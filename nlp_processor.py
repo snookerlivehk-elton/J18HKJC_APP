@@ -8,8 +8,10 @@ logger = logging.getLogger(__name__)
 class NLPProcessor:
     def __init__(self):
         self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.base_url = "https://api.openai.com/v1/chat/completions"
+        # 支援 OpenRouter，預設模型名稱可透過環境變數更改 (例如: openai/gpt-4o-mini 或 anthropic/claude-3-haiku)
+        self.model = os.getenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+        # 支援 OpenRouter 端點
+        self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
 
     def is_ready(self) -> bool:
         return bool(self.api_key)
