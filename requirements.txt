@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+httpx
+asyncpg
+selectolax
+pydantic
+python-dotenv
+pandas
+streamlit
+sqlalchemy
+psycopg2-binary

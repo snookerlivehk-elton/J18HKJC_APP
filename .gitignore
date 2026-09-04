@@ -1,0 +1,31 @@
+# 環境變數與機密資訊
+.env
+.env.*
+
+# 資料庫 (不把本地資料庫上傳，雲端會使用 PostgreSQL)
+*.db
+*.sqlite
+*.sqlite3
+j18_local.db
+
+# 日誌
+*.log
+crawler.log
+
+# Python 暫存檔
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VS Code / IDE 相關
+.vscode/
+.idea/
+.DS_Store
+
+# 虛擬環境
+venv/
+env/
+.venv/

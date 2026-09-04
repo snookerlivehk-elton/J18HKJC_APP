@@ -1,0 +1,97 @@
+"""
+J18 量化模型 - 超參數設定檔 (Hyperparameters Configuration)
+此檔案將所有因子計算的主觀參數獨立隔離。
+未來在使用機器學習 (如 Optuna, Grid Search) 進行參數最佳化時，
+只需動態修改此檔案或覆寫此 Config 類別即可進行自動回測尋優。
+"""
+
+class ModelConfig:
+    # ==========================================
+    # 1. 賽果目標權重 (Target Weights)
+    # ==========================================
+    WIN_WEIGHT = 1.0    # 跑第 1 名的得分
+    PLACE_WEIGHT = 0.3  # 跑入位置 (第 2, 3, 4 名) 的得分
+
+    # ==========================================
+    # 2. 時間衰減設定 (Time Decay Rates)
+    # 預設以 90 天 (約 3 個月) 為一個時間桶 (Bucket)
+    # ==========================================
+    TIME_WINDOW_DAYS = 90
+    
+    # 衰減陣列：[0~3個月, 3~6個月, 6~9個月, 9~12個月, 12個月以上]
+    JOCKEY_DECAY = [1.0, 0.70, 0.40, 0.20, 0.0]   # 騎師狀態波動大，衰減快
+    TRAINER_DECAY = [1.0, 0.85, 0.70, 0.50, 0.2]  # 練馬師狀態穩定，衰減慢
+    SYNERGY_DECAY = [1.0, 1.00, 0.60, 0.60, 0.0]  # 騎練合作次數少，時間窗需拉長
+    HORSE_JOCKEY_DECAY = [1.0, 1.00, 0.80, 0.60, 0.4] # 人馬合作次數極少，保留長期記憶
+    HORSE_DECAY = [1.0, 0.80, 0.50, 0.20, 0.0]    # 馬匹近績狀態波動大，衰減較快
+
+    # ==========================================
+    # 3. 貝葉斯平滑常數 (Bayesian Smoothing 'C')
+    # 解決稀疏數據 (例如出賽 1 次贏 1 次 = 100% 勝率的偏差)
+    # 數值代表「虛擬平均出賽次數」，數字越大，拉回平均值的力量越強 (Cap)
+    # ==========================================
+    JOCKEY_SMOOTH_C = 20
+    TRAINER_SMOOTH_C = 20
+    SYNERGY_SMOOTH_C = 10  # 合作數據天生較少，平滑力道可稍微放輕
+    HORSE_JOCKEY_SMOOTH_C = 5  # 人馬合作次數極少，平滑力道更輕
+    HORSE_SMOOTH_C = 5     # 馬匹近績平滑 (馬匹出賽頻率低)
+    DRAW_SMOOTH_C = 20     # 檔位大數據平滑
+
+    # ==========================================
+    # 4. 檔位與場地因子設定 (Draw & Track Bias)
+    # Phase 2 參數
+    # ==========================================
+    # 檔位分組邊界：[3, 7, 10] 代表 1-3(內), 4-7(中內), 8-10(中外), 11-14(外)
+    DRAW_GROUP_BOUNDARIES = [3, 7, 10]
+    
+    # 場地變化動態修正 (針對變化地 Yielding/Soft 削弱內欄優勢)
+    YIELDING_TRACK_MULTIPLIER = -0.5
+    
+    # ==========================================
+    # 5. 近績與 NLP 補償因子 (Recent Form & NLP Excuse)
+    # Phase 4 參數
+    # ==========================================
+    RECENT_FORM_WEIGHT = 0.5         # 近績基礎分數權重
+    EXCUSE_MULTIPLIER_EARLY = 1.2    # 早段受阻補償係數 (較小)
+    EXCUSE_MULTIPLIER_MIDDLE = 1.5   # 中段受阻補償係數 (中等)
+    EXCUSE_MULTIPLIER_LATE = 2.0     # 直路/末段受阻補償係數 (最大，因為直接影響名次)
+    CLASS_DROP_BONUS = 1.5           # 降班戰術加分 (需配合賠率與時間驗證)
+
+    # ==========================================
+    # 7. 步速與跑法因子 (Pace & Running Style)
+    # Phase 5 參數
+    # ==========================================
+    PACE_SMOOTH_C = 5              # 跑法數據平滑常數
+    CLOSER_BONUS_WEIGHT = 1.2      # 後追馬加分權重 (當預期為快步速時)
+    FRONT_RUNNER_BONUS_WEIGHT = 1.2 # 前領馬加分權重 (當預期為慢步速時)
+
+    # ==========================================
+    # 8. 速度指數與絕對時間 (Speed Figure & FSR)
+    # Phase 6 參數
+    # ==========================================
+    FSR_PENALTY_THRESHOLD = 105.0  # 步速過慢，開始懲罰末段時間的閥值 (%)
+    FSR_BONUS_THRESHOLD = 95.0     # 步速極快，開始獎勵末段時間的閥值 (%)
+    TIME_EMA_ALPHA = 0.5           # 近況時間趨勢的指數平滑衰減率
+
+    # ==========================================
+    # 9. 最終推論總分組合權重 (Inference Ensemble Weights)
+    # 用於計算排位表上的最終總分預測 (Total Score)
+    # 這些權重加總不一定要是 1.0，但比例代表影響力
+    # ==========================================
+    WEIGHT_JOCKEY = 1.0
+    WEIGHT_TRAINER = 0.8
+    WEIGHT_SYNERGY = 0.5
+    WEIGHT_DRAW = 1.2
+    WEIGHT_HORSE_JOCKEY = 0.5
+    WEIGHT_RECENT_FORM = 1.5
+    WEIGHT_SPEED_FIGURE = 1.5
+    
+    # 官方 Speed Guide 權重
+    WEIGHT_SG_FORM = 1.0
+    WEIGHT_SG_ENERGY = 1.0
+    WEIGHT_SG_DELTA = 0.5
+
+    @classmethod
+    def get_params_dict(cls):
+        """將參數轉為字典，方便匯出給機器學習框架記錄實驗 (Experiment Tracking)"""
+        return {k: v for k, v in cls.__dict__.items() if not k.startswith("__") and not callable(v)}

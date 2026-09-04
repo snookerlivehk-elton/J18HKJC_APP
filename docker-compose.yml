@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: j18_postgres_local
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: j18db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 將 schema.sql 掛載到初始化目錄，資料庫首次啟動時會自動建表
+      - ./schema.sql:/docker-entrypoint-initdb.d/1_schema.sql
+
+volumes:
+  postgres_data:
