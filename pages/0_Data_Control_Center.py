@@ -20,6 +20,8 @@ st.markdown("""
 # ==========================================
 st.subheader("🚀 手動觸發爬蟲 (Manual Triggers)")
 
+engine = InferenceEngine()
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -57,6 +59,8 @@ with col1:
                         st.error("抓完仍異常：" + msg)
                     else:
                         st.success("抽樣正常：檔位非全 0，練馬師為姓名。")
+                else:
+                    st.warning("抓取完成，但讀不到第 1 場馬匹抽樣（可能 race_id 不符）。")
             except subprocess.CalledProcessError as e:
                 st.error(f"❌ 執行失敗：\n{e.stderr}")
 
@@ -91,8 +95,6 @@ st.divider()
 # ==========================================
 st.subheader("📊 賽前資料整備度監控 (Pre-race Data Readiness)")
 st.markdown("這裡會顯示資料庫中『未來賽事』的準備狀況，確認是否可以進行 AI 推論。")
-
-engine = InferenceEngine()
 
 def get_readiness_status():
     if USE_SQLITE and not os.path.exists(SQLITE_DB_PATH):
