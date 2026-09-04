@@ -19,7 +19,7 @@ if races_df.empty:
     st.stop()
 
 scores_preview = engine.calc.load_factor_scores(
-    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE']
+    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE', 'SPEED']
 )
 if scores_preview.empty:
     st.error("❌ `factor_scores` 是空的。請回主頁執行「重算並寫入因子分數」後再預測。")
@@ -69,7 +69,8 @@ if st.button("🚀 執行因子匹配預測", type="primary"):
                 f"S{meta['hit_counts']['SYNERGY']} "
                 f"D{meta['hit_counts']['DRAW']} "
                 f"H{meta['hit_counts'].get('HORSE', 0)} "
-                f"P{meta['hit_counts'].get('PACE', 0)}）"
+                f"P{meta['hit_counts'].get('PACE', 0)} "
+                f"V{meta['hit_counts'].get('SPEED', 0)}）"
             )
 
             if meta['match_rate'] == 0:

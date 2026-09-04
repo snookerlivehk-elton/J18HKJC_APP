@@ -1470,8 +1470,101 @@ class FactorCalculator:
         
         # 3. 速度指數 (Speed Figure) = 自身時間差 - 當日場地偏差
         df['speed_figure'] = df['time_delta'] - daily_variant
-        
+
+        # 4. FSR 校正（白皮書：慢步速懲罰／快步速獎勵）
+        fsr = df['fsr'].clip(lower=85.0, upper=120.0)
+        df['fsr_clipped'] = fsr
+        pen = float(ModelConfig.FSR_PENALTY_THRESHOLD)
+        bon = float(ModelConfig.FSR_BONUS_THRESHOLD)
+        fsr_adj = np.where(
+            fsr > pen,
+            -0.08 * (fsr - pen),
+            np.where(fsr < bon, 0.10 * (bon - fsr), 0.0),
+        )
+        df['speed_figure_fsr'] = df['speed_figure'] + fsr_adj
         return df
+
+    def calculate_speed_factor(self, df: pd.DataFrame = None, apply_nlp: bool = True) -> pd.DataFrame:
+        """
+        速度指數 Peak / EMA → factor_scores (SPEED, GLOBAL)。
+        - adjusted_score / z_score 基於近況 EMA（FSR 校正後）
+        - 可選：NLP 受阻時對該場 speed_figure 輕度補償（時間被干擾灌差）
+        """
+        if df is None or df.empty:
+            df = self.fetch_historical_data()
+        if df.empty:
+            return pd.DataFrame()
+
+        work = self.extract_time_and_fsr(df)
+        work = work.dropna(subset=["speed_figure_fsr", "fsr"]).copy()
+        if work.empty:
+            return pd.DataFrame()
+
+        work["sf_used"] = work["speed_figure_fsr"]
+
+        if apply_nlp:
+            excuse_map = self.load_excuse_map()
+            if excuse_map and "runner_id" not in work.columns:
+                try:
+                    ids = pd.read_sql(
+                        "SELECT runner_id, race_id, horse_name FROM runners WHERE finish_order_num IS NOT NULL",
+                        self.engine,
+                    )
+                    ids["horse_name"] = ids["horse_name"].apply(normalize_person_name)
+                    work = work.merge(ids, on=["race_id", "horse_name"], how="left")
+                except Exception as e:
+                    print(f"speed NLP attach runner_id failed: {e}")
+            if excuse_map and "runner_id" in work.columns:
+                boosts = []
+                for _, row in work.iterrows():
+                    info = excuse_map.get(str(row.get("runner_id")))
+                    if not info:
+                        boosts.append(0.0)
+                        continue
+                    sev = float(info.get("severity") or 0.0)
+                    stage = str(info.get("excuse_stage") or "none")
+                    stage_w = {"early": 0.6, "middle": 1.0, "late": 1.3}.get(stage, 0.8)
+                    # 受阻通常令完成時間變慢 → SF 偏低；給予秒差級小幅補償
+                    boosts.append(0.12 * sev * stage_w)
+                work["nlp_time_boost"] = boosts
+                work["sf_used"] = work["sf_used"] + work["nlp_time_boost"]
+            else:
+                work["nlp_time_boost"] = 0.0
+        else:
+            work["nlp_time_boost"] = 0.0
+
+        work = work.sort_values(["horse_name", "racing_date"], ascending=[True, False])
+        alpha = float(ModelConfig.TIME_EMA_ALPHA)
+        rows = []
+        for horse, group in work.groupby("horse_name"):
+            recent = group.head(3)["sf_used"].astype(float).values
+            if len(recent) == 0:
+                continue
+            ema = float(pd.Series(recent[::-1]).ewm(alpha=alpha, adjust=False).mean().iloc[-1])
+            peak = float(group["sf_used"].max())
+            avg_fsr = float(group["fsr_clipped"].mean())
+            nlp_hits = int((group["nlp_time_boost"] > 0).sum()) if "nlp_time_boost" in group.columns else 0
+            rows.append({
+                "entity_name": normalize_person_name(horse),
+                "actual_runs": int(len(group)),
+                "weighted_runs": float(len(group)),
+                "peak_speed": peak,
+                "current_ema": ema,
+                "avg_fsr": avg_fsr,
+                "nlp_boosted_runs": nlp_hits,
+                "adjusted_score": ema,
+            })
+
+        out = pd.DataFrame(rows)
+        if out.empty:
+            return out
+        out["z_score"] = (
+            (out["adjusted_score"] - out["adjusted_score"].mean())
+            / (out["adjusted_score"].std() + 1e-9)
+        )
+        out["factor_type"] = "SPEED"
+        out["bucket_id"] = GLOBAL_BUCKET
+        return out
 
     def save_factor_scores(self, *factor_dfs) -> int:
         """將因子分數寫入 factor_scores（先清再寫，避免舊 bucket 殘留）。"""
@@ -1522,7 +1615,7 @@ class FactorCalculator:
         df = self.fetch_historical_data()
         if df.empty:
             print("No historical data found. Please run batch crawler first.")
-            return None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None
             
         df = self.calculate_base_score(df)
         
@@ -1573,17 +1666,20 @@ class FactorCalculator:
         print("Calculating Pace / Sectional Factor (GLOBAL)...")
         pace_df = self.calculate_pace_factor(df)
 
+        print("Calculating Speed Figure / FSR (GLOBAL)...")
+        speed_df = self.calculate_speed_factor(df, apply_nlp=apply_nlp)
+
         if persist:
             n = self.save_factor_scores(
-                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df
+                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df, speed_df
             )
             print(f"Saved {n} factor score rows to factor_scores.")
 
-        return jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df
+        return jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df, speed_df
 
 if __name__ == "__main__":
     calc = FactorCalculator()
-    j, t, s, d, hj, h, p = calc.run_all_factors(persist=True)
+    j, t, s, d, hj, h, p, sp = calc.run_all_factors(persist=True)
     if j is not None:
         print("\n=== Jockey Factor Preview (Top 5 Z-Score) ===")
         print(j.sort_values('z_score', ascending=False).head(5)[['bucket_id', 'entity_name', 'actual_runs', 'adjusted_score', 'z_score']])
@@ -1594,3 +1690,5 @@ if __name__ == "__main__":
             print("HORSE band rows:", len(h), "buckets:", sorted(h['bucket_id'].unique()))
         if p is not None and not p.empty:
             print("PACE rows:", len(p), p['running_style'].value_counts().to_dict())
+        if sp is not None and not sp.empty:
+            print("SPEED rows:", len(sp), "ema top:", sp.sort_values('z_score', ascending=False).head(3)[['entity_name','current_ema','z_score']].to_string(index=False))

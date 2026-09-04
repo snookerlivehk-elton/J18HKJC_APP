@@ -128,13 +128,14 @@ class InferenceEngine:
         fine_bucket = self.get_race_bucket(race_info)
         band_bucket = self.get_race_band_bucket(race_info)
         scores_df = self.calc.load_factor_scores(
-            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE']
+            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE', 'SPEED']
         )
         lookup = self._build_score_lookup(scores_df)
 
         results = []
         hit_counts = {
-            'JOCKEY': 0, 'TRAINER': 0, 'SYNERGY': 0, 'DRAW': 0, 'HORSE': 0, 'PACE': 0,
+            'JOCKEY': 0, 'TRAINER': 0, 'SYNERGY': 0, 'DRAW': 0,
+            'HORSE': 0, 'PACE': 0, 'SPEED': 0,
         }
         total_lookups = 0
 
@@ -151,11 +152,12 @@ class InferenceEngine:
             z_draw, hit_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
             z_horse, hit_h = self._lookup_z(lookup, 'HORSE', band_bucket, h_name)
             z_pace, hit_p = self._lookup_z(lookup, 'PACE', 'GLOBAL', h_name)
+            z_speed, hit_sp = self._lookup_z(lookup, 'SPEED', 'GLOBAL', h_name)
 
             for ft, hit in (
                 ('JOCKEY', hit_j), ('TRAINER', hit_t),
                 ('SYNERGY', hit_s), ('DRAW', hit_d),
-                ('HORSE', hit_h), ('PACE', hit_p),
+                ('HORSE', hit_h), ('PACE', hit_p), ('SPEED', hit_sp),
             ):
                 total_lookups += 1
                 if hit:
@@ -173,12 +175,16 @@ class InferenceEngine:
                 (z_draw * ModelConfig.WEIGHT_DRAW) +
                 (z_horse * ModelConfig.WEIGHT_RECENT_FORM) +
                 (z_pace * ModelConfig.WEIGHT_PACE) +
+                (z_speed * ModelConfig.WEIGHT_SPEED_FIGURE) +
                 (sg_form_score * ModelConfig.WEIGHT_SG_FORM) +
                 (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
                 (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
             )
 
-            hit_n = int(hit_j) + int(hit_t) + int(hit_s) + int(hit_d) + int(hit_h) + int(hit_p)
+            hit_n = (
+                int(hit_j) + int(hit_t) + int(hit_s) + int(hit_d)
+                + int(hit_h) + int(hit_p) + int(hit_sp)
+            )
             results.append({
                 '馬號': row['horse_no'],
                 '馬名': row['horse_name'],
@@ -191,7 +197,8 @@ class InferenceEngine:
                 '檔位分': round(z_draw, 2),
                 '近績分': round(z_horse, 2),
                 '步速分': round(z_pace, 2),
-                '命中': f"{hit_n}/6",
+                '速度分': round(z_speed, 2),
+                '命中': f"{hit_n}/7",
                 '狀態評級': row.get('form_rating'),
                 '能量差值': sg_delta,
                 '總預測分': round(total_score, 2),

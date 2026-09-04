@@ -73,7 +73,7 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
     with st.spinner("計算因子並寫入資料庫（含近績距離帶）..."):
         try:
             calc = FactorCalculator()
-            j, t, s, d, hj, h, p = calc.run_all_factors(persist=True)
+            j, t, s, d, hj, h, p, sp = calc.run_all_factors(persist=True)
             if j is None:
                 st.error("沒有歷史資料可計算。請先跑批次爬蟲。")
             else:
@@ -82,6 +82,7 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
                     + (0 if hj is None else len(hj))
                     + (0 if h is None else len(h))
                     + (0 if p is None else len(p))
+                    + (0 if sp is None else len(sp))
                 )
                 st.session_state['j_df_indep'] = j
                 st.session_state['t_df_indep'] = t
@@ -93,6 +94,8 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
                     st.session_state['h_df_indep'] = h
                 if p is not None:
                     st.session_state['pace_df'] = p
+                if sp is not None:
+                    st.session_state['speed_df'] = sp
                 # 同步 raw_df 方便各診斷頁
                 if 'raw_df' not in st.session_state:
                     df = calc.fetch_historical_data()
@@ -134,6 +137,7 @@ with st.expander("目前 ModelConfig 權重（推論用）"):
         "WEIGHT_DRAW": ModelConfig.WEIGHT_DRAW,
         "WEIGHT_RECENT_FORM": ModelConfig.WEIGHT_RECENT_FORM,
         "WEIGHT_PACE": ModelConfig.WEIGHT_PACE,
+        "WEIGHT_SPEED_FIGURE": ModelConfig.WEIGHT_SPEED_FIGURE,
         "WEIGHT_SG_FORM": ModelConfig.WEIGHT_SG_FORM,
         "WEIGHT_SG_ENERGY": ModelConfig.WEIGHT_SG_ENERGY,
         "WEIGHT_SG_DELTA": ModelConfig.WEIGHT_SG_DELTA,
