@@ -57,6 +57,20 @@ def get_runners_for_race(race_id):
     return df
 
 
+def get_history_df_for_compute():
+    """供各因子頁計算：優先 session raw_df，否則直接從 DB 抓歷史。"""
+    if 'raw_df' in st.session_state and not st.session_state['raw_df'].empty:
+        return st.session_state['raw_df'].copy(), "session"
+    calc = FactorCalculator()
+    df = calc.fetch_historical_data()
+    if df.empty:
+        return df, "empty"
+    df = calc.calculate_base_score(df)
+    st.session_state['raw_df'] = df
+    st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
+    return df.copy(), "database"
+
+
 def racecard_looks_corrupt(runners_df: pd.DataFrame):
     """偵測舊版爬蟲造成的欄位錯位：檔位全 0、練馬師變成數字。
     回傳 (is_corrupt, message)

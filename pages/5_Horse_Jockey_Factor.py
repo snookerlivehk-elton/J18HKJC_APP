@@ -26,16 +26,26 @@ with st.sidebar.expander("⚙️ 參數調節", expanded=False):
     )
     ModelConfig.HORSE_JOCKEY_DECAY = [float(x.strip()) for x in decay_str.split(",")]
 
-can_compute = 'raw_df' in st.session_state and not st.session_state['raw_df'].empty
-if st.button("🚀 計算人馬合作因子", type="primary", disabled=not can_compute):
-    with st.spinner("計算中..."):
-        calc = FactorCalculator()
-        df = calc.calculate_base_score(st.session_state['raw_df'].copy())
-        hj_df = calc.calculate_horse_jockey_factor(df)
-        st.session_state['hj_df_indep'] = hj_df
-        st.success(f"完成：{len(hj_df)} 筆（bucket={GLOBAL_BUCKET}）")
-if not can_compute:
-    st.caption("調參重算需先回主頁載入歷史")
+if st.button("🚀 計算人馬合作因子（並寫入資料庫）", type="primary"):
+    with st.spinner("從資料庫讀取歷史並計算人馬合作..."):
+        try:
+            df, src = ui_utils.get_history_df_for_compute()
+            if df.empty:
+                st.error("資料庫沒有可用歷史賽果，無法計算。")
+            else:
+                calc = FactorCalculator()
+                # get_history_df_for_compute 已含 base score；避免重複也無妨
+                if 'raw_score' not in df.columns:
+                    df = calc.calculate_base_score(df)
+                hj_df = calc.calculate_horse_jockey_factor(df)
+                n = calc.save_factor_scores(hj_df)
+                st.session_state['hj_df_indep'] = hj_df
+                st.success(
+                    f"完成：{len(hj_df)} 筆（bucket={GLOBAL_BUCKET}），"
+                    f"已寫入 factor_scores {n} 列。資料來源：{src}"
+                )
+        except Exception as e:
+            st.error(f"計算失敗：{e}")
 
 hj_df = ui_utils.load_factor_from_db_or_session('hj_df_indep', 'HORSE_JOCKEY')
 if not hj_df.empty:
@@ -48,4 +58,4 @@ if not hj_df.empty:
         use_global_bucket=True,
     )
 else:
-    st.info("尚未有人馬合作因子，請按上方按鈕計算，或回主頁寫入 factor_scores。")
+    st.info("尚未有人馬合作因子。按上方按鈕即可從雲端歷史直接計算並寫入，不必先回主頁。")
