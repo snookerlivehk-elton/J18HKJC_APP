@@ -29,9 +29,12 @@ def get_bucket_for_race(race_id):
     races_df = engine.get_upcoming_races()
     if races_df.empty: return None
     race_info = races_df[races_df['race_id'] == race_id].iloc[0]
-    course = str(race_info['course']).fillna('未知')
-    track = str(race_info['track']).replace('"', '').replace(' 賽道', '').strip()
-    distance = str(race_info['distance_m'])
+    
+    # 正確處理空值：先判斷是否為 pandas NA，再轉字串
+    course = '未知' if pd.isna(race_info['course']) else str(race_info['course'])
+    track = '' if pd.isna(race_info['track']) else str(race_info['track']).replace('"', '').replace(' 賽道', '').strip()
+    distance = '0' if pd.isna(race_info['distance_m']) else str(race_info['distance_m'])
+    
     return f"{course}_{track}_{distance}"
 
 def display_factor_details(df, selected_bucket, entity_col_name, filter_entities=None):
