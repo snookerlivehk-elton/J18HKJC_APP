@@ -109,6 +109,63 @@ def horse_jockey_name(horse: Any, jockey: Any) -> str:
 # 人馬合作 / 部分全域因子使用的虛擬分桶
 GLOBAL_BUCKET = "GLOBAL"
 
+# 距離帶：接近距離可共用樣本（短途 / 哩途 / 長途）
+DISTANCE_BANDS = (
+    ("SPRINT", 1000, 1200),   # 1000–1200
+    ("MILE", 1400, 1650),     # 1400–1650
+    ("STAY", 1800, 2400),     # 1800+
+)
+
+
+def distance_band(distance_m: Any) -> str:
+    d = normalize_distance(distance_m)
+    if d is None:
+        return "UNK"
+    for name, lo, hi in DISTANCE_BANDS:
+        if lo <= d <= hi:
+            return name
+    # 1300 等夾縫：靠最近帶
+    if d < 1400:
+        return "SPRINT"
+    if d < 1800:
+        return "MILE"
+    return "STAY"
+
+
+def distance_proximity_weight(hist_distance_m: Any, target_distance_m: Any) -> float:
+    """
+    接近距離加權：同距 1.0；±200 較高；更遠仍保留小權重（不全丟，避免過度分桶）。
+    """
+    h = normalize_distance(hist_distance_m)
+    t = normalize_distance(target_distance_m)
+    if h is None or t is None:
+        return 1.0
+    diff = abs(h - t)
+    if diff == 0:
+        return 1.0
+    if diff <= 200:
+        return 0.80
+    if diff <= 400:
+        return 0.50
+    if distance_band(h) == distance_band(t):
+        return 0.35
+    return 0.20
+
+
+def parse_bucket_parts(bucket_id: str):
+    """ST_A_1200 -> (ST, A, 1200)；無法解析則 (None,None,None)。"""
+    if not bucket_id or not isinstance(bucket_id, str):
+        return None, None, None
+    parts = bucket_id.split("_")
+    if len(parts) < 3:
+        return None, None, None
+    venue, track, dist_s = parts[0], parts[1], parts[-1]
+    try:
+        dist = int(dist_s)
+    except ValueError:
+        dist = None
+    return venue, track, dist
+
 
 def is_valid_bucket(bucket_id: str) -> bool:
     if not bucket_id or not isinstance(bucket_id, str):

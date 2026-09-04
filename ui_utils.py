@@ -13,6 +13,7 @@ from bucket_utils import (
     horse_jockey_name,
     is_valid_bucket,
     GLOBAL_BUCKET,
+    parse_bucket_parts,
 )
 
 
@@ -295,10 +296,11 @@ def render_upcoming_match_panel(
     jockey_scores = None
     if match_mode == 'horse_jockey':
         st.caption(
-            "雙軌評分（熟識優先）："
-            f"有合作 → A 為主 + 熟識加分 {ModelConfig.HJ_PARTNERSHIP_PRIOR}；"
-            f"無合作 → 正規化 B × {ModelConfig.UPGRADE_B_ONLY_SCALE}。"
-            f"CAP={ModelConfig.UPGRADE_DELTA_CAP}，稀疏混合 B 權重僅 {ModelConfig.HJ_SPARSE_B_BLEND}。"
+            "分桶說明：A 軌人馬合作本身是 GLOBAL（白皮書：不分場地距離）；"
+            "現場再用「接近距離加權」提高相近路程權重。"
+            "B 軌騎師 Z 採層級回退：精確桶 → 同場地同距 → 距離帶 → 全局。"
+            f" 熟識 prior={ModelConfig.HJ_PARTNERSHIP_PRIOR}；"
+            f"無合作 B×{ModelConfig.UPGRADE_B_ONLY_SCALE}。"
         )
         if 'raw_df' in st.session_state and not st.session_state['raw_df'].empty:
             hist_df = st.session_state['raw_df']
@@ -327,6 +329,24 @@ def render_upcoming_match_panel(
             source = '無'
 
         if match_mode == 'horse_jockey':
+            _, _, race_dist = parse_bucket_parts(race_bucket) if race_bucket else (None, None, None)
+            near = calc.score_partnership_near_distance(
+                row.get('horse_name'),
+                row.get('jockey_name'),
+                race_dist,
+                hist_df,
+            )
+            # 優先用接近距離加權現場分；若無配對再退回 GLOBAL 表
+            if near.get('z_proxy') is not None and near.get('actual_runs', 0) > 0:
+                z = float(near['z_proxy'])
+                runs = int(near['actual_runs'])
+                hit = True
+                hits = hits  # already counted if score_map hit; avoid double — recount below
+            elif hit:
+                pass  # keep GLOBAL z
+            else:
+                z, runs = None, 0
+
             delta_info = calc.compute_jockey_upgrade_delta(
                 horse_name=row.get('horse_name'),
                 current_jockey=row.get('jockey_name'),
@@ -335,7 +355,13 @@ def render_upcoming_match_panel(
                 jockey_scores=jockey_scores,
             )
             delta = delta_info.get('delta')
-            used, scaled_b, source = calc.adopt_horse_jockey_score(z if hit else None, runs if hit else 0, delta)
+            used, scaled_b, source = calc.adopt_horse_jockey_score(
+                z if (z is not None) else None,
+                runs if runs else 0,
+                delta,
+            )
+            if near.get('source') == 'near_distance_weighted' and z is not None and source.startswith('A'):
+                source = source + '+近距加權'
 
             row_out = {
                 '馬號': row.get('horse_no'),
@@ -344,8 +370,9 @@ def render_upcoming_match_panel(
                 '騎師': row.get('jockey_name'),
                 '練馬師': row.get('trainer_name'),
                 entity_label: entity,
-                '合作命中': '✓' if hit else '✗',
+                '合作命中': '✓' if (z is not None) else '✗',
                 '合作Z': None if z is None else round(z, 2),
+                '加權出賽': None if not near.get('weighted_runs') else round(float(near['weighted_runs']), 2),
                 '換人Δ原值': None if delta is None else round(delta, 2),
                 '換人Δ正規化': None if scaled_b is None else round(scaled_b, 2),
                 '採用分': None if used is None else round(used, 2),
@@ -371,6 +398,10 @@ def render_upcoming_match_panel(
         })
         if hit:
             scored += 1
+
+    # 人馬頁重新統計合作命中（含近距加權現場算出者）
+    if match_mode == 'horse_jockey' and rows:
+        hits = sum(1 for r in rows if r.get('合作命中') == '✓')
 
     match_df = pd.DataFrame(rows)
     if match_mode == 'horse_jockey':

@@ -11,6 +11,9 @@ from bucket_utils import (
     horse_jockey_name,
     is_valid_bucket,
     GLOBAL_BUCKET,
+    distance_proximity_weight,
+    distance_band,
+    parse_bucket_parts,
 )
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
@@ -195,12 +198,99 @@ class FactorCalculator:
         return by_bucket, by_name_avg
 
     def lookup_jockey_z(self, jockey_name: str, bucket_id: str, by_bucket: dict, by_name_avg: dict):
+        """
+        層級回退（避免細桶樣本過少）：
+        1) 精確 Venue_Track_Distance
+        2) 同場地+同距離、任意賽道
+        3) 同場地+同距離帶（接近距離）
+        4) 該騎師跨桶平均
+        """
         name = normalize_person_name(jockey_name)
+        if not name:
+            return None, None
+
         if (bucket_id, name) in by_bucket:
-            return by_bucket[(bucket_id, name)], 'bucket'
+            return by_bucket[(bucket_id, name)], 'exact'
+
+        venue, track, dist = parse_bucket_parts(bucket_id)
+        # 2) 同場地+距離
+        if venue and dist:
+            zs = [
+                z for (b, n), z in by_bucket.items()
+                if n == name and b.startswith(f"{venue}_") and b.endswith(f"_{dist}")
+            ]
+            if zs:
+                return float(sum(zs) / len(zs)), 'venue_dist'
+
+        # 3) 同場地+距離帶
+        if venue and dist:
+            band = distance_band(dist)
+            zs = []
+            for (b, n), z in by_bucket.items():
+                if n != name:
+                    continue
+                v2, _, d2 = parse_bucket_parts(b)
+                if v2 == venue and d2 is not None and distance_band(d2) == band:
+                    zs.append(z)
+            if zs:
+                return float(sum(zs) / len(zs)), f'band:{band}'
+
         if name in by_name_avg:
-            return by_name_avg[name], 'avg'
+            return by_name_avg[name], 'global_avg'
         return None, None
+
+    def score_partnership_near_distance(
+        self,
+        horse_name: str,
+        jockey_name: str,
+        target_distance_m,
+        hist_df: pd.DataFrame,
+    ):
+        """
+        人馬合作現場評分：仍用同一組合的全部歷史（不另開細桶），
+        但對「接近今仗距離」的場次加權更高 → 平衡樣本數與距離相關性。
+        回傳 dict: z_proxy, weighted_runs, actual_runs, source
+        """
+        if hist_df is None or hist_df.empty:
+            return {'z_proxy': None, 'weighted_runs': 0.0, 'actual_runs': 0, 'source': 'no_hist'}
+
+        horse = normalize_person_name(horse_name)
+        jockey = normalize_person_name(jockey_name)
+        pair = hist_df[
+            (hist_df['horse_name'].apply(normalize_person_name) == horse)
+            & (hist_df['jockey_name'].apply(normalize_person_name) == jockey)
+        ].copy()
+        if pair.empty:
+            return {'z_proxy': None, 'weighted_runs': 0.0, 'actual_runs': 0, 'source': 'no_pair'}
+
+        if 'raw_score' not in pair.columns:
+            pair = self.calculate_base_score(pair)
+        pair = self.apply_time_decay(pair, ModelConfig.HORSE_JOCKEY_DECAY)
+
+        prox = pair['distance_m'].apply(lambda d: distance_proximity_weight(d, target_distance_m))
+        pair = pair.copy()
+        pair['w'] = pair['time_weight'] * prox
+        pair = pair[pair['w'] > 0]
+        if pair.empty:
+            return {'z_proxy': None, 'weighted_runs': 0.0, 'actual_runs': 0, 'source': 'zero_weight'}
+
+        w_runs = float(pair['w'].sum())
+        w_score = float((pair['raw_score'] * pair['w']).sum())
+        # 用全體 hist 的平均 raw 作 prior（簡化貝葉斯）
+        prior_c = float(ModelConfig.HORSE_JOCKEY_SMOOTH_C)
+        global_avg = float(hist_df['raw_score'].mean()) if 'raw_score' in hist_df.columns else 0.15
+        adjusted = (w_score + prior_c * global_avg) / (w_runs + prior_c)
+
+        # 轉成相對全域合作水準的粗 Z：用 adjusted 相對 prior
+        z_proxy = (adjusted - global_avg) / max(abs(global_avg), 0.05)
+
+        return {
+            'z_proxy': float(z_proxy),
+            'adjusted_score': float(adjusted),
+            'weighted_runs': w_runs,
+            'actual_runs': int(len(pair)),
+            'source': 'near_distance_weighted',
+        }
 
     def compute_jockey_upgrade_delta(
         self,
