@@ -32,8 +32,8 @@ def get_bucket_for_race(race_id):
     
     # 正確處理空值：先判斷是否為 pandas NA，再轉字串
     course = '未知' if pd.isna(race_info['course']) else str(race_info['course'])
-    track = '' if pd.isna(race_info['track']) else str(race_info['track']).replace('"', '').replace(' 賽道', '').strip()
-    distance = '0' if pd.isna(race_info['distance_m']) else str(race_info['distance_m'])
+    track = '' if pd.isna(race_info['track']) else str(race_info['track']).replace('"', '').replace(' 賽道', '').replace('跑道', '').strip()
+    distance = '0' if pd.isna(race_info['distance_m']) else str(int(float(race_info['distance_m'])))
     
     return f"{course}_{track}_{distance}"
 
