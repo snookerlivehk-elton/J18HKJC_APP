@@ -37,10 +37,12 @@ class ModelConfig:
     HORSE_SMOOTH_C = 5     # 馬匹近績平滑 (馬匹出賽頻率低)
     DRAW_SMOOTH_C = 20     # 檔位大數據平滑
     JOCKEY_LOOKBACK_RACES = 3  # 換人效應：回溯該駒近 N 仗前任騎師
-    # B 軌換人Δ 合理化：差值尺度大於 Z-Score，需飽和後才可與 A 軌並排比較
-    UPGRADE_DELTA_CAP = 1.5          # tanh 飽和上限（約略對齊常見 Z 範圍）
-    HJ_MIN_RUNS_PURE_A = 3           # 合作出賽達此數才純用 A
-    HJ_SPARSE_B_BLEND = 0.35         # 合作樣本少時，採用分混入正規化 B 的權重
+    # B 軌換人Δ 合理化：差值尺度大於 Z-Score；純 B（無合作）再折扣
+    UPGRADE_DELTA_CAP = 1.2          # tanh 飽和上限
+    UPGRADE_B_ONLY_SCALE = 0.40      # 無合作、純用 B 時再乘此折扣（換人≠已熟識）
+    HJ_MIN_RUNS_PURE_A = 2           # 合作出賽達此數純用 A
+    HJ_SPARSE_B_BLEND = 0.15         # 合作樣本少時，正規化 B 混入權重（宜小）
+    HJ_PARTNERSHIP_PRIOR = 0.30      # 有合作歷史的熟識加分（疊在採用分上）
 
 
     # ==========================================

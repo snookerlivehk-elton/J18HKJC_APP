@@ -298,25 +298,28 @@ class FactorCalculator:
 
     def adopt_horse_jockey_score(self, partnership_z, partnership_runs, raw_delta):
         """
-        雙軌採用規則：
-        - 合作出賽充足 → 純 A
-        - 合作出賽稀少 → A 與正規化 B 混合（避免 1 戰合作蓋過真實換人訊號，也避免 B 暴走）
-        - 無合作 → 純正規化 B
+        雙軌採用規則（熟識優先）：
+        - 有合作 → 以 A 為主，並加熟識 prior；B 最多輕量混合
+        - 無合作 → 僅用正規化 B，再乘 B_ONLY 折扣（換人訊號 < 已合作）
         """
         scaled_b = self.scale_upgrade_delta(raw_delta) if raw_delta is not None else None
         has_a = partnership_z is not None
         runs = int(partnership_runs) if partnership_runs is not None else 0
+        prior = float(ModelConfig.HJ_PARTNERSHIP_PRIOR)
 
         if has_a and runs >= ModelConfig.HJ_MIN_RUNS_PURE_A:
-            return float(partnership_z), None if scaled_b is None else float(scaled_b), 'A:合作歷史'
+            adopted = float(partnership_z) + prior
+            return adopted, None if scaled_b is None else float(scaled_b), 'A:合作歷史(+熟識)'
         if has_a and scaled_b is not None:
             w = float(ModelConfig.HJ_SPARSE_B_BLEND)
-            adopted = (1.0 - w) * float(partnership_z) + w * float(scaled_b)
-            return float(adopted), float(scaled_b), f'A+B混合(出賽{runs})'
+            blended = (1.0 - w) * float(partnership_z) + w * float(scaled_b)
+            adopted = blended + prior
+            return float(adopted), float(scaled_b), f'A為主+熟識(出賽{runs})'
         if has_a:
-            return float(partnership_z), None if scaled_b is None else float(scaled_b), 'A:合作歷史'
+            return float(partnership_z) + prior, None if scaled_b is None else float(scaled_b), 'A:合作歷史(+熟識)'
         if scaled_b is not None:
-            return float(scaled_b), float(scaled_b), 'B:換人Δ(正規化)'
+            discounted = float(scaled_b) * float(ModelConfig.UPGRADE_B_ONLY_SCALE)
+            return discounted, float(scaled_b), 'B:換人Δ(正規化·無合作折扣)'
         return None, None, '無'
 
     def _assign_draw_group(self, draw: int) -> str:

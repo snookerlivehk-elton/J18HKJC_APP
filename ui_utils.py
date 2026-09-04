@@ -295,11 +295,10 @@ def render_upcoming_match_panel(
     jockey_scores = None
     if match_mode == 'horse_jockey':
         st.caption(
-            "雙軌評分（白皮書 Phase 3）："
-            "A=人馬合作 Z；B=換人Δ 經 tanh 飽和後再採用"
-            f"（CAP={ModelConfig.UPGRADE_DELTA_CAP}）。"
-            f"合作出賽≥{ModelConfig.HJ_MIN_RUNS_PURE_A} 純用 A；"
-            f"較少則與 B 混合（B 權重 {ModelConfig.HJ_SPARSE_B_BLEND}）。"
+            "雙軌評分（熟識優先）："
+            f"有合作 → A 為主 + 熟識加分 {ModelConfig.HJ_PARTNERSHIP_PRIOR}；"
+            f"無合作 → 正規化 B × {ModelConfig.UPGRADE_B_ONLY_SCALE}。"
+            f"CAP={ModelConfig.UPGRADE_DELTA_CAP}，稀疏混合 B 權重僅 {ModelConfig.HJ_SPARSE_B_BLEND}。"
         )
         if 'raw_df' in st.session_state and not st.session_state['raw_df'].empty:
             hist_df = st.session_state['raw_df']
