@@ -179,6 +179,109 @@ class FactorCalculator:
         out['factor_type'] = 'HORSE_JOCKEY'
         return out.rename(columns={'horse_jockey_name': 'entity_name'})
 
+    def _jockey_z_lookup(self, jockey_scores: pd.DataFrame) -> dict:
+        """(bucket_id, jockey_name) -> z_score；另建 jockey 跨桶平均作後備。"""
+        by_bucket = {}
+        by_name = {}
+        if jockey_scores is None or jockey_scores.empty:
+            return by_bucket, by_name
+        for _, row in jockey_scores.iterrows():
+            name = normalize_person_name(row['entity_name'])
+            key = (str(row['bucket_id']), name)
+            z = float(row['z_score'])
+            by_bucket[key] = z
+            by_name.setdefault(name, []).append(z)
+        by_name_avg = {k: float(sum(v) / len(v)) for k, v in by_name.items()}
+        return by_bucket, by_name_avg
+
+    def lookup_jockey_z(self, jockey_name: str, bucket_id: str, by_bucket: dict, by_name_avg: dict):
+        name = normalize_person_name(jockey_name)
+        if (bucket_id, name) in by_bucket:
+            return by_bucket[(bucket_id, name)], 'bucket'
+        if name in by_name_avg:
+            return by_name_avg[name], 'avg'
+        return None, None
+
+    def compute_jockey_upgrade_delta(
+        self,
+        horse_name: str,
+        current_jockey: str,
+        race_bucket: str,
+        hist_df: pd.DataFrame,
+        jockey_scores: pd.DataFrame,
+        lookback: int = None,
+    ):
+        """
+        白皮書 B 軌：Upgrade Delta = 今仗騎師 Z − 該駒近 N 仗前任騎師平均 Z。
+        即使人馬無合作歷史，仍可給出換人信號分數。
+        回傳 dict: delta, current_z, prev_avg_z, prev_jockeys, source
+        """
+        lookback = lookback if lookback is not None else ModelConfig.JOCKEY_LOOKBACK_RACES
+        by_bucket, by_name_avg = self._jockey_z_lookup(jockey_scores)
+
+        curr_z, curr_src = self.lookup_jockey_z(current_jockey, race_bucket, by_bucket, by_name_avg)
+        if curr_z is None:
+            return {
+                'delta': None,
+                'current_z': None,
+                'prev_avg_z': None,
+                'prev_jockeys': [],
+                'source': 'no_current_jockey_z',
+            }
+
+        horse = normalize_person_name(horse_name)
+        curr_j = normalize_person_name(current_jockey)
+        if hist_df is None or hist_df.empty:
+            return {
+                'delta': None,
+                'current_z': curr_z,
+                'prev_avg_z': None,
+                'prev_jockeys': [],
+                'source': 'no_hist',
+            }
+
+        horse_runs = hist_df[hist_df['horse_name'].apply(normalize_person_name) == horse].copy()
+        if horse_runs.empty:
+            return {
+                'delta': None,
+                'current_z': curr_z,
+                'prev_avg_z': None,
+                'prev_jockeys': [],
+                'source': 'horse_no_runs',
+            }
+
+        horse_runs = horse_runs.sort_values('racing_date', ascending=False)
+        prev_rows = horse_runs.head(int(lookback))
+        prev_zs = []
+        prev_names = []
+        for _, prow in prev_rows.iterrows():
+            pj = normalize_person_name(prow['jockey_name'])
+            # 同騎續配不算「前任」；仍納入平均以反映近期騎師水準也可——白皮書寫前任，排除今仗同一人較合理
+            if pj == curr_j:
+                continue
+            pz, _ = self.lookup_jockey_z(pj, race_bucket, by_bucket, by_name_avg)
+            if pz is not None:
+                prev_zs.append(pz)
+                prev_names.append(pj)
+
+        if not prev_zs:
+            return {
+                'delta': None,
+                'current_z': curr_z,
+                'prev_avg_z': None,
+                'prev_jockeys': prev_names,
+                'source': 'no_prev_jockey_z',
+            }
+
+        prev_avg = float(sum(prev_zs) / len(prev_zs))
+        return {
+            'delta': float(curr_z - prev_avg),
+            'current_z': float(curr_z),
+            'prev_avg_z': prev_avg,
+            'prev_jockeys': prev_names,
+            'source': f'upgrade:{curr_src}',
+        }
+
     def _assign_draw_group(self, draw: int) -> str:
         """將檔位 1-14 轉換為 4 個群組"""
         if pd.isna(draw):

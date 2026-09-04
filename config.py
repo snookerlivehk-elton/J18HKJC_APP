@@ -36,6 +36,7 @@ class ModelConfig:
     HORSE_JOCKEY_SMOOTH_C = 5  # 人馬合作次數極少，平滑力道更輕
     HORSE_SMOOTH_C = 5     # 馬匹近績平滑 (馬匹出賽頻率低)
     DRAW_SMOOTH_C = 20     # 檔位大數據平滑
+    JOCKEY_LOOKBACK_RACES = 3  # 換人效應：回溯該駒近 N 仗前任騎師
 
     # ==========================================
     # 4. 檔位與場地因子設定 (Draw & Track Bias)

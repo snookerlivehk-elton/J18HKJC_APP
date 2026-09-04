@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 from inference_engine import InferenceEngine
 from factor_calculator import FactorCalculator
+from config import ModelConfig
 from bucket_utils import (
     make_bucket_id,
     normalize_person_name,
@@ -269,8 +270,10 @@ def render_upcoming_match_panel(
     if use_global_bucket:
         target_bucket = GLOBAL_BUCKET
         bucket_ok = True
+        race_bucket = get_bucket_for_race(selected_race_id)  # 換人Δ仍用本場 Venue_Track_Distance
     else:
         target_bucket = get_bucket_for_race(selected_race_id)
+        race_bucket = target_bucket
         bucket_ok = is_valid_bucket(target_bucket) if target_bucket else False
 
     c1, c2, c3 = st.columns(3)
@@ -287,8 +290,26 @@ def render_upcoming_match_panel(
     for _, srow in subset.iterrows():
         score_map[str(srow['entity_name'])] = srow
 
+    # 人馬雙軌：預載歷史 + 騎師 Z（供 Upgrade Delta）
+    hist_df = None
+    jockey_scores = None
+    if match_mode == 'horse_jockey':
+        st.caption(
+            "雙軌評分（白皮書 Phase 3）："
+            "A=人馬合作歷史；無 A 時用 B=換人指數 "
+            f"(今仗騎師Z − 近 {ModelConfig.JOCKEY_LOOKBACK_RACES} 仗前任平均Z)。"
+        )
+        if 'raw_df' in st.session_state and not st.session_state['raw_df'].empty:
+            hist_df = st.session_state['raw_df']
+        else:
+            hist_df, _ = get_history_df_for_compute()
+        jockey_scores = calc.load_factor_scores(['JOCKEY'])
+        if jockey_scores.empty and 'j_df_indep' in st.session_state:
+            jockey_scores = st.session_state['j_df_indep']
+
     rows = []
     hits = 0
+    scored = 0
     for _, row in runners_df.iterrows():
         entity = _entity_key_for_runner(row, match_mode, calc)
         hit = entity in score_map
@@ -298,8 +319,50 @@ def render_upcoming_match_panel(
             z = float(s['z_score'])
             runs = int(s['actual_runs']) if pd.notna(s.get('actual_runs')) else None
             adj = float(s['adjusted_score']) if 'adjusted_score' in s and pd.notna(s.get('adjusted_score')) else None
+            source = 'A:合作歷史'
+            used = z
         else:
-            z, runs, adj = None, None, None
+            z, runs, adj, used = None, None, None, None
+            source = '無'
+
+        if match_mode == 'horse_jockey':
+            delta_info = calc.compute_jockey_upgrade_delta(
+                horse_name=row.get('horse_name'),
+                current_jockey=row.get('jockey_name'),
+                race_bucket=race_bucket or '',
+                hist_df=hist_df,
+                jockey_scores=jockey_scores,
+            )
+            delta = delta_info.get('delta')
+            if hit:
+                source = 'A:合作歷史'
+                used = z
+            elif delta is not None:
+                source = 'B:換人Δ'
+                used = delta
+                scored += 1  # B 軌有分
+            else:
+                source = f"無({delta_info.get('source')})"
+                used = None
+
+            row_out = {
+                '馬號': row.get('horse_no'),
+                '馬名': row.get('horse_name'),
+                '檔位': row.get('draw'),
+                '騎師': row.get('jockey_name'),
+                '練馬師': row.get('trainer_name'),
+                entity_label: entity,
+                '合作命中': '✓' if hit else '✗',
+                '合作Z': None if z is None else round(z, 2),
+                '換人Δ': None if delta is None else round(delta, 2),
+                '採用分': None if used is None else round(used, 2),
+                '來源': source,
+                '合作出賽': runs,
+            }
+            if hit:
+                scored += 1
+            rows.append(row_out)
+            continue
 
         rows.append({
             '馬號': row.get('horse_no'),
@@ -313,13 +376,24 @@ def render_upcoming_match_panel(
             '出賽': runs,
             '平滑分': None if adj is None else round(adj, 3),
         })
+        if hit:
+            scored += 1
 
     match_df = pd.DataFrame(rows)
-    st.caption(f"匹配率：{hits}/{len(runners_df)}（{hits / max(len(runners_df), 1):.0%}）")
+    if match_mode == 'horse_jockey':
+        st.caption(
+            f"合作歷史命中：{hits}/{len(runners_df)}　｜　"
+            f"有採用分（A 或 B）：{scored}/{len(runners_df)}"
+        )
+        sort_col = '採用分'
+    else:
+        st.caption(f"匹配率：{hits}/{len(runners_df)}（{hits / max(len(runners_df), 1):.0%}）")
+        sort_col = 'Z-Score'
 
-    # 依 Z-Score 排序（未命中放最後）
-    match_df['_sort'] = match_df['Z-Score'].fillna(-999)
-    match_df = match_df.sort_values('_sort', ascending=False).drop(columns=['_sort'])
+    # 依分數排序（未命中放最後）
+    if sort_col in match_df.columns:
+        match_df['_sort'] = match_df[sort_col].fillna(-999)
+        match_df = match_df.sort_values('_sort', ascending=False).drop(columns=['_sort'])
 
     st.markdown("#### 本場排位 × 因子對照")
     st.dataframe(match_df, hide_index=True, use_container_width=True, height=420)
