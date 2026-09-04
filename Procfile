@@ -1,1 +1,1 @@
-web: streamlit run ui_app.py --server.port $PORT --server.address 0.0.0.0
+web: bash start.sh
