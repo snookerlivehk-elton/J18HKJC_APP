@@ -6,10 +6,12 @@ import os
 from config import ModelConfig
 from bucket_utils import (
     make_bucket_id,
+    make_band_bucket_id,
     normalize_person_name,
     synergy_name,
     horse_jockey_name,
     is_valid_bucket,
+    is_valid_band_bucket,
     GLOBAL_BUCKET,
     distance_proximity_weight,
     distance_band,
@@ -61,7 +63,7 @@ class FactorCalculator:
         df['trainer_name'] = df['trainer_name'].apply(normalize_person_name)
         df['horse_name'] = df['horse_name'].apply(normalize_person_name)
 
-        # 標準分桶：Venue_Track_Distance（例如 HV_C+3_1650）
+        # 細桶：Venue_Track_Distance（檔位等）
         df['bucket_id'] = df.apply(
             lambda row: make_bucket_id(
                 race_id=row['race_id'],
@@ -71,7 +73,17 @@ class FactorCalculator:
             ),
             axis=1,
         )
+        # 粗桶：Venue_距離帶（騎師/練馬師/騎練）
+        df['band_bucket_id'] = df.apply(
+            lambda row: make_band_bucket_id(
+                race_id=row['race_id'],
+                course=row['course'],
+                distance_m=row['distance_m'],
+            ),
+            axis=1,
+        )
         df = df[df['bucket_id'].apply(is_valid_bucket)].copy()
+        df = df[df['band_bucket_id'].apply(is_valid_band_bucket)].copy()
         
         return df
 
@@ -129,11 +141,27 @@ class FactorCalculator:
         decay_rates: list,
         smooth_c: float,
         global_bucket: bool = False,
+        use_distance_band: bool = False,
     ) -> pd.DataFrame:
-        """計算特定實體因子。global_bucket=True 時不分場地距離（人馬合作）。"""
+        """計算特定實體因子。
+        - global_bucket：人馬合作 GLOBAL
+        - use_distance_band：騎/練/騎練用 Venue_距離帶粗桶
+        - 否則用細桶 Venue_Track_Distance
+        """
         temp_df = df.copy()
         if global_bucket:
             temp_df['bucket_id'] = GLOBAL_BUCKET
+        elif use_distance_band:
+            if 'band_bucket_id' not in temp_df.columns:
+                temp_df['band_bucket_id'] = temp_df.apply(
+                    lambda row: make_band_bucket_id(
+                        race_id=row.get('race_id'),
+                        course=row.get('course'),
+                        distance_m=row.get('distance_m'),
+                    ),
+                    axis=1,
+                )
+            temp_df['bucket_id'] = temp_df['band_bucket_id']
         temp_df = self.apply_time_decay(temp_df, decay_rates)
 
         grouped = temp_df.groupby(['bucket_id', entity_col]).agg({
@@ -199,10 +227,10 @@ class FactorCalculator:
 
     def lookup_jockey_z(self, jockey_name: str, bucket_id: str, by_bucket: dict, by_name_avg: dict):
         """
-        層級回退（避免細桶樣本過少）：
-        1) 精確 Venue_Track_Distance
-        2) 同場地+同距離、任意賽道
-        3) 同場地+同距離帶（接近距離）
+        層級回退：
+        1) 精確鍵（粗桶 ST_SPRINT 或細桶 ST_A_1200）
+        2) 若傳入細桶 → 轉成距離帶粗桶再查
+        3) 同場地其他距離帶平均（可選）
         4) 該騎師跨桶平均
         """
         name = normalize_person_name(jockey_name)
@@ -213,27 +241,22 @@ class FactorCalculator:
             return by_bucket[(bucket_id, name)], 'exact'
 
         venue, track, dist = parse_bucket_parts(bucket_id)
-        # 2) 同場地+距離
+        # 細桶 → 粗桶
         if venue and dist:
+            band_key = make_band_bucket_id(venue=venue, distance_m=dist)
+            if (band_key, name) in by_bucket:
+                return by_bucket[(band_key, name)], 'band'
+
+        # 已是粗桶 ST_SPRINT
+        parts = str(bucket_id).split("_")
+        if len(parts) == 2 and parts[0] in ("ST", "HV"):
+            venue = parts[0]
             zs = [
                 z for (b, n), z in by_bucket.items()
-                if n == name and b.startswith(f"{venue}_") and b.endswith(f"_{dist}")
+                if n == name and b.startswith(f"{venue}_")
             ]
             if zs:
-                return float(sum(zs) / len(zs)), 'venue_dist'
-
-        # 3) 同場地+距離帶
-        if venue and dist:
-            band = distance_band(dist)
-            zs = []
-            for (b, n), z in by_bucket.items():
-                if n != name:
-                    continue
-                v2, _, d2 = parse_bucket_parts(b)
-                if v2 == venue and d2 is not None and distance_band(d2) == band:
-                    zs.append(z)
-            if zs:
-                return float(sum(zs) / len(zs)), f'band:{band}'
+                return float(sum(zs) / len(zs)), 'venue_bands'
 
         if name in by_name_avg:
             return by_name_avg[name], 'global_avg'
@@ -626,36 +649,39 @@ class FactorCalculator:
         df = self.fetch_historical_data()
         if df.empty:
             print("No historical data found. Please run batch crawler first.")
-            return None, None, None, None
+            return None, None, None, None, None
             
         df = self.calculate_base_score(df)
         
-        print("Calculating Jockey Factor...")
+        print("Calculating Jockey Factor (distance-band buckets)...")
         jockey_df = self.calculate_entity_factor(
             df, 'jockey_name', 
             ModelConfig.JOCKEY_DECAY, 
-            ModelConfig.JOCKEY_SMOOTH_C
+            ModelConfig.JOCKEY_SMOOTH_C,
+            use_distance_band=True,
         )
         jockey_df['factor_type'] = 'JOCKEY'
         jockey_df = jockey_df.rename(columns={'jockey_name': 'entity_name'})
         
-        print("Calculating Trainer Factor...")
+        print("Calculating Trainer Factor (distance-band buckets)...")
         trainer_df = self.calculate_entity_factor(
             df, 'trainer_name', 
             ModelConfig.TRAINER_DECAY, 
-            ModelConfig.TRAINER_SMOOTH_C
+            ModelConfig.TRAINER_SMOOTH_C,
+            use_distance_band=True,
         )
         trainer_df['factor_type'] = 'TRAINER'
         trainer_df = trainer_df.rename(columns={'trainer_name': 'entity_name'})
         
-        print("Calculating Synergy Factor...")
+        print("Calculating Synergy Factor (distance-band buckets)...")
         df['synergy_name'] = df.apply(
             lambda r: synergy_name(r['jockey_name'], r['trainer_name']), axis=1
         )
         synergy_df = self.calculate_entity_factor(
             df, 'synergy_name', 
             ModelConfig.SYNERGY_DECAY, 
-            ModelConfig.SYNERGY_SMOOTH_C
+            ModelConfig.SYNERGY_SMOOTH_C,
+            use_distance_band=True,
         )
         synergy_df['factor_type'] = 'SYNERGY'
         synergy_df = synergy_df.rename(columns={'synergy_name': 'entity_name'})

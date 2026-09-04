@@ -5,7 +5,7 @@ import ui_utils
 
 st.set_page_config(page_title="騎師因子 (Jockey)", layout="wide")
 st.title("🏇 騎師因子 (Jockey Factor)")
-st.caption("依排位騎師 + 本場 Bucket，匹配歷史 JOCKEY Z-Score。")
+st.caption("依排位騎師 + 距離帶粗桶（如 ST_SPRINT），匹配歷史 JOCKEY Z-Score。")
 
 if not ui_utils.ensure_history_loaded():
     st.stop()
@@ -25,7 +25,8 @@ with col_a:
             calc = FactorCalculator()
             df = calc.calculate_base_score(st.session_state['raw_df'].copy())
             j_df = calc.calculate_entity_factor(
-                df, 'jockey_name', ModelConfig.JOCKEY_DECAY, ModelConfig.JOCKEY_SMOOTH_C
+                df, 'jockey_name', ModelConfig.JOCKEY_DECAY, ModelConfig.JOCKEY_SMOOTH_C,
+                use_distance_band=True,
             )
             j_df['factor_type'] = 'JOCKEY'
             j_df = j_df.rename(columns={'jockey_name': 'entity_name'})

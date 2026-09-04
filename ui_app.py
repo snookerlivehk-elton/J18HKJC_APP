@@ -47,11 +47,14 @@ if st.button("🚀 載入歷史賽果數據", type="primary"):
 
                 st.session_state['raw_df'] = df
                 st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
+                st.session_state['band_buckets'] = sorted(df['band_bucket_id'].unique().tolist())
 
                 progress_bar.progress(100)
                 progress_placeholder.success(
-                    f"✅ 載入 {len(df)} 筆紀錄，共 {len(st.session_state['buckets'])} 個 bucket。"
-                    f" 範例：`{st.session_state['buckets'][:5]}`"
+                    f"✅ 載入 {len(df)} 筆紀錄，"
+                    f"細桶 {len(st.session_state['buckets'])}、"
+                    f"粗桶 {len(st.session_state['band_buckets'])}。"
+                    f" 粗桶範例：`{st.session_state['band_buckets'][:6]}`"
                 )
 
         except Exception as e:
@@ -87,7 +90,8 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
                     if not df.empty:
                         st.session_state['raw_df'] = calc.calculate_base_score(df)
                         st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
-                st.success(f"✅ 已寫入約 {n} 筆因子分數（含人馬 GLOBAL）。可前往推論儀表板或各因子頁看排位匹配。")
+                        st.session_state['band_buckets'] = sorted(df['band_bucket_id'].unique().tolist())
+                st.success(f"✅ 已寫入約 {n} 筆因子分數（騎練=距離帶粗桶；檔位=細桶；人馬=GLOBAL）。可前往推論儀表板或各因子頁看排位匹配。")
                 st.dataframe(
                     j.sort_values('z_score', ascending=False).head(8)[
                         ['bucket_id', 'entity_name', 'actual_runs', 'z_score']

@@ -8,10 +8,12 @@ from factor_calculator import FactorCalculator
 from config import ModelConfig
 from bucket_utils import (
     make_bucket_id,
+    make_band_bucket_id,
     normalize_person_name,
     synergy_name,
     horse_jockey_name,
     is_valid_bucket,
+    is_valid_band_bucket,
     GLOBAL_BUCKET,
     parse_bucket_parts,
 )
@@ -38,8 +40,16 @@ def get_upcoming_races_list():
             track=track,
             distance_m=dist,
         )
+        band = make_band_bucket_id(
+            race_id=row['race_id'],
+            course=course,
+            distance_m=dist,
+        )
         valid = "✓" if is_valid_bucket(bucket) else "✗"
-        label = f"第 {num} 場 | {date} {course} {track or '-'} {dist or '?'}米 ({cls or '-'}) [{valid} {bucket}]"
+        label = (
+            f"第 {num} 場 | {date} {course} {track or '-'} {dist or '?'}米 ({cls or '-'}) "
+            f"[{valid} {bucket} / 粗:{band}]"
+        )
         options.append((row['race_id'], label))
     return options
 
@@ -116,6 +126,23 @@ def get_bucket_for_race(race_id):
         race_id=race_info['race_id'],
         course=race_info['course'],
         track=race_info['track'],
+        distance_m=race_info['distance_m'],
+    )
+
+
+def get_band_bucket_for_race(race_id):
+    """騎師/練馬師/騎練用的距離帶粗桶。"""
+    engine = InferenceEngine()
+    races_df = engine.get_upcoming_races()
+    if races_df.empty:
+        return None
+    matched = races_df[races_df['race_id'] == race_id]
+    if matched.empty:
+        return None
+    race_info = matched.iloc[0]
+    return make_band_bucket_id(
+        race_id=race_info['race_id'],
+        course=race_info['course'],
         distance_m=race_info['distance_m'],
     )
 
@@ -271,19 +298,32 @@ def render_upcoming_match_panel(
     if use_global_bucket:
         target_bucket = GLOBAL_BUCKET
         bucket_ok = True
-        race_bucket = get_bucket_for_race(selected_race_id)  # 換人Δ仍用本場 Venue_Track_Distance
+        race_bucket = get_bucket_for_race(selected_race_id)
+        band_bucket = get_band_bucket_for_race(selected_race_id)
+    elif match_mode in ('jockey', 'trainer', 'synergy'):
+        # 騎練：距離帶粗桶
+        target_bucket = get_band_bucket_for_race(selected_race_id)
+        band_bucket = target_bucket
+        race_bucket = get_bucket_for_race(selected_race_id)
+        bucket_ok = is_valid_band_bucket(target_bucket) if target_bucket else False
     else:
+        # 檔位 / 馬匹近績等：細桶
         target_bucket = get_bucket_for_race(selected_race_id)
         race_bucket = target_bucket
+        band_bucket = get_band_bucket_for_race(selected_race_id)
         bucket_ok = is_valid_bucket(target_bucket) if target_bucket else False
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Bucket", target_bucket or "-")
+    c1.metric("匹配 Bucket", target_bucket or "-")
     c2.metric("Bucket 有效", "是" if bucket_ok else "否")
     c3.metric("排位馬匹數", len(runners_df))
+    if band_bucket and match_mode == 'draw':
+        st.caption(f"參考：本場距離帶粗桶為 `{band_bucket}`（騎練因子用此鍵）")
+    if match_mode in ('jockey', 'trainer', 'synergy') and race_bucket:
+        st.caption(f"參考：本場細桶為 `{race_bucket}`（檔位因子用此鍵）")
 
     if not bucket_ok and not use_global_bucket:
-        st.error("此場距離/跑道不完整，無法用 Venue_Track_Distance 匹配。請重新抓排位表。")
+        st.error("此場 Bucket 無效（缺距離/場地）。請重新抓排位表。")
 
     calc = FactorCalculator()
     score_map = {}
@@ -347,10 +387,12 @@ def render_upcoming_match_panel(
             else:
                 z, runs = None, 0
 
+            # B 軌用距離帶粗桶查騎師 Z（與 JOCKEY factor_scores 一致）
+            jockey_lookup_bucket = band_bucket or race_bucket or ''
             delta_info = calc.compute_jockey_upgrade_delta(
                 horse_name=row.get('horse_name'),
                 current_jockey=row.get('jockey_name'),
-                race_bucket=race_bucket or '',
+                race_bucket=jockey_lookup_bucket,
                 hist_df=hist_df,
                 jockey_scores=jockey_scores,
             )

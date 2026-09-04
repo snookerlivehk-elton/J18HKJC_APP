@@ -4,7 +4,7 @@ import subprocess
 import os
 from inference_engine import InferenceEngine
 from factor_calculator import FactorCalculator
-from bucket_utils import make_bucket_id, is_valid_bucket
+from bucket_utils import make_bucket_id, make_band_bucket_id, is_valid_bucket, is_valid_band_bucket
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 
 st.set_page_config(page_title="Data Control Center", layout="wide")
@@ -167,20 +167,33 @@ try:
             f"類型 {sorted(scores['factor_type'].unique().tolist())}｜"
             f"{scores['bucket_id'].nunique()} 個 bucket"
         )
+        st.caption(
+            "騎師/練馬師/騎練用距離帶粗桶（如 ST_SPRINT）；檔位用細桶（如 ST_A_1200）。"
+        )
         if not races_all.empty:
             rows = []
+            jts = scores[scores['factor_type'].isin(['JOCKEY', 'TRAINER', 'SYNERGY'])]
+            draw_scores = scores[scores['factor_type'] == 'DRAW']
             for _, r in races_all.iterrows():
-                b = make_bucket_id(
+                fine = make_bucket_id(
                     race_id=r['race_id'], course=r['course'],
                     track=r['track'], distance_m=r['distance_m'],
                 )
-                has_hist = (scores['bucket_id'] == b).any() if is_valid_bucket(b) else False
+                band = make_band_bucket_id(
+                    race_id=r['race_id'], course=r['course'],
+                    distance_m=r['distance_m'],
+                )
+                has_draw = (draw_scores['bucket_id'] == fine).any() if is_valid_bucket(fine) else False
+                has_band = (jts['bucket_id'] == band).any() if is_valid_band_bucket(band) else False
                 rows.append({
                     '場次': r['race_num'],
                     'race_id': r['race_id'],
-                    'bucket': b,
-                    'bucket有效': is_valid_bucket(b),
-                    '歷史有此bucket': has_hist,
+                    '細桶(檔位)': fine,
+                    '細桶有效': is_valid_bucket(fine),
+                    '歷史有DRAW': has_draw,
+                    '粗桶(騎練)': band,
+                    '粗桶有效': is_valid_band_bucket(band),
+                    '歷史有騎練': has_band,
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 except Exception as e:

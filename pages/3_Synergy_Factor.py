@@ -6,7 +6,7 @@ import ui_utils
 
 st.set_page_config(page_title="騎練合作因子 (Synergy)", layout="wide")
 st.title("🤝 騎練合作因子 (Synergy Factor)")
-st.caption("依排位「騎師 & 練馬師」組合 + 本場 Bucket 匹配。名稱格式與推論引擎相同。")
+st.caption("依排位「騎師 & 練馬師」+ 距離帶粗桶匹配。名稱格式與推論引擎相同。")
 
 if not ui_utils.ensure_history_loaded():
     st.stop()
@@ -27,7 +27,8 @@ if st.button("🚀 計算騎練合作因子", type="primary", disabled=not can_c
             lambda r: synergy_name(r['jockey_name'], r['trainer_name']), axis=1
         )
         s_df = calc.calculate_entity_factor(
-            df, 'synergy_name', ModelConfig.SYNERGY_DECAY, ModelConfig.SYNERGY_SMOOTH_C
+            df, 'synergy_name', ModelConfig.SYNERGY_DECAY, ModelConfig.SYNERGY_SMOOTH_C,
+            use_distance_band=True,
         )
         s_df['factor_type'] = 'SYNERGY'
         s_df = s_df.rename(columns={'synergy_name': 'entity_name'})

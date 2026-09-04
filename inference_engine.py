@@ -4,9 +4,11 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import (
     make_bucket_id,
+    make_band_bucket_id,
     normalize_person_name,
     synergy_name,
     is_valid_bucket,
+    is_valid_band_bucket,
 )
 
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
@@ -56,11 +58,19 @@ class InferenceEngine:
             return pd.DataFrame()
 
     def get_race_bucket(self, race_info) -> str:
-        """由 upcoming_races 列組出標準 bucket。"""
+        """細桶 Venue_Track_Distance（檔位等）。"""
         return make_bucket_id(
             race_id=race_info.get('race_id') if hasattr(race_info, 'get') else race_info['race_id'],
             course=race_info['course'],
             track=race_info['track'],
+            distance_m=race_info['distance_m'],
+        )
+
+    def get_race_band_bucket(self, race_info) -> str:
+        """粗桶 Venue_距離帶（騎師/練馬師/騎練）。"""
+        return make_band_bucket_id(
+            race_id=race_info.get('race_id') if hasattr(race_info, 'get') else race_info['race_id'],
+            course=race_info['course'],
             distance_m=race_info['distance_m'],
         )
 
@@ -120,7 +130,8 @@ class InferenceEngine:
         if runners_df.empty:
             return pd.DataFrame(), race_info
 
-        bucket_id = self.get_race_bucket(race_info)
+        fine_bucket = self.get_race_bucket(race_info)
+        band_bucket = self.get_race_band_bucket(race_info)
         scores_df = self.calc.load_factor_scores(
             factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW']
         )
@@ -136,10 +147,10 @@ class InferenceEngine:
             syn_name = synergy_name(j_name, t_name)
             draw_group = self.calc._assign_draw_group(row['draw'])
 
-            z_jockey, hit_j = self._lookup_z(lookup, 'JOCKEY', bucket_id, j_name)
-            z_trainer, hit_t = self._lookup_z(lookup, 'TRAINER', bucket_id, t_name)
-            z_synergy, hit_s = self._lookup_z(lookup, 'SYNERGY', bucket_id, syn_name)
-            z_draw, hit_d = self._lookup_z(lookup, 'DRAW', bucket_id, draw_group)
+            z_jockey, hit_j = self._lookup_z(lookup, 'JOCKEY', band_bucket, j_name)
+            z_trainer, hit_t = self._lookup_z(lookup, 'TRAINER', band_bucket, t_name)
+            z_synergy, hit_s = self._lookup_z(lookup, 'SYNERGY', band_bucket, syn_name)
+            z_draw, hit_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
 
             for ft, hit in (
                 ('JOCKEY', hit_j), ('TRAINER', hit_t),
@@ -188,8 +199,10 @@ class InferenceEngine:
 
         # 把匹配診斷掛在 race_info 的複本屬性上（UI 可讀）
         meta = {
-            'bucket_id': bucket_id,
-            'bucket_valid': is_valid_bucket(bucket_id),
+            'bucket_id': fine_bucket,
+            'band_bucket_id': band_bucket,
+            'bucket_valid': is_valid_bucket(fine_bucket),
+            'band_bucket_valid': is_valid_band_bucket(band_bucket),
             'factor_rows': 0 if scores_df is None else len(scores_df),
             'match_rate': (sum(hit_counts.values()) / total_lookups) if total_lookups else 0.0,
             'hit_counts': hit_counts,

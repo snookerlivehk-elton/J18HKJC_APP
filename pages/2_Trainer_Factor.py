@@ -5,7 +5,7 @@ import ui_utils
 
 st.set_page_config(page_title="練馬師因子 (Trainer)", layout="wide")
 st.title("🎩 練馬師因子 (Trainer Factor)")
-st.caption("依排位練馬師 + 本場 Bucket，匹配歷史 TRAINER Z-Score。")
+st.caption("依排位練馬師 + 距離帶粗桶（如 ST_SPRINT），匹配歷史 TRAINER Z-Score。")
 
 if not ui_utils.ensure_history_loaded():
     st.stop()
@@ -23,7 +23,8 @@ if st.button("🚀 計算練馬師因子", type="primary", disabled=not can_comp
         calc = FactorCalculator()
         df = calc.calculate_base_score(st.session_state['raw_df'].copy())
         t_df = calc.calculate_entity_factor(
-            df, 'trainer_name', ModelConfig.TRAINER_DECAY, ModelConfig.TRAINER_SMOOTH_C
+            df, 'trainer_name', ModelConfig.TRAINER_DECAY, ModelConfig.TRAINER_SMOOTH_C,
+            use_distance_band=True,
         )
         t_df['factor_type'] = 'TRAINER'
         t_df = t_df.rename(columns={'trainer_name': 'entity_name'})

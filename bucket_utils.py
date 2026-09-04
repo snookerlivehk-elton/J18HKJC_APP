@@ -152,6 +152,36 @@ def distance_proximity_weight(hist_distance_m: Any, target_distance_m: Any) -> f
     return 0.20
 
 
+def make_band_bucket_id(
+    venue: Any = None,
+    distance_m: Any = None,
+    race_id: Any = None,
+    course: Any = None,
+) -> str:
+    """
+    粗桶：Venue + 距離帶（忽略賽道細碼）。
+    例：ST_SPRINT、HV_MILE、ST_STAY
+    供騎師 / 練馬師 / 騎練使用，增加樣本。
+    """
+    v = extract_venue(race_id=race_id, course=course if course is not None else venue)
+    if venue is not None and not _is_na(venue):
+        vv = str(venue).strip().upper()
+        if vv in ("ST", "HV"):
+            v = vv
+    band = distance_band(distance_m)
+    return f"{v}_{band}"
+
+
+def is_valid_band_bucket(bucket_id: str) -> bool:
+    if not bucket_id or not isinstance(bucket_id, str):
+        return False
+    parts = bucket_id.split("_")
+    if len(parts) != 2:
+        return False
+    venue, band = parts[0], parts[1]
+    return venue in ("ST", "HV") and band in ("SPRINT", "MILE", "STAY")
+
+
 def parse_bucket_parts(bucket_id: str):
     """ST_A_1200 -> (ST, A, 1200)；無法解析則 (None,None,None)。"""
     if not bucket_id or not isinstance(bucket_id, str):

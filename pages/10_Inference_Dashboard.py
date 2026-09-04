@@ -52,15 +52,16 @@ if st.button("🚀 執行因子匹配預測", type="primary"):
         try:
             predictions_df, race_info, meta = engine.predict_race(selected_race_id)
 
-            if not meta.get('bucket_valid'):
+            if not meta.get('bucket_valid') and not meta.get('band_bucket_valid'):
                 st.error(
-                    f"此場 Bucket 無效：`{meta.get('bucket_id')}`。"
+                    f"此場 Bucket 無效：細=`{meta.get('bucket_id')}`／粗=`{meta.get('band_bucket_id')}`。"
                     "排位表可能缺少跑道或距離，請重新抓取排位表。"
                 )
                 st.stop()
 
             st.info(
-                f"Bucket：`{meta['bucket_id']}`　｜　"
+                f"細桶(檔位)：`{meta['bucket_id']}`　｜　"
+                f"粗桶(騎練)：`{meta.get('band_bucket_id')}`　｜　"
                 f"因子表列數：{meta['factor_rows']}　｜　"
                 f"匹配率：{meta['match_rate']:.0%}　"
                 f"（J{meta['hit_counts']['JOCKEY']} "
@@ -71,8 +72,8 @@ if st.button("🚀 執行因子匹配預測", type="primary"):
 
             if meta['match_rate'] == 0:
                 st.warning(
-                    "匹配率為 0%：歷史因子的 bucket 與此場對不上，或該條件尚無樣本。"
-                    "請確認已用新版 bucket 重算因子，且排位距離/跑道正確。"
+                    "匹配率為 0%：請用主頁「重算並寫入 factor_scores」產生距離帶粗桶鍵（如 ST_SPRINT），"
+                    "並確認排位距離/跑道正確。"
                 )
 
             if predictions_df.empty:
