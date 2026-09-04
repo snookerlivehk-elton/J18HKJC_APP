@@ -27,11 +27,13 @@ with col1:
     if st.button("啟動排位表爬蟲", type="primary", use_container_width=True):
         with st.spinner(f"正在背景抓取 {target_date} {target_course} 的排位表..."):
             try:
+                # 確保環境變數傳遞給子進程
+                env = os.environ.copy()
                 result = subprocess.run(
                     ["python", "racecard_crawler.py", "--date", target_date, "--course", target_course],
-                    capture_output=True, text=True, check=True
+                    capture_output=True, text=True, check=True, env=env
                 )
-                st.success("✅ 排位表抓取完成！請查看下方監控面板。")
+                st.success("✅ 排位表抓取完成！請重新整理頁面以更新下方監控面板。")
                 with st.expander("查看執行日誌"):
                     st.text(result.stdout)
             except subprocess.CalledProcessError as e:
@@ -44,11 +46,12 @@ with col2:
     if st.button("啟動速勢能量爬蟲", type="primary", use_container_width=True):
         with st.spinner(f"正在背景抓取 {sg_date} {sg_course} 的速勢能量..."):
             try:
+                env = os.environ.copy()
                 result = subprocess.run(
                     ["python", "speedguide_crawler.py", "--date", sg_date, "--course", sg_course],
-                    capture_output=True, text=True, check=True
+                    capture_output=True, text=True, check=True, env=env
                 )
-                st.success("✅ 速勢能量抓取完成！請查看下方監控面板。")
+                st.success("✅ 速勢能量抓取完成！請重新整理頁面以更新下方監控面板。")
                 with st.expander("查看執行日誌"):
                     st.text(result.stdout)
             except subprocess.CalledProcessError as e:
