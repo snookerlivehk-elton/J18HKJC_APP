@@ -86,14 +86,94 @@ class HKJCSpeedGuideCrawler:
         conn.close()
         return True
 
+    def save_to_db(self, race_id, runners_data):
+        """寫入 SQLite 或 PostgreSQL"""
+        if not runners_data: return
+        
+        from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+        import os
+        
+        if USE_SQLITE:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            
+            try:
+                for r in runners_data:
+                    runner_id = f"{race_id}_{r['horse_no']}"
+                    cursor.execute('''
+                        INSERT INTO upcoming_speedguide 
+                        (runner_id, race_id, horse_no, form_rating, speed_energy, speed_energy_delta)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(runner_id) DO UPDATE SET
+                        form_rating=excluded.form_rating, 
+                        speed_energy=excluded.speed_energy, 
+                        speed_energy_delta=excluded.speed_energy_delta
+                    ''', (
+                        runner_id, race_id, r['horse_no'], 
+                        r['form_rating'], r['speed_energy'], r['speed_energy_delta']
+                    ))
+                
+                conn.commit()
+                print(f"成功儲存 Speedguide 資料: {race_id} (共 {len(runners_data)} 匹馬) [SQLite]")
+            except Exception as e:
+                print(f"資料庫寫入失敗: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+        else:
+            # 寫入 PostgreSQL (Railway)
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL")
+            if not db_url:
+                print("找不到 DATABASE_URL 環境變數，無法寫入 PostgreSQL。")
+                return
+                
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+                
+            try:
+                conn = psycopg2.connect(db_url)
+                cursor = conn.cursor()
+                
+                for r in runners_data:
+                    runner_id = f"{race_id}_{r['horse_no']}"
+                    cursor.execute('''
+                        INSERT INTO upcoming_speedguide 
+                        (runner_id, race_id, horse_no, form_rating, speed_energy, speed_energy_delta)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT(runner_id) DO UPDATE SET
+                        form_rating=EXCLUDED.form_rating, 
+                        speed_energy=EXCLUDED.speed_energy, 
+                        speed_energy_delta=EXCLUDED.speed_energy_delta
+                    ''', (
+                        runner_id, race_id, r['horse_no'], 
+                        r['form_rating'], r['speed_energy'], r['speed_energy_delta']
+                    ))
+                
+                conn.commit()
+                print(f"成功儲存 Speedguide 資料: {race_id} (共 {len(runners_data)} 匹馬) [PostgreSQL]")
+            except Exception as e:
+                print(f"PostgreSQL 資料庫寫入失敗: {e}")
+                conn.rollback()
+            finally:
+                if 'conn' in locals() and conn:
+                    cursor.close()
+                    conn.close()
+
     async def crawl_all_races(self, date_str, course):
         self.init_db()
         
         # 強制設定連接數限制為 1，完全遵守單線程、一個一個來的安全規範
         limits = httpx.Limits(max_connections=1, max_keepalive_connections=1)
-        async with httpx.AsyncClient(http2=True, limits=limits) as client:
+        # 移除 http2=True 避免在 Railway 發生錯誤
+        async with httpx.AsyncClient(limits=limits) as client:
             for num in range(1, 12):
                 await asyncio.sleep(3.0) # 遵守 3 秒間隔規定
+                
+                print(f"正在抓取速勢能量與狀態評級 (第 {num} 場):")
+                url = f"https://racing.hkjc.com/zh-hk/local/info/speedpro/speedguide?raceno={num}&racedate={date_str}&Racecourse={course}"
+                print(url)
+                
                 html = await self.fetch_speedguide(client, num, date_str, course)
                 if html and "找不到" not in html and "Error" not in html:
                     self.parse_and_save(html, date_str, course, num)

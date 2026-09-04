@@ -166,52 +166,108 @@ class HKJCRaceCardCrawler:
         return race_info, runners
 
     def save_to_db(self, race_info, runners):
-        """寫入 SQLite"""
+        """寫入 SQLite 或 PostgreSQL"""
         if not race_info or not runners: return
         
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+        import os
         
-        try:
-            # Upsert Race
-            cursor.execute('''
-                INSERT INTO upcoming_races 
-                (race_id, racing_date, race_num, course, race_name, class, distance_m, track, ground)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(race_id) DO UPDATE SET
-                class=excluded.class, distance_m=excluded.distance_m, track=excluded.track
-            ''', (
-                race_info['race_id'], race_info['racing_date'], race_info['race_num'], 
-                race_info['course'], race_info['race_name'], race_info['class'], 
-                race_info['distance_m'], race_info['track'], race_info['ground']
-            ))
+        if USE_SQLITE:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
             
-            # Upsert Runners
-            for r in runners:
+            try:
+                # Upsert Race
                 cursor.execute('''
-                    INSERT INTO upcoming_runners 
-                    (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight)
+                    INSERT INTO upcoming_races 
+                    (race_id, racing_date, race_num, course, race_name, class, distance_m, track, ground)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(runner_id) DO UPDATE SET
-                    draw=excluded.draw, jockey_name=excluded.jockey_name, trainer_name=excluded.trainer_name, handicap_weight=excluded.handicap_weight
+                    ON CONFLICT(race_id) DO UPDATE SET
+                    class=excluded.class, distance_m=excluded.distance_m, track=excluded.track
                 ''', (
-                    r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'], 
-                    r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'], r['handicap_weight']
+                    race_info['race_id'], race_info['racing_date'], race_info['race_num'], 
+                    race_info['course'], race_info['race_name'], race_info['class'], 
+                    race_info['distance_m'], race_info['track'], race_info['ground']
                 ))
-            
-            conn.commit()
-            print(f"成功儲存 {race_info['course']} 第 {race_info['race_num']} 場 (共 {len(runners)} 匹馬)")
-        except Exception as e:
-            print(f"資料庫寫入失敗: {e}")
-            conn.rollback()
-        finally:
-            conn.close()
+                
+                # Upsert Runners
+                for r in runners:
+                    cursor.execute('''
+                        INSERT INTO upcoming_runners 
+                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(runner_id) DO UPDATE SET
+                        draw=excluded.draw, jockey_name=excluded.jockey_name, trainer_name=excluded.trainer_name, handicap_weight=excluded.handicap_weight
+                    ''', (
+                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'], 
+                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'], r['handicap_weight']
+                    ))
+                
+                conn.commit()
+                print(f"成功儲存 {race_info['course']} 第 {race_info['race_num']} 場 (共 {len(runners)} 匹馬) [SQLite]")
+            except Exception as e:
+                print(f"資料庫寫入失敗: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+        else:
+            # 寫入 PostgreSQL (Railway)
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL")
+            if not db_url:
+                print("找不到 DATABASE_URL 環境變數，無法寫入 PostgreSQL。")
+                return
+                
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+                
+            try:
+                conn = psycopg2.connect(db_url)
+                cursor = conn.cursor()
+                
+                # Upsert Race (PostgreSQL 語法)
+                cursor.execute('''
+                    INSERT INTO upcoming_races 
+                    (race_id, racing_date, race_num, course, race_name, class, distance_m, track, ground)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT(race_id) DO UPDATE SET
+                    class=EXCLUDED.class, distance_m=EXCLUDED.distance_m, track=EXCLUDED.track
+                ''', (
+                    race_info['race_id'], race_info['racing_date'], race_info['race_num'], 
+                    race_info['course'], race_info['race_name'], race_info['class'], 
+                    race_info['distance_m'], race_info['track'], race_info['ground']
+                ))
+                
+                # Upsert Runners
+                for r in runners:
+                    cursor.execute('''
+                        INSERT INTO upcoming_runners 
+                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT(runner_id) DO UPDATE SET
+                        draw=EXCLUDED.draw, jockey_name=EXCLUDED.jockey_name, trainer_name=EXCLUDED.trainer_name, handicap_weight=EXCLUDED.handicap_weight
+                    ''', (
+                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'], 
+                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'], r['handicap_weight']
+                    ))
+                
+                conn.commit()
+                print(f"成功儲存 {race_info['course']} 第 {race_info['race_num']} 場 (共 {len(runners)} 匹馬) [PostgreSQL]")
+            except Exception as e:
+                print(f"PostgreSQL 資料庫寫入失敗: {e}")
+                conn.rollback()
+            finally:
+                if 'conn' in locals() and conn:
+                    cursor.close()
+                    conn.close()
 
     async def crawl_day(self, date_str, course):
         self.init_db()
         
         limits = httpx.Limits(max_connections=1, max_keepalive_connections=1)
-        async with httpx.AsyncClient(http2=True, limits=limits) as client:
+        # 移除 http2=True，因為在 Railway 環境可能會遇到 h2 未安裝的錯誤，
+        # 改用標準 HTTP/1.1 即可滿足抓取需求
+        async with httpx.AsyncClient(limits=limits) as client:
             # 先抓第 1 場探路
             html = await self.fetch_race(client, date_str, course, 1)
             if not html:
