@@ -24,7 +24,15 @@ def main():
     parser.add_argument("--limit", type=int, default=50, help="本輪最多解析幾筆")
     parser.add_argument("--sleep", type=float, default=0.2, help="每筆間隔秒數（控速）")
     parser.add_argument("--dry-run", action="store_true", help="只顯示待解析數量")
+    parser.add_argument(
+        "--skip-trivial",
+        action="store_true",
+        default=True,
+        help="略過空白／無特別報告（預設開）",
+    )
+    parser.add_argument("--no-skip-trivial", action="store_true", help="不要略過無內容")
     args = parser.parse_args()
+    skip_trivial = not args.no_skip_trivial
 
     calc = FactorCalculator()
     status = calc.nlp_status()
@@ -33,12 +41,16 @@ def main():
     if args.dry_run:
         return 0
 
+    if skip_trivial:
+        skipped = calc.mark_trivial_reports_skipped(limit=max(args.limit * 10, 200))
+        print(f"Marked trivial skipped: {skipped}")
+
     processor = NLPProcessor()
     if not processor.is_ready():
         print("ERROR: OPENAI_API_KEY not set", file=sys.stderr)
         return 1
 
-    rows = calc.load_unprocessed_reports(limit=args.limit)
+    rows = calc.load_unprocessed_reports(limit=args.limit, skip_trivial=skip_trivial)
     if rows.empty:
         print("Nothing to process.")
         return 0

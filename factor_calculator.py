@@ -300,9 +300,48 @@ class FactorCalculator:
                     "ALTER TABLE text_reports ADD COLUMN IF NOT EXISTS nlp_result TEXT"
                 ))
 
-    def load_unprocessed_reports(self, limit: int = 10) -> pd.DataFrame:
-        """讀取尚未 LLM 解析的賽後報告。"""
+    @staticmethod
+    def is_trivial_report(report_text) -> bool:
+        """空白或「無特別報告」等無補償價值文字，不呼叫 LLM。"""
+        if report_text is None or (isinstance(report_text, float) and np.isnan(report_text)):
+            return True
+        t = str(report_text).strip()
+        if not t or len(t) < 4:
+            return True
+        # 去掉標點後比對
+        compact = re.sub(r"[\s。．.！!？?，,、；;：:\"'「」『』（）()【】\[\]]+", "", t)
+        trivial_set = {
+            "無特別報告",
+            "沒有特別報告",
+            "無報告",
+            "沒有報告",
+            "Nil",
+            "NIL",
+            "N/A",
+            "NA",
+            "无特别报告",
+        }
+        if compact in trivial_set:
+            return True
+        if re.fullmatch(r"無特別報告.*", t):
+            return True
+        return False
+
+    @staticmethod
+    def skipped_nlp_payload(reason: str = "skipped: trivial/empty") -> dict:
+        return {
+            "has_excuse": False,
+            "excuse_stage": "none",
+            "severity": 0.0,
+            "reason": reason,
+            "skipped": True,
+        }
+
+    def load_unprocessed_reports(self, limit: int = 10, skip_trivial: bool = True) -> pd.DataFrame:
+        """讀取尚未 LLM 解析的賽後報告（可略過無內容）。"""
         self.ensure_nlp_result_column()
+        # 多取一些再於 Python 過濾，避免 SQL 難表達「無特別報告」
+        fetch_n = max(limit * 5, limit + 50) if skip_trivial else limit
         q = text("""
             SELECT id, entity_type, entity_id, report_type, report_text
             FROM text_reports
@@ -313,10 +352,172 @@ class FactorCalculator:
             LIMIT :lim
         """)
         try:
-            return pd.read_sql(q, self.engine, params={"lim": limit})
+            df = pd.read_sql(q, self.engine, params={"lim": int(fetch_n)})
         except Exception as e:
             print(f"load_unprocessed_reports failed: {e}")
             return pd.DataFrame()
+        if df.empty:
+            return df
+        if skip_trivial:
+            df = df[~df["report_text"].apply(self.is_trivial_report)].copy()
+        return df.head(limit).reset_index(drop=True)
+
+    def mark_trivial_reports_skipped(self, report_ids=None, limit: int = 500) -> int:
+        """把空白／無特別報告直接寫入 skipped nlp_result，不呼叫 LLM。"""
+        self.ensure_nlp_result_column()
+        if report_ids is not None:
+            ids = [int(x) for x in report_ids]
+            if not ids:
+                return 0
+            frames = []
+            for i in range(0, len(ids), 400):
+                chunk = ids[i:i + 400]
+                id_list = ",".join(str(x) for x in chunk)
+                frames.append(pd.read_sql(
+                    f"SELECT id, report_text FROM text_reports WHERE nlp_result IS NULL AND id IN ({id_list})",
+                    self.engine,
+                ))
+            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        else:
+            df = pd.read_sql(text("""
+                SELECT id, report_text FROM text_reports
+                WHERE nlp_result IS NULL
+                ORDER BY id
+                LIMIT :lim
+            """), self.engine, params={"lim": int(limit)})
+
+        if df.empty:
+            return 0
+        n = 0
+        payload = json.dumps(self.skipped_nlp_payload(), ensure_ascii=False)
+        with self.engine.begin() as conn:
+            for _, row in df.iterrows():
+                if not self.is_trivial_report(row["report_text"]):
+                    continue
+                conn.execute(
+                    text("UPDATE text_reports SET nlp_result = :payload WHERE id = :id"),
+                    {"payload": payload, "id": int(row["id"])},
+                )
+                n += 1
+        return n
+
+    def load_reports_for_upcoming_race(
+        self,
+        race_id: str,
+        lookback_days: int = 360,
+        only_unprocessed: bool = True,
+    ) -> pd.DataFrame:
+        """
+        只取「本場排位馬匹」在 lookback 內的歷史報告。
+        以品牌號（L100）優先對齊，其次正規化馬名。
+        """
+        self.ensure_nlp_result_column()
+        try:
+            upcoming = pd.read_sql(
+                text("""
+                    SELECT horse_no, horse_name, brand_num
+                    FROM upcoming_runners
+                    WHERE race_id = :rid
+                    ORDER BY horse_no
+                """),
+                self.engine,
+                params={"rid": race_id},
+            )
+        except Exception:
+            # brand_num 欄位可能不存在
+            upcoming = pd.read_sql(
+                text("""
+                    SELECT horse_no, horse_name
+                    FROM upcoming_runners
+                    WHERE race_id = :rid
+                    ORDER BY horse_no
+                """),
+                self.engine,
+                params={"rid": race_id},
+            )
+
+        if upcoming.empty:
+            return pd.DataFrame()
+
+        brands = set()
+        names = set()
+        for _, row in upcoming.iterrows():
+            hn = str(row.get("horse_name") or "")
+            bn = row.get("brand_num")
+            if bn is not None and str(bn).strip() and str(bn).strip().lower() not in ("none", "nan"):
+                brands.add(str(bn).strip().upper())
+            m = re.search(r"\(([A-Z]\d+)\)", hn.upper())
+            if m:
+                brands.add(m.group(1))
+            names.add(normalize_person_name(hn))
+
+        # 歷史 runners：品牌號或馬名對得上
+        hist = pd.read_sql(text("""
+            SELECT ru.runner_id, ru.horse_name, ru.brand_num, m.racing_date
+            FROM runners ru
+            JOIN races r ON ru.race_id = r.race_id
+            JOIN race_meetings m ON r.meeting_id = m.meeting_id
+            WHERE ru.finish_order_num IS NOT NULL
+        """), self.engine)
+        if hist.empty:
+            return pd.DataFrame()
+
+        hist["racing_date"] = pd.to_datetime(hist["racing_date"])
+        cutoff = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=int(lookback_days))
+        hist = hist[hist["racing_date"] >= cutoff].copy()
+        hist["horse_name_norm"] = hist["horse_name"].apply(normalize_person_name)
+        hist["brand_norm"] = hist["brand_num"].astype(str).str.strip().str.upper()
+        hist.loc[hist["brand_norm"].isin(["", "NONE", "NAN", "NAT"]), "brand_norm"] = None
+
+        mask = hist["horse_name_norm"].isin(names)
+        if brands:
+            mask = mask | hist["brand_norm"].isin(brands)
+        matched_runners = hist.loc[mask, "runner_id"].astype(str).unique().tolist()
+        if not matched_runners:
+            return pd.DataFrame()
+
+        # 分批 IN，避免參數過長
+        frames = []
+        chunk_size = 400
+        for i in range(0, len(matched_runners), chunk_size):
+            chunk = matched_runners[i:i + chunk_size]
+            placeholders = ", ".join([f":id{j}" for j in range(len(chunk))])
+            params = {f"id{j}": chunk[j] for j in range(len(chunk))}
+            where_nlp = "AND nlp_result IS NULL" if only_unprocessed else ""
+            q = text(f"""
+                SELECT id, entity_type, entity_id, report_type, report_text, nlp_result
+                FROM text_reports
+                WHERE entity_type = 'runner'
+                  AND entity_id IN ({placeholders})
+                  {where_nlp}
+                ORDER BY id
+            """)
+            try:
+                frames.append(pd.read_sql(q, self.engine, params=params))
+            except Exception as e:
+                # SQLite 退回字串 IN
+                ids_sql = ",".join([f"'{x}'" for x in chunk])
+                q2 = f"""
+                    SELECT id, entity_type, entity_id, report_type, report_text, nlp_result
+                    FROM text_reports
+                    WHERE entity_type = 'runner'
+                      AND entity_id IN ({ids_sql})
+                      {"AND nlp_result IS NULL" if only_unprocessed else ""}
+                    ORDER BY id
+                """
+                try:
+                    frames.append(pd.read_sql(q2, self.engine))
+                except Exception as e2:
+                    print(f"load_reports_for_upcoming_race failed: {e} / {e2}")
+
+        if not frames:
+            return pd.DataFrame()
+        out = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["id"])
+        out["is_trivial"] = out["report_text"].apply(self.is_trivial_report)
+        out["needs_llm"] = (~out["is_trivial"]) & (
+            out["nlp_result"].isna() if "nlp_result" in out.columns else True
+        )
+        return out
 
     def save_nlp_result(self, report_id: int, result: dict) -> None:
         payload = json.dumps(result, ensure_ascii=False)
