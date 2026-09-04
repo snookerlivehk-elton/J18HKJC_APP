@@ -1,50 +1,228 @@
-# J18 賽馬量化預測系統 - AI 開發交接報告 (Handover Report)
+# J18 賽馬量化預測系統 — AI 開發交接手冊
 
-> **⚠️ 下一次 AI 接手注意事項 (To Next AI Agent):**
-> 1. 本專案是一個**高度量化的賽馬預測系統**，請在執行任何操作前，**務必先閱讀 [`FACTOR_MODEL_DESIGN.md`](file:///c:/Users/User/.trae/J182026API_RE/FACTOR_MODEL_DESIGN.md)**，裡面記載了 6 大核心因子（如 Z-Score、貝葉斯平滑、FSR、Pace Projection）的數學邏輯，切勿偏離白皮書的設計。
-> 2. 目前卡關點：`api.j18.hk` 的歷史賽果 API 暫時阻擋 IP / 維修中。
-> 3. 下一步首要任務：一旦使用者告知 API 已修復，請立即執行 `python batch_crawler.py` 抓取歷史數據，並測試 `factor_calculator.py` 是否能正確產出所有因子的 Z-Score。
-> 4. 專案最終目標是部署至 **Railway**，並依賴 `fixtures` 表進行全自動 Cron Job 排程。
+> **給下一位 AI / 開發者**：先讀本文件，再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
+> 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
+> 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。
 
 ---
 
-## 1. 系統架構與目前進度 (Current Status)
+## 0. 一句話產品流程
 
-### 🧠 核心大腦與模型 (Models)
-- **`FACTOR_MODEL_DESIGN.md` (已完成 100%)**：定義了 6 大量化因子。這是整個系統的靈魂。
-- **`config.py` (已完成 100%)**：將所有模型超參數（如時間衰減、平滑常數、目標權重）抽離，為未來的機器學習 (ML) 參數尋優做好準備。
-- **`factor_calculator.py` (已完成 80%)**：基於 Pandas 的高速計算引擎，目前已完成 Phase 1 (騎練 Z-Score) 的計算，並串接至 Streamlit UI。
+1. 爬歷史賽果 + 排位表（馬、騎練、檔位、ST/HV、班次、距離、跑道）  
+2. 依白皮書算各因子 Z-Score，寫入 `factor_scores`  
+3. 對即將舉行的賽事做條件匹配 → 預測排名  
 
-### 🕸️ 資料收集與爬蟲管線 (ETL Pipelines)
-- **`schema.sql` (已完成)**：支援 PostgreSQL (Railway) 與 SQLite (Local)，並特別獨立出 `text_reports` 表供未來 NLP 分析。
-- **`batch_crawler.py` (已完成)**：負責抓取 J18 歷史賽果，具備斷點續傳與智能退避功能。(等待 API 修復中)
-- **`racecard_crawler.py` (已完成)**：負責抓取 HKJC 官方「明日排位表」。(已測試成功)
-- **`formguide_crawler.py` (已完成)**：負責抓取 HKJC Speedpro 的「賽前短評」，供 NLP 萃取隱藏優勢。
-- **`fixture_crawler.py` (已完成)**：負責抓取全季 88 個賽馬日的「賽期表」，這是全自動排程的基石。
+UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 → 預測**。
 
 ---
 
-## 2. 全自動化排程藍圖 (The Auto-Pilot Cron Logic)
+## 1. 目前架構（2026-09 現況）
 
-當 API 修復且模型數據驗證無誤後，系統將部署至 Railway，並按以下邏輯自動運作（無需人工介入）：
+### 1.1 資料層
 
-1. **每年季前**：執行 `fixture_crawler.py`，載入全季賽馬日曆至 `fixtures` 表。
-2. **賽前 2 日 (早上 08:00)**：若 `fixtures` 顯示後天有賽事，觸發 `racecard_crawler.py` 抓取排位表，並呼叫大腦進行「Pace Projection (預計步速推算)」。
-3. **賽前 1 日 (下午 17:00)**：觸發 `formguide_crawler.py` 抓取賽前短評，交由 LLM 萃取「漏閘 / 狀態提升」等標籤，進行 Z-Score 最終補償。
-4. **賽後隔日 (半夜 03:00)**：觸發 `batch_crawler.py` 抓取昨日賽果，接著啟動 `factor_calculator.py` 重新計算全庫的 Z-Score，完成大腦的自我迭代與升級。
+| 來源 | 表 / 產物 | 說明 |
+|------|-----------|------|
+| J18 歷史 API | `race_meetings`, `races`, `runners`, `text_reports` | `batch_crawler` / `etl_pipeline` |
+| HKJC 排位 | `upcoming_races`, `upcoming_runners` | `racecard_crawler`（注意欄位偏移：檔位/練馬師） |
+| HKJC Speed Guide | `upcoming_speedguide` | 賽前約 24–36h 才有資料屬正常 |
+| 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |
+
+- 雲端：`USE_SQLITE=false` + `DATABASE_URL` / `DATABASE_URL_SYNC`  
+- 本地可 SQLite，但與 Railway 開發請對齊 Postgres  
+- `start.sh`：**只跑 Streamlit**，部署時不要重爬整年歷史  
+
+### 1.2 Bucket 政策（極重要）
+
+實作在 `bucket_utils.py`。
+
+| 用途 | Bucket 例 | 誰用 |
+|------|-----------|------|
+| **細桶** `Venue_Track_Distance` | `ST_A_1200`, `HV_C+3_1650` | **DRAW**（檔位） |
+| **粗桶** `Venue_距離帶` | `ST_SPRINT`, `HV_MILE`, `ST_STAY` | **JOCKEY / TRAINER / SYNERGY / HORSE（近績）** |
+| **GLOBAL** | `GLOBAL` | **HORSE_JOCKEY**、**PACE**、**SPEED** |
+
+距離帶：SPRINT 1000–1200、MILE 1400–1650、STAY 1800–2400（夾縫靠最近帶）。
+
+**歷史坑**：J18 歷史 `races.course` 常是「草地」；真正場地碼在 `race_id`（如 `YYYYMMDDST01`）。必須用 `extract_venue(race_id=...)`，否則歷史與排位對不上。
+
+### 1.3 `factor_scores` 類型一覽
+
+| factor_type | bucket | 實體 | 計算入口 |
+|-------------|--------|------|----------|
+| JOCKEY | 距離帶粗桶 | 騎師名 | `calculate_entity_factor(..., use_distance_band=True)` |
+| TRAINER | 距離帶粗桶 | 練馬師名 | 同上 |
+| SYNERGY | 距離帶粗桶 | `騎師 & 練馬師`（`synergy_name`） | 同上 |
+| DRAW | 細桶 | Inner / Mid-Inner / Mid-Outer / Outer | `calculate_draw_factor` |
+| HORSE | 距離帶粗桶 | 馬名 | `calculate_horse_factor`（可 NLP 受阻 + 降班） |
+| HORSE_JOCKEY | GLOBAL | `馬|騎` | 合作 Z + 換人 Δ（匹配時近距加權） |
+| PACE | GLOBAL | 馬名 | 跑法／追回 Z；頁面另算同場步速熱度 |
+| SPEED | GLOBAL | 馬名 | Peak/EMA；FSR 校正；可選 NLP 時間補償 |
+
+推論加權見 `config.py`：`WEIGHT_*`（含 `WEIGHT_RECENT_FORM`、`WEIGHT_PACE`、`WEIGHT_SPEED_FIGURE`、Speed Guide 三項）。
+
+### 1.4 關鍵檔案地圖
+
+```
+bucket_utils.py          # 場地/跑道/距離帶、名稱正規化、synergy/horse_jockey 名
+config.py                # 全部超參數與 WEIGHT_*
+factor_calculator.py     # 歷史抓取、各因子、NLP 補償、save/load factor_scores
+inference_engine.py      # 排位查表預測
+nlp_processor.py         # OpenAI/OpenRouter JSON 受阻解析（只讀環境變數 Key）
+nlp_batch_job.py         # 本機/CI 大批次 NLP（可略過「無特別報告」）
+ui_app.py                # 主頁：載歷史、重算全部因子
+ui_utils.py              # 排位選擇、匹配面板、賽日 NLP 選項、NLP 新鮮度顯示
+pages/0_Data_Control…   # 排位/整備度
+pages/1–3_*              # 騎／練／騎練（粗桶）
+pages/4_Draw…            # 檔位（細桶）
+pages/5_Horse_Jockey…    # 人馬雙軌
+pages/6_Recent_Form…     # 近績 + 賽日 NLP 解析
+pages/7_Pace_Sectional…  # 步速／跑法
+pages/8_Speed_Figure…    # 速度指數 / FSR
+pages/9_HKJC_Speed…      # 官方 Speed Guide
+pages/10_Inference…      # 預測儀表板
+racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
+etl_pipeline.py / batch_crawler.py
+schema.sql
+```
+
+Streamlit 多頁：`ui_app.py` 為入口；`pages/` 自動掛載。
 
 ---
 
-## 3. 未來開發待辦事項 (Future Roadmap)
+## 2. 運維 Runbook（改碼後必做）
 
-1. **API 恢復後的首要工作**：
-   - 啟動 `batch_crawler.py` 灌入至少 1 年的歷史數據。
-   - 補齊 `factor_calculator.py` 中剩餘的 Phase 2 ~ Phase 6 因子計算邏輯（目前僅實作了 Phase 1）。
-   - 確保 Streamlit UI (`ui_app.py`) 能正確顯示所有因子的綜合評分。
+### 2.1 部署後
 
-2. **NLP 模組開發**：
-   - 串接 OpenAI / Claude API，針對 `text_reports` (賽後) 與 `upcoming_formguide` (賽前) 進行結構化 JSON 標籤抽取。
+1. Railway 部署完成  
+2. 主頁 **「重算並寫入 factor_scores」**（Bucket 規則或因子公式變更後**必須**重算，否則匹配率歸零）  
+3. 若改了排位爬蟲欄位：資料控制中心 **重新抓排位**  
+4. 近績要吃 NLP：賽日模式解析 → 再算近績／主頁重算  
 
-3. **Railway 部署**：
-   - 將 SQLite 切換回 PostgreSQL。
-   - 設定 Railway 的 Cron Jobs 對應上述的自動化排程藍圖。
+### 2.2 NLP（賽後報告）
+
+- Key：**只**用環境變數 `OPENAI_API_KEY`（可選 `OPENAI_MODEL`、`OPENAI_BASE_URL`）。**禁止**在 UI 輸入 Key。  
+- 結果寫入 `text_reports.nlp_result`（JSON），**可重用**；只處理 `nlp_result IS NULL`。  
+- UI：**整個賽日解析**（該日該場地所有排位馬）+ 自動略過空白／「無特別報告」。  
+- 換頁會中斷 Streamlit 同步迴圈；長跑用 `python nlp_batch_job.py --limit 200`。  
+- **解析 ≠ 已入近績/速度**：必須再跑對應計算（或主頁重算）。近績頁有「NLP vs 近績分數時間」警示。  
+
+兩種 NLP 用途（勿混）：
+
+| 用途 | 行為 |
+|------|------|
+| 近績 HORSE | 受阻 → 調整該場 **raw_score（名次向）** |
+| 速度 SPEED | 受阻 → 該場 **Speed Figure 小幅上修（時間向）** |
+
+### 2.3 環境變數（Railway）
+
+```
+USE_SQLITE=false
+DATABASE_URL=...
+DATABASE_URL_SYNC=...   # SQLAlchemy 用的同步 URL
+OPENAI_API_KEY=...      # 可選但 NLP 需要
+OPENAI_MODEL=gpt-4o-mini
+# OpenRouter 時設 OPENAI_BASE_URL + 對應 model 名
+```
+
+本地 `.env` 同上；**勿 commit**。密碼若曾貼在聊天室請輪替。
+
+---
+
+## 3. 已知坑（改碼前先看）
+
+1. **`raw_json` 在 Postgres 是 `dict`**：不可無腦 `json.loads`；先 `isinstance(raw, dict)`（步速曾因此全空）。  
+2. **排位表 HTML 欄位偏移**：檔位／練馬師索引錯會導致 draw=0、練馬師變閘號 → `racecard_looks_corrupt()`。  
+3. **細桶過嚴**：馬「有近績」≠ 命中本場條件；騎練／近績已改粗桶，檔位仍細桶。  
+4. **人馬 HORSE_JOCKEY**：合作本身 GLOBAL；現場近距加權 + 換人 Δ 層級回退（粗桶查騎師 Z）。  
+5. **Speed Guide 空白**：賽前太早無資料屬正常，推論對缺值給 0，不假裝官方分。  
+6. **Streamlit 換頁**：長任務（NLP 批次）會停；非背景 job。  
+7. **`run_all_factors` 回傳**：`(jockey, trainer, synergy, draw, hj, horse, pace, speed)` — 改 UI 解包時注意數量。  
+
+---
+
+## 4. 開發慣例（給 AI）
+
+- **改 Bucket / 公式後**：更新計算 + 匹配 UI + `inference_engine` + 手冊；提醒使用者重算 `factor_scores`。  
+- **因子頁模式**：可從 DB 載歷史計算（`ui_utils.get_history_df_for_compute`），不要只綁主頁 session。  
+- **落庫**：`save_factor_scores` 只保留標準欄位；診斷欄（跑法、Peak、NLP場次）可留 session／回傳 DataFrame。  
+- **名稱**：一律 `normalize_person_name`（去括號磅數）；騎練組合用 `synergy_name`。  
+- **提交**：使用者要求才 commit/push；`main` 為 Railway 追蹤分支。  
+- **秘錀**：不寫進 repo、不回顯完整 Key。  
+
+建議實作順序（新因子）：
+
+1. `factor_calculator` 純函式 + 可落庫  
+2. 專頁匹配／診斷  
+3. `inference_engine` + `WEIGHT_*`  
+4. `run_all_factors` / 主頁  
+5. 更新本手冊  
+
+---
+
+## 5. 全自動排程藍圖（尚未全部落地）
+
+目標仍是 Cron，無需人工：
+
+| 時機 | 動作 |
+|------|------|
+| 季前 | `fixture_crawler` → `fixtures` |
+| 賽前 ~2 日 | `racecard_crawler` + 可選 Pace 投影 |
+| 賽前 ~1 日 | Speed Guide / formguide（formguide 解析仍偏骨架） |
+| 賽後隔日 | `batch_crawler` → `run_all_factors(persist=True)` |
+| 賽日前 | 賽日 NLP 解析 → 再重算 HORSE/SPEED |
+
+`formguide_crawler` / 賽前 NLP：**未完整接進推論**。
+
+---
+
+## 6. 待辦優先序（Roadmap）
+
+### P0 — 穩定生產
+
+- [ ] 確認 Railway 每次 deploy 後有無需要的「重算因子」SOP（文件化給使用者）  
+- [ ] 排位爬蟲回歸測試（欄位索引）  
+- [ ] 歷史爬蟲監控（J18 API 偶發封鎖）  
+
+### P1 — 模型品質
+
+- [ ] 步速形勢加權併入推論總分（現多在 Pace 頁）  
+- [ ] SPEED：固定末 400m、Par Time 分位數  
+- [ ] 降班三條件再校準；NLP 過濾假性腳軟／假性無追勢（白皮書 Phase 5）  
+- [ ] Peak vs EMA 雙特徵進總分／ML  
+
+### P2 — 自動化與產品
+
+- [ ] Railway Cron / GitHub Actions：賽後重算、賽日 NLP  
+- [ ] formguide 賽前標籤進推論  
+- [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
+
+---
+
+## 7. 快速自檢指令（本機連 Railway DB）
+
+```bash
+# .env: USE_SQLITE=false + DATABASE_URL_SYNC
+python -c "from factor_calculator import FactorCalculator; c=FactorCalculator(); \
+ print(c.load_factor_scores().groupby('factor_type').size())"
+
+python -c "from inference_engine import InferenceEngine; e=InferenceEngine(); \
+ r=e.get_upcoming_races(); print(len(r)); \
+ print(e.predict_race(r.iloc[0].race_id)[2]['hit_counts'])"
+```
+
+Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 等非全 0（重算後）。
+
+---
+
+## 8. 文件關係
+
+| 文件 | 角色 |
+|------|------|
+| **本檔 `DEVELOPMENT_REPORT.md`** | 架構、運維、坑、待辦 — **AI 接手首讀** |
+| **`FACTOR_MODEL_DESIGN.md`** | 數學與產品定義（勿無故偏離） |
+| **`schema.sql`** | 表結構（含 `text_reports.nlp_result`） |
+| **`config.py`** | 可調參數唯一來源 |
+
+---
+
+*最後更新：2026-09-05 — 對齊距離帶粗桶、賽日 NLP、PACE/SPEED 落庫與推論、raw_json dict 修復。*
