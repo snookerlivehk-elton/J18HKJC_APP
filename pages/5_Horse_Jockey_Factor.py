@@ -37,5 +37,27 @@ if st.button("🚀 獨立計算人馬合作因子", type="primary"):
 
 if 'hj_df_indep' in st.session_state:
     st.divider()
-    selected_bucket = st.selectbox("📍 選擇分桶 (Bucket)", st.session_state['buckets'])
-    ui_utils.display_factor_details(st.session_state['hj_df_indep'], selected_bucket, "人馬組合")
+    
+    upcoming_options = ui_utils.get_upcoming_races_list()
+    if upcoming_options:
+        st.subheader("🔮 結合明日排位表 (對應預測)")
+        selected_race_id = st.selectbox(
+            "選擇明日賽事 (自動帶入參賽人馬組合)：",
+            options=[opt[0] for opt in upcoming_options],
+            format_func=lambda x: next(opt[1] for opt in upcoming_options if opt[0] == x)
+        )
+        
+        if selected_race_id != "None":
+            runners_df = ui_utils.get_runners_for_race(selected_race_id)
+            if not runners_df.empty:
+                st.info("人馬合作因子不區分賽道與距離，直接比對韁繩相性。")
+                runners_df['horse_jockey_name'] = runners_df['horse_name'].fillna('未知').astype(str) + " & " + runners_df['jockey_name'].fillna('未知').astype(str)
+                hj_in_race = runners_df['horse_jockey_name'].unique().tolist()
+                # 這裡強制指定 bucket 為 Global
+                ui_utils.display_factor_details(st.session_state['hj_df_indep'], 'Global', "人馬組合", filter_entities=hj_in_race)
+            else:
+                st.warning("無法取得該場賽事資訊。")
+        else:
+            ui_utils.display_factor_details(st.session_state['hj_df_indep'], 'Global', "人馬組合")
+    else:
+        ui_utils.display_factor_details(st.session_state['hj_df_indep'], 'Global', "人馬組合")

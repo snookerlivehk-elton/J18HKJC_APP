@@ -83,25 +83,64 @@ if st.button("🚀 解析歷史時間與計算速度指數", type="primary"):
 
 if 'speed_df' in st.session_state:
     st.divider()
-    st.subheader("🏆 馬匹速度指數與近況排行榜 (Speed Figure)")
     
-    display_df = st.session_state['speed_df'].copy()
+    import ui_utils
+    upcoming_options = ui_utils.get_upcoming_races_list()
     
-    # 格式化數值
-    display_df['peak_speed'] = display_df['peak_speed'].map('{:+.2f}s'.format)
-    display_df['current_ema'] = display_df['current_ema'].map('{:+.2f}s'.format)
-    display_df['avg_fsr'] = display_df['avg_fsr'].map('{:.1f}%'.format)
+    display_df = pd.DataFrame()
     
-    # 重新命名欄位供顯示
-    display_df = display_df.rename(columns={
-        'horse_name': '馬匹名稱',
-        'runs': '有效時間紀錄',
-        'peak_speed': '歷史峰值 (Peak Speed)',
-        'current_ema': '近況趨勢 (Current EMA)',
-        'avg_fsr': '平均末段變速 (Avg FSR)'
-    })
-    
-    st.dataframe(display_df, hide_index=True, use_container_width=True)
+    if upcoming_options:
+        st.subheader("🔮 結合明日排位表 (對應預測)")
+        selected_race_id = st.selectbox(
+            "選擇明日賽事 (自動帶入該場參賽馬匹)：",
+            options=[opt[0] for opt in upcoming_options],
+            format_func=lambda x: next(opt[1] for opt in upcoming_options if opt[0] == x)
+        )
+        
+        if selected_race_id != "None":
+            runners_df = ui_utils.get_runners_for_race(selected_race_id)
+            if not runners_df.empty:
+                st.info("顯示該場賽事所有馬匹的歷史平均與最高速度指數。")
+                horses_in_race = runners_df['horse_name'].unique().tolist()
+                
+                # 過濾並顯示
+                display_df = st.session_state['speed_df'][st.session_state['speed_df']['horse_name'].isin(horses_in_race)].copy()
+                if not display_df.empty:
+                    display_df = display_df.sort_values('current_ema', ascending=False)
+                else:
+                    st.info("此場賽事的馬匹皆無歷史速度指數紀錄。")
+            else:
+                st.warning("無法取得該場賽事資訊。")
+        else:
+            # 傳統歷史查詢
+            st.subheader("🏆 馬匹速度指數與近況排行榜 (Speed Figure)")
+            search_query = st.text_input("🔍 搜尋特定馬匹", "")
+            display_df = st.session_state['speed_df'].copy()
+            if search_query:
+                display_df = display_df[display_df['horse_name'].str.contains(search_query, na=False)]
+    else:
+        st.subheader("🏆 馬匹速度指數與近況排行榜 (Speed Figure)")
+        search_query = st.text_input("🔍 搜尋特定馬匹", "")
+        display_df = st.session_state['speed_df'].copy()
+        if search_query:
+            display_df = display_df[display_df['horse_name'].str.contains(search_query, na=False)]
+
+    if not display_df.empty:
+        # 格式化數值
+        display_df['peak_speed'] = display_df['peak_speed'].map('{:+.2f}s'.format)
+        display_df['current_ema'] = display_df['current_ema'].map('{:+.2f}s'.format)
+        display_df['avg_fsr'] = display_df['avg_fsr'].map('{:.1f}%'.format)
+        
+        # 重新命名欄位供顯示
+        display_df = display_df.rename(columns={
+            'horse_name': '馬匹名稱',
+            'runs': '有效時間紀錄',
+            'peak_speed': '歷史峰值 (Peak Speed)',
+            'current_ema': '近況趨勢 (Current EMA)',
+            'avg_fsr': '平均末段變速 (Avg FSR)'
+        })
+        
+        st.dataframe(display_df, hide_index=True, use_container_width=True)
     
     st.markdown("""
     **💡 解讀指南：**

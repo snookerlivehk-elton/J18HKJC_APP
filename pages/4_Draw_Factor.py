@@ -31,5 +31,31 @@ if st.button("🚀 獨立計算檔位因子", type="primary"):
 
 if 'd_df_indep' in st.session_state:
     st.divider()
-    selected_bucket = st.selectbox("📍 選擇分桶 (Bucket)", st.session_state['buckets'])
-    ui_utils.display_factor_details(st.session_state['d_df_indep'], selected_bucket, "檔位群組")
+    
+    upcoming_options = ui_utils.get_upcoming_races_list()
+    if upcoming_options:
+        st.subheader("🔮 結合明日排位表 (對應預測)")
+        selected_race_id = st.selectbox(
+            "選擇明日賽事 (自動帶入該場 Bucket 與參賽檔位)：",
+            options=[opt[0] for opt in upcoming_options],
+            format_func=lambda x: next(opt[1] for opt in upcoming_options if opt[0] == x)
+        )
+        
+        if selected_race_id != "None":
+            target_bucket = ui_utils.get_bucket_for_race(selected_race_id)
+            runners_df = ui_utils.get_runners_for_race(selected_race_id)
+            if not runners_df.empty and target_bucket:
+                st.info(f"自動匹配分桶：`{target_bucket}`")
+                calc = FactorCalculator()
+                # 檔位轉換成 group name
+                runners_df['draw_group'] = runners_df['draw'].apply(calc._assign_draw_group)
+                draws_in_race = runners_df['draw_group'].unique().tolist()
+                ui_utils.display_factor_details(st.session_state['d_df_indep'], target_bucket, "檔位區間", filter_entities=draws_in_race)
+            else:
+                st.warning("無法取得該場賽事資訊。")
+        else:
+            selected_bucket = st.selectbox("📍 選擇歷史分桶 (Bucket)", st.session_state['buckets'])
+            ui_utils.display_factor_details(st.session_state['d_df_indep'], selected_bucket, "檔位區間")
+    else:
+        selected_bucket = st.selectbox("📍 選擇歷史分桶 (Bucket)", st.session_state['buckets'])
+        ui_utils.display_factor_details(st.session_state['d_df_indep'], selected_bucket, "檔位區間")

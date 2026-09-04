@@ -32,5 +32,30 @@ if st.button("🚀 獨立計算合作因子", type="primary"):
 
 if 's_df_indep' in st.session_state:
     st.divider()
-    selected_bucket = st.selectbox("📍 選擇分桶 (Bucket)", st.session_state['buckets'])
-    ui_utils.display_factor_details(st.session_state['s_df_indep'], selected_bucket, "騎練組合")
+    
+    upcoming_options = ui_utils.get_upcoming_races_list()
+    if upcoming_options:
+        st.subheader("🔮 結合明日排位表 (對應預測)")
+        selected_race_id = st.selectbox(
+            "選擇明日賽事 (自動帶入該場 Bucket 與參賽騎練組合)：",
+            options=[opt[0] for opt in upcoming_options],
+            format_func=lambda x: next(opt[1] for opt in upcoming_options if opt[0] == x)
+        )
+        
+        if selected_race_id != "None":
+            target_bucket = ui_utils.get_bucket_for_race(selected_race_id)
+            runners_df = ui_utils.get_runners_for_race(selected_race_id)
+            if not runners_df.empty and target_bucket:
+                st.info(f"自動匹配分桶：`{target_bucket}`")
+                # 組合騎師與練馬師名稱
+                runners_df['synergy_name'] = runners_df['jockey_name'] + " & " + runners_df['trainer_name']
+                synergy_in_race = runners_df['synergy_name'].unique().tolist()
+                ui_utils.display_factor_details(st.session_state['s_df_indep'], target_bucket, "騎練組合", filter_entities=synergy_in_race)
+            else:
+                st.warning("無法取得該場賽事資訊。")
+        else:
+            selected_bucket = st.selectbox("📍 選擇歷史分桶 (Bucket)", st.session_state['buckets'])
+            ui_utils.display_factor_details(st.session_state['s_df_indep'], selected_bucket, "騎練組合")
+    else:
+        selected_bucket = st.selectbox("📍 選擇歷史分桶 (Bucket)", st.session_state['buckets'])
+        ui_utils.display_factor_details(st.session_state['s_df_indep'], selected_bucket, "騎練組合")
