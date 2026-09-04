@@ -57,6 +57,36 @@ def get_runners_for_race(race_id):
     return df
 
 
+def racecard_looks_corrupt(runners_df: pd.DataFrame):
+    """偵測舊版爬蟲造成的欄位錯位：檔位全 0、練馬師變成數字。
+    回傳 (is_corrupt, message)
+    """
+    if runners_df is None or runners_df.empty:
+        return False, ""
+    n = len(runners_df)
+    draw_zero = 0
+    if 'draw' in runners_df.columns:
+        draw_zero = int((pd.to_numeric(runners_df['draw'], errors='coerce').fillna(0) == 0).sum())
+    trainer_numeric = 0
+    if 'trainer_name' in runners_df.columns:
+        trainer_numeric = int(
+            runners_df['trainer_name'].astype(str).str.fullmatch(r"\d+").fillna(False).sum()
+        )
+    if draw_zero >= max(n - 1, 1) and trainer_numeric >= max(n // 2, 1):
+        return True, (
+            f"排位資料疑似舊版錯位（檔位為 0 者 {draw_zero}/{n}，"
+            f"練馬師為純數字者 {trainer_numeric}/{n}）。"
+            "請到「資料控制中心」用**最新程式**重新抓取排位表覆寫，"
+            "再回本頁重新整理。這不是因子計算錯誤。"
+        )
+    if trainer_numeric >= max(n // 2, 1):
+        return True, (
+            f"練馬師欄位多數為數字（{trainer_numeric}/{n}），排位爬蟲欄位仍錯位。"
+            "請重新抓取排位表。"
+        )
+    return False, ""
+
+
 def get_bucket_for_race(race_id):
     engine = InferenceEngine()
     races_df = engine.get_upcoming_races()
@@ -210,6 +240,16 @@ def render_upcoming_match_panel(
     runners_df = get_runners_for_race(selected_race_id)
     if runners_df.empty:
         st.warning("此場沒有排位馬匹。")
+        return
+
+    corrupt, corrupt_msg = racecard_looks_corrupt(runners_df)
+    if corrupt:
+        st.error(corrupt_msg)
+        st.dataframe(
+            runners_df[['horse_no', 'horse_name', 'draw', 'jockey_name', 'trainer_name']],
+            hide_index=True,
+            use_container_width=True,
+        )
         return
 
     if use_global_bucket:

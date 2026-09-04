@@ -29,15 +29,34 @@ with col1:
     if st.button("啟動排位表爬蟲", type="primary", use_container_width=True):
         with st.spinner(f"正在背景抓取 {target_date} {target_course} 的排位表..."):
             try:
-                # 確保環境變數傳遞給子進程
                 env = os.environ.copy()
                 result = subprocess.run(
                     ["python", "racecard_crawler.py", "--date", target_date, "--course", target_course],
                     capture_output=True, text=True, check=True, env=env
                 )
-                st.success("✅ 排位表抓取完成！請重新整理頁面以更新下方監控面板。")
+                st.cache_data.clear()
+                st.success("✅ 排位表抓取完成！請確認下方「抽樣檢查」檔位/練馬師已是正確中文名。")
                 with st.expander("查看執行日誌"):
-                    st.text(result.stdout)
+                    st.text(result.stdout or "(no stdout)")
+                    if result.stderr:
+                        st.text(result.stderr)
+                # 抽樣驗證，避免再次寫入錯位資料卻不知情
+                sample = engine.get_race_runners(
+                    f"{target_date.replace('/','')}{target_course}01"
+                )
+                if not sample.empty:
+                    st.markdown("#### 抽樣檢查（第 1 場前 5 匹）")
+                    st.dataframe(
+                        sample[['horse_no', 'horse_name', 'draw', 'jockey_name', 'trainer_name']].head(5),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                    from ui_utils import racecard_looks_corrupt
+                    bad, msg = racecard_looks_corrupt(sample)
+                    if bad:
+                        st.error("抓完仍異常：" + msg)
+                    else:
+                        st.success("抽樣正常：檔位非全 0，練馬師為姓名。")
             except subprocess.CalledProcessError as e:
                 st.error(f"❌ 執行失敗：\n{e.stderr}")
 
