@@ -1235,52 +1235,189 @@ class FactorCalculator:
 
     def extract_sectional_positions(self, df: pd.DataFrame) -> pd.DataFrame:
         """從 raw_json 中提取分段走位數據 (早段位置與追回名次)"""
-        import json
-        import numpy as np
-        
-        def parse_positions(raw_str):
+        def parse_positions(raw):
             try:
-                data = json.loads(raw_str)
-                sections = data.get("sections", {})
-                
-                # 尋找早段位置 (Stage 1 或 Stage 2)
+                data = raw if isinstance(raw, dict) else json.loads(raw)
+                sections = data.get("sections") or {}
                 early_pos = None
                 for i in range(1, 4):
                     stage = sections.get(f"stage_{i}")
-                    if stage and stage.get("position"):
-                        try:
-                            early_pos = int(stage["position"])
-                            break
-                        except ValueError:
-                            pass
-                            
+                    if not stage:
+                        continue
+                    pos = stage.get("position")
+                    if pos is None or str(pos).strip() in ("", "-", "N", "None"):
+                        continue
+                    try:
+                        early_pos = int(float(pos))
+                        break
+                    except (TypeError, ValueError):
+                        continue
                 return early_pos if early_pos is not None else np.nan
             except Exception:
                 return np.nan
 
-        df['early_position'] = df['raw_json'].apply(parse_positions)
-        
-        # 計算追回名次 (Positions Gained) = 早段名次 - 最終名次
-        # 如果早段第 10 名，最終第 2 名 => 追回 8 名 (後追力強)
-        # 如果早段第 2 名，最終第 10 名 => 追回 -8 名 (力弱大敗)
-        df['positions_gained'] = df['early_position'] - df['finish_order_num']
-        
-        # 標記跑法風格 (Running Style)
-        # 1-4: 前領 (Front-Runner), 5-8: 居中 (Mid-Pack), 9+: 後追 (Closer)
+        def parse_early_sectional_sec(raw):
+            """首段 sectional_time（秒），愈小愈具前領意圖。"""
+            try:
+                data = raw if isinstance(raw, dict) else json.loads(raw)
+                sections = data.get("sections") or {}
+                stage = sections.get("stage_1") or {}
+                t = stage.get("sectional_time")
+                if t is None or str(t).strip() in ("", "-", "None"):
+                    return np.nan
+                return float(str(t).strip())
+            except Exception:
+                return np.nan
+
+        out = df.copy()
+        out["early_position"] = out["raw_json"].apply(parse_positions)
+        out["early_sectional_sec"] = out["raw_json"].apply(parse_early_sectional_sec)
+        # 追回名次 = 早段名次 - 最終名次（正數＝後追力強）
+        out["positions_gained"] = out["early_position"] - out["finish_order_num"]
+
         conditions = [
-            (df['early_position'] <= 4),
-            (df['early_position'] <= 8),
-            (df['early_position'] > 8)
+            (out["early_position"] <= 4),
+            (out["early_position"] <= 8),
+            (out["early_position"] > 8),
         ]
-        choices = ['前領 (Front-Runner)', '居中 (Mid-Pack)', '後追 (Closer)']
-        df['running_style'] = np.select(conditions, choices, default='未知 (Unknown)')
-        
-        return df
+        choices = ["前領 (Front-Runner)", "居中 (Mid-Pack)", "後追 (Closer)"]
+        out["running_style"] = np.select(conditions, choices, default="未知 (Unknown)")
+        return out
+
+    def calculate_pace_factor(self, df: pd.DataFrame = None) -> pd.DataFrame:
+        """
+        馬匹跑法／追回指數 → 寫入 factor_scores (PACE, GLOBAL)。
+        adjusted_score = 貝葉斯平滑後的平均追回名次；
+        另附 early_speed_proxy（首段愈快分數愈高）供同場步速熱度。
+        """
+        if df is None or df.empty:
+            df = self.fetch_historical_data()
+        if df.empty:
+            return pd.DataFrame()
+
+        work = self.extract_sectional_positions(df)
+        work = work.dropna(subset=["early_position", "positions_gained"]).copy()
+        if work.empty:
+            return pd.DataFrame()
+
+        work["horse_name_clean"] = work["horse_name"].fillna("未知馬匹").astype(str)
+
+        # 早段速度：同距離內，首段時間愈短 → 分數愈高
+        work["early_speed_raw"] = np.nan
+        for dist, g in work.groupby("distance_m"):
+            times = g["early_sectional_sec"]
+            if times.notna().sum() < 3:
+                continue
+            # 轉成「愈快愈高」：用距離內 z 的負值
+            mu, sd = times.mean(), times.std()
+            if sd and sd > 0:
+                work.loc[g.index, "early_speed_raw"] = -(times - mu) / sd
+
+        grouped = work.groupby("horse_name_clean").agg(
+            actual_runs=("positions_gained", "count"),
+            avg_early_pos=("early_position", "mean"),
+            avg_positions_gained=("positions_gained", "mean"),
+            avg_finish=("finish_order_num", "mean"),
+            early_speed_proxy=("early_speed_raw", "mean"),
+            style_mode=("running_style", lambda s: s.mode().iloc[0] if len(s.mode()) else "未知 (Unknown)"),
+        ).reset_index()
+
+        global_avg = grouped["avg_positions_gained"].mean()
+        c = float(ModelConfig.PACE_SMOOTH_C)
+        grouped["adjusted_score"] = (
+            (grouped["avg_positions_gained"] * grouped["actual_runs"] + c * global_avg)
+            / (grouped["actual_runs"] + c)
+        )
+        grouped["weighted_runs"] = grouped["actual_runs"].astype(float)
+        grouped["z_score"] = (
+            (grouped["adjusted_score"] - grouped["adjusted_score"].mean())
+            / (grouped["adjusted_score"].std() + 1e-9)
+        )
+        # 把早段速度 proxy 也標準化，缺值填 0
+        es = grouped["early_speed_proxy"].fillna(0.0)
+        grouped["early_speed_z"] = (es - es.mean()) / (es.std() + 1e-9)
+
+        conditions = [
+            (grouped["avg_early_pos"] <= 4.5),
+            (grouped["avg_early_pos"] <= 8.5),
+            (grouped["avg_early_pos"] > 8.5),
+        ]
+        grouped["running_style"] = np.select(
+            conditions,
+            ["前領 (Front-Runner)", "居中 (Mid-Pack)", "後追 (Closer)"],
+            default="未知 (Unknown)",
+        )
+
+        out = grouped.rename(columns={"horse_name_clean": "entity_name"})
+        out["factor_type"] = "PACE"
+        out["bucket_id"] = GLOBAL_BUCKET
+        # factor_scores 標準欄；其餘診斷欄留在 session / 回傳表
+        return out
+
+    def project_race_pace(self, pace_df: pd.DataFrame, horse_names: list) -> dict:
+        """
+        同場步速熱度：取本場馬 early_speed_z 最高前 N 名加總。
+        回傳 heat、scenario、以及每匹馬的形勢分。
+        """
+        top_n = int(getattr(ModelConfig, "EARLY_SPEED_TOP_N", 3))
+        names = [normalize_person_name(n) for n in horse_names]
+        if pace_df is None or pace_df.empty:
+            return {"heat": 0.0, "scenario": "未知", "by_horse": {}}
+
+        name_col = "entity_name" if "entity_name" in pace_df.columns else "horse_name"
+        style_col = "running_style" if "running_style" in pace_df.columns else None
+        speed_col = "early_speed_z" if "early_speed_z" in pace_df.columns else None
+        z_col = "z_score" if "z_score" in pace_df.columns else None
+
+        sub = pace_df[pace_df[name_col].isin(names)].copy()
+        if sub.empty:
+            return {"heat": 0.0, "scenario": "未知", "by_horse": {}}
+
+        if speed_col and sub[speed_col].notna().any():
+            heats = sub[speed_col].fillna(0.0).sort_values(ascending=False).head(top_n)
+            heat = float(heats.sum())
+        else:
+            # 後備：平均早段位置愈前 → 熱度愈高
+            if "avg_early_pos" in sub.columns:
+                heat = float((14.0 - sub["avg_early_pos"].fillna(8)).nlargest(top_n).sum() / 10.0)
+            else:
+                heat = 0.0
+
+        # 熱度閾值（經驗值，可用參數再調）
+        if heat >= 2.5:
+            scenario = "超快步速"
+        elif heat <= 0.5:
+            scenario = "偏慢步速"
+        else:
+            scenario = "中性步速"
+
+        by_horse = {}
+        closer_w = float(ModelConfig.CLOSER_BONUS_WEIGHT)
+        front_w = float(ModelConfig.FRONT_RUNNER_BONUS_WEIGHT)
+        for _, row in sub.iterrows():
+            hn = row[name_col]
+            style = str(row[style_col]) if style_col else ""
+            base_z = float(row[z_col]) if z_col and pd.notna(row.get(z_col)) else 0.0
+            bonus = 0.0
+            if scenario == "超快步速" and "後追" in style:
+                bonus = closer_w * 0.5
+            elif scenario == "偏慢步速" and "前領" in style:
+                bonus = front_w * 0.5
+            elif scenario == "超快步速" and "前領" in style:
+                bonus = -0.25
+            elif scenario == "偏慢步速" and "後追" in style:
+                bonus = -0.25
+            by_horse[hn] = {
+                "running_style": style,
+                "pace_z": base_z,
+                "scenario_bonus": bonus,
+                "pace_score": base_z + bonus,
+                "early_speed_z": float(row[speed_col]) if speed_col and pd.notna(row.get(speed_col)) else None,
+            }
+        return {"heat": heat, "scenario": scenario, "by_horse": by_horse, "top_n": top_n}
 
     def extract_time_and_fsr(self, df: pd.DataFrame) -> pd.DataFrame:
         """提取完成時間與末段時間，計算速度指數與 FSR"""
-        import json
-        
         def time_to_seconds(t_str):
             if not isinstance(t_str, str) or not t_str:
                 return np.nan
@@ -1292,23 +1429,23 @@ class FactorCalculator:
             except ValueError:
                 return np.nan
 
-        def get_l400m_time(raw_str):
+        def get_l400m_time(raw):
             try:
-                data = json.loads(raw_str)
-                sections = data.get("sections", {})
-                
-                # 尋找最後一個非 null 的 stage 的 sectional_time
+                data = raw if isinstance(raw, dict) else json.loads(raw)
+                sections = data.get("sections") or {}
                 last_time = None
                 for i in range(6, 0, -1):
                     stage = sections.get(f"stage_{i}")
                     if stage and stage.get("sectional_time"):
                         last_time = stage["sectional_time"]
                         break
-                        
-                return time_to_seconds(last_time)
+                return time_to_seconds(last_time) if isinstance(last_time, str) else (
+                    float(last_time) if last_time is not None else np.nan
+                )
             except Exception:
                 return np.nan
 
+        df = df.copy()
         df['final_time_sec'] = df['final_time'].apply(time_to_seconds)
         df['l400m_time_sec'] = df['raw_json'].apply(get_l400m_time)
         
@@ -1385,7 +1522,7 @@ class FactorCalculator:
         df = self.fetch_historical_data()
         if df.empty:
             print("No historical data found. Please run batch crawler first.")
-            return None, None, None, None, None, None
+            return None, None, None, None, None, None, None
             
         df = self.calculate_base_score(df)
         
@@ -1433,17 +1570,20 @@ class FactorCalculator:
         print("Calculating Horse recent-form (distance-band + NLP/class-drop)...")
         horse_df = self.calculate_horse_factor(df, apply_nlp=apply_nlp)
 
+        print("Calculating Pace / Sectional Factor (GLOBAL)...")
+        pace_df = self.calculate_pace_factor(df)
+
         if persist:
             n = self.save_factor_scores(
-                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df
+                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df
             )
             print(f"Saved {n} factor score rows to factor_scores.")
 
-        return jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df
+        return jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df
 
 if __name__ == "__main__":
     calc = FactorCalculator()
-    j, t, s, d, hj, h = calc.run_all_factors(persist=True)
+    j, t, s, d, hj, h, p = calc.run_all_factors(persist=True)
     if j is not None:
         print("\n=== Jockey Factor Preview (Top 5 Z-Score) ===")
         print(j.sort_values('z_score', ascending=False).head(5)[['bucket_id', 'entity_name', 'actual_runs', 'adjusted_score', 'z_score']])
@@ -1452,3 +1592,5 @@ if __name__ == "__main__":
             print("HJ GLOBAL rows:", len(hj))
         if h is not None and not h.empty:
             print("HORSE band rows:", len(h), "buckets:", sorted(h['bucket_id'].unique()))
+        if p is not None and not p.empty:
+            print("PACE rows:", len(p), p['running_style'].value_counts().to_dict())

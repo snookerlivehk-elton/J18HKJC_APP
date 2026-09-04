@@ -93,11 +93,15 @@ class ModelConfig:
     WEIGHT_HORSE_JOCKEY = 0.5
     WEIGHT_RECENT_FORM = 1.5
     WEIGHT_SPEED_FIGURE = 1.5
-    
+    WEIGHT_PACE = 0.8              # 跑法／追回指數 + 同場形勢加權
+
     # 官方 Speed Guide 權重
     WEIGHT_SG_FORM = 1.0
     WEIGHT_SG_ENERGY = 1.0
     WEIGHT_SG_DELTA = 0.5
+
+    # 步速熱度：同場取 early speed 最高前 N 名加總
+    EARLY_SPEED_TOP_N = 3
 
     @classmethod
     def get_params_dict(cls):
