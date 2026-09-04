@@ -112,25 +112,29 @@ class HKJCRaceCardCrawler:
             
             # 尋找賽道
             if '草地' in text:
-                race_info['track'] = '草地'
                 match_track = re.search(r'"([A-Z\+]+)"', text)
-                if match_track: race_info['track'] += f"_{match_track.group(1)}"
+                if match_track: 
+                    race_info['track'] = f'"{match_track.group(1)}" 賽道'
+                else:
+                    race_info['track'] = '草地'
             elif '全天候' in text or '泥地' in text:
-                race_info['track'] = '全天候'
+                race_info['track'] = '全天候跑道'
             else:
                 race_info['track'] = '未知'
                 
         # 再次檢查，如果用 .f_fl 沒抓到，嘗試抓取 table 的上一層或整頁字串
-        if race_info['distance_m'] == 0:
+        if race_info['distance_m'] == 0 or race_info['track'] == '':
             text = tree.body.text(strip=True)
             match_dist = re.search(r'(\d+)\s*米', text)
             if match_dist: race_info['distance_m'] = int(match_dist.group(1))
             match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
             if match_class: race_info['class'] = match_class.group(1)
-            if '草地' in text and race_info['track'] == '':
-                race_info['track'] = '草地'
+            if '草地' in text and (race_info['track'] == '' or race_info['track'] == '未知'):
                 match_track = re.search(r'"([A-Z\+]+)"', text)
-                if match_track: race_info['track'] += f"_{match_track.group(1)}"
+                if match_track: 
+                    race_info['track'] = f'"{match_track.group(1)}" 賽道'
+                else:
+                    race_info['track'] = '草地'
 
         # 2. 萃取馬匹名單 (Runners)
         runners = []
