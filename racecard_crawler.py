@@ -122,18 +122,24 @@ class HKJCRaceCardCrawler:
             else:
                 race_info['track'] = '未知'
                 
-        # 再次檢查，如果用 .f_fl 沒抓到，嘗試抓取 table 的上一層或整頁字串
-        if race_info['distance_m'] == 0 or race_info['track'] == '':
-            text = tree.body.text(strip=True)
-            match_dist = re.search(r'(\d+)\s*米', text)
-            if match_dist: race_info['distance_m'] = int(match_dist.group(1))
-            match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
-            if match_class: race_info['class'] = match_class.group(1)
-            if '草地' in text and (race_info['track'] == '' or race_info['track'] == '未知'):
-                match_track = re.search(r'"([A-Z\+]+)"', text)
-                if match_track: 
+        # 再次檢查：整頁文字 + 常見英文距離 (1200M)
+        if race_info['distance_m'] == 0 or race_info['track'] in ('', '未知'):
+            text = tree.body.text(strip=True) if tree.body else ""
+            if race_info['distance_m'] == 0:
+                match_dist = re.search(r'(\d+)\s*米', text) or re.search(r'(\d+)\s*[Mm]', text)
+                if match_dist:
+                    race_info['distance_m'] = int(match_dist.group(1))
+            if not race_info['class']:
+                match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
+                if match_class:
+                    race_info['class'] = match_class.group(1)
+            if race_info['track'] in ('', '未知'):
+                match_track = re.search(r'"([A-Z]\+?\d?)"', text) or re.search(r'\b([ABC](?:\+\d)?)\s*賽道', text)
+                if match_track:
                     race_info['track'] = f'"{match_track.group(1)}" 賽道'
-                else:
+                elif '全天候' in text or '泥地' in text or 'AWT' in text.upper():
+                    race_info['track'] = '全天候跑道'
+                elif '草地' in text:
                     race_info['track'] = '草地'
 
         # 2. 萃取馬匹名單 (Runners)

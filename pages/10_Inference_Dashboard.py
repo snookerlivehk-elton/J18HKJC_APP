@@ -6,28 +6,28 @@ st.set_page_config(page_title="Inference Dashboard", layout="wide")
 
 st.title("🔮 明日賽事推論預測引擎 (Inference Dashboard)")
 st.markdown("""
-這裡是 J18 系統的**第二階段 (Phase 2)**：
-讀取賽前排位表，根據明日的「場地 + 賽道 + 距離 (Bucket)」自動匹配歷史計算出的 Z-Score，
-最後套用 `config.py` 中的推論權重，計算出**總預測分 (Total Score)** 並給出排名。
+**主流程**：讀取排位表條件 → 組標準 Bucket（`ST/HV_賽道_距離`）→ 查 `factor_scores` → 加權排名。  
+請先在主頁「重算並寫入因子分數」，再來此頁預測。
 """)
 
-# ==========================================
-# 1. 初始化與載入賽程
-# ==========================================
 engine = InferenceEngine()
-
 races_df = engine.get_upcoming_races()
 
 if races_df.empty:
-    st.warning("⚠️ 目前資料庫中沒有即將舉行的賽事 (Upcoming Races)。請先執行排位表爬蟲：`python racecard_crawler.py --date YYYY/MM/DD`")
+    st.warning("⚠️ 目前沒有即將舉行的賽事。請先到「資料控制中心」抓取排位表。")
     st.stop()
 
-# ==========================================
-# 2. 選擇賽事
-# ==========================================
+scores_preview = engine.calc.load_factor_scores(
+    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW']
+)
+if scores_preview.empty:
+    st.error("❌ `factor_scores` 是空的。請回主頁執行「重算並寫入因子分數」後再預測。")
+    st.stop()
+else:
+    st.caption(f"目前資料庫已有 {len(scores_preview)} 筆因子分數可供匹配。")
+
 st.subheader("🗓️ 選擇場次")
 
-# 建立下拉選單選項
 race_options = []
 for _, row in races_df.iterrows():
     date = row['racing_date']
@@ -40,37 +40,51 @@ for _, row in races_df.iterrows():
     race_options.append((row['race_id'], label))
 
 selected_race_id = st.selectbox(
-    "請選擇要進行預測的賽事：", 
+    "請選擇要進行預測的賽事：",
     options=[opt[0] for opt in race_options],
     format_func=lambda x: next(opt[1] for opt in race_options if opt[0] == x)
 )
 
-# ==========================================
-# 3. 執行推論與顯示排名
-# ==========================================
-if st.button("🚀 執行 AI 因子推論配對", type="primary"):
-    if 'raw_df' not in st.session_state:
-        st.error("⚠️ 請先回首頁 (ui_app.py) 點擊「載入歷史賽果數據」，才能進行歷史分數匹配！")
-        st.stop()
-        
-    with st.spinner("正在將排位名單與歷史 Z-Score 進行配對，並套用權重計算..."):
+if st.button("🚀 執行因子匹配預測", type="primary"):
+    with st.spinner("正在以排位條件查詢 factor_scores..."):
         try:
-            # 傳入 session_state 中的歷史數據，避免重複查詢 DB
-            predictions_df, race_info = engine.predict_race(selected_race_id, st.session_state['raw_df'])
-            
+            predictions_df, race_info, meta = engine.predict_race(selected_race_id)
+
+            if not meta.get('bucket_valid'):
+                st.error(
+                    f"此場 Bucket 無效：`{meta.get('bucket_id')}`。"
+                    "排位表可能缺少跑道或距離，請重新抓取排位表。"
+                )
+                st.stop()
+
+            st.info(
+                f"Bucket：`{meta['bucket_id']}`　｜　"
+                f"因子表列數：{meta['factor_rows']}　｜　"
+                f"匹配率：{meta['match_rate']:.0%}　"
+                f"（J{meta['hit_counts']['JOCKEY']} "
+                f"T{meta['hit_counts']['TRAINER']} "
+                f"S{meta['hit_counts']['SYNERGY']} "
+                f"D{meta['hit_counts']['DRAW']}）"
+            )
+
+            if meta['match_rate'] == 0:
+                st.warning(
+                    "匹配率為 0%：歷史因子的 bucket 與此場對不上，或該條件尚無樣本。"
+                    "請確認已用新版 bucket 重算因子，且排位距離/跑道正確。"
+                )
+
             if predictions_df.empty:
-                st.warning("無法產出預測，可能是該場賽事沒有馬匹排位資料。")
+                st.warning("無法產出預測，可能是該場沒有馬匹排位資料。")
             else:
-                st.success(f"✅ 成功產出預測！分析基準 Bucket: `{race_info['course']}_{race_info['track'].replace(' 賽道', '')}_{race_info['distance_m']}`")
-                
-                # 突顯前三名
                 st.subheader("🏆 預測排名結果")
-                
-                # 使用 DataFrame 顯示，加上樣式
+
                 def highlight_top3(s):
-                    if s['預測排名'] == 1: return ['background-color: #ffd700; color: black'] * len(s)
-                    if s['預測排名'] == 2: return ['background-color: #e3e4e5; color: black'] * len(s)
-                    if s['預測排名'] == 3: return ['background-color: #cd7f32; color: black'] * len(s)
+                    if s['預測排名'] == 1:
+                        return ['background-color: #ffd700; color: black'] * len(s)
+                    if s['預測排名'] == 2:
+                        return ['background-color: #e3e4e5; color: black'] * len(s)
+                    if s['預測排名'] == 3:
+                        return ['background-color: #cd7f32; color: black'] * len(s)
                     return [''] * len(s)
 
                 st.dataframe(
@@ -78,8 +92,7 @@ if st.button("🚀 執行 AI 因子推論配對", type="primary"):
                     use_container_width=True,
                     height=500
                 )
-                
-                st.info("💡 提示：『總預測分』是由騎師、練馬師、檔位等歷史 Z-Score，加上官方速勢能量轉換後，根據 `config.py` 權重相加而得。")
-                
+                st.caption("「命中」欄表示該馬四項核心因子（騎/練/騎練/檔）有幾項成功查到歷史 Z-Score。")
+
         except Exception as e:
             st.error(f"推論過程發生錯誤: {e}")

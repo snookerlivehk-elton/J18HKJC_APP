@@ -1,15 +1,20 @@
 import pandas as pd
-import sqlite3
 import os
 from config import ModelConfig
 from factor_calculator import FactorCalculator
+from bucket_utils import (
+    make_bucket_id,
+    normalize_person_name,
+    synergy_name,
+    is_valid_bucket,
+)
 
-# 根據環境變數決定使用 SQLite 或 PostgreSQL
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
     DATABASE_URL_SYNC = os.getenv("DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db")
+
 
 class InferenceEngine:
     def __init__(self):
@@ -20,7 +25,7 @@ class InferenceEngine:
         """獲取所有即將舉行的賽事清單"""
         if USE_SQLITE and not os.path.exists(SQLITE_DB_PATH):
             return pd.DataFrame()
-            
+
         try:
             import sqlalchemy
             engine = sqlalchemy.create_engine(self.db_url)
@@ -50,80 +55,106 @@ class InferenceEngine:
             print(f"Error fetching runners for {race_id}: {e}")
             return pd.DataFrame()
 
+    def get_race_bucket(self, race_info) -> str:
+        """由 upcoming_races 列組出標準 bucket。"""
+        return make_bucket_id(
+            race_id=race_info.get('race_id') if hasattr(race_info, 'get') else race_info['race_id'],
+            course=race_info['course'],
+            track=race_info['track'],
+            distance_m=race_info['distance_m'],
+        )
+
     def _map_form_rating(self, rating: str) -> float:
         """將狀態評級 (如 A, B, C) 轉換為數值分數"""
-        if pd.isna(rating): return 0.0
+        if pd.isna(rating):
+            return 0.0
         r = str(rating).upper().strip()
-        mapping = {'A+': 3.0, 'A': 2.0, 'A-': 1.0, 'B+': 0.5, 'B': 0.0, 'B-': -0.5, 'C': -1.0, 'D': -2.0}
+        mapping = {
+            'A+': 3.0, 'A': 2.0, 'A-': 1.0,
+            'B+': 0.5, 'B': 0.0, 'B-': -0.5,
+            'C': -1.0, 'D': -2.0,
+        }
         return mapping.get(r, 0.0)
 
-    def predict_race(self, race_id: str, df_hist: pd.DataFrame = None) -> pd.DataFrame:
-        """
-        執行單場賽事推論：
-        1. 讀取排位表
-        2. 計算賽事 Bucket
-        3. 從 df_hist 字典中查找 Z-Score
-        4. 加權總和
-        """
-        # 1. 取得賽事與馬匹資訊
-        races_df = self.get_upcoming_races()
-        if races_df.empty: return pd.DataFrame()
-        
-        race_info = races_df[races_df['race_id'] == race_id].iloc[0]
-        runners_df = self.get_race_runners(race_id)
-        if runners_df.empty: return pd.DataFrame()
-        
-        # 2. 計算 Bucket ID (例如 ST_草地_A_1200)
-        course = str(race_info['course']).fillna('未知')
-        track = str(race_info['track']).replace('"', '').replace(' 賽道', '').strip()
-        distance = str(race_info['distance_m'])
-        bucket_id = f"{course}_{track}_{distance}"
-        
-        # 3. 準備歷史資料字典 (若外部未提供，則即時計算)
-        if df_hist is None:
-            df_hist = self.calc.fetch_historical_data()
-            df_hist = self.calc.calculate_base_score(df_hist)
-            
-        # 計算各因子字典 (這裡為了效能，實務上應該讀取 factor_scores 表，但我們暫時用即時算)
-        jockey_df = self.calc.calculate_entity_factor(df_hist, 'jockey_name', ModelConfig.JOCKEY_DECAY, ModelConfig.JOCKEY_SMOOTH_C)
-        trainer_df = self.calc.calculate_entity_factor(df_hist, 'trainer_name', ModelConfig.TRAINER_DECAY, ModelConfig.TRAINER_SMOOTH_C)
-        
-        df_hist['synergy_name'] = df_hist['jockey_name'].fillna('') + " & " + df_hist['trainer_name'].fillna('')
-        synergy_df = self.calc.calculate_entity_factor(df_hist, 'synergy_name', ModelConfig.SYNERGY_DECAY, ModelConfig.SYNERGY_SMOOTH_C)
-        
-        draw_df = self.calc.calculate_draw_factor(df_hist)
-        
-        # 建立快速查找表 (針對當前 bucket)
-        def get_zscore(factor_df, entity_col, entity_val):
-            if factor_df is None or factor_df.empty: return 0.0
-            # 檔位的欄位名在 calculate_draw_factor 中叫 draw_group
-            match_col = 'draw_group' if 'draw_group' in factor_df.columns else entity_col
-            subset = factor_df[(factor_df['bucket_id'] == bucket_id) & (factor_df[match_col] == entity_val)]
-            return subset['z_score'].iloc[0] if not subset.empty else 0.0
+    def _build_score_lookup(self, scores_df: pd.DataFrame) -> dict:
+        """(factor_type, bucket_id, entity_name) -> z_score"""
+        lookup = {}
+        if scores_df is None or scores_df.empty:
+            return lookup
+        for _, row in scores_df.iterrows():
+            key = (
+                str(row['factor_type']),
+                str(row['bucket_id']),
+                str(row['entity_name']),
+            )
+            lookup[key] = float(row['z_score'])
+        return lookup
 
-        # 4. 依序為每匹馬匹配分數
+    def _lookup_z(self, lookup: dict, factor_type: str, bucket_id: str, entity_name: str):
+        """回傳 (z_score, hit: bool)。查不到明確標 miss，不靜默造假。"""
+        key = (factor_type, bucket_id, entity_name)
+        if key in lookup:
+            return lookup[key], True
+        return 0.0, False
+
+    def predict_race(self, race_id: str, df_hist: pd.DataFrame = None) -> tuple:
+        """
+        執行單場賽事推論（查表模式）：
+        1. 讀取排位表條件
+        2. 組標準 Bucket
+        3. 從 factor_scores 匹配 Z-Score
+        4. 依 config 權重加總排名
+
+        df_hist 保留參數相容舊 UI，但不再用於現算因子。
+        """
+        races_df = self.get_upcoming_races()
+        if races_df.empty:
+            return pd.DataFrame(), None
+
+        matched = races_df[races_df['race_id'] == race_id]
+        if matched.empty:
+            return pd.DataFrame(), None
+
+        race_info = matched.iloc[0]
+        runners_df = self.get_race_runners(race_id)
+        if runners_df.empty:
+            return pd.DataFrame(), race_info
+
+        bucket_id = self.get_race_bucket(race_info)
+        scores_df = self.calc.load_factor_scores(
+            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW']
+        )
+        lookup = self._build_score_lookup(scores_df)
+
         results = []
+        hit_counts = {'JOCKEY': 0, 'TRAINER': 0, 'SYNERGY': 0, 'DRAW': 0}
+        total_lookups = 0
+
         for _, row in runners_df.iterrows():
-            j_name = row['jockey_name']
-            t_name = row['trainer_name']
-            syn_name = f"{j_name} & {t_name}"
+            j_name = normalize_person_name(row['jockey_name'])
+            t_name = normalize_person_name(row['trainer_name'])
+            syn_name = synergy_name(j_name, t_name)
             draw_group = self.calc._assign_draw_group(row['draw'])
-            
-            # 歷史 Z-Score
-            z_jockey = get_zscore(jockey_df, 'jockey_name', j_name)
-            z_trainer = get_zscore(trainer_df, 'trainer_name', t_name)
-            z_synergy = get_zscore(synergy_df, 'synergy_name', syn_name)
-            z_draw = get_zscore(draw_df, 'draw_group', draw_group)
-            
-            # 官方 Speed Guide 分數轉換
-            sg_form_score = self._map_form_rating(row['form_rating'])
-            sg_energy = float(row['speed_energy']) if pd.notna(row['speed_energy']) else 0.0
-            sg_delta = float(row['speed_energy_delta']) if pd.notna(row['speed_energy_delta']) else 0.0
-            
-            # 正規化 energy (假設平均在 100 左右)
+
+            z_jockey, hit_j = self._lookup_z(lookup, 'JOCKEY', bucket_id, j_name)
+            z_trainer, hit_t = self._lookup_z(lookup, 'TRAINER', bucket_id, t_name)
+            z_synergy, hit_s = self._lookup_z(lookup, 'SYNERGY', bucket_id, syn_name)
+            z_draw, hit_d = self._lookup_z(lookup, 'DRAW', bucket_id, draw_group)
+
+            for ft, hit in (
+                ('JOCKEY', hit_j), ('TRAINER', hit_t),
+                ('SYNERGY', hit_s), ('DRAW', hit_d),
+            ):
+                total_lookups += 1
+                if hit:
+                    hit_counts[ft] += 1
+
+            # Speed Guide：有資料才計入，沒有則 0（不假裝官方分）
+            sg_form_score = self._map_form_rating(row.get('form_rating'))
+            sg_energy = float(row['speed_energy']) if pd.notna(row.get('speed_energy')) else 0.0
+            sg_delta = float(row['speed_energy_delta']) if pd.notna(row.get('speed_energy_delta')) else 0.0
             sg_energy_norm = (sg_energy - 100.0) / 10.0 if sg_energy > 0 else 0.0
-            
-            # 計算加權總分 (Total Score)
+
             total_score = (
                 (z_jockey * ModelConfig.WEIGHT_JOCKEY) +
                 (z_trainer * ModelConfig.WEIGHT_TRAINER) +
@@ -133,7 +164,7 @@ class InferenceEngine:
                 (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
                 (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
             )
-            
+
             results.append({
                 '馬號': row['horse_no'],
                 '馬名': row['horse_name'],
@@ -144,15 +175,24 @@ class InferenceEngine:
                 '練馬師分': round(z_trainer, 2),
                 '騎練分': round(z_synergy, 2),
                 '檔位分': round(z_draw, 2),
-                '狀態評級': row['form_rating'],
+                '命中': f"{int(hit_j)+int(hit_t)+int(hit_s)+int(hit_d)}/4",
+                '狀態評級': row.get('form_rating'),
                 '能量差值': sg_delta,
-                '總預測分': round(total_score, 2)
+                '總預測分': round(total_score, 2),
             })
-            
+
         df_result = pd.DataFrame(results)
         if not df_result.empty:
-            # 依總分排序，給出預測排名
             df_result = df_result.sort_values('總預測分', ascending=False).reset_index(drop=True)
             df_result.insert(0, '預測排名', df_result.index + 1)
-            
-        return df_result, race_info
+
+        # 把匹配診斷掛在 race_info 的複本屬性上（UI 可讀）
+        meta = {
+            'bucket_id': bucket_id,
+            'bucket_valid': is_valid_bucket(bucket_id),
+            'factor_rows': 0 if scores_df is None else len(scores_df),
+            'match_rate': (sum(hit_counts.values()) / total_lookups) if total_lookups else 0.0,
+            'hit_counts': hit_counts,
+        }
+
+        return df_result, race_info, meta

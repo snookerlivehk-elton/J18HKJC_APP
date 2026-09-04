@@ -3,6 +3,8 @@ import pandas as pd
 import subprocess
 import os
 from inference_engine import InferenceEngine
+from factor_calculator import FactorCalculator
+from bucket_utils import make_bucket_id, is_valid_bucket
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 
 st.set_page_config(page_title="Data Control Center", layout="wide")
@@ -129,4 +131,37 @@ else:
     total_races = len(status_df)
     ready_races = len(status_df[status_df['狀態 (Status)'] == '🟢 資料齊全 (Ready)'])
     st.info(f"📈 監控總結：共發現 **{total_races}** 場即將舉行的賽事，其中 **{ready_races}** 場資料已完全齊全。")
+
+st.divider()
+st.subheader("🧠 因子表整備度 (factor_scores)")
+try:
+    calc = FactorCalculator()
+    scores = calc.load_factor_scores()
+    races_all = engine.get_upcoming_races()
+    if scores.empty:
+        st.warning("factor_scores 為空。請回主頁執行「重算並寫入因子分數」。")
+    else:
+        st.success(
+            f"已有 {len(scores)} 筆因子分數｜"
+            f"類型 {sorted(scores['factor_type'].unique().tolist())}｜"
+            f"{scores['bucket_id'].nunique()} 個 bucket"
+        )
+        if not races_all.empty:
+            rows = []
+            for _, r in races_all.iterrows():
+                b = make_bucket_id(
+                    race_id=r['race_id'], course=r['course'],
+                    track=r['track'], distance_m=r['distance_m'],
+                )
+                has_hist = (scores['bucket_id'] == b).any() if is_valid_bucket(b) else False
+                rows.append({
+                    '場次': r['race_num'],
+                    'race_id': r['race_id'],
+                    'bucket': b,
+                    'bucket有效': is_valid_bucket(b),
+                    '歷史有此bucket': has_hist,
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+except Exception as e:
+    st.error(f"無法檢查 factor_scores: {e}")
 
