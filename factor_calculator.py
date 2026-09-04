@@ -282,6 +282,43 @@ class FactorCalculator:
             'source': f'upgrade:{curr_src}',
         }
 
+    @staticmethod
+    def scale_upgrade_delta(delta: float) -> float:
+        """
+        將原始換人Δ（兩 Z 之差，常過大）飽和到與合作 Z 相近的尺度。
+        adopted_B = CAP * tanh(delta / CAP)
+        """
+        import math
+        if delta is None or (isinstance(delta, float) and math.isnan(delta)):
+            return None
+        cap = float(ModelConfig.UPGRADE_DELTA_CAP)
+        if cap <= 0:
+            return float(delta)
+        return float(cap * math.tanh(float(delta) / cap))
+
+    def adopt_horse_jockey_score(self, partnership_z, partnership_runs, raw_delta):
+        """
+        雙軌採用規則：
+        - 合作出賽充足 → 純 A
+        - 合作出賽稀少 → A 與正規化 B 混合（避免 1 戰合作蓋過真實換人訊號，也避免 B 暴走）
+        - 無合作 → 純正規化 B
+        """
+        scaled_b = self.scale_upgrade_delta(raw_delta) if raw_delta is not None else None
+        has_a = partnership_z is not None
+        runs = int(partnership_runs) if partnership_runs is not None else 0
+
+        if has_a and runs >= ModelConfig.HJ_MIN_RUNS_PURE_A:
+            return float(partnership_z), None if scaled_b is None else float(scaled_b), 'A:合作歷史'
+        if has_a and scaled_b is not None:
+            w = float(ModelConfig.HJ_SPARSE_B_BLEND)
+            adopted = (1.0 - w) * float(partnership_z) + w * float(scaled_b)
+            return float(adopted), float(scaled_b), f'A+B混合(出賽{runs})'
+        if has_a:
+            return float(partnership_z), None if scaled_b is None else float(scaled_b), 'A:合作歷史'
+        if scaled_b is not None:
+            return float(scaled_b), float(scaled_b), 'B:換人Δ(正規化)'
+        return None, None, '無'
+
     def _assign_draw_group(self, draw: int) -> str:
         """將檔位 1-14 轉換為 4 個群組"""
         if pd.isna(draw):

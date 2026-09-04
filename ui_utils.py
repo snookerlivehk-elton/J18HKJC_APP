@@ -296,8 +296,10 @@ def render_upcoming_match_panel(
     if match_mode == 'horse_jockey':
         st.caption(
             "雙軌評分（白皮書 Phase 3）："
-            "A=人馬合作歷史；無 A 時用 B=換人指數 "
-            f"(今仗騎師Z − 近 {ModelConfig.JOCKEY_LOOKBACK_RACES} 仗前任平均Z)。"
+            "A=人馬合作 Z；B=換人Δ 經 tanh 飽和後再採用"
+            f"（CAP={ModelConfig.UPGRADE_DELTA_CAP}）。"
+            f"合作出賽≥{ModelConfig.HJ_MIN_RUNS_PURE_A} 純用 A；"
+            f"較少則與 B 混合（B 權重 {ModelConfig.HJ_SPARSE_B_BLEND}）。"
         )
         if 'raw_df' in st.session_state and not st.session_state['raw_df'].empty:
             hist_df = st.session_state['raw_df']
@@ -334,16 +336,7 @@ def render_upcoming_match_panel(
                 jockey_scores=jockey_scores,
             )
             delta = delta_info.get('delta')
-            if hit:
-                source = 'A:合作歷史'
-                used = z
-            elif delta is not None:
-                source = 'B:換人Δ'
-                used = delta
-                scored += 1  # B 軌有分
-            else:
-                source = f"無({delta_info.get('source')})"
-                used = None
+            used, scaled_b, source = calc.adopt_horse_jockey_score(z if hit else None, runs if hit else 0, delta)
 
             row_out = {
                 '馬號': row.get('horse_no'),
@@ -354,12 +347,13 @@ def render_upcoming_match_panel(
                 entity_label: entity,
                 '合作命中': '✓' if hit else '✗',
                 '合作Z': None if z is None else round(z, 2),
-                '換人Δ': None if delta is None else round(delta, 2),
+                '換人Δ原值': None if delta is None else round(delta, 2),
+                '換人Δ正規化': None if scaled_b is None else round(scaled_b, 2),
                 '採用分': None if used is None else round(used, 2),
                 '來源': source,
                 '合作出賽': runs,
             }
-            if hit:
+            if used is not None:
                 scored += 1
             rows.append(row_out)
             continue
@@ -383,7 +377,7 @@ def render_upcoming_match_panel(
     if match_mode == 'horse_jockey':
         st.caption(
             f"合作歷史命中：{hits}/{len(runners_df)}　｜　"
-            f"有採用分（A 或 B）：{scored}/{len(runners_df)}"
+            f"有採用分（A／混合／正規化B）：{scored}/{len(runners_df)}"
         )
         sort_col = '採用分'
     else:
