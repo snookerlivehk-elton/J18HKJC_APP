@@ -357,6 +357,45 @@ def render_upcoming_match_panel(
     for _, srow in subset.iterrows():
         score_map[str(srow['entity_name'])] = srow
 
+    # 近績頁：顯示 NLP 是否已納入目前 factor_scores
+    horse_nlp_map = {}
+    if match_mode == 'horse':
+        freshness = calc.horse_factor_nlp_freshness()
+        st.markdown("#### NLP 判決納入狀態")
+        f1, f2, f3 = st.columns(3)
+        f1.metric("有受阻判決的歷史出賽", freshness.get("excuse_runner_count", 0))
+        f2.metric(
+            "近績分數時間",
+            str(freshness.get("horse_calculated_at"))[:19] if freshness.get("horse_calculated_at") is not None else "尚無",
+        )
+        f3.metric(
+            "最新 NLP 時間",
+            str(freshness.get("nlp_updated_at"))[:19] if freshness.get("nlp_updated_at") is not None else "尚無",
+        )
+        st_map = freshness.get("status")
+        if st_map == "stale_horse":
+            st.warning(
+                "NLP 解析比近績分數更新。**目前表上的 Z／平滑分尚未反映最新判決**。"
+                "請按上方「計算並寫入馬匹近績因子」（勾選套用 NLP）或主頁重算。"
+            )
+        elif st_map == "horse_current":
+            if freshness.get("excuse_runner_count", 0) > 0:
+                st.success(
+                    "近績分數時間不早於最新 NLP；若重算時有勾選「套用 NLP」，"
+                    "下方「NLP受阻」為 ✓ 的馬，其 Z 已可能含受阻補償。"
+                )
+            else:
+                st.info("已有近績分數，但庫內尚無 has_excuse=true 的判決（或皆為無受阻／略過）。")
+        elif st_map == "no_nlp":
+            st.info("尚未有 NLP 解析結果；目前近績為純歷史名次計算。")
+        elif st_map == "no_horse_factor":
+            st.warning("尚無 HORSE 近績分數，請先計算並寫入。")
+
+        horse_nlp_map = calc.summarize_nlp_impact_by_horse(
+            runners_df["horse_name"].tolist(),
+            lookback_days=360,
+        )
+
     # 人馬雙軌：預載歷史 + 騎師 Z（供 Upgrade Delta）
     hist_df = None
     jockey_scores = None
@@ -452,7 +491,7 @@ def render_upcoming_match_panel(
             rows.append(row_out)
             continue
 
-        rows.append({
+        row_out = {
             '馬號': row.get('horse_no'),
             '馬名': row.get('horse_name'),
             '檔位': row.get('draw'),
@@ -463,7 +502,19 @@ def render_upcoming_match_panel(
             'Z-Score': None if z is None else round(z, 2),
             '出賽': runs,
             '平滑分': None if adj is None else round(adj, 3),
-        })
+        }
+        if match_mode == 'horse':
+            nlp = horse_nlp_map.get(entity) or horse_nlp_map.get(normalize_person_name(row.get('horse_name'))) or {}
+            exc = int(nlp.get("excuse_count") or 0)
+            row_out['NLP受阻'] = '✓' if exc > 0 else '—'
+            row_out['NLP場次'] = exc
+            row_out['NLP段'] = nlp.get("best_stage") or '—'
+            row_out['NLP嚴重度'] = (
+                round(float(nlp.get("best_severity") or 0), 2) if exc > 0 else None
+            )
+            row_out['NLP摘要'] = nlp.get("reason") or ''
+            row_out['已解析報告'] = int(nlp.get("parsed_reports") or 0)
+        rows.append(row_out)
         if hit:
             scored += 1
 
@@ -481,6 +532,13 @@ def render_upcoming_match_panel(
     else:
         st.caption(f"匹配率：{hits}/{len(runners_df)}（{hits / max(len(runners_df), 1):.0%}）")
         sort_col = 'Z-Score'
+        if match_mode == 'horse' and 'NLP受阻' in match_df.columns:
+            n_exc = int((match_df['NLP受阻'] == '✓').sum())
+            st.caption(
+                f"本場有 NLP 受阻判決的馬：{n_exc}/{len(runners_df)}　｜　"
+                "「NLP受阻=✓」表示回看期內至少一場 has_excuse；"
+                "Z 是否已含補償取決於上方「近績分數時間」是否在 NLP 之後並已重算。"
+            )
 
     # 依分數排序（未命中放最後）
     if sort_col in match_df.columns:

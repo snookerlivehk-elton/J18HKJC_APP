@@ -632,6 +632,144 @@ class FactorCalculator:
                 }
         return best
 
+    def horse_factor_nlp_freshness(self) -> dict:
+        """
+        對照：庫內 HORSE 分數時間 vs 最新 NLP 寫入時間。
+        若 NLP 較新，代表近績尚未用最新判決重算。
+        """
+        self.ensure_nlp_result_column()
+        horse_at = None
+        nlp_at = None
+        try:
+            hs = pd.read_sql(text("""
+                SELECT MAX(calculated_at) AS t FROM factor_scores WHERE factor_type = 'HORSE'
+            """), self.engine)
+            if not hs.empty and pd.notna(hs.iloc[0]["t"]):
+                horse_at = pd.to_datetime(hs.iloc[0]["t"], utc=True)
+        except Exception:
+            pass
+        try:
+            ns = pd.read_sql(text("""
+                SELECT MAX(updated_at) AS t FROM text_reports WHERE nlp_result IS NOT NULL
+            """), self.engine)
+            if not ns.empty and pd.notna(ns.iloc[0]["t"]):
+                nlp_at = pd.to_datetime(ns.iloc[0]["t"], utc=True)
+        except Exception:
+            pass
+
+        excuse_n = len(self.load_excuse_map())
+        status = "unknown"
+        if nlp_at is None and excuse_n == 0:
+            status = "no_nlp"
+        elif horse_at is None:
+            status = "no_horse_factor"
+        elif nlp_at is not None and horse_at < nlp_at:
+            status = "stale_horse"  # 需重算近績
+        else:
+            status = "horse_current"
+
+        return {
+            "status": status,
+            "horse_calculated_at": horse_at,
+            "nlp_updated_at": nlp_at,
+            "excuse_runner_count": excuse_n,
+        }
+
+    def summarize_nlp_impact_by_horse(
+        self,
+        horse_names,
+        lookback_days: int = 360,
+    ) -> dict:
+        """
+        horse_name_norm -> {
+          parsed_reports, excuse_count, best_stage, best_severity, reason
+        }
+        用於 UI 顯示「這匹馬的近績是否可能受 NLP 判決影響」。
+        """
+        names = {normalize_person_name(n) for n in (horse_names or []) if n}
+        names.discard("")
+        empty = {
+            "parsed_reports": 0,
+            "excuse_count": 0,
+            "best_stage": None,
+            "best_severity": 0.0,
+            "reason": "",
+        }
+        if not names:
+            return {}
+
+        try:
+            hist = pd.read_sql(text("""
+                SELECT ru.runner_id, ru.horse_name, m.racing_date
+                FROM runners ru
+                JOIN races r ON ru.race_id = r.race_id
+                JOIN race_meetings m ON r.meeting_id = m.meeting_id
+                WHERE ru.finish_order_num IS NOT NULL
+            """), self.engine)
+        except Exception as e:
+            print(f"summarize_nlp_impact_by_horse hist failed: {e}")
+            return {n: dict(empty) for n in names}
+
+        if hist.empty:
+            return {n: dict(empty) for n in names}
+
+        hist["racing_date"] = pd.to_datetime(hist["racing_date"])
+        cutoff = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=int(lookback_days))
+        hist = hist[hist["racing_date"] >= cutoff].copy()
+        hist["horse_name_norm"] = hist["horse_name"].apply(normalize_person_name)
+        hist = hist[hist["horse_name_norm"].isin(names)]
+        if hist.empty:
+            return {n: dict(empty) for n in names}
+
+        runner_to_horse = {
+            str(r.runner_id): r.horse_name_norm
+            for r in hist.itertuples(index=False)
+        }
+        rids = list(runner_to_horse.keys())
+        frames = []
+        for i in range(0, len(rids), 400):
+            chunk = rids[i:i + 400]
+            id_list = ",".join([f"'{x}'" for x in chunk])
+            try:
+                frames.append(pd.read_sql(f"""
+                    SELECT entity_id, nlp_result FROM text_reports
+                    WHERE entity_type = 'runner'
+                      AND entity_id IN ({id_list})
+                      AND nlp_result IS NOT NULL
+                """, self.engine))
+            except Exception as e:
+                print(f"summarize nlp chunk failed: {e}")
+
+        out = {n: dict(empty) for n in names}
+        stage_rank = {"none": 0, "early": 1, "middle": 2, "late": 3}
+        if not frames:
+            return out
+
+        reports = pd.concat(frames, ignore_index=True)
+        for _, row in reports.iterrows():
+            hn = runner_to_horse.get(str(row["entity_id"]))
+            if not hn:
+                continue
+            info = out[hn]
+            info["parsed_reports"] += 1
+            try:
+                obj = json.loads(row["nlp_result"]) if isinstance(row["nlp_result"], str) else row["nlp_result"]
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(obj, dict) or obj.get("skipped") or not obj.get("has_excuse"):
+                continue
+            sev = float(obj.get("severity") or 0.0)
+            stage = str(obj.get("excuse_stage") or "none").lower()
+            info["excuse_count"] += 1
+            if sev > info["best_severity"] or (
+                sev == info["best_severity"]
+                and stage_rank.get(stage, 0) > stage_rank.get(info["best_stage"] or "none", 0)
+            ):
+                info["best_severity"] = sev
+                info["best_stage"] = stage
+                info["reason"] = str(obj.get("reason") or "")[:40]
+        return out
+
     def apply_nlp_excuse_boost(self, df: pd.DataFrame, excuse_map: dict = None) -> pd.DataFrame:
         """
         將 NLP 受阻結果併入 raw_score（白皮書 Phase 4 簡化實作）：

@@ -67,13 +67,15 @@ if st.button("🚀 計算並寫入馬匹近績因子", type="primary", disabled=
         else:
             n = calc.save_factor_scores(h_df)
             st.session_state["h_df_indep"] = h_df
+            st.session_state["horse_nlp_applied"] = bool(apply_nlp_on_compute)
             excused = 0
             if apply_nlp_on_compute:
                 emap = calc.load_excuse_map()
                 excused = len(emap)
             st.success(
                 f"完成：{len(h_df)} 筆近績（已寫入 factor_scores {n} 列）；"
-                f"可用 NLP 受阻 runner 數：{excused}"
+                f"本次{'有' if apply_nlp_on_compute else '沒有'}套用 NLP；"
+                f"可用受阻 runner 數：{excused}"
             )
 
 h_df = ui_utils.load_factor_from_db_or_session("h_df_indep", "HORSE")
