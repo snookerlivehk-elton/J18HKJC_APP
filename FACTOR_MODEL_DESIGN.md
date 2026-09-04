@@ -1,5 +1,8 @@
 # J18 Quant Model - 因子模型設計白皮書 (Factor Model Design)
 
+> **實作／運維交接**：請先讀 [`DEVELOPMENT_REPORT.md`](DEVELOPMENT_REPORT.md)。  
+> 本檔定義數學與產品原則；交接手冊記載現行 Bucket 政策（騎練／近績＝距離帶粗桶、檔位＝細桶等）、`factor_scores` 類型與部署後重算流程。
+
 ## 1. 核心理念
 本模型旨在將歷史賽果轉換為可量化的「因子分數 (Factor Scores)」，以供未來排位表進行同場比較。模型設計嚴格遵循「分桶 (Bucketing)」、「時間衰減 (Time Decay)」、「貝葉斯平滑 (Bayesian Smoothing)」與「因子獨立性」四大原則。
 
