@@ -300,14 +300,14 @@ def render_upcoming_match_panel(
         bucket_ok = True
         race_bucket = get_bucket_for_race(selected_race_id)
         band_bucket = get_band_bucket_for_race(selected_race_id)
-    elif match_mode in ('jockey', 'trainer', 'synergy'):
-        # 騎練：距離帶粗桶
+    elif match_mode in ('jockey', 'trainer', 'synergy', 'horse'):
+        # 騎練／馬匹近績：距離帶粗桶
         target_bucket = get_band_bucket_for_race(selected_race_id)
         band_bucket = target_bucket
         race_bucket = get_bucket_for_race(selected_race_id)
         bucket_ok = is_valid_band_bucket(target_bucket) if target_bucket else False
     else:
-        # 檔位 / 馬匹近績等：細桶
+        # 檔位等：細桶
         target_bucket = get_bucket_for_race(selected_race_id)
         race_bucket = target_bucket
         band_bucket = get_band_bucket_for_race(selected_race_id)
@@ -318,8 +318,8 @@ def render_upcoming_match_panel(
     c2.metric("Bucket 有效", "是" if bucket_ok else "否")
     c3.metric("排位馬匹數", len(runners_df))
     if band_bucket and match_mode == 'draw':
-        st.caption(f"參考：本場距離帶粗桶為 `{band_bucket}`（騎練因子用此鍵）")
-    if match_mode in ('jockey', 'trainer', 'synergy') and race_bucket:
+        st.caption(f"參考：本場距離帶粗桶為 `{band_bucket}`（騎練／近績因子用此鍵）")
+    if match_mode in ('jockey', 'trainer', 'synergy', 'horse') and race_bucket:
         st.caption(f"參考：本場細桶為 `{race_bucket}`（檔位因子用此鍵）")
 
     if not bucket_ok and not use_global_bucket:

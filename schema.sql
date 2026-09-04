@@ -179,6 +179,7 @@ CREATE TABLE text_reports (
     source_api VARCHAR(100),             -- 資料來源端點或識別
     language VARCHAR(20) DEFAULT 'zh-HK',
     raw_json JSONB,                      -- 關聯的原始 JSON 段落
+    nlp_result TEXT,                     -- LLM 結構化 JSON（has_excuse / stage / severity）
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

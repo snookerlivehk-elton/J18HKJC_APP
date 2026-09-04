@@ -3,6 +3,9 @@ import numpy as np
 from datetime import datetime
 from sqlalchemy import create_engine, text
 import os
+import json
+import re
+from typing import Optional
 from config import ModelConfig
 from bucket_utils import (
     make_bucket_id,
@@ -43,7 +46,9 @@ class FactorCalculator:
             SELECT 
                 m.racing_date,
                 r.race_id, r.course, r.track, r.distance_m, r.ground, r.class as race_class,
-                ru.jockey_name, ru.trainer_name, ru.horse_name, ru.finish_order_num, ru.bar_draw as draw,
+                ru.runner_id, ru.jockey_name, ru.trainer_name, ru.horse_name,
+                ru.finish_order_num, ru.bar_draw as draw,
+                ru.runner_rating, ru.win_probability_raw,
                 ru.final_time, ru.raw_json
             FROM runners ru
             JOIN races r ON ru.race_id = r.race_id
@@ -62,6 +67,12 @@ class FactorCalculator:
         df['jockey_name'] = df['jockey_name'].apply(normalize_person_name)
         df['trainer_name'] = df['trainer_name'].apply(normalize_person_name)
         df['horse_name'] = df['horse_name'].apply(normalize_person_name)
+        df['class_num'] = df['race_class'].apply(self._parse_class_num)
+        df['win_odds'] = df.apply(
+            lambda r: self._parse_win_odds(r.get('raw_json'), r.get('win_probability_raw')),
+            axis=1,
+        )
+        df['late_pos'] = df['raw_json'].apply(self._parse_late_sectional_position)
 
         # 細桶：Venue_Track_Distance（檔位等）
         df['bucket_id'] = df.apply(
@@ -82,10 +93,76 @@ class FactorCalculator:
             ),
             axis=1,
         )
-        df = df[df['bucket_id'].apply(is_valid_bucket)].copy()
-        df = df[df['band_bucket_id'].apply(is_valid_band_bucket)].copy()
+        df = df[df['bucket_id'].apply(is_valid_bucket) | df['band_bucket_id'].apply(is_valid_band_bucket)].copy()
         
         return df
+
+    @staticmethod
+    def _parse_class_num(race_class) -> Optional[int]:
+        """第五班→5；Class 4→4；無法解析→None。"""
+        if race_class is None or (isinstance(race_class, float) and np.isnan(race_class)):
+            return None
+        s = str(race_class)
+        m = re.search(r"第([一二三四五六七八九十])班", s)
+        if m:
+            cmap = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+            return cmap.get(m.group(1))
+        m = re.search(r"(?:Class|班)\s*([1-5])", s, re.I)
+        if m:
+            return int(m.group(1))
+        m = re.search(r"([1-5])\s*班", s)
+        if m:
+            return int(m.group(1))
+        return None
+
+    @staticmethod
+    def _parse_win_odds(raw_json, win_probability_raw) -> Optional[float]:
+        """轉成約當獨贏賠率；win_probability 若為百分比則 odds≈100/p。"""
+        val = None
+        if win_probability_raw is not None and str(win_probability_raw).strip() not in ("", "-", "None"):
+            try:
+                val = float(str(win_probability_raw).replace("%", "").strip())
+            except ValueError:
+                val = None
+        if val is None and raw_json is not None:
+            try:
+                data = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+                wp = data.get("win_probability")
+                if wp is not None and str(wp).strip() not in ("", "-", "None"):
+                    val = float(str(wp).replace("%", "").strip())
+            except (TypeError, ValueError, json.JSONDecodeError):
+                val = None
+        if val is None or val <= 0:
+            return None
+        # 百分比機率 → 賠率；若已是賠率（常見 >1 且小數）則直接用
+        if val > 1:
+            # 多數 J18 為百分比字串如 45
+            return 100.0 / val
+        return 1.0 / val
+
+    @staticmethod
+    def _parse_late_sectional_position(raw_json) -> Optional[int]:
+        """取最後一個非空 stage 的 position（近似末段走位）。"""
+        if raw_json is None:
+            return None
+        try:
+            data = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+            sections = data.get("sections") or {}
+            last_pos = None
+            for key in ("stage_1", "stage_2", "stage_3", "stage_4", "stage_5", "stage_6"):
+                stage = sections.get(key)
+                if not stage:
+                    continue
+                pos = stage.get("position")
+                if pos is None or str(pos).strip() in ("", "-", "N"):
+                    continue
+                try:
+                    last_pos = int(float(pos))
+                except (TypeError, ValueError):
+                    continue
+            return last_pos
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
 
     def calculate_base_score(self, df: pd.DataFrame) -> pd.DataFrame:
         """計算單場賽事的原始得分 (Base Score)"""
@@ -209,6 +286,294 @@ class FactorCalculator:
             return out
         out['factor_type'] = 'HORSE_JOCKEY'
         return out.rename(columns={'horse_jockey_name': 'entity_name'})
+
+    def ensure_nlp_result_column(self) -> None:
+        """為 text_reports 補上 nlp_result（Postgres / SQLite 皆可）。"""
+        with self.engine.begin() as conn:
+            if USE_SQLITE:
+                cols = pd.read_sql("PRAGMA table_info(text_reports)", conn)
+                names = cols['name'].tolist() if not cols.empty else []
+                if 'nlp_result' not in names:
+                    conn.execute(text("ALTER TABLE text_reports ADD COLUMN nlp_result TEXT"))
+            else:
+                conn.execute(text(
+                    "ALTER TABLE text_reports ADD COLUMN IF NOT EXISTS nlp_result TEXT"
+                ))
+
+    def load_unprocessed_reports(self, limit: int = 10) -> pd.DataFrame:
+        """讀取尚未 LLM 解析的賽後報告。"""
+        self.ensure_nlp_result_column()
+        q = text("""
+            SELECT id, entity_type, entity_id, report_type, report_text
+            FROM text_reports
+            WHERE nlp_result IS NULL
+              AND report_text IS NOT NULL
+              AND LENGTH(TRIM(report_text)) > 0
+            ORDER BY id
+            LIMIT :lim
+        """)
+        try:
+            return pd.read_sql(q, self.engine, params={"lim": limit})
+        except Exception as e:
+            print(f"load_unprocessed_reports failed: {e}")
+            return pd.DataFrame()
+
+    def save_nlp_result(self, report_id: int, result: dict) -> None:
+        payload = json.dumps(result, ensure_ascii=False)
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE text_reports SET nlp_result = :payload WHERE id = :id"),
+                {"payload": payload, "id": int(report_id)},
+            )
+
+    def nlp_status(self) -> dict:
+        """NLP 解析進度摘要。"""
+        self.ensure_nlp_result_column()
+        try:
+            row = pd.read_sql(text("""
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(nlp_result) AS done,
+                    COUNT(*) FILTER (WHERE nlp_result IS NULL) AS pending
+                FROM text_reports
+                WHERE report_text IS NOT NULL AND LENGTH(TRIM(report_text)) > 0
+            """), self.engine).iloc[0]
+            return {
+                "total": int(row["total"]),
+                "done": int(row["done"]),
+                "pending": int(row["pending"]),
+            }
+        except Exception:
+            # SQLite 無 FILTER；退回兩次查詢
+            try:
+                total = pd.read_sql(
+                    "SELECT COUNT(*) AS n FROM text_reports WHERE report_text IS NOT NULL",
+                    self.engine,
+                ).iloc[0]["n"]
+                done = pd.read_sql(
+                    "SELECT COUNT(*) AS n FROM text_reports WHERE nlp_result IS NOT NULL",
+                    self.engine,
+                ).iloc[0]["n"]
+                return {"total": int(total), "done": int(done), "pending": int(total) - int(done)}
+            except Exception as e:
+                return {"total": 0, "done": 0, "pending": 0, "error": str(e)}
+
+    def load_excuse_map(self) -> dict:
+        """
+        runner_id -> 最佳受阻結果（severity 最高；同 severity 取較重 stage）。
+        需先跑 LLM 把 nlp_result 寫回 text_reports。
+        """
+        self.ensure_nlp_result_column()
+        try:
+            df = pd.read_sql(text("""
+                SELECT entity_id, nlp_result
+                FROM text_reports
+                WHERE nlp_result IS NOT NULL
+                  AND entity_type = 'runner'
+            """), self.engine)
+        except Exception as e:
+            print(f"load_excuse_map failed: {e}")
+            return {}
+
+        stage_rank = {"none": 0, "early": 1, "middle": 2, "late": 3}
+        best = {}
+        for _, row in df.iterrows():
+            try:
+                obj = json.loads(row["nlp_result"]) if isinstance(row["nlp_result"], str) else row["nlp_result"]
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(obj, dict) or not obj.get("has_excuse"):
+                continue
+            sev = float(obj.get("severity") or 0.0)
+            stage = str(obj.get("excuse_stage") or "none").lower()
+            rid = str(row["entity_id"])
+            prev = best.get(rid)
+            if prev is None or sev > prev["severity"] or (
+                sev == prev["severity"] and stage_rank.get(stage, 0) > stage_rank.get(prev["excuse_stage"], 0)
+            ):
+                best[rid] = {
+                    "has_excuse": True,
+                    "excuse_stage": stage,
+                    "severity": sev,
+                    "reason": obj.get("reason", ""),
+                }
+        return best
+
+    def apply_nlp_excuse_boost(self, df: pd.DataFrame, excuse_map: dict = None) -> pd.DataFrame:
+        """
+        將 NLP 受阻結果併入 raw_score（白皮書 Phase 4 簡化實作）：
+        - 已有入位分：依 stage 乘數與 severity 放大
+        - 未入位：給予部分虛擬入位分（ capped ）
+        需 runners.runner_id 才能對上 text_reports.entity_id。
+        """
+        out = df.copy()
+        if "raw_score" not in out.columns:
+            out = self.calculate_base_score(out)
+        if excuse_map is None:
+            excuse_map = self.load_excuse_map()
+        if not excuse_map:
+            out["excuse_applied"] = False
+            out["excuse_stage"] = None
+            out["excuse_severity"] = 0.0
+            return out
+
+        # 確保有 runner_id：歷史查詢若缺則從 race_id + brand 拼不了，這裡從 DB 補
+        if "runner_id" not in out.columns:
+            try:
+                ids = pd.read_sql(
+                    "SELECT runner_id, race_id, horse_name FROM runners WHERE finish_order_num IS NOT NULL",
+                    self.engine,
+                )
+                ids["horse_name"] = ids["horse_name"].apply(normalize_person_name)
+                out = out.merge(ids, on=["race_id", "horse_name"], how="left")
+            except Exception as e:
+                print(f"attach runner_id failed: {e}")
+                out["excuse_applied"] = False
+                return out
+
+        mult_map = {
+            "early": float(ModelConfig.EXCUSE_MULTIPLIER_EARLY),
+            "middle": float(ModelConfig.EXCUSE_MULTIPLIER_MIDDLE),
+            "late": float(ModelConfig.EXCUSE_MULTIPLIER_LATE),
+        }
+        late_cap = float(ModelConfig.EXCUSE_MULTIPLIER_LATE)
+        place_w = float(ModelConfig.PLACE_WEIGHT)
+
+        applied = []
+        stages = []
+        sevs = []
+        new_scores = []
+        for _, row in out.iterrows():
+            rid = row.get("runner_id")
+            info = excuse_map.get(str(rid)) if pd.notna(rid) else None
+            base = float(row["raw_score"])
+            if not info:
+                applied.append(False)
+                stages.append(None)
+                sevs.append(0.0)
+                new_scores.append(base)
+                continue
+            sev = float(info.get("severity") or 0.0)
+            stage = str(info.get("excuse_stage") or "none")
+            mult = mult_map.get(stage, 1.0)
+            if base > 0:
+                boosted = base * (1.0 + (mult - 1.0) * sev)
+            else:
+                # 未入位：給「虛擬入位分」，上限略低於真實 PLACE
+                boosted = place_w * sev * (mult / late_cap) * 0.85
+            applied.append(True)
+            stages.append(stage)
+            sevs.append(sev)
+            new_scores.append(float(boosted))
+
+        out["raw_score"] = new_scores
+        out["excuse_applied"] = applied
+        out["excuse_stage"] = stages
+        out["excuse_severity"] = sevs
+        return out
+
+    def apply_class_drop_boost(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        白皮書 Phase 4 降班三條件（簡化實作）：
+        須同時滿足才對「降班當仗」加 CLASS_DROP_BONUS，並略抬升近三仗未入位分。
+        1) 今仗班次數字 > 近三仗（降班）
+        2) 近三仗平均名次 > 7，且平均獨贏賠率 < 15
+        3) 近三仗至少一場末段走位列全場前 30%
+        """
+        out = df.copy()
+        if "raw_score" not in out.columns:
+            out = self.calculate_base_score(out)
+        out["class_drop_applied"] = False
+        if "horse_name" not in out.columns or "class_num" not in out.columns:
+            return out
+
+        field_size = out.groupby("race_id")["horse_name"].transform("count")
+        out["_field_size"] = field_size
+
+        bonus = float(ModelConfig.CLASS_DROP_BONUS)
+        place_w = float(ModelConfig.PLACE_WEIGHT)
+
+        pieces = []
+        for horse, g in out.groupby("horse_name", sort=False):
+            g = g.sort_values("racing_date").copy()
+            drop_flags = []
+            for i in range(len(g)):
+                if i < 3:
+                    drop_flags.append(False)
+                    continue
+                prior = g.iloc[i - 3:i]
+                cur = g.iloc[i]
+                cur_cls = cur.get("class_num")
+                prior_cls = prior["class_num"].dropna()
+                if pd.isna(cur_cls) or prior_cls.empty:
+                    drop_flags.append(False)
+                    continue
+                # 條件1：今仗班次數字更大（例如 4→5）
+                if float(cur_cls) <= float(prior_cls.mean()):
+                    drop_flags.append(False)
+                    continue
+                # 條件2：劣績但市場未棄
+                avg_fin = float(prior["finish_order_num"].mean())
+                odds = prior["win_odds"].dropna()
+                avg_odds = float(odds.mean()) if not odds.empty else None
+                if avg_fin <= 7 or avg_odds is None or avg_odds >= 15:
+                    drop_flags.append(False)
+                    continue
+                # 條件3：末段走位前 30%
+                strong_late = False
+                for _, pr in prior.iterrows():
+                    lp = pr.get("late_pos")
+                    fs = pr.get("_field_size") or 0
+                    if pd.notna(lp) and fs and float(lp) <= max(1.0, float(fs) * 0.30):
+                        strong_late = True
+                        break
+                drop_flags.append(bool(strong_late))
+
+            g["class_drop_applied"] = drop_flags
+            scores = g["raw_score"].astype(float).tolist()
+            for i, flag in enumerate(drop_flags):
+                if not flag:
+                    continue
+                scores[i] = scores[i] + bonus
+                for j in range(max(0, i - 3), i):
+                    if scores[j] <= 0:
+                        scores[j] = place_w * 0.35
+            g["raw_score"] = scores
+            pieces.append(g)
+
+        if not pieces:
+            return out
+        result = pd.concat(pieces, ignore_index=True)
+        if "_field_size" in result.columns:
+            result = result.drop(columns=["_field_size"])
+        return result
+
+    def calculate_horse_factor(self, df: pd.DataFrame = None, apply_nlp: bool = True) -> pd.DataFrame:
+        """馬匹近績：距離帶粗桶；可選套用 NLP 受阻補償與降班修正後再算 Z。"""
+        if df is None or df.empty:
+            df = self.fetch_historical_data()
+        if df.empty:
+            return pd.DataFrame()
+
+        work = df.copy()
+        if "raw_score" not in work.columns:
+            work = self.calculate_base_score(work)
+        if apply_nlp:
+            work = self.apply_nlp_excuse_boost(work)
+        work = self.apply_class_drop_boost(work)
+
+        work["horse_name_clean"] = work["horse_name"].fillna("未知馬匹").astype(str)
+        out = self.calculate_entity_factor(
+            work,
+            "horse_name_clean",
+            ModelConfig.HORSE_DECAY,
+            ModelConfig.HORSE_SMOOTH_C,
+            use_distance_band=True,
+        )
+        if out.empty:
+            return out
+        out["factor_type"] = "HORSE"
+        return out.rename(columns={"horse_name_clean": "entity_name"})
 
     def _jockey_z_lookup(self, jockey_scores: pd.DataFrame) -> dict:
         """(bucket_id, jockey_name) -> z_score；另建 jockey 跨桶平均作後備。"""
@@ -643,13 +1008,13 @@ class FactorCalculator:
             print(f"load_factor_scores failed: {e}")
             return pd.DataFrame()
 
-    def run_all_factors(self, persist: bool = True):
+    def run_all_factors(self, persist: bool = True, apply_nlp: bool = True):
         """執行核心因子計算；persist=True 時寫入 factor_scores。"""
         print("Fetching historical data...")
         df = self.fetch_historical_data()
         if df.empty:
             print("No historical data found. Please run batch crawler first.")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
             
         df = self.calculate_base_score(df)
         
@@ -694,18 +1059,25 @@ class FactorCalculator:
         print("Calculating Horse-Jockey Factor (GLOBAL)...")
         hj_df = self.calculate_horse_jockey_factor(df)
 
+        print("Calculating Horse recent-form (distance-band + NLP/class-drop)...")
+        horse_df = self.calculate_horse_factor(df, apply_nlp=apply_nlp)
+
         if persist:
-            n = self.save_factor_scores(jockey_df, trainer_df, synergy_df, draw_df, hj_df)
+            n = self.save_factor_scores(
+                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df
+            )
             print(f"Saved {n} factor score rows to factor_scores.")
 
-        return jockey_df, trainer_df, synergy_df, draw_df, hj_df
+        return jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df
 
 if __name__ == "__main__":
     calc = FactorCalculator()
-    j, t, s, d, hj = calc.run_all_factors(persist=True)
+    j, t, s, d, hj, h = calc.run_all_factors(persist=True)
     if j is not None:
         print("\n=== Jockey Factor Preview (Top 5 Z-Score) ===")
         print(j.sort_values('z_score', ascending=False).head(5)[['bucket_id', 'entity_name', 'actual_runs', 'adjusted_score', 'z_score']])
         print("\nSample buckets:", sorted(j['bucket_id'].unique())[:10])
         if hj is not None and not hj.empty:
             print("HJ GLOBAL rows:", len(hj))
+        if h is not None and not h.empty:
+            print("HORSE band rows:", len(h), "buckets:", sorted(h['bucket_id'].unique()))

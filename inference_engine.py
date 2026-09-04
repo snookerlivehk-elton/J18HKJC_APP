@@ -67,7 +67,7 @@ class InferenceEngine:
         )
 
     def get_race_band_bucket(self, race_info) -> str:
-        """粗桶 Venue_距離帶（騎師/練馬師/騎練）。"""
+        """粗桶 Venue_距離帶（騎師/練馬師/騎練/近績）。"""
         return make_band_bucket_id(
             race_id=race_info.get('race_id') if hasattr(race_info, 'get') else race_info['race_id'],
             course=race_info['course'],
@@ -110,12 +110,7 @@ class InferenceEngine:
     def predict_race(self, race_id: str, df_hist: pd.DataFrame = None) -> tuple:
         """
         執行單場賽事推論（查表模式）：
-        1. 讀取排位表條件
-        2. 組標準 Bucket
-        3. 從 factor_scores 匹配 Z-Score
-        4. 依 config 權重加總排名
-
-        df_hist 保留參數相容舊 UI，但不再用於現算因子。
+        騎練/近績用距離帶粗桶；檔位用細桶；可選 HORSE Z。
         """
         races_df = self.get_upcoming_races()
         if races_df.empty:
@@ -133,17 +128,20 @@ class InferenceEngine:
         fine_bucket = self.get_race_bucket(race_info)
         band_bucket = self.get_race_band_bucket(race_info)
         scores_df = self.calc.load_factor_scores(
-            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW']
+            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE']
         )
         lookup = self._build_score_lookup(scores_df)
 
         results = []
-        hit_counts = {'JOCKEY': 0, 'TRAINER': 0, 'SYNERGY': 0, 'DRAW': 0}
+        hit_counts = {
+            'JOCKEY': 0, 'TRAINER': 0, 'SYNERGY': 0, 'DRAW': 0, 'HORSE': 0,
+        }
         total_lookups = 0
 
         for _, row in runners_df.iterrows():
             j_name = normalize_person_name(row['jockey_name'])
             t_name = normalize_person_name(row['trainer_name'])
+            h_name = normalize_person_name(row['horse_name'])
             syn_name = synergy_name(j_name, t_name)
             draw_group = self.calc._assign_draw_group(row['draw'])
 
@@ -151,16 +149,16 @@ class InferenceEngine:
             z_trainer, hit_t = self._lookup_z(lookup, 'TRAINER', band_bucket, t_name)
             z_synergy, hit_s = self._lookup_z(lookup, 'SYNERGY', band_bucket, syn_name)
             z_draw, hit_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
+            z_horse, hit_h = self._lookup_z(lookup, 'HORSE', band_bucket, h_name)
 
             for ft, hit in (
                 ('JOCKEY', hit_j), ('TRAINER', hit_t),
-                ('SYNERGY', hit_s), ('DRAW', hit_d),
+                ('SYNERGY', hit_s), ('DRAW', hit_d), ('HORSE', hit_h),
             ):
                 total_lookups += 1
                 if hit:
                     hit_counts[ft] += 1
 
-            # Speed Guide：有資料才計入，沒有則 0（不假裝官方分）
             sg_form_score = self._map_form_rating(row.get('form_rating'))
             sg_energy = float(row['speed_energy']) if pd.notna(row.get('speed_energy')) else 0.0
             sg_delta = float(row['speed_energy_delta']) if pd.notna(row.get('speed_energy_delta')) else 0.0
@@ -171,11 +169,13 @@ class InferenceEngine:
                 (z_trainer * ModelConfig.WEIGHT_TRAINER) +
                 (z_synergy * ModelConfig.WEIGHT_SYNERGY) +
                 (z_draw * ModelConfig.WEIGHT_DRAW) +
+                (z_horse * ModelConfig.WEIGHT_RECENT_FORM) +
                 (sg_form_score * ModelConfig.WEIGHT_SG_FORM) +
                 (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
                 (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
             )
 
+            hit_n = int(hit_j) + int(hit_t) + int(hit_s) + int(hit_d) + int(hit_h)
             results.append({
                 '馬號': row['horse_no'],
                 '馬名': row['horse_name'],
@@ -186,7 +186,8 @@ class InferenceEngine:
                 '練馬師分': round(z_trainer, 2),
                 '騎練分': round(z_synergy, 2),
                 '檔位分': round(z_draw, 2),
-                '命中': f"{int(hit_j)+int(hit_t)+int(hit_s)+int(hit_d)}/4",
+                '近績分': round(z_horse, 2),
+                '命中': f"{hit_n}/5",
                 '狀態評級': row.get('form_rating'),
                 '能量差值': sg_delta,
                 '總預測分': round(total_score, 2),
@@ -197,7 +198,6 @@ class InferenceEngine:
             df_result = df_result.sort_values('總預測分', ascending=False).reset_index(drop=True)
             df_result.insert(0, '預測排名', df_result.index + 1)
 
-        # 把匹配診斷掛在 race_info 的複本屬性上（UI 可讀）
         meta = {
             'bucket_id': fine_bucket,
             'band_bucket_id': band_bucket,

@@ -65,25 +65,31 @@ st.divider()
 
 st.subheader("🧠 步驟 2: 重算並寫入因子分數（供預測查表）")
 st.markdown(
-    "計算騎師 / 練馬師 / 騎練 / 檔位 Z-Score，寫入 `factor_scores`。"
-    "推論頁只讀這張表，不再每次現算。"
+    "計算騎師 / 練馬師 / 騎練 / 檔位 / 人馬 / **馬匹近績** Z-Score，寫入 `factor_scores`。"
+    "騎練與近績用距離帶粗桶；檔位用細桶。推論頁只讀這張表。"
 )
 
 if st.button("💾 重算並寫入 factor_scores", type="primary"):
-    with st.spinner("計算四大因子並寫入資料庫..."):
+    with st.spinner("計算因子並寫入資料庫（含近績距離帶）..."):
         try:
             calc = FactorCalculator()
-            j, t, s, d, hj = calc.run_all_factors(persist=True)
+            j, t, s, d, hj, h = calc.run_all_factors(persist=True)
             if j is None:
                 st.error("沒有歷史資料可計算。請先跑批次爬蟲。")
             else:
-                n = len(j) + len(t) + len(s) + len(d) + (0 if hj is None else len(hj))
+                n = (
+                    len(j) + len(t) + len(s) + len(d)
+                    + (0 if hj is None else len(hj))
+                    + (0 if h is None else len(h))
+                )
                 st.session_state['j_df_indep'] = j
                 st.session_state['t_df_indep'] = t
                 st.session_state['s_df_indep'] = s
                 st.session_state['d_df_indep'] = d
                 if hj is not None:
                     st.session_state['hj_df_indep'] = hj
+                if h is not None:
+                    st.session_state['h_df_indep'] = h
                 # 同步 raw_df 方便各診斷頁
                 if 'raw_df' not in st.session_state:
                     df = calc.fetch_historical_data()
@@ -91,7 +97,10 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
                         st.session_state['raw_df'] = calc.calculate_base_score(df)
                         st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
                         st.session_state['band_buckets'] = sorted(df['band_bucket_id'].unique().tolist())
-                st.success(f"✅ 已寫入約 {n} 筆因子分數（騎練=距離帶粗桶；檔位=細桶；人馬=GLOBAL）。可前往推論儀表板或各因子頁看排位匹配。")
+                st.success(
+                    f"✅ 已寫入約 {n} 筆（騎練/近績=距離帶；檔位=細桶；人馬=GLOBAL）。"
+                    "可前往推論儀表板。"
+                )
                 st.dataframe(
                     j.sort_values('z_score', ascending=False).head(8)[
                         ['bucket_id', 'entity_name', 'actual_runs', 'z_score']
@@ -120,6 +129,7 @@ with st.expander("目前 ModelConfig 權重（推論用）"):
         "WEIGHT_TRAINER": ModelConfig.WEIGHT_TRAINER,
         "WEIGHT_SYNERGY": ModelConfig.WEIGHT_SYNERGY,
         "WEIGHT_DRAW": ModelConfig.WEIGHT_DRAW,
+        "WEIGHT_RECENT_FORM": ModelConfig.WEIGHT_RECENT_FORM,
         "WEIGHT_SG_FORM": ModelConfig.WEIGHT_SG_FORM,
         "WEIGHT_SG_ENERGY": ModelConfig.WEIGHT_SG_ENERGY,
         "WEIGHT_SG_DELTA": ModelConfig.WEIGHT_SG_DELTA,

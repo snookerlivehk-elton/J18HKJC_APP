@@ -6,10 +6,9 @@ st.set_page_config(page_title="Inference Dashboard", layout="wide")
 
 st.title("🔮 明日賽事推論預測引擎 (Inference Dashboard)")
 st.markdown("""
-**主流程**：讀取排位表條件 → 組標準 Bucket（`ST/HV_賽道_距離`）→ 查 `factor_scores` → 加權排名。  
+**主流程**：讀取排位表 → 粗桶匹配騎練／近績、細桶匹配檔位 → 查 `factor_scores` → 加權排名。  
 
 請先：① 資料控制中心抓排位 ② 主頁「重算並寫入因子分數」③ 本頁選場預測。  
-各因子頁可查看「本場排位列 × 單一因子」對照。
 """)
 
 engine = InferenceEngine()
@@ -20,13 +19,14 @@ if races_df.empty:
     st.stop()
 
 scores_preview = engine.calc.load_factor_scores(
-    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW']
+    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE']
 )
 if scores_preview.empty:
     st.error("❌ `factor_scores` 是空的。請回主頁執行「重算並寫入因子分數」後再預測。")
     st.stop()
 else:
-    st.caption(f"目前資料庫已有 {len(scores_preview)} 筆因子分數可供匹配。")
+    types = sorted(scores_preview['factor_type'].unique().tolist())
+    st.caption(f"目前資料庫已有 {len(scores_preview)} 筆因子分數（類型：{types}）。")
 
 st.subheader("🗓️ 選擇場次")
 
@@ -61,13 +61,14 @@ if st.button("🚀 執行因子匹配預測", type="primary"):
 
             st.info(
                 f"細桶(檔位)：`{meta['bucket_id']}`　｜　"
-                f"粗桶(騎練)：`{meta.get('band_bucket_id')}`　｜　"
+                f"粗桶(騎練/近績)：`{meta.get('band_bucket_id')}`　｜　"
                 f"因子表列數：{meta['factor_rows']}　｜　"
                 f"匹配率：{meta['match_rate']:.0%}　"
                 f"（J{meta['hit_counts']['JOCKEY']} "
                 f"T{meta['hit_counts']['TRAINER']} "
                 f"S{meta['hit_counts']['SYNERGY']} "
-                f"D{meta['hit_counts']['DRAW']}）"
+                f"D{meta['hit_counts']['DRAW']} "
+                f"H{meta['hit_counts'].get('HORSE', 0)}）"
             )
 
             if meta['match_rate'] == 0:
