@@ -101,6 +101,15 @@ def synergy_name(jockey: Any, trainer: Any) -> str:
     return f"{normalize_person_name(jockey)} & {normalize_person_name(trainer)}"
 
 
+def horse_jockey_name(horse: Any, jockey: Any) -> str:
+    """人馬組合鍵（白皮書：不分賽道距離，全域統計）。"""
+    return f"{normalize_person_name(horse)} & {normalize_person_name(jockey)}"
+
+
+# 人馬合作 / 部分全域因子使用的虛擬分桶
+GLOBAL_BUCKET = "GLOBAL"
+
+
 def is_valid_bucket(bucket_id: str) -> bool:
     if not bucket_id or not isinstance(bucket_id, str):
         return False

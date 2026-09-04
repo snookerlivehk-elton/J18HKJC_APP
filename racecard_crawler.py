@@ -150,29 +150,47 @@ class HKJCRaceCardCrawler:
             if len(tds) < 10: continue
             
             try:
-                # 解析馬號
+                # 欄位順序（HKJC racecard table.draggable）：
+                # 0馬號 1近績 2綵衣 3馬名 4烙號 5負磅 6騎師 7可能超磅 8檔位 9練馬師
+                # 10國際評分 11評分 12評分+/- 13排位體重 ... 22配備
                 horse_no_text = tds[0].text(strip=True)
-                if not horse_no_text.isdigit(): continue
-                
-                # 解析馬名與代碼
-                horse_full = tds[3].text(strip=True)
-                horse_name = horse_full.split('(')[0].strip() if '(' in horse_full else horse_full
-                horse_code = ''
-                match = re.search(r'\(([A-Z0-9]+)\)', horse_full)
-                if match: horse_code = match.group(1)
-                
-                # 檔位、負磅、騎師、練馬師
-                draw_text = tds[7].text(strip=True)
-                draw = int(draw_text) if draw_text.isdigit() else 0
-                
+                if not horse_no_text.isdigit():
+                    continue
+
+                horse_name = tds[3].text(strip=True)
+                horse_code = tds[4].text(strip=True) if len(tds) > 4 else ''
+
                 weight_text = tds[5].text(strip=True)
-                weight = float(weight_text) if weight_text.replace('.','',1).isdigit() else 0.0
-                
+                weight = float(weight_text) if weight_text.replace('.', '', 1).isdigit() else 0.0
+
                 jockey = tds[6].text(strip=True).split('(')[0].strip()
-                trainer = tds[8].text(strip=True)
-                
+
+                draw_text = tds[8].text(strip=True)
+                draw = int(draw_text) if draw_text.isdigit() else 0
+
+                trainer = tds[9].text(strip=True)
+
+                rating = 0
+                rating_text = tds[11].text(strip=True) if len(tds) > 11 else ''
+                if rating_text.isdigit():
+                    rating = int(rating_text)
+
+                rating_delta = 0
+                rd_text = tds[12].text(strip=True) if len(tds) > 12 else ''
+                try:
+                    rating_delta = int(rd_text.replace('+', '')) if rd_text not in ('', '-') else 0
+                except ValueError:
+                    rating_delta = 0
+
+                horse_weight = 0.0
+                hw_text = tds[13].text(strip=True) if len(tds) > 13 else ''
+                if hw_text.replace('.', '', 1).isdigit():
+                    horse_weight = float(hw_text)
+
+                gear = tds[22].text(strip=True) if len(tds) > 22 else ''
+
                 runner_id = f"{race_id}_{horse_no_text}"
-                
+
                 runners.append({
                     'runner_id': runner_id,
                     'race_id': race_id,
@@ -183,10 +201,10 @@ class HKJCRaceCardCrawler:
                     'jockey_name': jockey,
                     'trainer_name': trainer,
                     'handicap_weight': weight,
-                    'horse_weight': 0.0, # 排位表通常還沒有體重
-                    'rating': 0,
-                    'rating_delta': 0,
-                    'gear': ''
+                    'horse_weight': horse_weight,
+                    'rating': rating,
+                    'rating_delta': rating_delta,
+                    'gear': gear,
                 })
             except Exception as e:
                 print(f"解析馬匹失敗: {e}")
@@ -223,13 +241,17 @@ class HKJCRaceCardCrawler:
                 for r in runners:
                     cursor.execute('''
                         INSERT INTO upcoming_runners 
-                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight, horse_weight, rating, rating_delta, gear)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(runner_id) DO UPDATE SET
-                        draw=excluded.draw, jockey_name=excluded.jockey_name, trainer_name=excluded.trainer_name, handicap_weight=excluded.handicap_weight
+                        draw=excluded.draw, jockey_name=excluded.jockey_name, trainer_name=excluded.trainer_name,
+                        handicap_weight=excluded.handicap_weight, horse_weight=excluded.horse_weight,
+                        rating=excluded.rating, rating_delta=excluded.rating_delta, gear=excluded.gear,
+                        horse_name=excluded.horse_name, horse_code=excluded.horse_code
                     ''', (
-                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'], 
-                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'], r['handicap_weight']
+                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'],
+                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'],
+                        r['handicap_weight'], r['horse_weight'], r['rating'], r['rating_delta'], r['gear']
                     ))
                 
                 conn.commit()
@@ -271,13 +293,17 @@ class HKJCRaceCardCrawler:
                 for r in runners:
                     cursor.execute('''
                         INSERT INTO upcoming_runners 
-                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (runner_id, race_id, horse_no, horse_name, horse_code, draw, jockey_name, trainer_name, handicap_weight, horse_weight, rating, rating_delta, gear)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT(runner_id) DO UPDATE SET
-                        draw=EXCLUDED.draw, jockey_name=EXCLUDED.jockey_name, trainer_name=EXCLUDED.trainer_name, handicap_weight=EXCLUDED.handicap_weight
+                        draw=EXCLUDED.draw, jockey_name=EXCLUDED.jockey_name, trainer_name=EXCLUDED.trainer_name,
+                        handicap_weight=EXCLUDED.handicap_weight, horse_weight=EXCLUDED.horse_weight,
+                        rating=EXCLUDED.rating, rating_delta=EXCLUDED.rating_delta, gear=EXCLUDED.gear,
+                        horse_name=EXCLUDED.horse_name, horse_code=EXCLUDED.horse_code
                     ''', (
-                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'], 
-                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'], r['handicap_weight']
+                        r['runner_id'], r['race_id'], r['horse_no'], r['horse_name'],
+                        r['horse_code'], r['draw'], r['jockey_name'], r['trainer_name'],
+                        r['handicap_weight'], r['horse_weight'], r['rating'], r['rating_delta'], r['gear']
                     ))
                 
                 conn.commit()

@@ -8,7 +8,9 @@ from bucket_utils import (
     make_bucket_id,
     normalize_person_name,
     synergy_name,
+    horse_jockey_name,
     is_valid_bucket,
+    GLOBAL_BUCKET,
 )
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
@@ -117,47 +119,65 @@ class FactorCalculator:
         )
         return grouped_df
 
-    def calculate_entity_factor(self, df: pd.DataFrame, entity_col: str, decay_rates: list, smooth_c: float) -> pd.DataFrame:
-        """計算特定實體 (騎師、練馬師、騎練組合) 的因子分數"""
-        # 1. 複製一份 dataframe 並套用該實體專屬的時間衰減
+    def calculate_entity_factor(
+        self,
+        df: pd.DataFrame,
+        entity_col: str,
+        decay_rates: list,
+        smooth_c: float,
+        global_bucket: bool = False,
+    ) -> pd.DataFrame:
+        """計算特定實體因子。global_bucket=True 時不分場地距離（人馬合作）。"""
         temp_df = df.copy()
+        if global_bucket:
+            temp_df['bucket_id'] = GLOBAL_BUCKET
         temp_df = self.apply_time_decay(temp_df, decay_rates)
-        
-        # 2. 依照 Bucket 與 實體 進行分組聚合
+
         grouped = temp_df.groupby(['bucket_id', entity_col]).agg({
             'weighted_score': 'sum',
             'weighted_runs': 'sum',
-            'raw_score': 'count', # 真實出賽次數，僅供參考
+            'raw_score': 'count',
             'finish_order_num': [
                 ('wins', lambda x: (x == 1).sum()),
                 ('places', lambda x: x.isin([2, 3, 4]).sum())
             ]
         })
-        
-        # 展平 MultiIndex columns
+
         grouped.columns = ['weighted_score', 'weighted_runs', 'actual_runs', 'wins', 'places']
         grouped = grouped.reset_index()
-        
-        # 過濾掉加權出賽數為 0 的無效數據
         grouped = grouped[grouped['weighted_runs'] > 0]
-        
-        # 3. 按 Bucket 獨立進行貝葉斯平滑
+
         result = []
         for bucket, group in grouped.groupby('bucket_id'):
             smoothed = self.apply_bayesian_smoothing(group.copy(), smooth_c)
             result.append(smoothed)
-            
+
         if not result:
             return pd.DataFrame()
-            
+
         final_df = pd.concat(result, ignore_index=True)
-        
-        # 4. 為了讓不同 Bucket 之間可比較，計算 Z-Score (標準化)
         final_df['z_score'] = final_df.groupby('bucket_id')['adjusted_score'].transform(
             lambda x: (x - x.mean()) / (x.std() + 1e-9)
         )
-        
         return final_df
+
+    def calculate_horse_jockey_factor(self, df: pd.DataFrame) -> pd.DataFrame:
+        """人馬合作：全域 bucket=GLOBAL，不分賽道距離。"""
+        temp = df.copy()
+        temp['horse_jockey_name'] = temp.apply(
+            lambda r: horse_jockey_name(r['horse_name'], r['jockey_name']), axis=1
+        )
+        out = self.calculate_entity_factor(
+            temp,
+            'horse_jockey_name',
+            ModelConfig.HORSE_JOCKEY_DECAY,
+            ModelConfig.HORSE_JOCKEY_SMOOTH_C,
+            global_bucket=True,
+        )
+        if out.empty:
+            return out
+        out['factor_type'] = 'HORSE_JOCKEY'
+        return out.rename(columns={'horse_jockey_name': 'entity_name'})
 
     def _assign_draw_group(self, draw: int) -> str:
         """將檔位 1-14 轉換為 4 個群組"""
@@ -412,16 +432,21 @@ class FactorCalculator:
         draw_df['factor_type'] = 'DRAW'
         draw_df = draw_df.rename(columns={'draw_group': 'entity_name'})
 
+        print("Calculating Horse-Jockey Factor (GLOBAL)...")
+        hj_df = self.calculate_horse_jockey_factor(df)
+
         if persist:
-            n = self.save_factor_scores(jockey_df, trainer_df, synergy_df, draw_df)
+            n = self.save_factor_scores(jockey_df, trainer_df, synergy_df, draw_df, hj_df)
             print(f"Saved {n} factor score rows to factor_scores.")
-        
-        return jockey_df, trainer_df, synergy_df, draw_df
+
+        return jockey_df, trainer_df, synergy_df, draw_df, hj_df
 
 if __name__ == "__main__":
     calc = FactorCalculator()
-    j, t, s, d = calc.run_all_factors(persist=True)
+    j, t, s, d, hj = calc.run_all_factors(persist=True)
     if j is not None:
         print("\n=== Jockey Factor Preview (Top 5 Z-Score) ===")
         print(j.sort_values('z_score', ascending=False).head(5)[['bucket_id', 'entity_name', 'actual_runs', 'adjusted_score', 'z_score']])
         print("\nSample buckets:", sorted(j['bucket_id'].unique())[:10])
+        if hj is not None and not hj.empty:
+            print("HJ GLOBAL rows:", len(hj))

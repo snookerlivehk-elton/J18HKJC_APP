@@ -7,7 +7,9 @@ st.set_page_config(page_title="Inference Dashboard", layout="wide")
 st.title("🔮 明日賽事推論預測引擎 (Inference Dashboard)")
 st.markdown("""
 **主流程**：讀取排位表條件 → 組標準 Bucket（`ST/HV_賽道_距離`）→ 查 `factor_scores` → 加權排名。  
-請先在主頁「重算並寫入因子分數」，再來此頁預測。
+
+請先：① 資料控制中心抓排位 ② 主頁「重算並寫入因子分數」③ 本頁選場預測。  
+各因子頁可查看「本場排位列 × 單一因子」對照。
 """)
 
 engine = InferenceEngine()

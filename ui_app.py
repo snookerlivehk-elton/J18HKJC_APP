@@ -70,22 +70,24 @@ if st.button("💾 重算並寫入 factor_scores", type="primary"):
     with st.spinner("計算四大因子並寫入資料庫..."):
         try:
             calc = FactorCalculator()
-            j, t, s, d = calc.run_all_factors(persist=True)
+            j, t, s, d, hj = calc.run_all_factors(persist=True)
             if j is None:
                 st.error("沒有歷史資料可計算。請先跑批次爬蟲。")
             else:
-                n = len(j) + len(t) + len(s) + len(d)
+                n = len(j) + len(t) + len(s) + len(d) + (0 if hj is None else len(hj))
                 st.session_state['j_df_indep'] = j
                 st.session_state['t_df_indep'] = t
                 st.session_state['s_df_indep'] = s
                 st.session_state['d_df_indep'] = d
+                if hj is not None:
+                    st.session_state['hj_df_indep'] = hj
                 # 同步 raw_df 方便各診斷頁
                 if 'raw_df' not in st.session_state:
                     df = calc.fetch_historical_data()
                     if not df.empty:
                         st.session_state['raw_df'] = calc.calculate_base_score(df)
                         st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
-                st.success(f"✅ 已寫入約 {n} 筆因子分數。可前往「推論儀表板」做賽事預測。")
+                st.success(f"✅ 已寫入約 {n} 筆因子分數（含人馬 GLOBAL）。可前往推論儀表板或各因子頁看排位匹配。")
                 st.dataframe(
                     j.sort_values('z_score', ascending=False).head(8)[
                         ['bucket_id', 'entity_name', 'actual_runs', 'z_score']
