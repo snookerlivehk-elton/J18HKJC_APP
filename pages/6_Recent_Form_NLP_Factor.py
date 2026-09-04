@@ -101,7 +101,7 @@ parse_mode = st.radio(
     "解析模式",
     options=["racecard", "queue"],
     format_func=lambda x: {
-        "racecard": "⭐ 本場排位相關（推薦｜自動略過無特別報告）",
+        "racecard": "⭐ 整個賽日解析（推薦｜自動略過無特別報告）",
         "queue": "全庫佇列（慢｜可選略過無內容）",
     }[x],
     horizontal=True,
@@ -118,26 +118,34 @@ lookback_days = st.number_input(
 )
 
 if parse_mode == "racecard":
-    race_options = ui_utils.get_upcoming_races_list()
-    if not race_options:
+    meeting_options = ui_utils.get_upcoming_meeting_days_list()
+    if not meeting_options:
         st.warning("沒有即將舉行的賽事。請先到資料控制中心抓排位表。")
     else:
-        selected_race_id = st.selectbox(
-            "選擇要解析相關報告的場次",
-            options=[opt[0] for opt in race_options],
-            format_func=lambda x: next(opt[1] for opt in race_options if opt[0] == x),
-            key="nlp_race_select",
+        selected_key = st.selectbox(
+            "選擇要整個賽日解析的賽日",
+            options=[opt[0] for opt in meeting_options],
+            format_func=lambda x: next(opt[1] for opt in meeting_options if opt[0] == x),
+            key="nlp_meeting_select",
         )
+        selected = next(opt for opt in meeting_options if opt[0] == selected_key)
+        meeting_key, meeting_label, race_ids = selected
+        date_part, course_part = meeting_key.split("|", 1)
+
         related = calc.load_reports_for_upcoming_race(
-            selected_race_id,
+            race_ids,
             lookback_days=int(lookback_days),
             only_unprocessed=True,
         )
         n_total = len(related)
         n_trivial = int(related["is_trivial"].sum()) if n_total else 0
         n_llm = int(related["needs_llm"].sum()) if n_total else 0
+        n_races = len(race_ids)
+        n_horses = related.attrs.get("upcoming_horse_count") if hasattr(related, "attrs") else None
+
+        st.caption(f"已選：{meeting_label}｜race_id × {n_races}" + (f"｜排位馬約 {n_horses} 匹" if n_horses else ""))
         m1, m2, m3 = st.columns(3)
-        m1.metric("本場相關待處理", n_total)
+        m1.metric("賽日相關待處理", n_total)
         m2.metric("將略過（無內容）", n_trivial)
         m3.metric("將呼叫 LLM", n_llm)
 
@@ -151,13 +159,13 @@ if parse_mode == "racecard":
                 hide_index=True,
             )
         else:
-            st.info("本場排位馬匹在回看期內沒有未解析報告（可能已解析完，或歷史尚無文字）。")
+            st.info("此賽日排位馬匹在回看期內沒有未解析報告（可能已解析完，或歷史尚無文字）。")
 
         if st.button(
-            "🚀 解析本場相關報告",
+            "🚀 整個賽日解析",
             type="primary",
             disabled=(n_llm == 0 and n_trivial == 0) or (n_llm > 0 and not ready),
-            key="nlp_parse_racecard",
+            key="nlp_parse_meeting",
         ):
             skipped = 0
             if n_trivial:
@@ -187,7 +195,7 @@ if parse_mode == "racecard":
                     status_text.text("✅ LLM 完成")
 
             st.success(
-                f"略過 {skipped} 筆無內容；LLM 成功 {len(results)} 筆。"
+                f"賽日 {date_part} {course_part}：略過 {skipped} 筆無內容；LLM 成功 {len(results)} 筆。"
                 "結果已寫入 nlp_result，之後可重用。"
             )
             if results:
@@ -268,7 +276,7 @@ else:
 st.markdown(
     """
 **流程說明**
-1. **本場模式**：只解析該場排位馬匹、回看期內、尚未有 `nlp_result` 的報告；空白／「無特別報告」直接標記略過（不花 API）。
+1. **整個賽日模式**：一次涵蓋該日該場地所有排位馬匹、回看期內尚未有 `nlp_result` 的報告；空白／「無特別報告」直接標記略過（不花 API）。
 2. 結果寫入 `text_reports.nlp_result` 後**永久重用**，不會每次重跑。
 3. 計算近績時讀取已解析結果做受阻補償；推論以 `WEIGHT_RECENT_FORM` 計入。
 """

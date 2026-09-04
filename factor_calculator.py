@@ -403,39 +403,46 @@ class FactorCalculator:
 
     def load_reports_for_upcoming_race(
         self,
-        race_id: str,
+        race_id,
         lookback_days: int = 360,
         only_unprocessed: bool = True,
     ) -> pd.DataFrame:
         """
-        只取「本場排位馬匹」在 lookback 內的歷史報告。
+        只取排位馬匹在 lookback 內的歷史報告。
+        race_id 可為單場字串，或整個賽日的 race_id 列表。
         以品牌號（L100）優先對齊，其次正規化馬名。
         """
         self.ensure_nlp_result_column()
-        try:
-            upcoming = pd.read_sql(
-                text("""
-                    SELECT horse_no, horse_name, brand_num
-                    FROM upcoming_runners
-                    WHERE race_id = :rid
-                    ORDER BY horse_no
-                """),
-                self.engine,
-                params={"rid": race_id},
-            )
-        except Exception:
-            # brand_num 欄位可能不存在
-            upcoming = pd.read_sql(
-                text("""
-                    SELECT horse_no, horse_name
-                    FROM upcoming_runners
-                    WHERE race_id = :rid
-                    ORDER BY horse_no
-                """),
-                self.engine,
-                params={"rid": race_id},
-            )
+        race_ids = [race_id] if isinstance(race_id, str) else list(race_id or [])
+        race_ids = [str(r) for r in race_ids if r]
+        if not race_ids:
+            return pd.DataFrame()
 
+        upcoming_frames = []
+        for rid in race_ids:
+            try:
+                upcoming_frames.append(pd.read_sql(
+                    text("""
+                        SELECT race_id, horse_no, horse_name, brand_num
+                        FROM upcoming_runners
+                        WHERE race_id = :rid
+                        ORDER BY horse_no
+                    """),
+                    self.engine,
+                    params={"rid": rid},
+                ))
+            except Exception:
+                upcoming_frames.append(pd.read_sql(
+                    text("""
+                        SELECT race_id, horse_no, horse_name
+                        FROM upcoming_runners
+                        WHERE race_id = :rid
+                        ORDER BY horse_no
+                    """),
+                    self.engine,
+                    params={"rid": rid},
+                ))
+        upcoming = pd.concat(upcoming_frames, ignore_index=True) if upcoming_frames else pd.DataFrame()
         if upcoming.empty:
             return pd.DataFrame()
 
@@ -517,7 +524,32 @@ class FactorCalculator:
         out["needs_llm"] = (~out["is_trivial"]) & (
             out["nlp_result"].isna() if "nlp_result" in out.columns else True
         )
+        out.attrs["upcoming_horse_count"] = upcoming["horse_name"].nunique()
+        out.attrs["race_count"] = len(race_ids)
         return out
+
+    def load_reports_for_meeting_day(
+        self,
+        racing_date,
+        course: str = None,
+        lookback_days: int = 360,
+        only_unprocessed: bool = True,
+    ) -> pd.DataFrame:
+        """整個賽日：該日（可加場地）所有排位場次的馬匹相關報告。"""
+        races = pd.read_sql(text("SELECT race_id, racing_date, course, race_num FROM upcoming_races"), self.engine)
+        if races.empty:
+            return pd.DataFrame()
+        races["racing_date"] = pd.to_datetime(races["racing_date"]).dt.strftime("%Y-%m-%d")
+        target = pd.to_datetime(racing_date).strftime("%Y-%m-%d")
+        matched = races[races["racing_date"] == target]
+        if course:
+            matched = matched[matched["course"].astype(str).str.upper() == str(course).upper()]
+        race_ids = matched.sort_values("race_num")["race_id"].astype(str).tolist()
+        return self.load_reports_for_upcoming_race(
+            race_ids,
+            lookback_days=lookback_days,
+            only_unprocessed=only_unprocessed,
+        )
 
     def save_nlp_result(self, report_id: int, result: dict) -> None:
         payload = json.dumps(result, ensure_ascii=False)

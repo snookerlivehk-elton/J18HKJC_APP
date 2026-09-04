@@ -54,6 +54,32 @@ def get_upcoming_races_list():
     return options
 
 
+@st.cache_data(ttl=60)
+def get_upcoming_meeting_days_list():
+    """
+    整個賽日選項。
+    回傳 [(meeting_key, label, race_ids), ...]
+    meeting_key = YYYY-MM-DD|ST 或 YYYY-MM-DD|HV
+    """
+    engine = InferenceEngine()
+    races_df = engine.get_upcoming_races()
+    if races_df.empty:
+        return []
+
+    df = races_df.copy()
+    df["racing_date"] = pd.to_datetime(df["racing_date"]).dt.strftime("%Y-%m-%d")
+    df["course"] = df["course"].astype(str).str.upper()
+    options = []
+    for (date, course), g in df.groupby(["racing_date", "course"], sort=True):
+        g = g.sort_values("race_num")
+        race_ids = g["race_id"].astype(str).tolist()
+        n_races = len(race_ids)
+        key = f"{date}|{course}"
+        label = f"{date} {course}｜共 {n_races} 場（第 {int(g['race_num'].min())}–{int(g['race_num'].max())} 場）"
+        options.append((key, label, race_ids))
+    return options
+
+
 def get_runners_for_race(race_id):
     engine = InferenceEngine()
     df = engine.get_race_runners(race_id)
