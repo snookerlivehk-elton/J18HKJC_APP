@@ -95,23 +95,42 @@ class HKJCRaceCardCrawler:
             'ground': '未知' # 排位時通常未知
         }
 
-        # 從標題區塊提取班次、距離等 (這部分 HKJC 網頁結構常變，用正則輔助)
-        title_div = tree.css_first('.race_tab_info')
-        if title_div:
-            text = title_div.text(strip=True)
-            # 簡單正則範例
-            if '米' in text:
-                match = re.search(r'(\d+)米', text)
-                if match: race_info['distance_m'] = int(match.group(1))
-            if '班' in text:
-                match = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽)', text)
-                if match: race_info['class'] = match.group(1)
+        # 從標題區塊提取班次、距離等
+        # 由於 HKJC 網頁結構，標題通常在 .f_fl .f_fs13
+        title_divs = tree.css('.f_fl.f_fs13')
+        if title_divs:
+            # 整個標題列的文字拼起來
+            text = " ".join([d.text(strip=True) for d in title_divs])
+            
+            # 尋找距離
+            match_dist = re.search(r'(\d+)\s*米', text)
+            if match_dist: race_info['distance_m'] = int(match_dist.group(1))
+            
+            # 尋找班次
+            match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
+            if match_class: race_info['class'] = match_class.group(1)
+            
+            # 尋找賽道
             if '草地' in text:
                 race_info['track'] = '草地'
-                match = re.search(r'"([A-Z\+]+)"賽道', text)
-                if match: race_info['track'] += f"_{match.group(1)}"
-            elif '泥地' in text:
-                race_info['track'] = '泥地'
+                match_track = re.search(r'"([A-Z\+]+)"', text)
+                if match_track: race_info['track'] += f"_{match_track.group(1)}"
+            elif '全天候' in text or '泥地' in text:
+                race_info['track'] = '全天候'
+            else:
+                race_info['track'] = '未知'
+                
+        # 再次檢查，如果用 .f_fl 沒抓到，嘗試抓取 table 的上一層或整頁字串
+        if race_info['distance_m'] == 0:
+            text = tree.body.text(strip=True)
+            match_dist = re.search(r'(\d+)\s*米', text)
+            if match_dist: race_info['distance_m'] = int(match_dist.group(1))
+            match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
+            if match_class: race_info['class'] = match_class.group(1)
+            if '草地' in text and race_info['track'] == '':
+                race_info['track'] = '草地'
+                match_track = re.search(r'"([A-Z\+]+)"', text)
+                if match_track: race_info['track'] += f"_{match_track.group(1)}"
 
         # 2. 萃取馬匹名單 (Runners)
         runners = []
