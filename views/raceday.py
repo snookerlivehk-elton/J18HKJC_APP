@@ -36,51 +36,61 @@ st.markdown(
 }
 .rd-hero p { margin: 0; opacity: 0.88; font-size: 0.84rem; }
 .rd-meta {
-  background: var(--card);
-  border: 1px solid var(--line);
+  background: var(--card, rgba(128,128,128,0.12));
+  border: 1px solid var(--line, rgba(128,128,128,0.28));
   border-radius: 12px;
   padding: 0.8rem 0.95rem;
   margin: 0.4rem 0 0.85rem 0;
 }
-.rd-meta .title { font-weight: 800; font-size: 1.02rem; color: var(--ink); margin-bottom: 0.4rem; }
+.rd-meta .title { font-weight: 800; font-size: 1.02rem; color: var(--ink, inherit); margin-bottom: 0.4rem; }
 .rd-meta .grid {
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: 0.3rem 0.7rem; font-size: 0.8rem; color: var(--muted);
+  gap: 0.3rem 0.7rem; font-size: 0.8rem; color: var(--muted, inherit); opacity: 0.92;
 }
-.rd-meta .grid b { color: var(--ink); font-weight: 600; }
+.rd-meta .grid b { color: var(--ink, inherit); font-weight: 600; opacity: 1; }
 .horse-card {
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--card, rgba(128,128,128,0.08));
+  border: 1px solid var(--line, rgba(128,128,128,0.28));
   border-radius: 12px;
   padding: 0.8rem 0.9rem;
   margin-bottom: 0.65rem;
 }
 .horse-card.top1 { border-color: #0b6e4f; border-width: 1.5px; }
+.horse-card.pick { border-color: #0b6e4f; }
 .hc-top { display: flex; justify-content: space-between; gap: 0.5rem; }
 .hc-rank {
   display: inline-block; font-size: 0.7rem; font-weight: 700;
-  color: var(--accent); background: var(--accent-soft);
+  color: #0b6e4f; background: rgba(11,110,79,0.15);
   border-radius: 999px; padding: 0.1rem 0.45rem; margin-bottom: 0.2rem;
 }
-.hc-name { font-size: 1.08rem; font-weight: 800; color: var(--ink); line-height: 1.25; }
-.hc-no { color: var(--muted); font-weight: 600; font-size: 0.88rem; }
+.hc-name { font-size: 1.08rem; font-weight: 800; line-height: 1.25; }
+.hc-no { opacity: 0.65; font-weight: 600; font-size: 0.88rem; }
 .hc-prob { text-align: right; flex-shrink: 0; }
-.hc-prob .pct { font-size: 1.4rem; font-weight: 800; color: var(--accent); line-height: 1; }
-.hc-prob .lbl { font-size: 0.66rem; color: var(--muted); margin-top: 0.12rem; }
-.hc-sub { margin-top: 0.45rem; font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
-.hc-sub b { color: var(--ink); font-weight: 600; }
-.hc-score-row {
-  display: flex; justify-content: space-between;
-  margin-top: 0.45rem; padding-top: 0.45rem;
-  border-top: 1px solid var(--line); font-size: 0.8rem;
+.hc-prob .pct { font-size: 1.35rem; font-weight: 800; color: #0b6e4f; line-height: 1; }
+.hc-prob .lbl { font-size: 0.66rem; opacity: 0.65; margin-top: 0.12rem; }
+.hc-sub { margin-top: 0.45rem; font-size: 0.78rem; opacity: 0.8; line-height: 1.45; }
+.hc-sub b { font-weight: 600; opacity: 1; }
+.hc-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
+  margin-top: 0.5rem; padding-top: 0.5rem;
+  border-top: 1px solid rgba(128,128,128,0.25); font-size: 0.78rem;
 }
+.hc-metrics .m-lbl { opacity: 0.65; font-size: 0.68rem; }
+.hc-metrics .m-val { font-weight: 700; margin-top: 0.1rem; }
+.hc-metrics .ai-pos { color: #0b6e4f; }
+.hc-metrics .ai-neg { color: #c45c26; }
 .factor-chip {
-  display: inline-block; background: var(--accent-soft); color: var(--ink);
+  display: inline-block; background: rgba(11,110,79,0.12);
   border-radius: 7px; padding: 0.18rem 0.4rem; margin: 0.12rem 0.15rem 0.12rem 0;
   font-size: 0.7rem; font-weight: 600;
 }
-div[data-testid="stHorizontalBlock"] button {
-  border-radius: 999px !important; min-height: 2.35rem !important; font-weight: 700 !important;
+/* 場次數字 pill：壓低高度 */
+div[data-testid="stPills"] button {
+  min-width: 2.4rem !important;
+  min-height: 2.4rem !important;
+  border-radius: 999px !important;
+  padding: 0 0.55rem !important;
+  font-weight: 700 !important;
 }
 </style>
 """,
@@ -162,23 +172,29 @@ day_ids = set(day["race_id"].astype(str))
 if st.session_state.rd_race_id not in day_ids:
     st.session_state.rd_race_id = str(day.iloc[0]["race_id"])
 
-st.markdown("**場次**")
 nums = day["race_num"].astype(int).tolist()
-for start in range(0, len(nums), 5):
-    chunk = nums[start : start + 5]
-    cols = st.columns(len(chunk))
-    for i, num in enumerate(chunk):
-        row = day[day["race_num"] == num].iloc[0]
-        rid = str(row["race_id"])
-        active = st.session_state.rd_race_id == rid
-        if cols[i].button(
-            f"第{num}場",
-            key=f"race_btn_{rid}",
-            type="primary" if active else "secondary",
-            use_container_width=True,
-        ):
-            st.session_state.rd_race_id = rid
-            st.rerun()
+num_to_rid = {
+    int(r["race_num"]): str(r["race_id"])
+    for _, r in day.iterrows()
+}
+# 目前場次數字
+cur_num = int(day[day["race_id"].astype(str) == st.session_state.rd_race_id].iloc[0]["race_num"])
+
+# 緊湊：圓形數字 pill（手機不會再直向堆滿屏）
+picked = st.pills(
+    "場次",
+    options=nums,
+    selection_mode="single",
+    default=cur_num,
+    format_func=lambda n: str(n),
+    label_visibility="collapsed",
+    key="rd_race_pills",
+)
+if picked is None:
+    picked = cur_num
+if int(picked) != cur_num:
+    st.session_state.rd_race_id = num_to_rid[int(picked)]
+    st.rerun()
 
 race_id = st.session_state.rd_race_id
 race_row = day[day["race_id"].astype(str) == race_id].iloc[0]
@@ -219,7 +235,7 @@ if "模型勝率" in pred_df.columns:
 else:
     pred_df = pred_df.sort_values("總預測分", ascending=False).reset_index(drop=True)
 
-st.caption(f"{len(pred_df)} 匹 · 按勝率排序")
+st.caption(f"{len(pred_df)} 匹 · 按模型勝率排序（主推介）")
 
 for _, row in pred_df.iterrows():
     rank = int(row["預測排名"]) if pd.notna(row.get("預測排名")) else 0
@@ -233,6 +249,22 @@ for _, row in pred_df.iterrows():
     draw = row.get("檔位")
     hw = row.get("負磅")
     bw = row.get("體重")
+
+    ai = ai_map.get(hno)
+    if ai is not None and pd.notna(ai.get("ai_score")):
+        ai_score = float(ai["ai_score"])
+        ai_conf = float(ai["confidence"]) if pd.notna(ai.get("confidence")) else 0.0
+        ai_combo = ai_score * ai_conf  # 評價 × 信心
+        ai_cls = "ai-pos" if ai_combo >= 0 else "ai-neg"
+        ai_block = (
+            f'<div><div class="m-lbl">AI 推介（評價×信心）</div>'
+            f'<div class="m-val {ai_cls}">{ai_score:+.2f}×{ai_conf:.0%}＝{ai_combo:+.2f}</div></div>'
+        )
+    else:
+        ai_block = (
+            '<div><div class="m-lbl">AI 推介</div>'
+            '<div class="m-val" style="opacity:0.5">尚無</div></div>'
+        )
 
     def _fmt(v, suffix=""):
         if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -258,9 +290,12 @@ for _, row in pred_df.iterrows():
     騎師 <b>{jockey}</b>　·　練馬師 <b>{trainer}</b><br/>
     檔位 <b>{_fmt(draw)}</b>　·　負磅 <b>{_fmt(hw)}</b>　·　馬重 <b>{_fmt(bw)}</b>
   </div>
-  <div class="hc-score-row">
-    <span>統計總分</span>
-    <b>{total:.2f}</b>
+  <div class="hc-metrics">
+    <div>
+      <div class="m-lbl">統計總分</div>
+      <div class="m-val">{total:.2f}</div>
+    </div>
+    {ai_block}
   </div>
 </div>
 """
@@ -272,11 +307,10 @@ for _, row in pred_df.iterrows():
             chips.append(f'<span class="factor-chip">{label} {val:+.2f}</span>')
         st.markdown("".join(chips), unsafe_allow_html=True)
 
-        ai = ai_map.get(hno)
         if ai is not None:
             st.markdown(
                 f"**AI 評價**（{float(ai['ai_score']):+.2f}｜信心 {float(ai['confidence']):.0%}）  \n"
-                f"{ai['summary']}"
+                f"{ai.get('summary') or ''}"
             )
         else:
             st.caption("尚無 AI 評價")
@@ -288,4 +322,4 @@ for _, row in pred_df.iterrows():
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-st.caption("雷達為同場相對形狀，非勝率。模型勝率僅供參考。")
+st.caption("主推介＝模型勝率；AI＝旁路觀點（評價×信心）。雷達為同場相對形狀。")
