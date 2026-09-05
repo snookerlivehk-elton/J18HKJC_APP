@@ -117,6 +117,30 @@ if st.button("結算待處理快照（需 J18 賽果已入庫）"):
     st.info(f"更新 {r.get('updated_rows', 0)} 列；結算 batch：{r.get('settled_batches')}")
 
 st.divider()
+st.subheader("📄 賽績指引 Form Guide（CMS）")
+fg1, fg2, fg3 = st.columns([2, 1, 1])
+with fg1:
+    fgd = st.text_input("FormGuide 核對日期 YYYY/MM/DD", value="2026/09/06", key="fg_date")
+with fg2:
+    fgc = st.selectbox("FormGuide 場地", ["ST", "HV"], key="fg_course")
+with fg3:
+    st.write("")
+    st.write("")
+    if st.button("抓取 Form Guide", use_container_width=True):
+        with st.spinner("抓取賽績指引…"):
+            env = os.environ.copy()
+            try:
+                result = subprocess.run(
+                    ["python", "formguide_crawler.py", "--date", fgd, "--course", fgc],
+                    capture_output=True, text=True, check=True, env=env,
+                )
+                st.success("Form Guide 完成")
+                with st.expander("日誌"):
+                    st.text(result.stdout or "")
+            except subprocess.CalledProcessError as e:
+                st.error(e.stderr or e.stdout)
+
+st.divider()
 
 # ==========================================
 # 2. 賽前資料整備度監控 (Data Readiness)

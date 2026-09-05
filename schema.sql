@@ -256,6 +256,21 @@ CREATE TABLE upcoming_formguide (
     race_id VARCHAR(50),
     horse_no INT,
     form_text TEXT,
+    raw_json JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE upcoming_form_ai (
+    runner_id VARCHAR(50) PRIMARY KEY,
+    race_id VARCHAR(50),
+    horse_no INT,
+    ai_score NUMERIC,
+    confidence NUMERIC,
+    summary TEXT,
+    tags_json JSONB,
+    risks_json JSONB,
+    evidence_json JSONB,
+    raw_json JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

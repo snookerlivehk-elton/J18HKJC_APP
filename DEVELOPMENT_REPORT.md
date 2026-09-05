@@ -81,8 +81,9 @@ pages/8_Speed_Figure…    # 速度指數 / FSR
 pages/9_HKJC_Speed…      # 官方 Speed Guide
 pages/10_Inference…      # 融合總分 + 分場次表 + 因子雷達圖
 pages/11_RaceDay_Mobile  # 手機優先賽日速覽（用戶向：場次按鈕＋勝率卡片＋雷達）
-pages/12_Factor_Calibration  # 賽前快照→賽後結算→各因子獨贏／入圍命中率
-factor_calibration.py    # snapshot_meeting / settle_pending / evaluate_settled
+pages/13_Form_AI…         # Form Guide CMS + 賽前 AI 評語／獨立分
+formguide_crawler.py     # CMS fg_index / fg_race_N → upcoming_formguide
+form_ai_analyst.py       # 統計+近績文字 → upcoming_form_ai
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
 speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py

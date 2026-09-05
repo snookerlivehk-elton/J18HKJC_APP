@@ -9,6 +9,7 @@ import pandas as pd
 from inference_engine import InferenceEngine
 from bucket_utils import format_class_display
 from radar_charts import RADAR_AXES, build_radar_figure, factor_rows_for_horse
+from form_ai_analyst import FormAIAnalyst
 
 try:
     import plotly.graph_objects as go  # noqa: F401
@@ -275,6 +276,15 @@ race_id = st.session_state.rd_race_id
 race_row = day[day["race_id"].astype(str) == race_id].iloc[0]
 pred_df, _info, meta = load_pred(race_id)
 
+ai_map = {}
+try:
+    ai_df = FormAIAnalyst().load_ai_for_race(race_id)
+    if not ai_df.empty:
+        for _, a in ai_df.iterrows():
+            ai_map[int(a["horse_no"])] = a
+except Exception:
+    pass
+
 cls_disp = format_class_display(race_row.get("class"))
 race_name = race_row.get("race_name") or ""
 meta_html = f"""
@@ -354,6 +364,15 @@ for _, row in pred_df.iterrows():
         for label, val in factor_rows_for_horse(row):
             chips.append(f'<span class="factor-chip">{label} {val:+.2f}</span>')
         st.markdown("".join(chips), unsafe_allow_html=True)
+
+        ai = ai_map.get(hno)
+        if ai is not None:
+            st.markdown(
+                f"**AI 評價**（分 {float(ai['ai_score']):+.2f}｜信心 {float(ai['confidence']):.0%}）  \n"
+                f"{ai['summary']}"
+            )
+        else:
+            st.caption("尚無 AI 評價（請到 Form AI 頁分析）。")
 
         if HAS_PLOTLY:
             fig = build_radar_figure(
