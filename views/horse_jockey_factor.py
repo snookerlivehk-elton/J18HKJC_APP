@@ -3,6 +3,7 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import GLOBAL_BUCKET
 import ui_utils
+import ui_param_help as ph
 
 st.title("🏇🤝 人馬合作因子")
 st.caption(
@@ -14,14 +15,23 @@ if not ui_utils.ensure_history_loaded():
     st.stop()
 
 with st.expander("⚙️ 參數調節", expanded=False):
-    ModelConfig.WIN_WEIGHT = st.slider("WIN_WEIGHT", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1)
-    ModelConfig.PLACE_WEIGHT = st.slider("PLACE_WEIGHT", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05)
+    st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化。")
+    ModelConfig.WIN_WEIGHT = st.slider(
+        "冠軍權重", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1, help=ph.WIN_WEIGHT
+    )
+    ModelConfig.PLACE_WEIGHT = st.slider(
+        "入位權重", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05, help=ph.PLACE_WEIGHT
+    )
     ModelConfig.HORSE_JOCKEY_SMOOTH_C = st.number_input(
-        "HORSE_JOCKEY_SMOOTH_C", min_value=1, value=ModelConfig.HORSE_JOCKEY_SMOOTH_C
+        "人馬平滑常數",
+        min_value=1,
+        value=ModelConfig.HORSE_JOCKEY_SMOOTH_C,
+        help=ph.smooth_c("人馬合作"),
     )
     decay_str = st.text_input(
-        "HORSE_JOCKEY_DECAY",
+        "人馬時間衰減",
         value=",".join(map(str, ModelConfig.HORSE_JOCKEY_DECAY)),
+        help=ph.decay("人馬合作"),
     )
     ModelConfig.HORSE_JOCKEY_DECAY = [float(x.strip()) for x in decay_str.split(",")]
 

@@ -4,6 +4,7 @@ from config import ModelConfig
 from nlp_processor import NLPProcessor, DEFAULT_SYSTEM_PROMPT
 from factor_calculator import FactorCalculator
 import ui_utils
+import ui_param_help as ph
 
 st.title("📉🤖 近績與 NLP 因子")
 st.caption(
@@ -17,23 +18,39 @@ if not ui_utils.ensure_history_loaded():
 col1, col2 = st.columns([1, 2])
 with col1:
     with st.expander("⚙️ 參數調節", expanded=False):
-        ModelConfig.WIN_WEIGHT = st.slider("WIN_WEIGHT", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1)
-        ModelConfig.PLACE_WEIGHT = st.slider("PLACE_WEIGHT", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05)
+        st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化。")
+        ModelConfig.WIN_WEIGHT = st.slider(
+            "冠軍權重", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1, help=ph.WIN_WEIGHT
+        )
+        ModelConfig.PLACE_WEIGHT = st.slider(
+            "入位權重", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05, help=ph.PLACE_WEIGHT
+        )
         ModelConfig.HORSE_SMOOTH_C = st.number_input(
-            "HORSE_SMOOTH_C", min_value=1, value=ModelConfig.HORSE_SMOOTH_C
+            "馬匹近績平滑常數",
+            min_value=1,
+            value=ModelConfig.HORSE_SMOOTH_C,
+            help=ph.smooth_c("馬匹近績"),
         )
         decay_str = st.text_input(
-            "HORSE_DECAY", value=",".join(map(str, ModelConfig.HORSE_DECAY))
+            "馬匹時間衰減",
+            value=",".join(map(str, ModelConfig.HORSE_DECAY)),
+            help=ph.decay("馬匹近績"),
         )
         ModelConfig.HORSE_DECAY = [float(x.strip()) for x in decay_str.split(",")]
         ModelConfig.EXCUSE_MULTIPLIER_EARLY = st.slider(
-            "早段受阻補償", 1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_EARLY, 0.1
+            "早段受阻補償",
+            1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_EARLY, 0.1,
+            help=ph.EXCUSE_EARLY,
         )
         ModelConfig.EXCUSE_MULTIPLIER_MIDDLE = st.slider(
-            "中段受阻補償", 1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_MIDDLE, 0.1
+            "中段受阻補償",
+            1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_MIDDLE, 0.1,
+            help=ph.EXCUSE_MIDDLE,
         )
         ModelConfig.EXCUSE_MULTIPLIER_LATE = st.slider(
-            "直路受阻補償", 1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_LATE, 0.1
+            "直路受阻補償",
+            1.0, 3.0, ModelConfig.EXCUSE_MULTIPLIER_LATE, 0.1,
+            help=ph.EXCUSE_LATE,
         )
 
 with col2:
@@ -45,11 +62,16 @@ with col2:
             st.error("未偵測到 OPENAI_API_KEY。請在 Railway → Variables 設定後重新部署。")
         st.caption(f"目前模型：`{processor.model}`（可用 OPENAI_MODEL 覆寫）")
         st.caption(f"端點：`{processor.base_url}`（OpenRouter 請設 OPENAI_BASE_URL）")
-        system_prompt = st.text_area("System Prompt", value=DEFAULT_SYSTEM_PROMPT, height=160)
+        system_prompt = st.text_area(
+            "System Prompt",
+            value=DEFAULT_SYSTEM_PROMPT,
+            height=160,
+            help="送給 LLM 的系統指示，決定如何從評馬報告抽出受阻／藉口結構。改寫後會影響新解析結果的標籤品質。",
+        )
         apply_nlp_on_compute = st.checkbox(
             "計算近績時套用已解析的 NLP 受阻補償",
             value=True,
-            help="僅使用資料庫中已有 nlp_result 的報告；未解析的場次不補償。",
+            help=ph.APPLY_NLP_FORM,
         )
 
 st.divider()

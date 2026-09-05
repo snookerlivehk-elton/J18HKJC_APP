@@ -11,6 +11,7 @@ from config import ModelConfig
 from bucket_utils import format_class_display
 from ui_theme import inject_admin_css, page_header
 from radar_charts import build_radar_figure, RADAR_AXES
+import ui_param_help as ph
 
 inject_admin_css()
 page_header("融合預測", "總分排序 · 場內 z 勝率 · 雷達展示")
@@ -64,26 +65,47 @@ types = sorted(scores_preview["factor_type"].unique().tolist())
 st.caption(f"資料庫已有 {len(scores_preview)} 筆因子分數（{types}）。")
 
 with st.expander("融合權重（ModelConfig）", expanded=True):
-    ModelConfig.WEIGHT_JOCKEY = st.slider("騎師", 0.0, 3.0, float(ModelConfig.WEIGHT_JOCKEY), 0.1)
-    ModelConfig.WEIGHT_TRAINER = st.slider("練馬師", 0.0, 3.0, float(ModelConfig.WEIGHT_TRAINER), 0.1)
-    ModelConfig.WEIGHT_SYNERGY = st.slider("騎練", 0.0, 3.0, float(ModelConfig.WEIGHT_SYNERGY), 0.1)
-    ModelConfig.WEIGHT_DRAW = st.slider("檔位", 0.0, 3.0, float(ModelConfig.WEIGHT_DRAW), 0.1)
-    ModelConfig.WEIGHT_RECENT_FORM = st.slider("近績", 0.0, 3.0, float(ModelConfig.WEIGHT_RECENT_FORM), 0.1)
-    ModelConfig.WEIGHT_PACE = st.slider("步速", 0.0, 3.0, float(ModelConfig.WEIGHT_PACE), 0.1)
-    ModelConfig.WEIGHT_SPEED_FIGURE = st.slider("速度", 0.0, 3.0, float(ModelConfig.WEIGHT_SPEED_FIGURE), 0.1)
-    ModelConfig.WEIGHT_SG_FORM = st.slider("SG·Fitness", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1)
-    ModelConfig.WEIGHT_SG_ENERGY = st.slider("SG·能量Z", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1)
-    ModelConfig.WEIGHT_SG_DELTA = st.slider("SG·差值", -1.0, 3.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1)
+    st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化。調權重會即時影響總分排序與模型勝率。")
+    ModelConfig.WEIGHT_JOCKEY = st.slider(
+        "騎師", 0.0, 3.0, float(ModelConfig.WEIGHT_JOCKEY), 0.1, help=ph.weight("騎師")
+    )
+    ModelConfig.WEIGHT_TRAINER = st.slider(
+        "練馬師", 0.0, 3.0, float(ModelConfig.WEIGHT_TRAINER), 0.1, help=ph.weight("練馬師")
+    )
+    ModelConfig.WEIGHT_SYNERGY = st.slider(
+        "騎練", 0.0, 3.0, float(ModelConfig.WEIGHT_SYNERGY), 0.1, help=ph.weight("騎練合作")
+    )
+    ModelConfig.WEIGHT_DRAW = st.slider(
+        "檔位", 0.0, 3.0, float(ModelConfig.WEIGHT_DRAW), 0.1, help=ph.weight("檔位")
+    )
+    ModelConfig.WEIGHT_RECENT_FORM = st.slider(
+        "近績", 0.0, 3.0, float(ModelConfig.WEIGHT_RECENT_FORM), 0.1, help=ph.weight("近績")
+    )
+    ModelConfig.WEIGHT_PACE = st.slider(
+        "步速", 0.0, 3.0, float(ModelConfig.WEIGHT_PACE), 0.1, help=ph.weight("步速／跑法")
+    )
+    ModelConfig.WEIGHT_SPEED_FIGURE = st.slider(
+        "速度", 0.0, 3.0, float(ModelConfig.WEIGHT_SPEED_FIGURE), 0.1, help=ph.weight("速度指數")
+    )
+    ModelConfig.WEIGHT_SG_FORM = st.slider(
+        "SG·Fitness", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1, help=ph.WEIGHT_SG_FORM
+    )
+    ModelConfig.WEIGHT_SG_ENERGY = st.slider(
+        "SG·能量Z", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1, help=ph.WEIGHT_SG_ENERGY
+    )
+    ModelConfig.WEIGHT_SG_DELTA = st.slider(
+        "SG·差值", -1.0, 3.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1, help=ph.WEIGHT_SG_DELTA
+    )
     st.divider()
     ModelConfig.SOFTMAX_WITHIN_RACE_Z = st.checkbox(
         "勝率前先做場內 z-score（建議開）",
         value=bool(ModelConfig.SOFTMAX_WITHIN_RACE_Z),
-        help="壓掉加權總分絕對分差；關閉則回到直接對原始總分 softmax（易極端）。",
+        help=ph.SOFTMAX_Z,
     )
     ModelConfig.SOFTMAX_TEMPERATURE = st.slider(
         "SOFTMAX 溫度（勝率尖銳度）",
         0.5, 8.0, float(ModelConfig.SOFTMAX_TEMPERATURE), 0.1,
-        help="場內 z 之後再除以 T。愈小→熱門愈尖；愈大→愈平均。不影響總分排序。",
+        help=ph.SOFTMAX_T,
     )
 
 race_options = []

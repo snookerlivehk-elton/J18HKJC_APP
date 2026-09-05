@@ -4,6 +4,7 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import normalize_person_name, GLOBAL_BUCKET
 import ui_utils
+import ui_param_help as ph
 
 st.title("⏱️ 步速與分段形勢因子")
 st.caption(
@@ -15,17 +16,22 @@ if not ui_utils.ensure_history_loaded():
     st.stop()
 
 with st.expander("⚙️ 參數調節", expanded=False):
+    st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化。")
     ModelConfig.PACE_SMOOTH_C = st.number_input(
-        "PACE_SMOOTH_C", min_value=1, value=ModelConfig.PACE_SMOOTH_C
+        "跑法平滑常數", min_value=1, value=ModelConfig.PACE_SMOOTH_C, help=ph.PACE_SMOOTH
     )
     ModelConfig.CLOSER_BONUS_WEIGHT = st.slider(
-        "後追馬加分", 1.0, 3.0, ModelConfig.CLOSER_BONUS_WEIGHT, 0.1
+        "後追馬加分", 1.0, 3.0, ModelConfig.CLOSER_BONUS_WEIGHT, 0.1, help=ph.CLOSER_BONUS
     )
     ModelConfig.FRONT_RUNNER_BONUS_WEIGHT = st.slider(
-        "前領馬加分", 1.0, 3.0, ModelConfig.FRONT_RUNNER_BONUS_WEIGHT, 0.1
+        "前領馬加分", 1.0, 3.0, ModelConfig.FRONT_RUNNER_BONUS_WEIGHT, 0.1, help=ph.FRONT_BONUS
     )
     ModelConfig.EARLY_SPEED_TOP_N = st.number_input(
-        "EARLY_SPEED_TOP_N", min_value=1, max_value=5, value=ModelConfig.EARLY_SPEED_TOP_N
+        "早段速度取前 N 名",
+        min_value=1,
+        max_value=5,
+        value=ModelConfig.EARLY_SPEED_TOP_N,
+        help=ph.EARLY_SPEED_TOP_N,
     )
 
 hist_df, hist_src = ui_utils.get_history_df_for_compute()

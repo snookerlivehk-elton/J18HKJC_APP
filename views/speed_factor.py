@@ -4,6 +4,7 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import normalize_person_name, GLOBAL_BUCKET
 import ui_utils
+import ui_param_help as ph
 
 st.title("⏱️ 速度指數與絕對時間")
 st.caption(
@@ -15,29 +16,36 @@ if not ui_utils.ensure_history_loaded():
     st.stop()
 
 with st.expander("⚙️ 參數調節", expanded=False):
+    st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化。")
     ModelConfig.FSR_PENALTY_THRESHOLD = st.number_input(
-        "FSR 慢步速懲罰閥值", min_value=100.0, value=ModelConfig.FSR_PENALTY_THRESHOLD
+        "FSR 慢步速懲罰閥值",
+        min_value=100.0,
+        value=ModelConfig.FSR_PENALTY_THRESHOLD,
+        help=ph.FSR_PENALTY,
     )
     ModelConfig.FSR_BONUS_THRESHOLD = st.number_input(
-        "FSR 快步速獎勵閥值", max_value=100.0, value=ModelConfig.FSR_BONUS_THRESHOLD
+        "FSR 快步速獎勵閥值",
+        max_value=100.0,
+        value=ModelConfig.FSR_BONUS_THRESHOLD,
+        help=ph.FSR_BONUS,
     )
     ModelConfig.TIME_EMA_ALPHA = st.slider(
-        "EMA Alpha", 0.1, 1.0, ModelConfig.TIME_EMA_ALPHA, 0.1
+        "近況 EMA 係數", 0.1, 1.0, ModelConfig.TIME_EMA_ALPHA, 0.1, help=ph.TIME_EMA
     )
     ModelConfig.SPEED_PAR_PERCENTILE = st.slider(
         "Par 分位數（50＝中位數）",
         30.0, 70.0, float(ModelConfig.SPEED_PAR_PERCENTILE), 5.0,
-        help="愈低＝Par 愈快（要求更高）；愈高＝Par 愈慢。",
+        help=ph.PAR_PERCENTILE,
     )
     ModelConfig.SPEED_PAR_MIN_N = st.number_input(
         "細桶最少樣本數",
         min_value=10, max_value=200, value=int(ModelConfig.SPEED_PAR_MIN_N), step=5,
-        help="不足則回退：同場地跑道距離／距離帶+班次／距離帶。",
+        help=ph.PAR_MIN_N,
     )
     apply_nlp = st.checkbox(
         "套用 NLP 受阻時間補償",
         value=True,
-        help="受阻場次完成時間偏慢時，對該場 Speed Figure 做小幅上修（與近績名次補償分開）。",
+        help=ph.APPLY_NLP_SPEED,
     )
 
 hist_df, hist_src = ui_utils.get_history_df_for_compute()

@@ -5,6 +5,7 @@ import os
 from config import ModelConfig
 from inference_engine import InferenceEngine
 import ui_utils
+import ui_param_help as ph
 
 st.title("⚡ 官方速勢能量（Speed Guide）")
 st.caption(
@@ -16,16 +17,22 @@ engine = InferenceEngine()
 races = engine.get_upcoming_races()
 
 with st.expander("⚙️ 推論權重（寫入 ModelConfig）", expanded=True):
+    st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化；調完表格「SG貢獻／評分排名」會即時重算。")
     ModelConfig.WEIGHT_SG_FORM = st.slider(
-        "WEIGHT_SG_FORM（狀態／Fitness）", 0.0, 2.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1
+        "SG·狀態／Fitness",
+        0.0, 2.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1,
+        help=ph.WEIGHT_SG_FORM,
     )
     ModelConfig.WEIGHT_SG_ENERGY = st.slider(
-        "WEIGHT_SG_ENERGY（能量同場 Z）", 0.0, 2.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1
+        "SG·能量同場 Z",
+        0.0, 2.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1,
+        help=ph.WEIGHT_SG_ENERGY,
     )
     ModelConfig.WEIGHT_SG_DELTA = st.slider(
-        "WEIGHT_SG_DELTA（能量差值，官方主排序）", -1.0, 2.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1
+        "SG·能量差值",
+        -1.0, 2.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1,
+        help=ph.WEIGHT_SG_DELTA,
     )
-    st.caption("調權重後表格「SG貢獻／評分排名」會即時重算。")
 
 with st.expander("抓取 / 更新 Speed Guide", expanded=False):
     st.markdown(
