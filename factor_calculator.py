@@ -1346,37 +1346,59 @@ class FactorCalculator:
 
     def project_race_pace(self, pace_df: pd.DataFrame, horse_names: list) -> dict:
         """
-        同場步速熱度：取本場馬 early_speed_z 最高前 N 名加總。
-        回傳 heat、scenario、以及每匹馬的形勢分。
+        同場步速形勢：
+        - heat：前 N 名 early_speed_z 加總（顯示用）
+        - scenario：依「夠快的爭搶馬數量」判定（超快互燒／中性／偏慢獨走）
+          不可用固定 heat≥2.5：12 匹場前 3 名全局 Z 期望和常 >2.5，會幾乎全判超快。
         """
         top_n = int(getattr(ModelConfig, "EARLY_SPEED_TOP_N", 3))
+        fast_z = float(getattr(ModelConfig, "PACE_EARLY_FAST_Z", 1.0))
+        hot_min = int(getattr(ModelConfig, "PACE_HOT_MIN_CONTENDERS", 3))
+        cold_max = int(getattr(ModelConfig, "PACE_COLD_MAX_CONTENDERS", 1))
+
         names = [normalize_person_name(n) for n in horse_names]
         if pace_df is None or pace_df.empty:
-            return {"heat": 0.0, "scenario": "未知", "by_horse": {}}
+            return {
+                "heat": 0.0, "scenario": "未知", "by_horse": {},
+                "top_n": top_n, "n_contenders": 0, "fast_z": fast_z,
+            }
 
         name_col = "entity_name" if "entity_name" in pace_df.columns else "horse_name"
         style_col = "running_style" if "running_style" in pace_df.columns else None
         speed_col = "early_speed_z" if "early_speed_z" in pace_df.columns else None
         z_col = "z_score" if "z_score" in pace_df.columns else None
 
-        sub = pace_df[pace_df[name_col].isin(names)].copy()
+        # 名稱對齊：兩邊都 normalize，避免排位與因子表空白／全半形差
+        work = pace_df.copy()
+        work["_match_name"] = work[name_col].map(normalize_person_name)
+        sub = work[work["_match_name"].isin(names)].copy()
         if sub.empty:
-            return {"heat": 0.0, "scenario": "未知", "by_horse": {}}
+            return {
+                "heat": 0.0, "scenario": "未知", "by_horse": {},
+                "top_n": top_n, "n_contenders": 0, "fast_z": fast_z,
+            }
 
+        n_contenders = 0
         if speed_col and sub[speed_col].notna().any():
-            heats = sub[speed_col].fillna(0.0).sort_values(ascending=False).head(top_n)
+            es = pd.to_numeric(sub[speed_col], errors="coerce").fillna(0.0)
+            heats = es.sort_values(ascending=False).head(top_n)
             heat = float(heats.sum())
+            n_contenders = int((es >= fast_z).sum())
         else:
-            # 後備：平均早段位置愈前 → 熱度愈高
+            # 後備：平均早段位置愈前 → 視為爭搶；熱度用位置換算
             if "avg_early_pos" in sub.columns:
-                heat = float((14.0 - sub["avg_early_pos"].fillna(8)).nlargest(top_n).sum() / 10.0)
+                pos = pd.to_numeric(sub["avg_early_pos"], errors="coerce").fillna(8.0)
+                heat = float((14.0 - pos).nlargest(top_n).sum() / 10.0)
+                # 平均早段 ≤4.5 約等同前領意圖
+                n_contenders = int((pos <= 4.5).sum())
             else:
                 heat = 0.0
+                n_contenders = 0
 
-        # 熱度閾值（經驗值，可用參數再調）
-        if heat >= 2.5:
+        # 劇本：數「夠快」的爭搶馬（對齊白皮書互燒 vs 獨走），不用 heat 絕對門檻
+        if n_contenders >= hot_min:
             scenario = "超快步速"
-        elif heat <= 0.5:
+        elif n_contenders <= cold_max:
             scenario = "偏慢步速"
         else:
             scenario = "中性步速"
@@ -1385,7 +1407,7 @@ class FactorCalculator:
         closer_w = float(ModelConfig.CLOSER_BONUS_WEIGHT)
         front_w = float(ModelConfig.FRONT_RUNNER_BONUS_WEIGHT)
         for _, row in sub.iterrows():
-            hn = row[name_col]
+            hn = row["_match_name"] if "_match_name" in row.index else row[name_col]
             style = str(row[style_col]) if style_col else ""
             base_z = float(row[z_col]) if z_col and pd.notna(row.get(z_col)) else 0.0
             bonus = 0.0
@@ -1404,7 +1426,17 @@ class FactorCalculator:
                 "pace_score": base_z + bonus,
                 "early_speed_z": float(row[speed_col]) if speed_col and pd.notna(row.get(speed_col)) else None,
             }
-        return {"heat": heat, "scenario": scenario, "by_horse": by_horse, "top_n": top_n}
+        return {
+            "heat": heat,
+            "scenario": scenario,
+            "by_horse": by_horse,
+            "top_n": top_n,
+            "n_contenders": n_contenders,
+            "fast_z": fast_z,
+            "hot_need": hot_min,
+            "cold_need": cold_max,
+            "field_matched": int(len(sub)),
+        }
 
     def extract_time_and_fsr(self, df: pd.DataFrame) -> pd.DataFrame:
         """提取完成時間與末段時間，計算速度指數與 FSR。

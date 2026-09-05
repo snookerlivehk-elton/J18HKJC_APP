@@ -27,11 +27,26 @@ with st.expander("⚙️ 參數調節", expanded=False):
         "前領馬加分", 1.0, 3.0, ModelConfig.FRONT_RUNNER_BONUS_WEIGHT, 0.1, help=ph.FRONT_BONUS
     )
     ModelConfig.EARLY_SPEED_TOP_N = st.number_input(
-        "早段速度取前 N 名",
+        "熱度取前 N 名（顯示用）",
         min_value=1,
         max_value=5,
         value=ModelConfig.EARLY_SPEED_TOP_N,
         help=ph.EARLY_SPEED_TOP_N,
+    )
+    ModelConfig.PACE_EARLY_FAST_Z = st.slider(
+        "爭搶馬早段 Z 門檻",
+        0.25, 1.50, float(ModelConfig.PACE_EARLY_FAST_Z), 0.05,
+        help=ph.PACE_EARLY_FAST_Z,
+    )
+    ModelConfig.PACE_HOT_MIN_CONTENDERS = st.number_input(
+        "超快：最少爭搶馬數",
+        min_value=2, max_value=6, value=int(ModelConfig.PACE_HOT_MIN_CONTENDERS),
+        help=ph.PACE_HOT_MIN,
+    )
+    ModelConfig.PACE_COLD_MAX_CONTENDERS = st.number_input(
+        "偏慢：最多爭搶馬數",
+        min_value=0, max_value=2, value=int(ModelConfig.PACE_COLD_MAX_CONTENDERS),
+        help=ph.PACE_COLD_MAX,
     )
 
 hist_df, hist_src = ui_utils.get_history_df_for_compute()
@@ -101,17 +116,36 @@ if selected_race_id != "None":
         display_df = pace_df.sort_values("z_score", ascending=False).head(50)
     else:
         proj = calc.project_race_pace(pace_df, runners["horse_name"].tolist())
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("步速熱度 Pace Heat", f"{proj['heat']:.2f}")
         c2.metric("形勢劇本", proj["scenario"])
-        c3.metric("熱度取前 N 快馬", proj.get("top_n", ModelConfig.EARLY_SPEED_TOP_N))
+        c3.metric(
+            "爭搶馬數",
+            f"{proj.get('n_contenders', 0)}",
+        )
+        c4.metric(
+            "判定門檻",
+            f"超快≥{proj.get('hot_need', ModelConfig.PACE_HOT_MIN_CONTENDERS)}／慢≤{proj.get('cold_need', ModelConfig.PACE_COLD_MAX_CONTENDERS)}",
+        )
+        st.caption(
+            f"爭搶馬＝早段速度 Z ≥ {float(proj.get('fast_z', ModelConfig.PACE_EARLY_FAST_Z)):.2f}；"
+            f"Pace Heat＝前 {proj.get('top_n', ModelConfig.EARLY_SPEED_TOP_N)} 名 Z 加總（僅顯示，不直接判劇本）。"
+        )
 
         if proj["scenario"] == "超快步速":
-            st.caption("超快：後追型加分、前領型略扣（互燒劇本）。")
+            st.caption(
+                f"超快互燒：爭搶馬 {proj.get('n_contenders')} 匹 "
+                f"（需≥{proj.get('hot_need')}；命中 {proj.get('field_matched')} 匹）。後追加分、前領略扣。"
+            )
         elif proj["scenario"] == "偏慢步速":
-            st.caption("偏慢：前領型加分、後追型略扣（難追及）。")
+            st.caption(
+                f"偏慢／獨走：爭搶馬僅 {proj.get('n_contenders')} 匹 "
+                f"（≤{proj.get('cold_need')}）。前領加分、後追略扣。"
+            )
         else:
-            st.caption("中性步速：主要看追回指數本身。")
+            st.caption(
+                f"中性步速：爭搶馬 {proj.get('n_contenders')} 匹，介於冷熱之間；主要看追回指數。"
+            )
 
         rows = []
         for _, row in runners.iterrows():
@@ -163,8 +197,9 @@ with st.expander("優化說明"):
     st.markdown(
         """
 - **已修正**：Postgres 的 `raw_json` 是 dict，舊版 `json.loads` 導致分段全空、算不出來。
-- **評分**：追回 Z = 平滑後「早段名次−終點名次」；同場再依步速熱度加減前領／後追。
+- **已修正（形勢劇本）**：不再用「前 N 名 Z 加總 ≥2.5＝超快」（幾乎每場都超快）；改數「早段 Z ≥ 門檻」的爭搶馬數判定互燒／中性／偏慢。
+- **評分**：追回 Z = 平滑後「早段名次−終點名次」；同場再依步速形勢加減前領／後追。
 - **推論**：`WEIGHT_PACE` 計入追回 Z（形勢加權在排位頁可見；總分用追回 Z）。
-- **後續可優化**：NLP 過濾假性腳軟／假性無追勢；熱度閾值改為分位數分位；距離帶分桶跑法。
+- **後續可優化**：NLP 過濾假性腳軟／假性無追勢；距離帶分桶跑法。
 """
     )

@@ -109,8 +109,14 @@ class ModelConfig:
     SOFTMAX_WITHIN_RACE_Z = True
     SOFTMAX_TEMPERATURE = 1.5
 
-    # 步速熱度：同場取 early speed 最高前 N 名加總
+    # 步速熱度／形勢劇本
+    # heat 顯示用：同場 early_speed_z 最高前 N 名加總（僅供參考）
     EARLY_SPEED_TOP_N = 3
+    # 劇本判定：數「早段速度 Z ≥ 門檻」的爭搶馬（互燒 vs 獨走）
+    # 舊版用 heat≥2.5→超快會幾乎全場中標（12 匹場前 3 名 Z 期望和約 3.5+）
+    PACE_EARLY_FAST_Z = 1.0        # 達此視為具前領／搶放意圖（約前 16% 全局）
+    PACE_HOT_MIN_CONTENDERS = 3    # 爭搶馬 ≥ 此 → 超快互燒
+    PACE_COLD_MAX_CONTENDERS = 1   # 爭搶馬 ≤ 此 → 偏慢／獨走
 
     @classmethod
     def get_params_dict(cls):
