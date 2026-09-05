@@ -123,12 +123,48 @@ for stage, label in STAGES:
                     st.error(r.get("error"))
                 st.rerun()
         elif stage == "FORM_AI":
+            only_miss = st.checkbox(
+                "只補尚未有結果的馬（取消＝整日重跑）",
+                value=True,
+                key=f"ai_only_miss_{stage}",
+            )
             if a1.button("跑 Form AI", key=f"act_ai_{stage}"):
-                with st.spinner("OpenAI Form AI…"):
-                    r = pipe.run_action(racing_date, course, "run_form_ai")
+                prog = st.progress(0.0, text="準備中…")
+                line = st.empty()
+                detail = st.empty()
+                st.info("請留在本頁至完成；換頁會中斷 Streamlit 長任務。")
+
+                def on_prog(info: dict):
+                    ri = int(info.get("race_index") or 1)
+                    rn = max(int(info.get("race_count") or 1), 1)
+                    hd = int(info.get("horse_done") or 0)
+                    ht = max(int(info.get("horse_total") or 0), 1)
+                    overall = ((ri - 1) + (hd / ht)) / rn
+                    rid = info.get("race_id") or ""
+                    hno = info.get("horse_no")
+                    res = info.get("result") or {}
+                    prog.progress(
+                        min(1.0, overall),
+                        text=f"場次 {ri}/{rn} · 本場馬 {hd}/{ht}",
+                    )
+                    line.write(f"**{rid}**")
+                    if hno is not None:
+                        summary = (res.get("summary") or "")[:48]
+                        score = res.get("ai_score")
+                        score_s = f"{score:+.2f}" if isinstance(score, (int, float)) else "—"
+                        detail.write(f"#{hno}　AI {score_s}　{summary}")
+
+                r = pipe.run_action(
+                    racing_date,
+                    course,
+                    "run_form_ai",
+                    only_missing=only_miss,
+                    progress_cb=on_prog,
+                )
+                prog.progress(1.0, text="完成")
                 st.session_state.pop("ops_ready", None)
                 if r.get("ok"):
-                    st.success(f"完成 {r.get('done')} 匹")
+                    st.success(f"完成寫入 {r.get('done')} 匹（共 {r.get('n_races')} 場）")
                 else:
                     st.error(r.get("error"))
                 st.rerun()

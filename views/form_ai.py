@@ -12,11 +12,13 @@ import pandas as pd
 from inference_engine import InferenceEngine
 from form_ai_analyst import FormAIAnalyst
 import ui_utils
+from ui_theme import inject_admin_css, page_header
 
-st.title("📝 賽績指引 + AI 評價")
+inject_admin_css()
+page_header("賽績指引 + AI 評價", "獨立馬評軌道（不混入模型總分）")
 st.caption(
     "CMS Form Guide 近績文字 + 系統量化統計 → 文字評價與 AI 獨立分（−2～+2）。"
-    "不覆蓋模型勝率；可重用、可進賽日速覽。"
+    "可重用、進賽日速覽並排推介。長任務請留在本頁。"
 )
 
 engine = InferenceEngine()
@@ -65,20 +67,39 @@ st.subheader("③ 執行 AI 分析")
 if not analyst.is_ready():
     st.error("未設定 OPENAI_API_KEY（環境變數）。")
 else:
-    only_missing = st.checkbox("只處理尚未有 AI 結果的馬", value=True)
+    only_missing = st.checkbox("只處理尚未有 AI 結果的馬（取消＝本場全部重跑）", value=True)
     if st.button("分析本場全部馬匹", type="primary"):
-        prog = st.progress(0.0)
+        st.info("請留在本頁至進度完成；換頁會中斷分析。")
+        prog = st.progress(0.0, text="準備中…")
         status = st.empty()
-        n_total = max(len(forms) if not forms.empty else 14, 1)
+        detail = st.empty()
 
-        def cb(done, hno, res):
-            prog.progress(min(1.0, done / n_total))
-            status.write(f"完成 #{hno}　AI分 {res['ai_score']}　{res['summary'][:40]}…")
+        def cb(done, total, hno, res):
+            tot = max(int(total or 0), 1)
+            cur = int(done or 0)
+            frac = 0.0 if tot == 0 else min(1.0, cur / tot)
+            prog.progress(frac, text=f"進度 {cur}/{total or 0}")
+            if hno is None:
+                status.write("無需處理（已全部存在或無馬匹）")
+                return
+            summary = ""
+            score_s = "—"
+            if isinstance(res, dict):
+                summary = (res.get("summary") or "")[:56]
+                sc = res.get("ai_score")
+                if isinstance(sc, (int, float)):
+                    score_s = f"{sc:+.2f}"
+            status.write(f"正在／剛完成 **#{hno}**　AI {score_s}")
+            if summary:
+                detail.caption(summary)
 
-        with st.spinner("呼叫 LLM…"):
-            out = analyst.analyze_race(selected, only_missing=only_missing, progress_cb=cb)
+        out = analyst.analyze_race(selected, only_missing=only_missing, progress_cb=cb)
+        prog.progress(1.0, text="完成")
         if out.get("ok"):
-            st.success(f"新寫入 {out['done']} 匹")
+            msg = f"新寫入 {out['done']} 匹"
+            if out.get("skipped"):
+                msg += f"（略過已有 {out['skipped']}）"
+            st.success(msg)
             if out.get("errors"):
                 st.warning(str(out["errors"][:5]))
         else:

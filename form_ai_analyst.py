@@ -314,20 +314,39 @@ class FormAIAnalyst:
             if not cur.empty:
                 existing = set(cur["horse_no"].astype(int).tolist())
 
-        done = 0
-        errors = []
+        work = []
         for _, row in pred.iterrows():
             hno = int(row["馬號"])
             if horse_nos and hno not in horse_nos:
                 continue
             if only_missing and hno in existing:
                 continue
+            work.append(row)
+
+        done = 0
+        errors = []
+        total = len(work)
+        if progress_cb and total == 0:
+            progress_cb(0, 0, None, None)
+
+        for row in work:
+            hno = int(row["馬號"])
             try:
                 res = self.analyze_one(race_meta, row, form_map.get(hno, ""))
                 self.save_result(race_id, hno, res)
                 done += 1
                 if progress_cb:
-                    progress_cb(done, hno, res)
+                    progress_cb(done, total, hno, res)
             except Exception as e:
                 errors.append({"horse_no": hno, "error": str(e)})
-        return {"ok": True, "done": done, "errors": errors, "race_id": race_id}
+                if progress_cb:
+                    # 失敗也推進度，避免卡住視覺
+                    progress_cb(done + len(errors), total, hno, {"ai_score": None, "summary": str(e)})
+        return {
+            "ok": True,
+            "done": done,
+            "skipped": int(len(pred) - total) if only_missing else 0,
+            "total": total,
+            "errors": errors,
+            "race_id": race_id,
+        }

@@ -492,8 +492,8 @@ class MeetingPipeline:
             out[stage] = {"status": st, "detail": detail, "manual": False}
         return out
 
-    def run_action(self, racing_date: str, course: str, action: str) -> Dict[str, Any]:
-        """手動節點動作。"""
+    def run_action(self, racing_date: str, course: str, action: str, **kwargs) -> Dict[str, Any]:
+        """手動節點動作。kwargs：如 run_form_ai 的 only_missing、progress_cb。"""
         d_slash = racing_date.replace("-", "/")
         env = os.environ.copy()
         try:
@@ -548,12 +548,35 @@ class MeetingPipeline:
                     (races["racing_date"].astype(str).str[:10] == racing_date[:10])
                     & (races["course"].astype(str) == course)
                 ]
+                race_ids = [str(x) for x in races["race_id"].tolist()]
+                only_missing = bool(kwargs.get("only_missing", True))
+                progress_cb = kwargs.get("progress_cb")
                 done = 0
-                for rid in races["race_id"].tolist():
-                    out = analyst.analyze_race(str(rid), only_missing=True)
+                n_races = len(race_ids)
+                for i, rid in enumerate(race_ids, start=1):
+                    def _cb(cur, tot, hno, res, _i=i, _rid=rid):
+                        if not progress_cb:
+                            return
+                        progress_cb(
+                            {
+                                "race_index": _i,
+                                "race_count": n_races,
+                                "race_id": _rid,
+                                "horse_done": cur,
+                                "horse_total": tot,
+                                "horse_no": hno,
+                                "result": res,
+                            }
+                        )
+
+                    out = analyst.analyze_race(
+                        rid,
+                        only_missing=only_missing,
+                        progress_cb=_cb if progress_cb else None,
+                    )
                     done += out.get("done", 0)
                 self.refresh_readiness(racing_date, course)
-                return {"ok": True, "done": done}
+                return {"ok": True, "done": done, "n_races": n_races}
 
             if action == "snapshot":
                 from factor_calibration import FactorCalibration
