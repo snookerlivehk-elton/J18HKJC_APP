@@ -255,10 +255,11 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 |----|------|------|
 | A 因子／總分 | 可正可負（Z-Score + 加權） | 排序、診斷、雷達前的原料 |
 | B 雷達半徑 | 同場每軸 min-max → [0,1] | **只顯示**；不是勝率 |
-| C 模型勝率 | `softmax(總分 / T)`，同場加總≈1 | 外傳凱利；`export_kelly_payload` |
+| C 模型勝率 | 場內 z(總分) → `softmax(/T)`，加總≈1 | 外傳凱利；`export_kelly_payload` |
 
-- **不要**把總分硬加常數變正數再當機率——相對差距才是勝率來源。  
-- `SOFTMAX_TEMPERATURE`（預設 2.0）：愈小愈尖、愈大愈平均。  
+- **不要**把總分硬加常數變正數再當機率。  
+- **不要**把各因子 Z 改成同場瓜分 100%（破壞跨場比較與校正）。  
+- `SOFTMAX_WITHIN_RACE_Z`（預設 True）+ `SOFTMAX_TEMPERATURE`（預設 1.5）：壓低極端勝率。  
 - Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`。  
 
 ---

@@ -20,18 +20,37 @@ else:
     DATABASE_URL_SYNC = os.getenv("DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db")
 
 
-def scores_to_win_probs(scores, temperature: float = None) -> np.ndarray:
+def scores_to_win_probs(
+    scores,
+    temperature: float = None,
+    *,
+    within_race_z: bool = None,
+) -> np.ndarray:
     """
     同場總分 → 勝率（加總 = 1）。
 
-    使用 softmax：P_i = exp(s_i / T) / Σ exp(s_j / T)
-    - 負分完全沒問題（Z-Score / 總分可正可負）
-    - 勿改成「全部加常數變正數」再當機率——相對差距才是勝率來源
+    預設流程：
+      1) 同場 z-score（壓掉加權總分絕對分差爆炸）
+      2) softmax：P_i = exp(s'_i / T) / Σ exp(s'_j / T)
+
+    - 負分完全沒問題；勿改成「全部加常數變正數」再當機率
     - temperature 愈小，高分馬勝率愈尖；愈大愈接近均分
+    - within_race_z=False 可退回舊行為（直接對原始總分 softmax）
     """
     arr = np.asarray(scores, dtype=float)
     if arr.size == 0:
         return arr
+    use_z = (
+        ModelConfig.SOFTMAX_WITHIN_RACE_Z
+        if within_race_z is None
+        else bool(within_race_z)
+    )
+    if use_z and arr.size >= 2:
+        sd = float(np.std(arr, ddof=0))
+        if sd > 1e-9:
+            arr = (arr - float(np.mean(arr))) / sd
+        else:
+            arr = np.zeros_like(arr)
     t = float(temperature if temperature is not None else ModelConfig.SOFTMAX_TEMPERATURE)
     t = max(t, 1e-6)
     x = arr / t
@@ -322,6 +341,7 @@ class InferenceEngine:
             'match_rate': (sum(hit_counts.values()) / total_lookups) if total_lookups else 0.0,
             'hit_counts': hit_counts,
             'softmax_temperature': ModelConfig.SOFTMAX_TEMPERATURE,
+            'softmax_within_race_z': ModelConfig.SOFTMAX_WITHIN_RACE_Z,
             'win_prob_sum': float(df_result['模型勝率'].sum()) if not df_result.empty else 0.0,
         }
 
@@ -372,11 +392,13 @@ class InferenceEngine:
                 'band_bucket_id': meta.get('band_bucket_id'),
                 'match_rate': meta.get('match_rate'),
                 'softmax_temperature': meta.get('softmax_temperature'),
+                'softmax_within_race_z': meta.get('softmax_within_race_z'),
                 'win_prob_sum': meta.get('win_prob_sum'),
             },
             'runners': runners,
             'note': (
                 'model_win_prob sums to ~1 within the race. '
+                'Probs = softmax(within-race-z(total_score) / T) when within_race_z is on. '
                 'Kelly: f*=(b*p-q)/b with decimal odds o, b=o-1, q=1-p. '
                 'Do not shift total_score to be positive for probabilities.'
             ),

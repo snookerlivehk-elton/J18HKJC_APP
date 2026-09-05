@@ -21,9 +21,9 @@ st.title("🔮 賽事融合預測（總分 + 勝率 + 雷達圖）")
 st.markdown(
     """
 **三層勿混用**
-1. **因子／總分**（可正可負，Z-Score）— 內部排序與加權  
+1. **因子／總分**（可正可負，歷史 Z + 加權）— 內部排序；**不**改成場內瓜分  
 2. **雷達半徑**（同場 0–1）— 只為圖形展示，不是勝率  
-3. **模型勝率**（同場 softmax，加總≈100%）— 給凱利／外傳系統用  
+3. **模型勝率**（場內 z → softmax，加總≈100%）— 給凱利／外傳；壓低極端 80%/0.2%  
 """
 )
 
@@ -147,10 +147,15 @@ with st.sidebar.expander("融合權重（ModelConfig）", expanded=False):
     ModelConfig.WEIGHT_SG_ENERGY = st.slider("SG·能量Z", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1)
     ModelConfig.WEIGHT_SG_DELTA = st.slider("SG·差值", -1.0, 3.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1)
     st.divider()
+    ModelConfig.SOFTMAX_WITHIN_RACE_Z = st.checkbox(
+        "勝率前先做場內 z-score（建議開）",
+        value=bool(ModelConfig.SOFTMAX_WITHIN_RACE_Z),
+        help="壓掉加權總分絕對分差；關閉則回到直接對原始總分 softmax（易極端）。",
+    )
     ModelConfig.SOFTMAX_TEMPERATURE = st.slider(
         "SOFTMAX 溫度（勝率尖銳度）",
         0.5, 8.0, float(ModelConfig.SOFTMAX_TEMPERATURE), 0.1,
-        help="愈小→熱門勝率愈高；愈大→各馬勝率愈平均。不影響總分排序。",
+        help="場內 z 之後再除以 T。愈小→熱門愈尖；愈大→愈平均。不影響總分排序。",
     )
 
 race_options = []
@@ -175,6 +180,7 @@ weight_key = (
     ModelConfig.WEIGHT_SG_ENERGY,
     ModelConfig.WEIGHT_SG_DELTA,
     ModelConfig.SOFTMAX_TEMPERATURE,
+    ModelConfig.SOFTMAX_WITHIN_RACE_Z,
 )
 
 
@@ -223,7 +229,9 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         f"匹配率 {meta.get('match_rate', 0):.0%}｜"
         f"J{hc.get('JOCKEY', 0)} T{hc.get('TRAINER', 0)} S{hc.get('SYNERGY', 0)} "
         f"D{hc.get('DRAW', 0)} H{hc.get('HORSE', 0)} P{hc.get('PACE', 0)} V{hc.get('SPEED', 0)}｜"
-        f"softmax T={meta.get('softmax_temperature')}｜勝率加總={meta.get('win_prob_sum', 0):.4f}"
+        f"softmax T={meta.get('softmax_temperature')}｜"
+        f"場內z={meta.get('softmax_within_race_z')}｜"
+        f"勝率加總={meta.get('win_prob_sum', 0):.4f}"
     )
 
     if predictions_df.empty:
