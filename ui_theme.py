@@ -35,34 +35,15 @@ def inject_admin_css():
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap');
 html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif; }
-.block-container { padding-top: 1.25rem !important; max-width: 1200px; }
+.block-container { padding-top: 0.85rem !important; max-width: 1200px; }
 
-/* 跟隨 Streamlit 主題，勿寫死淺色側欄（Dark 會白底淺字） */
+/* 側欄僅作參數面板（頁面導航已改頂部） */
 [data-testid="stSidebar"] {
   background-color: var(--secondary-background-color) !important;
   border-right: 1px solid rgba(128, 128, 128, 0.25);
 }
 [data-testid="stSidebar"] > div:first-child {
   background-color: var(--secondary-background-color) !important;
-}
-[data-testid="stSidebar"] * {
-  color: inherit;
-}
-div[data-testid="stSidebarNav"] span,
-div[data-testid="stSidebarNav"] a,
-div[data-testid="stSidebarNav"] p {
-  color: var(--text-color) !important;
-  font-weight: 500;
-}
-div[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"]:hover,
-div[data-testid="stSidebarNav"] [aria-selected="true"] {
-  background-color: rgba(128, 128, 128, 0.18) !important;
-}
-/* 導航觸控高度 */
-div[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"] {
-  min-height: 2.25rem;
-  padding-top: 0.4rem !important;
-  padding-bottom: 0.4rem !important;
 }
 
 .j18-page-head {
@@ -78,44 +59,73 @@ div[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"] {
   margin: 0.25rem 0 0; color: var(--text-color); opacity: 0.72; font-size: 0.9rem;
 }
 
-/* —— 平板／手機：側欄當抽屜、主區可讀、表格可橫滑 —— */
+/* —— 平板／手機 —— */
 @media (max-width: 992px) {
   .block-container {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-    padding-top: 0.75rem !important;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+    padding-top: 0.5rem !important;
     max-width: 100% !important;
   }
-  .j18-page-head h1 { font-size: 1.25rem; }
+  .j18-page-head h1 { font-size: 1.2rem; }
   .j18-page-head p { font-size: 0.85rem; }
 
-  /* 側欄：實底＋高 z，避免半透明疊字 */
-  [data-testid="stSidebar"] {
-    z-index: 1000001 !important;
-    background-color: var(--secondary-background-color) !important;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.28);
+  /* 收合側欄：徹底不佔位、不透出選單字 */
+  [data-testid="stSidebar"][aria-expanded="false"] {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    transform: translateX(-110%) !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
   }
-  [data-testid="stSidebar"] > div:first-child {
+  /* 展開側欄：固定抽屜、實底蓋住主內容 */
+  [data-testid="stSidebar"][aria-expanded="true"] {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    z-index: 1000002 !important;
+    width: min(88vw, 320px) !important;
+    min-width: 0 !important;
+    max-width: 88vw !important;
+    transform: none !important;
+    visibility: visible !important;
     background-color: var(--secondary-background-color) !important;
-    height: 100%;
-    overflow-y: auto;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.35);
+  }
+  [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+    background-color: var(--secondary-background-color) !important;
+    height: 100% !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* 多欄改直向堆疊，避免擠成重疊 */
+  section.main, [data-testid="stAppViewContainer"] > .main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  /* 頂部導航可橫滑 */
+  [data-testid="stHeadingWithActionElements"],
+  header[data-testid="stHeader"],
+  [data-testid="stToolbar"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 多欄直向堆疊 */
   div[data-testid="stHorizontalBlock"] {
     flex-wrap: wrap !important;
-    gap: 0.35rem 0 !important;
   }
   div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-    min-width: min(100%, 280px) !important;
+    min-width: min(100%, 260px) !important;
     flex: 1 1 100% !important;
   }
 
-  /* 表格／dataframe 橫向捲動 */
   [data-testid="stDataFrame"],
-  [data-testid="stTable"],
-  div[data-testid="stElementContainer"]:has(table) {
+  [data-testid="stTable"] {
     max-width: 100%;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
@@ -128,21 +138,16 @@ div[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"] {
 
 @media (max-width: 640px) {
   .block-container {
-    padding-left: 0.7rem !important;
-    padding-right: 0.7rem !important;
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
   }
-  /* 極窄：欄一律全寬 */
   div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
     min-width: 100% !important;
     width: 100% !important;
     flex: 1 1 100% !important;
   }
-  /* 側欄導航更緊湊（長選單可捲） */
-  div[data-testid="stSidebarNav"] span {
-    font-size: 0.92rem !important;
-  }
-  section.main .stMarkdown h1 { font-size: 1.3rem !important; }
-  section.main .stMarkdown h2 { font-size: 1.1rem !important; }
+  section.main .stMarkdown h1 { font-size: 1.25rem !important; }
+  section.main .stMarkdown h2 { font-size: 1.08rem !important; }
   section.main .stMarkdown h3 { font-size: 1rem !important; }
 }
 </style>
@@ -180,9 +185,17 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     padding-right: 0.75rem !important;
     max-width: 100% !important;
   }
-  [data-testid="stSidebar"] {
-    z-index: 1000001 !important;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.28);
+  [data-testid="stSidebar"][aria-expanded="false"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  [data-testid="stSidebar"][aria-expanded="true"] {
+    position: fixed !important;
+    z-index: 1000002 !important;
+    width: min(88vw, 320px) !important;
+    background-color: var(--secondary-background-color) !important;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.35);
   }
 }
 </style>

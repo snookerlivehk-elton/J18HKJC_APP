@@ -251,18 +251,26 @@ def render_login_page():
                 st.error(msg)
 
 
-def render_sidebar_account():
+def render_account_bar():
+    """主內容區帳號列（搭配頂部導航；避免手機側欄與頁面疊字）。"""
     import streamlit as st
     role = current_role()
     if not role:
         return
     identity = st.session_state.get(SESSION_IDENTITY, "")
     via = st.session_state.get(SESSION_VIA, "")
-    with st.sidebar:
+    left, right = st.columns([4, 1], vertical_alignment="center")
+    with left:
         st.caption(f"{'管理' if role == ROLE_ADMIN else '用戶'}｜{identity}")
-        st.caption("手機／平板：點左上角 ≡ 開關選單")
         if via == "bootstrap":
-            st.warning("開機通行碼模式")
+            st.warning("開機通行碼模式：請立刻到「白名單」新增正式 admin")
+    with right:
         if st.button("登出", use_container_width=True):
             logout()
             st.rerun()
+
+
+def render_sidebar_account():
+    """相容舊呼叫：改為主區帳號列。"""
+    render_account_bar()
+
