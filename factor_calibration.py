@@ -1,10 +1,11 @@
 """
-賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率命中統計。
+賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率／AI 獨立軌道命中統計。
 
 流程：
   1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
+     （含 ai_score／confidence／ai_combo，不混入模型權重）
   2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
-  3. evaluate_settled() — 按快照分數算各訊號獨贏／入圍率
+  3. evaluate_settled() — 按快照分數算各訊號獨贏／入圍率（含 AI評價×信心）
 
 入圍：≤6 匹前 2；≥7 匹前 3。
 """
@@ -41,6 +42,8 @@ SIGNAL_DEFS = [
     ("SG貢獻", "sg_contrib", None),
     ("綜合總分", "total_score", None),
     ("模型勝率", "model_win_prob", None),
+    # 獨立軌道：Form AI 馬評（評價×信心），不混入模型權重
+    ("AI評價×信心", "ai_combo", None),
 ]
 
 
@@ -78,6 +81,9 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     total_score NUMERIC,
     model_win_prob NUMERIC,
     pred_rank INT,
+    ai_score NUMERIC,
+    confidence NUMERIC,
+    ai_combo NUMERIC,
     finish_order_num INT,
     UNIQUE (batch_id, race_id, horse_no)
 );
@@ -115,6 +121,9 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     total_score REAL,
     model_win_prob REAL,
     pred_rank INTEGER,
+    ai_score REAL,
+    confidence REAL,
+    ai_combo REAL,
     finish_order_num INTEGER,
     UNIQUE (batch_id, race_id, horse_no),
     FOREIGN KEY (batch_id) REFERENCES prediction_snapshot_batches(batch_id) ON DELETE CASCADE
@@ -138,6 +147,24 @@ class FactorCalibration:
                 s = stmt.strip()
                 if s:
                     conn.execute(text(s))
+            self._ensure_ai_snapshot_columns(conn)
+
+    def _ensure_ai_snapshot_columns(self, conn):
+        """既有庫補欄：AI 獨立軌道（不影響舊快照結算）。"""
+        cols = ("ai_score", "confidence", "ai_combo")
+        for col in cols:
+            try:
+                if USE_SQLITE:
+                    conn.execute(text(f"ALTER TABLE prediction_snapshots ADD COLUMN {col} REAL"))
+                else:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE prediction_snapshots "
+                            f"ADD COLUMN IF NOT EXISTS {col} NUMERIC"
+                        )
+                    )
+            except Exception:
+                pass
 
     # ---------- 賽前快照 ----------
     def snapshot_meeting(
@@ -171,18 +198,43 @@ class FactorCalibration:
         course = str(races.iloc[0]["course"])
         batch_id = f"{racing_date.replace('-', '')}{course}_{uuid4().hex[:8]}"
 
+        from form_ai_analyst import FormAIAnalyst
+        from form_ai_picks import compute_ai_combo
+
+        ai_by_race: dict = {}
+        try:
+            analyst = FormAIAnalyst()
+            for rid in races["race_id"].astype(str).unique():
+                ai_by_race[rid] = {}
+                try:
+                    adf = analyst.load_ai_for_race(rid)
+                    if adf is None or adf.empty:
+                        continue
+                    for _, a in adf.iterrows():
+                        hno = int(a["horse_no"])
+                        sc = float(a["ai_score"]) if pd.notna(a.get("ai_score")) else None
+                        cf = float(a["confidence"]) if pd.notna(a.get("confidence")) else None
+                        ai_by_race[rid][hno] = (sc, cf, compute_ai_combo(sc, cf))
+                except Exception:
+                    continue
+        except Exception:
+            ai_by_race = {}
+
         rows = []
         for _, race in races.iterrows():
             rid = race["race_id"]
             pred, _info, _meta = self.infer.predict_race(rid)
             if pred is None or pred.empty:
                 continue
+            ai_map = ai_by_race.get(str(rid), {})
             for _, p in pred.iterrows():
+                hno = int(p["馬號"])
+                sc, cf, combo = ai_map.get(hno, (None, None, None))
                 rows.append(
                     {
                         "batch_id": batch_id,
                         "race_id": rid,
-                        "horse_no": int(p["馬號"]),
+                        "horse_no": hno,
                         "horse_name": p.get("馬名"),
                         "jockey_name": p.get("騎師"),
                         "trainer_name": p.get("練馬師"),
@@ -198,6 +250,9 @@ class FactorCalibration:
                         "total_score": float(p.get("總預測分") or 0),
                         "model_win_prob": float(p.get("模型勝率") or 0),
                         "pred_rank": int(p["預測排名"]) if pd.notna(p.get("預測排名")) else None,
+                        "ai_score": sc,
+                        "confidence": cf,
+                        "ai_combo": combo,
                         "finish_order_num": None,
                     }
                 )
@@ -228,17 +283,20 @@ class FactorCalibration:
                         INSERT INTO prediction_snapshots (
                             batch_id, race_id, horse_no, horse_name, jockey_name, trainer_name, draw,
                             z_jockey, z_trainer, z_synergy, z_draw, z_horse, z_pace, z_speed,
-                            sg_contrib, total_score, model_win_prob, pred_rank, finish_order_num
+                            sg_contrib, total_score, model_win_prob, pred_rank,
+                            ai_score, confidence, ai_combo, finish_order_num
                         ) VALUES (
                             :batch_id, :race_id, :horse_no, :horse_name, :jockey_name, :trainer_name, :draw,
                             :z_jockey, :z_trainer, :z_synergy, :z_draw, :z_horse, :z_pace, :z_speed,
-                            :sg_contrib, :total_score, :model_win_prob, :pred_rank, :finish_order_num
+                            :sg_contrib, :total_score, :model_win_prob, :pred_rank,
+                            :ai_score, :confidence, :ai_combo, :finish_order_num
                         )
                         """
                     ),
                     r,
                 )
 
+        n_ai = sum(1 for r in rows if r.get("ai_combo") is not None)
         return {
             "ok": True,
             "batch_id": batch_id,
@@ -246,6 +304,7 @@ class FactorCalibration:
             "course": course,
             "n_rows": len(rows),
             "n_races": int(races["race_id"].nunique()),
+            "n_with_ai": n_ai,
         }
 
     # ---------- 賽後結算 ----------
@@ -435,13 +494,19 @@ class FactorCalibration:
             for _, g in snaps.groupby("race_id"):
                 if g["finish_order_num"].isna().all():
                     continue
-                vals = pd.to_numeric(g[col], errors="coerce").fillna(0.0)
+                if col not in g.columns:
+                    continue
+                vals = pd.to_numeric(g[col], errors="coerce")
                 # SG 可能全 0（賽前無 Speed Guide）— 仍計入但覆蓋另計
-                if col == "sg_contrib" and (vals.abs() < 1e-12).all():
+                if col == "sg_contrib" and vals.fillna(0).abs().lt(1e-12).all():
+                    continue
+                # AI 獨立軌道：該場無人有 AI 則跳過（不計入有效場次）
+                if col == "ai_combo" and vals.isna().all():
                     continue
                 scored_races += 1
-                top = vals.max()
-                contenders = g.loc[vals == top]
+                vals_filled = vals.fillna(-1e18)
+                top = vals_filled.max()
+                contenders = g.loc[vals_filled == top]
                 finishes = contenders["finish_order_num"].astype(int)
                 cut = place_cutoff(int(g["n_runners"].iloc[0]))
                 if (finishes == 1).any():

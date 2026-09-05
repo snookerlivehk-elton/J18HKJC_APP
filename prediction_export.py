@@ -169,7 +169,7 @@ def build_race_prediction(
             item["implied_prob"] = round(1.0 / float(o), 6) if float(o) > 0 else None
         runners.append(item)
 
-    # 爭勝 1～2；入圍前 place_n
+    # 爭勝 1～2；入圍前 place_n（模型軌道）
     win_n = 1
     if n >= 2 and runners[0].get("model_win_prob") and runners[1].get("model_win_prob"):
         if runners[1]["model_win_prob"] >= runners[0]["model_win_prob"] * 0.70:
@@ -183,9 +183,29 @@ def build_race_prediction(
             "model_win_prob": r["model_win_prob"],
             "model_win_prob_pct": r["model_win_prob_pct"],
             "ai_combo": (r.get("ai") or {}).get("ai_combo"),
+            "ai_score": (r.get("ai") or {}).get("ai_score"),
+            "confidence": (r.get("ai") or {}).get("confidence"),
             "kelly_fraction": r.get("kelly_fraction"),
             "edge_vs_market": r.get("edge_vs_market"),
         }
+
+    from form_ai_picks import build_ai_picks
+
+    ai_pick_rows = []
+    for r in runners:
+        a = r.get("ai") or {}
+        ai_pick_rows.append(
+            {
+                "horse_no": r["horse_no"],
+                "horse_name": r["horse_name"],
+                "ai_score": a.get("ai_score"),
+                "confidence": a.get("confidence"),
+                "ai_combo": a.get("ai_combo"),
+                "pred_rank": r.get("pred_rank"),
+                "model_win_prob": r.get("model_win_prob"),
+            }
+        )
+    ai_picks = build_ai_picks(ai_pick_rows, n_runners=n)
 
     return {
         "ok": True,
@@ -213,6 +233,10 @@ def build_race_prediction(
         "picks": {
             "win": [_slim(r) for r in runners[:win_n]],
             "place": [_slim(r) for r in runners[:place_n]],
+            "ai_win": ai_picks.get("win") or [],
+            "ai_place": ai_picks.get("place") or [],
+            "ai_available": bool(ai_picks.get("available")),
+            "note": "model=win_prob track; ai=independent form-AI handicapper (score×confidence); not mixed into model weights",
         },
         "runners": runners,
         "kelly": {

@@ -298,7 +298,7 @@ OpenAPI：部署後 `/docs`。
 
 - [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）  
 - [ ] **賽前**：fixtures／排位／SG／快照 tick  
-- [ ] formguide／Form AI 訊號進推論權重（現多為旁路顯示）  
+- [ ] Form AI：**保持獨立馬評軌道**（推介＋快照命中）；**不要**併入 `WEIGHT_*`／總分  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
 
 ---
@@ -339,11 +339,14 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 | A 因子／總分 | 可正可負（Z-Score + 加權） | 排序、診斷、雷達前的原料 |
 | B 雷達半徑 | 同場每軸 min-max → [0,1] | **只顯示**；不是勝率 |
 | C 模型勝率 | 場內 z(總分) → `softmax(/T)`，加總≈1 | 外傳凱利；`prediction_api` / `export_kelly_payload` |
+| D **AI 馬評（獨立）** | `ai_score`×`confidence`＝`ai_combo` | **不混入**總分／權重；並排推介 + 快照命中統計 |
 
 - **不要**把總分硬加常數變正數再當機率。  
 - **不要**把各因子 Z 改成同場瓜分 100%（破壞跨場比較與校正）。  
+- **不要**把 Form AI 分數併入 `WEIGHT_*`／總分（AI 是參考了因子＋賽績指引的獨立馬評家）。  
 - `SOFTMAX_WITHIN_RACE_Z`（預設 True）+ `SOFTMAX_TEMPERATURE`（預設 1.5）：壓低極端勝率。  
 - Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`（見 §2.4）。  
+- AI 推介：`form_ai_picks.py`；賽前快照鎖 `ai_*`；`evaluate_settled` 訊號「AI評價×信心」。重建快照才含 AI 欄。  
 
 ---
 
@@ -351,6 +354,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-05 | **AI 獨立軌道**：`form_ai_picks` 推介；快照鎖 ai_*；命中率訊號「AI評價×信心」；賽日並排模型／AI |
 | 2026-09-05 | **手冊 §4.1**：GitHub UI 同事會優化版面；開發邏輯時勿用本地舊 UI 覆蓋 `main` |
 | 2026-09-05 | **賽前預測 API**：`prediction_api` + Kelly／即時賠率；`PREDICTION_API_KEY`；獨立 `start-api.sh` |
 | 2026-09-05 | **登入分權**：`auth_whitelist` + `AUTH_BOOTSTRAP_ADMIN`；user 僅賽日速覽；admin 全管理頁；`views/` + `st.navigation` |
