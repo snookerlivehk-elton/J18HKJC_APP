@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 
@@ -112,31 +113,80 @@ class AuthStore:
     ) -> Dict[str, Any]:
         token = (token or "").strip()
         if not token:
-            return {"ok": False, "error": "token 不可空白"}
+            return {"ok": False, "error": "帳號／通行碼不可空白"}
         if role not in (ROLE_ADMIN, ROLE_USER):
-            return {"ok": False, "error": "role 無效"}
+            return {"ok": False, "error": "角色無效"}
         if token_type not in (TOKEN_EMAIL, TOKEN_PASSWORD, None):
-            return {"ok": False, "error": "token_type 無效"}
+            return {"ok": False, "error": "類型無效"}
         if token_type is None:
             token_type = TOKEN_EMAIL if ("@" in token) else TOKEN_PASSWORD
         store_token = token.lower() if token_type == TOKEN_EMAIL else token
-        with self.engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO auth_whitelist (token, token_type, role, label, is_active)
-                    VALUES (:token, :token_type, :role, :label, :active)
-                    """
-                ),
-                {
-                    "token": store_token,
-                    "token_type": token_type,
-                    "role": role,
-                    "label": label or "",
-                    "active": True if not USE_SQLITE else 1,
-                },
-            )
-        return {"ok": True}
+        active_val = True if not USE_SQLITE else 1
+
+        try:
+            with self.engine.begin() as conn:
+                # 唯一鍵為 lower(token)+role：已存在則更新備註並重新啟用（勿再 INSERT 炸 traceback）
+                existing = conn.execute(
+                    text(
+                        """
+                        SELECT id, is_active FROM auth_whitelist
+                        WHERE lower(token) = lower(:token) AND role = :role
+                        ORDER BY id
+                        LIMIT 1
+                        """
+                    ),
+                    {"token": store_token, "role": role},
+                ).fetchone()
+                if existing:
+                    eid = int(existing[0])
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE auth_whitelist
+                            SET token = :token,
+                                token_type = :token_type,
+                                label = :label,
+                                is_active = :active
+                            WHERE id = :id
+                            """
+                        ),
+                        {
+                            "token": store_token,
+                            "token_type": token_type,
+                            "label": label or "",
+                            "active": active_val,
+                            "id": eid,
+                        },
+                    )
+                    return {
+                        "ok": True,
+                        "updated": True,
+                        "message": f"此帳號／通行碼（{role}）已在白名單，已更新備註並啟用",
+                    }
+
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO auth_whitelist (token, token_type, role, label, is_active)
+                        VALUES (:token, :token_type, :role, :label, :active)
+                        """
+                    ),
+                    {
+                        "token": store_token,
+                        "token_type": token_type,
+                        "role": role,
+                        "label": label or "",
+                        "active": active_val,
+                    },
+                )
+            return {"ok": True, "updated": False, "message": "已新增"}
+        except IntegrityError:
+            return {
+                "ok": False,
+                "error": "此帳號／通行碼與角色已存在於白名單（請到下方名單啟用或改備註）",
+            }
+        except Exception as e:
+            return {"ok": False, "error": f"寫入失敗：{e}"}
 
     def set_active(self, entry_id: int, active: bool) -> None:
         with self.engine.begin() as conn:

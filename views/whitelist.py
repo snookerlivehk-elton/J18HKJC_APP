@@ -40,10 +40,10 @@ if st.button("加入白名單", type="primary"):
     ttype = None if new_type == "自動" else new_type
     r = store.add_entry(new_token, new_role, token_type=ttype, label=new_label)
     if r.get("ok"):
-        st.success("已新增")
+        st.success(r.get("message") or ("已更新" if r.get("updated") else "已新增"))
         st.rerun()
     else:
-        st.error(r.get("error"))
+        st.error(r.get("error") or "寫入失敗")
 
 st.divider()
 st.subheader("現有名單")
