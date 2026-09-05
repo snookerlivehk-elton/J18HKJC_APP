@@ -3,8 +3,8 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 import ui_utils
 
-st.set_page_config(page_title="練馬師因子 (Trainer)", layout="wide")
-st.title("🎩 練馬師因子 (Trainer Factor)")
+st.set_page_config(page_title="練馬師因子", layout="wide")
+st.title("🎩 練馬師因子")
 st.caption("依排位練馬師 + 距離帶粗桶（如 ST_SPRINT），匹配歷史 TRAINER Z-Score。")
 
 if not ui_utils.ensure_history_loaded():

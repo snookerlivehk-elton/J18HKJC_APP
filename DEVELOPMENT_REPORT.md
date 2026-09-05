@@ -69,21 +69,27 @@ factor_calculator.py     # 歷史抓取、各因子、NLP 補償、save/load fac
 inference_engine.py      # 排位查表預測
 nlp_processor.py         # OpenAI/OpenRouter JSON 受阻解析（只讀環境變數 Key）
 nlp_batch_job.py         # 本機/CI 大批次 NLP（可略過「無特別報告」）
-ui_app.py                # 主頁：載歷史、重算全部因子
+系統主頁.py              # 入口：載歷史、重算全部因子（側欄顯示「系統主頁」）
 ui_utils.py              # 排位選擇、匹配面板、賽日 NLP 選項、NLP 新鮮度顯示
-pages/0_Data_Control…   # 排位/整備度
-pages/1–3_*              # 騎／練／騎練（粗桶）
-pages/4_Draw…            # 檔位（細桶）
-pages/5_Horse_Jockey…    # 人馬雙軌
-pages/6_Recent_Form…     # 近績 + 賽日 NLP 解析
-pages/7_Pace_Sectional…  # 步速／跑法
-pages/8_Speed_Figure…    # 速度指數 / FSR
-pages/9_HKJC_Speed…      # 官方 Speed Guide
-pages/10_Inference…      # 融合總分 + 分場次表 + 因子雷達圖
-pages/11_RaceDay_Mobile  # 手機優先賽日速覽（用戶向：場次按鈕＋勝率卡片＋雷達）
-pages/13_Form_AI…         # Form Guide CMS + 賽前 AI 評語／獨立分
+pages/0_資料控制中心.py   # 排位／整備度快捷
+pages/1_騎師因子.py
+pages/2_練馬師因子.py
+pages/3_騎練合作因子.py   # 粗桶
+pages/4_檔位因子.py       # 細桶
+pages/5_人馬合作因子.py
+pages/6_近績與NLP因子.py  # 近績 + 賽日 NLP 解析
+pages/7_步速形勢因子.py
+pages/8_速度指數因子.py
+pages/9_官方速勢能量.py   # Speed Guide CMS
+pages/10_融合預測.py      # 總分 + 勝率 + 雷達 + Kelly JSON
+pages/11_賽日速覽.py      # 手機優先賽日卡片
+pages/12_因子命中率.py    # 賽前快照 → 賽後結算統計
+pages/13_賽績AI評價.py    # Form Guide + Form AI
+pages/14_賽日作戰室.py    # fixtures + readiness + 手動節點
 formguide_crawler.py     # CMS fg_index / fg_race_N → upcoming_formguide
 form_ai_analyst.py       # 統計+近績文字 → upcoming_form_ai
+fixture_crawler.py       # 整季賽期表 → fixtures
+meeting_pipeline.py      # readiness／stage／手動動作
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
 speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py
@@ -98,7 +104,7 @@ schema.sql
 - 推論：Fitness：`0`=倒轉拇指→`-1.5`，`1/2/3`=向上拇指→`0/1/2`；能量**同場 Z**；差值× `WEIGHT_SG_DELTA`  
 - CLI：`python speedguide_crawler.py`（可選 `--date` / `--course` 核對、`--races 1,2`）  
 
-Streamlit 多頁：`ui_app.py` 為入口；`pages/` 自動掛載。
+Streamlit 多頁：`系統主頁.py` 為入口（`start.sh`）；`pages/` 檔名（去數字前綴）即側欄中文名。
 
 ---
 
@@ -173,27 +179,46 @@ OPENAI_MODEL=gpt-4o-mini
 
 ---
 
-## 5. 全自動排程藍圖
+## 5. 自動化藍圖與賽後開發流程
 
-### 已落地（手動作戰室）
+### 5.1 已落地（手動作戰室）
 
-- `fixture_crawler.py` → `fixtures`（HKJC Fixture.aspx 整季）
-- `meeting_pipeline.py`：`meeting_readiness` + 各 stage 狀態 + 手動動作
-- UI：`pages/14_Meeting_Ops.py`（賽日作戰室）
+- `fixture_crawler.py` → `fixtures`（無參數當月頁才有當月；`CalMonth=當月` 可能空殼）
+- `meeting_pipeline.py`：`refresh_readiness` + stage + 手動動作
+- UI：`pages/14_賽日作戰室.py`
 
-階段：FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS → NLP → FORM_AI → SNAPSHOT → RESULTS → SETTLED
+階段：`FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS → NLP → FORM_AI → SNAPSHOT → RESULTS → SETTLED`
 
-### 尚未落地（Cron tick）
+### 5.2 賽前手動 SOP（目前生產）
 
-目標仍是短輪詢 Cron，無需人工：
+1. 作戰室選賽日 → 重新檢查 readiness  
+2. 缺什麼按什麼（排位／SG／Form Guide／Form AI）  
+3. **賽前**建立預測快照（鎖總分＋當版模型勝率）  
+4. 改了勝率公式／權重後：**必須重建快照**再賽  
 
-| 時機 | 動作 |
-|------|------|
-| 季前／每周 | `fixture_crawler` → `fixtures` |
-| 賽前 ~2 日 | `racecard_crawler` |
-| 賽前 ~24–36h | `speedguide_crawler` / `formguide_crawler`（未上架則 waiting 重試） |
-| 排位齊後 | factors／Form AI → `snapshot_meeting` |
-| 賽後隔日 | `batch_crawler` → `settle_pending` |
+### 5.3 賽後自動化 — 開發流程（下一階段）
+
+> **原則**：狀態機 + 短 Cron tick（約 30–60 分），依 readiness 重試；禁止無限狂爬。  
+> **上線時機**：至少一場「賽前快照 → 賽後結算」手動跑通後再掛 Cron。
+
+| 步驟 | 觸發 | 動作 | 成功準則 |
+|------|------|------|----------|
+| A | 賽後數小時～隔日 | 歷史增量爬蟲（既有 Actions／`batch_crawler`） | 該日 `finish_order_num` 入庫 |
+| B | 名次覆蓋達標 | readiness → RESULTS=ok | 作戰室 RESULTS 變 ok |
+| C | 有未結算 snapshot | `FactorCalibration.settle_pending()` | batch 有 `settled_at` |
+| D | 結算後（可選） | `run_all_factors` 納入新賽果 | `factor_scores` 刷新 |
+| E | 結算後（可選） | `nlp_batch_job` → 再算 HORSE／SPEED | NLP 節點可 skip |
+
+**開發切片順序**
+
+1. CLI `meeting_tick.py`：讀 fixtures → `refresh_readiness` → 只跑該做的 `run_action`（先實作賽後 settle）  
+2. Railway **獨立 Cron service**（勿塞進 Streamlit request）：`python meeting_tick.py`  
+3. 護欄：同 stage 連續失敗 N 次改 `failed`；官方未上架保持 `waiting`  
+4. 驗收：對照手動結算結果與 tick dry-run；UI 與 `meeting_pipeline` 表一致  
+
+### 5.4 賽前 Cron（較後再做）
+
+每周 fixtures → 賽前 2 日排位 → 24–36h SG／FormGuide → Form AI → snapshot。
 
 ---
 
@@ -211,10 +236,12 @@ OPENAI_MODEL=gpt-4o-mini
 - [ ] SPEED：固定末 400m、Par Time 分位數  
 - [ ] 降班三條件再校準；NLP 過濾假性腳軟／假性無追勢（白皮書 Phase 5）  
 - [ ] Peak vs EMA 雙特徵進總分／ML  
+- [ ] 用已結算快照校準 `SOFTMAX_TEMPERATURE`  
 
 ### P2 — 自動化與產品
 
-- [ ] Cron tick 接 `meeting_pipeline`（依 readiness 重試，非無限爬）  
+- [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）  
+- [ ] **賽前**：fixtures／排位／SG／快照 tick  
 - [ ] formguide／Form AI 訊號進推論權重（現多為旁路顯示）  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
 
@@ -264,4 +291,15 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-05 — 對齊距離帶粗桶、賽日 NLP、PACE/SPEED 落庫與推論、raw_json dict 修復。*
+## 9. 變更日誌（摘要）
+
+| 日期 | 內容 |
+|------|------|
+| 2026-09-05 | **UI 中文化**：側欄改中文檔名（`系統主頁.py` + `pages/*_中文.py`）；`start.sh` 改跑主頁 |
+| 2026-09-05 | **勝率**：場內 z → softmax（`SOFTMAX_WITHIN_RACE_Z`，T 預設 1.5），避免極端 80%/0.2% |
+| 2026-09-05 | **作戰室**：fixtures + `meeting_pipeline` + 賽日作戰室；本檔 §5.3 寫明賽後自動化開發切片 |
+| 2026-09-05 | Form Guide CMS + Form AI；預測快照結算；級賽 class 解析 |
+
+---
+
+*最後更新：2026-09-05 — UI 中文側欄、勝率場內 z、賽後自動化開發流程入冊。*

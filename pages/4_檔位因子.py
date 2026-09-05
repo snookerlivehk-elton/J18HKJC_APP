@@ -3,8 +3,8 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 import ui_utils
 
-st.set_page_config(page_title="檔位與場地因子 (Draw)", layout="wide")
-st.title("🚪 檔位與場地偏差因子 (Draw Factor)")
+st.set_page_config(page_title="檔位因子", layout="wide")
+st.title("🚪 檔位與場地偏差因子")
 st.caption("依排位檔位群組（Inner / Mid-Inner / Mid-Outer / Outer）+ 本場 Bucket 匹配。")
 
 if not ui_utils.ensure_history_loaded():

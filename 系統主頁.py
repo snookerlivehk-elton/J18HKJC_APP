@@ -3,15 +3,15 @@ import pandas as pd
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 
-st.set_page_config(page_title="J18 Quant Model", layout="wide")
+st.set_page_config(page_title="J18 量化系統", layout="wide")
 
 st.title("🏇 J18 量化預測系統")
 st.markdown("""
 **建議操作順序**
 1. 資料控制中心：抓取明日排位表  
 2. 本頁：載入歷史 → **重算並寫入因子分數**  
-3. **賽日速覽**（手機）：給用戶看場次／勝率卡片＋雷達  
-4. 推論儀表板：進階權重與 JSON 外傳  
+3. **賽日速覽**（手機）：場次／勝率卡片＋雷達  
+4. **融合預測**：進階權重與 JSON 外傳  
 """)
 
 st.divider()

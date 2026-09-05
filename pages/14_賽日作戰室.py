@@ -8,7 +8,7 @@ import streamlit as st
 from meeting_pipeline import MeetingPipeline, STAGES, STATUS_OK, STATUS_SKIPPED
 
 st.set_page_config(page_title="賽日作戰室", layout="wide")
-st.title("🛰️ 賽日作戰室（Meeting Ops）")
+st.title("🛰️ 賽日作戰室")
 st.caption("賽期表 → 各階段整備度 → 缺什麼跑什麼；可人工放行節點。Cron 稍後再接。")
 
 pipe = MeetingPipeline()

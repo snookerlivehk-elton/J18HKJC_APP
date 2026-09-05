@@ -13,7 +13,7 @@ from inference_engine import InferenceEngine
 from form_ai_analyst import FormAIAnalyst
 import ui_utils
 
-st.set_page_config(page_title="Form AI", layout="wide")
+st.set_page_config(page_title="賽績 AI 評價", layout="wide")
 st.title("📝 賽績指引 + AI 評價")
 st.caption(
     "CMS Form Guide 近績文字 + 系統量化統計 → 文字評價與 AI 獨立分（−2～+2）。"

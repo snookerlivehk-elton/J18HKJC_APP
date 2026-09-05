@@ -4,8 +4,8 @@ from factor_calculator import FactorCalculator
 from bucket_utils import synergy_name
 import ui_utils
 
-st.set_page_config(page_title="騎練合作因子 (Synergy)", layout="wide")
-st.title("🤝 騎練合作因子 (Synergy Factor)")
+st.set_page_config(page_title="騎練合作因子", layout="wide")
+st.title("🤝 騎練合作因子")
 st.caption("依排位「騎師 & 練馬師」+ 距離帶粗桶匹配。名稱格式與推論引擎相同。")
 
 if not ui_utils.ensure_history_loaded():

@@ -6,7 +6,7 @@ from factor_calculator import FactorCalculator
 import ui_utils
 
 st.set_page_config(page_title="近績與 NLP 因子", layout="wide")
-st.title("📉🤖 近績與 NLP 因子 (Recent Form & NLP)")
+st.title("📉🤖 近績與 NLP 因子")
 st.caption(
     "基礎近績 = 馬匹在**距離帶粗桶**（如 ST_SPRINT）的歷史表現；"
     "NLP 受阻補償寫回 raw_score 後再算 Z（需先解析 text_reports）。"

@@ -15,9 +15,9 @@ try:
 except ImportError:
     go = None
 
-st.set_page_config(page_title="Inference Dashboard", layout="wide")
+st.set_page_config(page_title="融合預測", layout="wide")
 
-st.title("🔮 賽事融合預測（總分 + 勝率 + 雷達圖）")
+st.title("🔮 賽事融合預測")
 st.markdown(
     """
 **三層勿混用**

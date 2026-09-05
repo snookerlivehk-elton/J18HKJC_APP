@@ -7,21 +7,21 @@ from factor_calculator import FactorCalculator
 from bucket_utils import make_bucket_id, make_band_bucket_id, is_valid_bucket, is_valid_band_bucket
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 
-st.set_page_config(page_title="Data Control Center", layout="wide")
+st.set_page_config(page_title="資料控制中心", layout="wide")
 
-st.title("🎛️ 系統控制與數據監控中心 (Data Control Center)")
+st.title("🎛️ 資料控制中心")
 st.markdown("""
 這個版面負責監控賽前資料（排位表、速勢能量）是否已經具備，並提供手動觸發爬蟲的快捷按鈕。
 這也是未來開發「全自動化觸發流程」的基礎監控面板。
 
 **賽日作戰室**（賽期表 + 各階段 readiness + 手動節點）：請開側欄「賽日作戰室」。
 """)
-st.page_link("pages/14_Meeting_Ops.py", label="🛰️ 前往賽日作戰室", icon="🛰️")
+st.page_link("pages/14_賽日作戰室.py", label="🛰️ 前往賽日作戰室", icon="🛰️")
 
 # ==========================================
 # 1. 爬蟲快捷控制按鈕
 # ==========================================
-st.subheader("🚀 手動觸發爬蟲 (Manual Triggers)")
+st.subheader("🚀 手動觸發爬蟲")
 
 engine = InferenceEngine()
 
@@ -148,7 +148,7 @@ st.divider()
 # ==========================================
 # 2. 賽前資料整備度監控 (Data Readiness)
 # ==========================================
-st.subheader("📊 賽前資料整備度監控 (Pre-race Data Readiness)")
+st.subheader("📊 賽前資料整備度監控")
 st.markdown("這裡會顯示資料庫中『未來賽事』的準備狀況，確認是否可以進行 AI 推論。")
 
 def get_readiness_status():
@@ -209,7 +209,7 @@ else:
     st.info(f"📈 監控總結：共發現 **{total_races}** 場即將舉行的賽事，其中 **{ready_races}** 場資料已完全齊全。")
 
 st.divider()
-st.subheader("🧠 因子表整備度 (factor_scores)")
+st.subheader("🧠 因子表整備度（factor_scores）")
 try:
     calc = FactorCalculator()
     scores = calc.load_factor_scores()
