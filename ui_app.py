@@ -24,7 +24,8 @@ st.set_page_config(
     page_title="J18AI Plus+",
     page_icon=str(_LOGO) if _LOGO.is_file() else "🏇",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    # auto：有參數頁時側欄仍可開；參數已改主區 expander，不依賴側欄
+    initial_sidebar_state="auto",
 )
 
 inject_home_screen_icons()

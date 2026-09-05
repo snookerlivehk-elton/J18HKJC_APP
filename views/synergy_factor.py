@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import synergy_name
@@ -10,7 +10,7 @@ st.caption("依排位「騎師 & 練馬師」+ 距離帶粗桶匹配。名稱格
 if not ui_utils.ensure_history_loaded():
     st.stop()
 
-with st.sidebar.expander("⚙️ 參數調節", expanded=False):
+with st.expander("⚙️ 參數調節", expanded=False):
     ModelConfig.WIN_WEIGHT = st.slider("WIN_WEIGHT", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1)
     ModelConfig.PLACE_WEIGHT = st.slider("PLACE_WEIGHT", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05)
     ModelConfig.SYNERGY_SMOOTH_C = st.number_input("SYNERGY_SMOOTH_C", min_value=1, value=ModelConfig.SYNERGY_SMOOTH_C)

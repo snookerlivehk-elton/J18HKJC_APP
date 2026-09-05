@@ -223,8 +223,7 @@ OpenAPI：部署後 `/docs`。
 - **因子頁模式**：可從 DB 載歷史計算（`ui_utils.get_history_df_for_compute`），不要只綁主頁 session。  
 - **落庫**：`save_factor_scores` 只保留標準欄位；診斷欄（跑法、Peak、NLP場次）可留 session／回傳 DataFrame。  
 - **名稱**：一律 `normalize_person_name`（去括號磅數）；騎練組合用 `synergy_name`。  
-- **提交**：使用者要求才 commit/push；`main` 為 Railway 追蹤分支。  
-- **秘錀**：不寫進 repo、不回顯完整 Key。  
+- **因子／融合參數**：放在**主內容區** `st.expander`（勿只放 `st.sidebar`；側欄收合時會像「參數 UI 消失」）。  
 
 建議實作順序（新因子）：
 

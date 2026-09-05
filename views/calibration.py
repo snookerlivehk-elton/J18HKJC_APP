@@ -96,8 +96,8 @@ else:
 st.divider()
 st.subheader("④ 命中率統計（僅已結算／已有名次）")
 
-with st.sidebar:
-    st.caption("目前推論權重（快照當下已鎖在 DB，此處僅參考）")
+with st.expander("目前推論權重（參考；快照當下已鎖在 DB）", expanded=False):
+    st.caption("調整權重請到各因子頁／融合預測；此處僅顯示當前 ModelConfig。")
     for label, _col, wname in SIGNAL_DEFS:
         if wname:
             st.text(f"{label}: {getattr(ModelConfig, wname)}")

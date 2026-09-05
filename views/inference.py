@@ -1,4 +1,4 @@
-"""
+﻿"""
 推論儀表板：分場次融合總分 + 各因子雷達圖。
 """
 from __future__ import annotations
@@ -63,7 +63,7 @@ if scores_preview.empty:
 types = sorted(scores_preview["factor_type"].unique().tolist())
 st.caption(f"資料庫已有 {len(scores_preview)} 筆因子分數（{types}）。")
 
-with st.sidebar.expander("融合權重（ModelConfig）", expanded=False):
+with st.expander("融合權重（ModelConfig）", expanded=True):
     ModelConfig.WEIGHT_JOCKEY = st.slider("騎師", 0.0, 3.0, float(ModelConfig.WEIGHT_JOCKEY), 0.1)
     ModelConfig.WEIGHT_TRAINER = st.slider("練馬師", 0.0, 3.0, float(ModelConfig.WEIGHT_TRAINER), 0.1)
     ModelConfig.WEIGHT_SYNERGY = st.slider("騎練", 0.0, 3.0, float(ModelConfig.WEIGHT_SYNERGY), 0.1)

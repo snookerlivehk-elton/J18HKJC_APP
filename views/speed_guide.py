@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import subprocess
 import os
@@ -15,7 +15,7 @@ st.caption(
 engine = InferenceEngine()
 races = engine.get_upcoming_races()
 
-with st.sidebar.expander("⚙️ 推論權重（寫入 ModelConfig）", expanded=True):
+with st.expander("⚙️ 推論權重（寫入 ModelConfig）", expanded=True):
     ModelConfig.WEIGHT_SG_FORM = st.slider(
         "WEIGHT_SG_FORM（狀態／Fitness）", 0.0, 2.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1
     )

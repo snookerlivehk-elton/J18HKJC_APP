@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import GLOBAL_BUCKET
@@ -13,7 +13,7 @@ st.caption(
 if not ui_utils.ensure_history_loaded():
     st.stop()
 
-with st.sidebar.expander("⚙️ 參數調節", expanded=False):
+with st.expander("⚙️ 參數調節", expanded=False):
     ModelConfig.WIN_WEIGHT = st.slider("WIN_WEIGHT", 0.5, 2.0, ModelConfig.WIN_WEIGHT, 0.1)
     ModelConfig.PLACE_WEIGHT = st.slider("PLACE_WEIGHT", 0.0, 1.0, ModelConfig.PLACE_WEIGHT, 0.05)
     ModelConfig.HORSE_JOCKEY_SMOOTH_C = st.number_input(

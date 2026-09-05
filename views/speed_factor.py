@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 from config import ModelConfig
 from factor_calculator import FactorCalculator
@@ -14,7 +14,7 @@ st.caption(
 if not ui_utils.ensure_history_loaded():
     st.stop()
 
-with st.sidebar.expander("⚙️ 參數調節", expanded=False):
+with st.expander("⚙️ 參數調節", expanded=False):
     ModelConfig.FSR_PENALTY_THRESHOLD = st.number_input(
         "FSR 慢步速懲罰閥值", min_value=100.0, value=ModelConfig.FSR_PENALTY_THRESHOLD
     )

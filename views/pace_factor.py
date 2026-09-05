@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 from config import ModelConfig
 from factor_calculator import FactorCalculator
@@ -14,7 +14,7 @@ st.caption(
 if not ui_utils.ensure_history_loaded():
     st.stop()
 
-with st.sidebar.expander("⚙️ 參數調節", expanded=False):
+with st.expander("⚙️ 參數調節", expanded=False):
     ModelConfig.PACE_SMOOTH_C = st.number_input(
         "PACE_SMOOTH_C", min_value=1, value=ModelConfig.PACE_SMOOTH_C
     )
