@@ -81,7 +81,9 @@ pages/8_Speed_Figure…    # 速度指數 / FSR
 pages/9_HKJC_Speed…      # 官方 Speed Guide
 pages/10_Inference…      # 融合總分 + 分場次表 + 因子雷達圖
 pages/11_RaceDay_Mobile  # 手機優先賽日速覽（用戶向：場次按鈕＋勝率卡片＋雷達）
+pages/12_Factor_Calibration  # 各因子／總分獨立獨贏・入圍命中率（調權重用）
 radar_charts.py          # 共用 Plotly 雷達
+factor_calibration.py    # 因子命中統計引擎
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
 speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py
