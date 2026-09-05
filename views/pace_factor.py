@@ -5,7 +5,6 @@ from factor_calculator import FactorCalculator
 from bucket_utils import normalize_person_name, GLOBAL_BUCKET
 import ui_utils
 
-st.set_page_config(page_title="步速與分段形勢", layout="wide")
 st.title("⏱️ 步速與分段形勢因子")
 st.caption(
     "由歷史分段走位推跑法與追回指數（GLOBAL）；"

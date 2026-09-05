@@ -63,39 +63,37 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 ### 1.4 關鍵檔案地圖
 
 ```
-bucket_utils.py          # 場地/跑道/距離帶、名稱正規化、synergy/horse_jockey 名
-config.py                # 全部超參數與 WEIGHT_*
-factor_calculator.py     # 歷史抓取、各因子、NLP 補償、save/load factor_scores
-inference_engine.py      # 排位查表預測
-nlp_processor.py         # OpenAI/OpenRouter JSON 受阻解析（只讀環境變數 Key）
-nlp_batch_job.py         # 本機/CI 大批次 NLP（可略過「無特別報告」）
-系統主頁.py              # （已改回）入口請用 `ui_app.py`；側欄顯示 ui app
-ui_app.py                # 入口：載歷史、重算全部因子（`start.sh` 跑此檔）
-ui_utils.py              # 排位選擇、匹配面板、賽日 NLP 選項、NLP 新鮮度顯示
-pages/0_資料控制中心.py   # 排位／整備度快捷（檔名＝側欄中文）
-pages/1_騎師因子.py
-pages/2_練馬師因子.py
-pages/3_騎練合作因子.py   # 粗桶
-pages/4_檔位因子.py       # 細桶
-pages/5_人馬合作因子.py
-pages/6_近績與NLP因子.py  # 近績 + 賽日 NLP 解析
-pages/7_步速形勢因子.py
-pages/8_速度指數因子.py
-pages/9_官方速勢能量.py   # Speed Guide CMS
-pages/10_融合預測.py      # 總分 + 勝率 + 雷達 + Kelly JSON
-pages/11_賽日速覽.py      # 手機優先賽日卡片
-pages/12_因子命中率.py    # 賽前快照 → 賽後結算統計
-pages/13_賽績AI評價.py    # Form Guide + Form AI
-pages/14_賽日作戰室.py    # fixtures + readiness + 手動節點
-formguide_crawler.py     # CMS fg_index / fg_race_N → upcoming_formguide
-form_ai_analyst.py       # 統計+近績文字 → upcoming_form_ai
-fixture_crawler.py       # 整季賽期表 → fixtures
-meeting_pipeline.py      # readiness／stage／手動動作
-racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
-speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
-etl_pipeline.py / batch_crawler.py
+ui_app.py                # 入口：登入關卡 + st.navigation（start.sh）
+auth_utils.py            # 白名單／bootstrap／登入登出
+ui_theme.py              # 登入／管理／用戶 CSS
+views/home.py            # 系統主頁（載歷史、重算因子）
+views/whitelist.py       # 白名單 CRUD（僅 admin）
+views/data_control.py    # 資料控制中心
+views/meeting_ops.py     # 賽日作戰室
+views/raceday.py         # 賽日速覽（用戶主畫面）
+views/inference.py       # 融合預測
+views/calibration.py     # 因子命中率
+views/form_ai.py         # 賽績 AI
+views/*_factor.py         # 各因子診斷頁
+pages/                   # 留空（勿自動掛頁，避免用戶看到管理選單）
+bucket_utils.py / config.py / factor_calculator.py / inference_engine.py
+meeting_pipeline.py / fixture_crawler.py / …
 schema.sql
 ```
+
+### 1.5 登入與角色分頁
+
+| 角色 | 可見頁面 | 登入憑證 |
+|------|----------|----------|
+| **user** | 僅「賽日速覽」 | `auth_whitelist` 中 `role=user` 的 email／通行碼 |
+| **admin** | 全部管理頁 + 白名單 + 賽日速覽 | `role=admin` 的 email／通行碼 |
+
+- 表：`auth_whitelist`（token、token_type=email|password、role、label、is_active）  
+- 環境變數：`AUTH_BOOTSTRAP_ADMIN` — **僅當庫內尚無 active admin** 時可當開機通行碼登入，登入後請立刻在白名單加正式 admin。  
+- 安全：Streamlit session 屬「擋君子」；勿把密鑰寫進程式碼或 git。  
+- 導航：`st.navigation` 依角色組裝；`pages/` 目錄刻意留空。  
+
+首次上線 SOP：Railway 設 `AUTH_BOOTSTRAP_ADMIN` → 開站登入 → 白名單新增 admin／user → 可清空或輪替 bootstrap。
 
 #### Speed Guide 實作要點
 
@@ -105,7 +103,7 @@ schema.sql
 - 推論：Fitness：`0`=倒轉拇指→`-1.5`，`1/2/3`=向上拇指→`0/1/2`；能量**同場 Z**；差值× `WEIGHT_SG_DELTA`  
 - CLI：`python speedguide_crawler.py`（可選 `--date` / `--course` 核對、`--races 1,2`）  
 
-Streamlit 多頁：`ui_app.py` 為入口（`start.sh`；勿用中文主檔名以免 Railway 502）；`pages/` 中文檔名＝側欄中文。
+Streamlit：`ui_app.py` + `views/`；`streamlit>=1.40`（`st.navigation`／`st.Page`）。
 
 ---
 
@@ -296,11 +294,12 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
-| 2026-09-05 | **UI 中文化**：側欄改中文檔名（`系統主頁.py` + `pages/*_中文.py`）；`start.sh` 改跑主頁 |
-| 2026-09-05 | **勝率**：場內 z → softmax（`SOFTMAX_WITHIN_RACE_Z`，T 預設 1.5），避免極端 80%/0.2% |
-| 2026-09-05 | **作戰室**：fixtures + `meeting_pipeline` + 賽日作戰室；本檔 §5.3 寫明賽後自動化開發切片 |
+| 2026-09-05 | **登入分權**：`auth_whitelist` + `AUTH_BOOTSTRAP_ADMIN`；user 僅賽日速覽；admin 全管理頁；`views/` + `st.navigation` |
+| 2026-09-05 | **UI**：登入頁／管理外殼／賽日速覽簡潔綠系；側欄中文由 Page title 提供 |
+| 2026-09-05 | **勝率**：場內 z → softmax（`SOFTMAX_WITHIN_RACE_Z`，T 預設 1.5） |
+| 2026-09-05 | **作戰室**：fixtures + meeting_pipeline；§5.3 賽後自動化開發切片 |
 | 2026-09-05 | Form Guide CMS + Form AI；預測快照結算；級賽 class 解析 |
 
 ---
 
-*最後更新：2026-09-05 — UI 中文側欄、勝率場內 z、賽後自動化開發流程入冊。*
+*最後更新：2026-09-05 — 登入分權、白名單、賽日速覽簡潔化。*

@@ -6,10 +6,10 @@ from __future__ import annotations
 import streamlit as st
 
 from meeting_pipeline import MeetingPipeline, STAGES, STATUS_OK, STATUS_SKIPPED
+from ui_theme import inject_admin_css, page_header
 
-st.set_page_config(page_title="賽日作戰室", layout="wide")
-st.title("🛰️ 賽日作戰室")
-st.caption("賽期表 → 各階段整備度 → 缺什麼跑什麼；可人工放行節點。Cron 稍後再接。")
+inject_admin_css()
+page_header("賽日作戰室", "賽期表 → 整備度 → 手動重跑／放行")
 
 pipe = MeetingPipeline()
 

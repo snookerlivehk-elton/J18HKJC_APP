@@ -1,0 +1,2 @@
+# pages/ 留空：導航改由 ui_app.py 的 st.navigation 顯式掛載 views/
+# （避免自動發現暴露全部管理頁給用戶）

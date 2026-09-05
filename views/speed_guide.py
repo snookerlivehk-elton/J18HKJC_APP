@@ -6,7 +6,6 @@ from config import ModelConfig
 from inference_engine import InferenceEngine
 import ui_utils
 
-st.set_page_config(page_title="官方速勢能量", layout="wide")
 st.title("⚡ 官方速勢能量（Speed Guide）")
 st.caption(
     "資料來自 HKJC CMS JSON（`sg_index` / `sg_race_N`），寫入 `upcoming_speedguide` 後直接進推論。"

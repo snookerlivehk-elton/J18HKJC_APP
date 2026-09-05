@@ -7,16 +7,11 @@ from factor_calculator import FactorCalculator
 from bucket_utils import make_bucket_id, make_band_bucket_id, is_valid_bucket, is_valid_band_bucket
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 
-st.set_page_config(page_title="資料控制中心", layout="wide")
+from ui_theme import inject_admin_css, page_header
 
-st.title("🎛️ 資料控制中心")
-st.markdown("""
-這個版面負責監控賽前資料（排位表、速勢能量）是否已經具備，並提供手動觸發爬蟲的快捷按鈕。
-這也是未來開發「全自動化觸發流程」的基礎監控面板。
-
-**賽日作戰室**（賽期表 + 各階段 readiness + 手動節點）：請開側欄「賽日作戰室」。
-""")
-st.page_link("pages/14_賽日作戰室.py", label="🛰️ 前往賽日作戰室", icon="🛰️")
+inject_admin_css()
+page_header("資料控制中心", "排位／速勢／Form Guide 快捷與整備度監控")
+st.caption("賽日作戰室請用側欄「營運 → 賽日作戰室」。")
 
 # ==========================================
 # 1. 爬蟲快捷控制按鈕

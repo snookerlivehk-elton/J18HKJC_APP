@@ -3,7 +3,6 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 import ui_utils
 
-st.set_page_config(page_title="騎師因子", layout="wide")
 st.title("🏇 騎師因子")
 st.caption("依排位騎師 + 距離帶粗桶（如 ST_SPRINT），匹配歷史 JOCKEY Z-Score。")
 

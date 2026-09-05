@@ -9,21 +9,21 @@ import pandas as pd
 from inference_engine import InferenceEngine
 from config import ModelConfig
 from bucket_utils import format_class_display
+from ui_theme import inject_admin_css, page_header
 
 try:
     import plotly.graph_objects as go
 except ImportError:
     go = None
 
-st.set_page_config(page_title="融合預測", layout="wide")
-
-st.title("🔮 賽事融合預測")
+inject_admin_css()
+page_header("融合預測", "總分排序 · 場內 z 勝率 · 雷達展示")
 st.markdown(
     """
 **三層勿混用**
-1. **因子／總分**（可正可負，歷史 Z + 加權）— 內部排序；**不**改成場內瓜分  
-2. **雷達半徑**（同場 0–1）— 只為圖形展示，不是勝率  
-3. **模型勝率**（場內 z → softmax，加總≈100%）— 給凱利／外傳；壓低極端 80%/0.2%  
+1. **因子／總分**（歷史 Z + 加權）— 排序  
+2. **雷達**（同場 0–1）— 只顯示  
+3. **模型勝率**（場內 z → softmax）— Kelly／外傳  
 """
 )
 

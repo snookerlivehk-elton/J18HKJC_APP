@@ -4,7 +4,6 @@ from factor_calculator import FactorCalculator
 from bucket_utils import GLOBAL_BUCKET
 import ui_utils
 
-st.set_page_config(page_title="人馬合作因子", layout="wide")
 st.title("🏇🤝 人馬合作因子")
 st.caption(
     f"白皮書：不分賽道距離，使用全域分桶 `{GLOBAL_BUCKET}`。"

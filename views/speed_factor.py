@@ -5,7 +5,6 @@ from factor_calculator import FactorCalculator
 from bucket_utils import normalize_person_name, GLOBAL_BUCKET
 import ui_utils
 
-st.set_page_config(page_title="速度指數", layout="wide")
 st.title("⏱️ 速度指數與絕對時間")
 st.caption(
     "Par Time + 當日場地偏差 → Speed Figure；FSR 校正末段含金量；"

@@ -15,8 +15,6 @@ try:
 except ImportError:
     px = None
 
-st.set_page_config(page_title="因子命中率", layout="wide")
-
 st.title("📊 因子命中率（賽前快照 → 賽後結算）")
 st.markdown(
     """

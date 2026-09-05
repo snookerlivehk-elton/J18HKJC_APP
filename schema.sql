@@ -343,3 +343,14 @@ CREATE TABLE meeting_pipeline (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (racing_date, course, stage)
 );
+
+-- 登入白名單（管理頁可編輯；Streamlit session 關卡）
+CREATE TABLE auth_whitelist (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL,
+    token_type VARCHAR(20) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    label TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);

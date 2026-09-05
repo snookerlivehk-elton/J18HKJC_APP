@@ -1,143 +1,66 @@
+"""
+J18 量化系統入口：登入關卡 + 依角色導航。
+用戶僅見賽日速覽；管理員見全部管理頁。
+"""
+from __future__ import annotations
+
 import streamlit as st
-import pandas as pd
-from config import ModelConfig
-from factor_calculator import FactorCalculator
 
-st.set_page_config(page_title="J18 量化系統", layout="wide")
-
-st.title("🏇 J18 量化預測系統")
-st.markdown("""
-**建議操作順序**
-1. 資料控制中心：抓取明日排位表  
-2. 本頁：載入歷史 → **重算並寫入因子分數**  
-3. **賽日速覽**（手機）：場次／勝率卡片＋雷達  
-4. **融合預測**：進階權重與 JSON 外傳  
-""")
-
-st.divider()
-
-st.subheader("📥 步驟 1: 載入歷史賽果")
-st.markdown("從資料庫讀取已抓取的歷史出賽紀錄（不打 J18 API）。")
-
-if st.button("🚀 載入歷史賽果數據", type="primary"):
-    progress_placeholder = st.empty()
-    progress_bar = st.progress(0)
-
-    with st.spinner("系統運算中..."):
-        try:
-            calc = FactorCalculator()
-
-            progress_placeholder.info("🔄 步驟 1/3: 讀取資料庫...")
-            progress_bar.progress(33)
-
-            df = calc.fetch_historical_data()
-
-            if df.empty:
-                progress_placeholder.error("找不到歷史數據！請先執行 `python batch_crawler.py`。")
-                progress_bar.empty()
-            else:
-                progress_placeholder.info(f"🔄 步驟 2/3: 已讀 {len(df)} 筆，計算 Base Score...")
-                progress_bar.progress(66)
-
-                df = calc.calculate_base_score(df)
-
-                progress_placeholder.info("🔄 步驟 3/3: 整理標準 Bucket 快取...")
-                progress_bar.progress(90)
-
-                st.session_state['raw_df'] = df
-                st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
-                st.session_state['band_buckets'] = sorted(df['band_bucket_id'].unique().tolist())
-
-                progress_bar.progress(100)
-                progress_placeholder.success(
-                    f"✅ 載入 {len(df)} 筆紀錄，"
-                    f"細桶 {len(st.session_state['buckets'])}、"
-                    f"粗桶 {len(st.session_state['band_buckets'])}。"
-                    f" 粗桶範例：`{st.session_state['band_buckets'][:6]}`"
-                )
-
-        except Exception as e:
-            progress_placeholder.error(f"發生錯誤: {e}")
-            progress_bar.empty()
-
-st.divider()
-
-st.subheader("🧠 步驟 2: 重算並寫入因子分數（供預測查表）")
-st.markdown(
-    "計算騎師 / 練馬師 / 騎練 / 檔位 / 人馬 / **馬匹近績** Z-Score，寫入 `factor_scores`。"
-    "騎練與近績用距離帶粗桶；檔位用細桶。推論頁只讀這張表。"
+from auth_utils import (
+    ROLE_ADMIN,
+    is_logged_in,
+    current_role,
+    render_login_page,
+    render_sidebar_account,
 )
 
-if st.button("💾 重算並寫入 factor_scores", type="primary"):
-    with st.spinner("計算因子並寫入資料庫（含近績距離帶）..."):
-        try:
-            calc = FactorCalculator()
-            j, t, s, d, hj, h, p, sp = calc.run_all_factors(persist=True)
-            if j is None:
-                st.error("沒有歷史資料可計算。請先跑批次爬蟲。")
-            else:
-                n = (
-                    len(j) + len(t) + len(s) + len(d)
-                    + (0 if hj is None else len(hj))
-                    + (0 if h is None else len(h))
-                    + (0 if p is None else len(p))
-                    + (0 if sp is None else len(sp))
-                )
-                st.session_state['j_df_indep'] = j
-                st.session_state['t_df_indep'] = t
-                st.session_state['s_df_indep'] = s
-                st.session_state['d_df_indep'] = d
-                if hj is not None:
-                    st.session_state['hj_df_indep'] = hj
-                if h is not None:
-                    st.session_state['h_df_indep'] = h
-                if p is not None:
-                    st.session_state['pace_df'] = p
-                if sp is not None:
-                    st.session_state['speed_df'] = sp
-                # 同步 raw_df 方便各診斷頁
-                if 'raw_df' not in st.session_state:
-                    df = calc.fetch_historical_data()
-                    if not df.empty:
-                        st.session_state['raw_df'] = calc.calculate_base_score(df)
-                        st.session_state['buckets'] = sorted(df['bucket_id'].unique().tolist())
-                        st.session_state['band_buckets'] = sorted(df['band_bucket_id'].unique().tolist())
-                st.success(
-                    f"✅ 已寫入約 {n} 筆（騎練/近績=距離帶；檔位=細桶；人馬=GLOBAL）。"
-                    "可前往推論儀表板。"
-                )
-                st.dataframe(
-                    j.sort_values('z_score', ascending=False).head(8)[
-                        ['bucket_id', 'entity_name', 'actual_runs', 'z_score']
-                    ],
-                    use_container_width=True,
-                )
-        except Exception as e:
-            st.error(f"寫入失敗: {e}")
+st.set_page_config(
+    page_title="J18 量化系統",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# 顯示目前庫內狀態
-try:
-    calc = FactorCalculator()
-    existing = calc.load_factor_scores()
-    if not existing.empty:
-        st.caption(
-            f"資料庫現有 factor_scores：{len(existing)} 筆，"
-            f"類型 {sorted(existing['factor_type'].unique().tolist())}，"
-            f"bucket 數 {existing['bucket_id'].nunique()}"
-        )
-except Exception:
-    pass
+if not is_logged_in():
+    render_login_page()
+    st.stop()
 
-with st.expander("目前 ModelConfig 權重（推論用）"):
-    st.json({
-        "WEIGHT_JOCKEY": ModelConfig.WEIGHT_JOCKEY,
-        "WEIGHT_TRAINER": ModelConfig.WEIGHT_TRAINER,
-        "WEIGHT_SYNERGY": ModelConfig.WEIGHT_SYNERGY,
-        "WEIGHT_DRAW": ModelConfig.WEIGHT_DRAW,
-        "WEIGHT_RECENT_FORM": ModelConfig.WEIGHT_RECENT_FORM,
-        "WEIGHT_PACE": ModelConfig.WEIGHT_PACE,
-        "WEIGHT_SPEED_FIGURE": ModelConfig.WEIGHT_SPEED_FIGURE,
-        "WEIGHT_SG_FORM": ModelConfig.WEIGHT_SG_FORM,
-        "WEIGHT_SG_ENERGY": ModelConfig.WEIGHT_SG_ENERGY,
-        "WEIGHT_SG_DELTA": ModelConfig.WEIGHT_SG_DELTA,
-    })
+role = current_role()
+render_sidebar_account()
+
+# 依角色組裝導航（顯式 Page，不使用 pages/ 自動發現）
+home = st.Page("views/home.py", title="系統主頁", default=(role == ROLE_ADMIN))
+data_control = st.Page("views/data_control.py", title="資料控制中心")
+meeting_ops = st.Page("views/meeting_ops.py", title="賽日作戰室")
+whitelist = st.Page("views/whitelist.py", title="白名單")
+raceday = st.Page(
+    "views/raceday.py",
+    title="賽日速覽",
+    default=(role != ROLE_ADMIN),
+)
+inference = st.Page("views/inference.py", title="融合預測")
+calibration = st.Page("views/calibration.py", title="因子命中率")
+form_ai = st.Page("views/form_ai.py", title="賽績 AI 評價")
+jockey = st.Page("views/jockey_factor.py", title="騎師因子")
+trainer = st.Page("views/trainer_factor.py", title="練馬師因子")
+synergy = st.Page("views/synergy_factor.py", title="騎練合作")
+draw = st.Page("views/draw_factor.py", title="檔位因子")
+hj = st.Page("views/horse_jockey_factor.py", title="人馬合作")
+form_nlp = st.Page("views/form_nlp_factor.py", title="近績與 NLP")
+pace = st.Page("views/pace_factor.py", title="步速形勢")
+speed = st.Page("views/speed_factor.py", title="速度指數")
+sg = st.Page("views/speed_guide.py", title="官方速勢能量")
+
+if role == ROLE_ADMIN:
+    nav = st.navigation(
+        {
+            "系統": [home, whitelist],
+            "營運": [data_control, meeting_ops],
+            "預測": [raceday, inference, calibration, form_ai],
+            "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
+        }
+    )
+else:
+    # 用戶：僅賽日速覽
+    nav = st.navigation([raceday])
+
+nav.run()
