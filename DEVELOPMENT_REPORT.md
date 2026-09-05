@@ -173,20 +173,27 @@ OPENAI_MODEL=gpt-4o-mini
 
 ---
 
-## 5. 全自動排程藍圖（尚未全部落地）
+## 5. 全自動排程藍圖
 
-目標仍是 Cron，無需人工：
+### 已落地（手動作戰室）
+
+- `fixture_crawler.py` → `fixtures`（HKJC Fixture.aspx 整季）
+- `meeting_pipeline.py`：`meeting_readiness` + 各 stage 狀態 + 手動動作
+- UI：`pages/14_Meeting_Ops.py`（賽日作戰室）
+
+階段：FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS → NLP → FORM_AI → SNAPSHOT → RESULTS → SETTLED
+
+### 尚未落地（Cron tick）
+
+目標仍是短輪詢 Cron，無需人工：
 
 | 時機 | 動作 |
 |------|------|
-| 季前 | `fixture_crawler` → `fixtures` |
-| 賽前 ~2 日 | `racecard_crawler` + 可選 Pace 投影 |
-| 賽前 ~1 日（約中午） | `speedguide_crawler`（CMS JSON）／formguide（解析仍偏骨架） |
-| 賽前（排位齊） | `FactorCalibration.snapshot_meeting` 鎖預測快照 |
-| 賽後隔日 | `batch_crawler` → `run_all_factors` → `settle_pending` 結算命中 |
-| 賽日前 | 賽日 NLP 解析 → 再重算 HORSE/SPEED |
-
-`formguide_crawler` / 賽前 NLP：**未完整接進推論**。
+| 季前／每周 | `fixture_crawler` → `fixtures` |
+| 賽前 ~2 日 | `racecard_crawler` |
+| 賽前 ~24–36h | `speedguide_crawler` / `formguide_crawler`（未上架則 waiting 重試） |
+| 排位齊後 | factors／Form AI → `snapshot_meeting` |
+| 賽後隔日 | `batch_crawler` → `settle_pending` |
 
 ---
 
@@ -207,8 +214,8 @@ OPENAI_MODEL=gpt-4o-mini
 
 ### P2 — 自動化與產品
 
-- [ ] Railway Cron / GitHub Actions：賽後重算、賽日 NLP  
-- [ ] formguide 賽前標籤進推論  
+- [ ] Cron tick 接 `meeting_pipeline`（依 readiness 重試，非無限爬）  
+- [ ] formguide／Form AI 訊號進推論權重（現多為旁路顯示）  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
 
 ---

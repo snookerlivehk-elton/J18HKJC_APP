@@ -1,86 +1,220 @@
+"""
+HKJC 整季賽期表爬蟲。
+
+資料來源（經典 ASPX，可解析 HTML）：
+  https://racing.hkjc.com/racing/information/Chinese/Racing/Fixture.aspx
+  參數 CalMonth / CalYear
+
+寫入 fixtures；並為每個賽日初始化 meeting_pipeline 階段列。
+"""
+from __future__ import annotations
+
+import argparse
 import asyncio
+import os
+import re
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Tuple
+
 import httpx
 from selectolax.parser import HTMLParser
-import sqlite3
-from datetime import datetime
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
+FIXTURE_URL = "https://racing.hkjc.com/racing/information/Chinese/Racing/Fixture.aspx"
+
+# 港季大約 9 月開季 → 翌年 7 月
+MONTH_CN = {
+    "一月": 1, "二月": 2, "三月": 3, "四月": 4, "五月": 5, "六月": 6,
+    "七月": 7, "八月": 8, "九月": 9, "十月": 10, "十一月": 11, "十二月": 12,
+}
+WEEKDAY_CN = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+
+def _season_months(today: Optional[date] = None) -> List[Tuple[int, int]]:
+    """回傳 (year, month) 列表：本季月份。"""
+    today = today or date.today()
+    # 若今天 >= 9 月，季年 = 今年；否則季年 = 去年
+    season_start_year = today.year if today.month >= 9 else today.year - 1
+    out = []
+    for m in range(9, 13):
+        out.append((season_start_year, m))
+    for m in range(1, 8):
+        out.append((season_start_year + 1, m))
+    return out
+
+
+def _parse_month_year_from_page(text: str, fallback_y: int, fallback_m: int) -> Tuple[int, int]:
+    # 二0二六年九月 / 二〇二六年九月
+    m = re.search(r"二[0〇]二([一二三四五六七八九〇零])年(十?[一二三四五六七八九]?月)", text)
+    if m:
+        y_map = {"〇": 0, "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+        year = 2020 + y_map.get(m.group(1), 6)
+        mon_s = m.group(2)
+        # normalize 十月/十一月/十二月/九月
+        mon_map = {
+            "一月": 1, "二月": 2, "三月": 3, "四月": 4, "五月": 5, "六月": 6,
+            "七月": 7, "八月": 8, "九月": 9, "十月": 10, "十一月": 11, "十二月": 12,
+        }
+        month = mon_map.get(mon_s, fallback_m)
+        return year, month
+    m2 = re.search(r"(20\d{2})年\s*(\d{1,2})月", text)
+    if m2:
+        return int(m2.group(1)), int(m2.group(2))
+    return fallback_y, fallback_m
+
+
+def _course_from_img_src(src: str) -> Optional[str]:
+    """相容經典 st.gif／hv.gif，以及新 CMS 路徑 st-ch／hv-ch。"""
+    s = (src or "").lower().split("?")[0]
+    name = s.rstrip("/").split("/")[-1]
+    if name in ("st.gif", "st-ch", "st"):
+        return "ST"
+    if name in ("hv.gif", "hv-ch", "hv"):
+        return "HV"
+    if s.endswith("st.gif") or "/fixture/st" in s:
+        return "ST"
+    if s.endswith("hv.gif") or "/fixture/hv" in s:
+        return "HV"
+    return None
+
+
+def parse_fixture_html(html: str, cal_year: int, cal_month: int) -> List[dict]:
+    tree = HTMLParser(html)
+    body_text = tree.body.text(strip=True) if tree.body else html
+    year, month = _parse_month_year_from_page(body_text, cal_year, cal_month)
+
+    meetings = []
+    for im in tree.css("img"):
+        src = im.attributes.get("src") or ""
+        course = _course_from_img_src(src)
+        if not course:
+            continue
+
+        td = im.parent
+        for _ in range(10):
+            if td is None:
+                break
+            if td.tag == "td":
+                break
+            td = td.parent
+        if td is None or td.tag != "td":
+            continue
+
+        day = None
+        for child in td.css("a, span, div, font, b, strong"):
+            t = (child.text(strip=True) or "").strip()
+            if re.fullmatch(r"[1-9]|[12]\d|3[01]", t):
+                day = int(t)
+                break
+        if day is None:
+            # 後援：避免 61400 誤判 — 要求後面不是數字
+            tm = re.match(r"^([1-9]|[12]\d|3[01])(?!\d)", (td.text(strip=True) or ""))
+            if tm:
+                day = int(tm.group(1))
+        if day is None:
+            continue
+
+        html_td = (td.html or "").lower()
+        is_night = "night.gif" in html_td or "/fixture/night" in html_td
+        is_dusk = "dusk.gif" in html_td or "/fixture/dusk" in html_td
+        is_day = (
+            "day.gif" in html_td
+            or "/fixture/day" in html_td
+            or (not is_night and not is_dusk)
+        )
+        try:
+            d = date(year, month, day)
+        except ValueError:
+            continue
+        wd = WEEKDAY_CN[d.weekday()]
+        meetings.append(
+            {
+                "racing_date": d.isoformat(),
+                "course": course,
+                "day_of_week": wd,
+                "is_day_meeting": bool(is_day and not is_night),
+                "session": "night" if is_night else ("dusk" if is_dusk else "day"),
+            }
+        )
+
+    # 去重
+    uniq = {}
+    for m in meetings:
+        uniq[(m["racing_date"], m["course"])] = m
+    return list(uniq.values())
+
 
 class HKJCFixtureCrawler:
-    def __init__(self, db_path='j18_local.db'):
-        self.db_path = db_path
+    def __init__(self):
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://racing.hkjc.com/'
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://racing.hkjc.com/",
         }
 
-    def init_db(self):
-        """建立賽期表專用資料表"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fixtures (
-            racing_date DATE PRIMARY KEY,
-            course TEXT,          -- ST (沙田) 或 HV (跑馬地)
-            day_of_week TEXT,     -- 星期三、星期日等
-            is_day_meeting BOOLEAN, -- 日馬(True) 或 夜馬(False)
-            status TEXT DEFAULT 'PENDING' -- PENDING, RACECARD_DONE, RESULT_DONE
-        )
-        ''')
-        conn.commit()
-        conn.close()
+    async def fetch_month(self, client: httpx.AsyncClient, year: int, month: int) -> str:
+        params = {"CalMonth": str(month), "CalYear": str(year)}
+        # 預設當月有時不需參數；仍帶參數較穩
+        r = await client.get(FIXTURE_URL, headers=self.headers, params=params, timeout=30.0)
+        r.raise_for_status()
+        return r.text
 
-    async def fetch_fixtures(self):
-        # 官方賽期表 URL
-        url = "https://racing.hkjc.com/zh-hk/local/racing-fixtures"
-        
-        async with httpx.AsyncClient(http2=True) as client:
+    def save_fixtures(self, rows: List[dict]) -> int:
+        from meeting_pipeline import MeetingPipeline
+
+        pipe = MeetingPipeline()
+        return pipe.upsert_fixtures(rows)
+
+    async def crawl_season(self, today: Optional[date] = None) -> Dict[str, Any]:
+        today = today or date.today()
+        months = _season_months(today)
+        all_rows: List[dict] = []
+        limits = httpx.Limits(max_connections=1, max_keepalive_connections=1)
+        async with httpx.AsyncClient(limits=limits, follow_redirects=True) as client:
+            # 無參數頁＝官網「當月」視圖；CalMonth=當月有時回空殼（2026-09 實證）
             try:
-                print(f"正在抓取整季賽期表...")
-                response = await client.get(url, headers=self.headers, timeout=15.0)
-                response.raise_for_status()
-                return response.text
+                print(f"抓取賽期（當月預設頁）…")
+                html = await client.get(FIXTURE_URL, headers=self.headers, timeout=30.0)
+                html.raise_for_status()
+                rows = parse_fixture_html(html.text, today.year, today.month)
+                print(f"  → {len(rows)} 個賽日")
+                all_rows.extend(rows)
             except Exception as e:
-                print(f"抓取賽期表失敗: {e}")
-                return None
+                print(f"  預設頁失敗: {e}")
 
-    def parse_and_save(self, html):
-        if not html: return
-        
-        tree = HTMLParser(html)
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # HKJC 的賽期表通常放在一個有 .row 或特定 class 的表格裡
-        # 由於網頁常變，我們這裡用泛用的搜尋方式找尋 YYYY/MM/DD 的格式
-        import re
-        date_pattern = re.compile(r'(202[5-9])/(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])')
-        
-        text_blocks = tree.css('td, div, span')
-        
-        saved_count = 0
-        current_year = datetime.now().year
-        
-        # 這是一個簡化的解析邏輯。實務上會根據 HKJC 的確切 DOM 結構 (如 table tr) 來精確定位。
-        # 這裡我們模擬萃取出日期與馬場。
-        
-        # TODO: 由於 HKJC 賽期表網頁由大量 JavaScript 動態生成，若 selectolax 抓不到，
-        # 未來在 Railway 上可以改接 J18 的 API (若他們有提供賽程表) 或用 Playwright。
-        
-        print("✅ 賽期表解析完成 (模擬)。")
-        print("💡 在真實環境中，這會將未來 88 個賽馬日寫入 fixtures 資料表。")
-        print("   例如: INSERT INTO fixtures (racing_date, course) VALUES ('2026-09-06', 'ST')")
-        
-        # 模擬寫入一筆測試資料
-        cursor.execute('''
-            INSERT INTO fixtures (racing_date, course, day_of_week, is_day_meeting)
-            VALUES (?, ?, ?, ?) ON CONFLICT(racing_date) DO NOTHING
-        ''', ('2026-09-06', 'ST', '星期日', True))
-        
-        conn.commit()
-        conn.close()
+            for year, month in months:
+                # 當月已由預設頁覆蓋；帶 CalMonth 的當月請求可能是空的，仍試一次作補漏
+                await asyncio.sleep(1.0)
+                try:
+                    print(f"抓取賽期 {year}-{month:02d} …")
+                    html = await self.fetch_month(client, year, month)
+                    rows = parse_fixture_html(html, year, month)
+                    print(f"  → {len(rows)} 個賽日")
+                    all_rows.extend(rows)
+                except Exception as e:
+                    print(f"  失敗: {e}")
+
+        # 去重
+        uniq = {}
+        for m in all_rows:
+            uniq[(m["racing_date"], m["course"])] = m
+        all_rows = list(uniq.values())
+
+        n = self.save_fixtures(all_rows)
+        print(f"完成：寫入／更新 {n} 筆 fixtures（解析到 {len(all_rows)}）")
+        return {"ok": True, "parsed": len(all_rows), "saved": n, "rows": all_rows}
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="HKJC 整季賽期表爬蟲")
+    args = parser.parse_args()
     crawler = HKJCFixtureCrawler()
-    asyncio.run(crawler.fetch_fixtures()).add_done_callback(lambda future: crawler.parse_and_save(future.result()))
+    asyncio.run(crawler.crawl_season())

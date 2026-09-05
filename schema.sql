@@ -320,3 +320,26 @@ CREATE TABLE prediction_snapshots (
 );
 CREATE INDEX idx_pred_snap_race ON prediction_snapshots(race_id);
 CREATE INDEX idx_pred_snap_batch ON prediction_snapshots(batch_id);
+
+-- 賽期表 + 賽日管線狀態（作戰室）
+CREATE TABLE fixtures (
+    racing_date DATE NOT NULL,
+    course VARCHAR(10) NOT NULL,
+    day_of_week VARCHAR(20),
+    is_day_meeting BOOLEAN,
+    session VARCHAR(20),
+    status VARCHAR(40) DEFAULT 'PENDING',
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (racing_date, course)
+);
+
+CREATE TABLE meeting_pipeline (
+    racing_date DATE NOT NULL,
+    course VARCHAR(10) NOT NULL,
+    stage VARCHAR(40) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    detail TEXT,
+    manual_override BOOLEAN DEFAULT FALSE,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (racing_date, course, stage)
+);
