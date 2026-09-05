@@ -137,12 +137,14 @@ Streamlit：`ui_app.py` + `views/`；`streamlit>=1.40`（`st.navigation`／`st.P
 USE_SQLITE=false
 DATABASE_URL=...
 DATABASE_URL_SYNC=...   # SQLAlchemy 用的同步 URL
+J18_API_BASE_URL=...    # 公司內 J18 歷史 API 源站或完整 historyResult URL（費用敏感，勿寫死／勿公開）
 OPENAI_API_KEY=...      # 可選但 NLP 需要
 OPENAI_MODEL=gpt-4o-mini
+AUTH_BOOTSTRAP_ADMIN=...  # 僅庫內尚無 admin 時的開機通行碼
 # OpenRouter 時設 OPENAI_BASE_URL + 對應 model 名
 ```
 
-本地 `.env` 同上；**勿 commit**。密碼若曾貼在聊天室請輪替。
+本地 `.env` 同上；**勿 commit**。`J18_API_BASE_URL` 可填 `https://api.j18.hk`（自動接 path）或完整 `…/historyResult`。密碼若曾貼在聊天室請輪替。
 
 ---
 

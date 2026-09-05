@@ -13,6 +13,23 @@ logger = logging.getLogger(__name__)
 USE_SQLITE = os.getenv("USE_SQLITE", "true").lower() == "true"
 SQLITE_DB_PATH = "j18_local.db"
 
+# 公司內 J18 歷史 API（費用敏感）：只從環境變數讀取，勿把正式網址寫死在 repo
+_DEFAULT_J18_ORIGIN = "https://api.j18.hk"
+_J18_HISTORY_PATH = "/calculate/v1/historyResult"
+
+
+def get_j18_history_result_url() -> str:
+    """
+    J18_API_BASE_URL 可為：
+    - 源站：https://api.j18.hk  → 自動接 /calculate/v1/historyResult
+    - 完整 endpoint：…/historyResult
+    """
+    raw = (os.getenv("J18_API_BASE_URL") or _DEFAULT_J18_ORIGIN).strip().rstrip("/")
+    if raw.lower().endswith("historyresult"):
+        return raw
+    return f"{raw}{_J18_HISTORY_PATH}"
+
+
 class J18ETLPipeline:
     def __init__(self, db_pool=None):
         """
@@ -20,7 +37,7 @@ class J18ETLPipeline:
         :param db_pool: asyncpg database pool (供 PostgreSQL 使用)，若 USE_SQLITE 為 True 則略過
         """
         self.db_pool = db_pool
-        self.base_url = "https://api.j18.hk/calculate/v1/historyResult"
+        self.base_url = get_j18_history_result_url()
         
         if USE_SQLITE:
             self._init_sqlite_db()

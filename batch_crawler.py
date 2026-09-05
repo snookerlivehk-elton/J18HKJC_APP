@@ -6,7 +6,7 @@ import asyncpg
 import httpx
 import os
 
-from etl_pipeline import J18ETLPipeline
+from etl_pipeline import J18ETLPipeline, get_j18_history_result_url
 
 # 設定日誌
 logging.basicConfig(
@@ -64,7 +64,7 @@ class RaceCrawler:
 
     async def probe_date(self, date_str: str) -> int:
         """探測特定日期是否有賽事，若有則回傳總場數，否則回傳 0"""
-        url = f"https://api.j18.hk/calculate/v1/historyResult?date={date_str}&num=1"
+        url = f"{get_j18_history_result_url()}?date={date_str}&num=1"
         try:
             # 強制設定連接數限制，保證不會同時發出多個請求
             limits = httpx.Limits(max_connections=1, max_keepalive_connections=1)
