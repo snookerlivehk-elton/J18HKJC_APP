@@ -204,10 +204,6 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
             "只傳勝率與總分；即時賠率由對方系統接入。"
         )
 
-    if go is None:
-        st.warning("未安裝 plotly，無法顯示雷達圖。請把 `plotly` 加入 requirements 後重新部署。")
-        return
-
     st.subheader("因子雷達圖")
     default_top = [int(x) for x in predictions_df.head(3)["馬號"].tolist()]
     all_labels = {
@@ -225,10 +221,12 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         st.info("請至少選一匹馬。")
         return
 
-    st.plotly_chart(
-        build_radar_figure(predictions_df, pick, height=540, mobile=False),
-        use_container_width=True,
-    )
+    fig = build_radar_figure(predictions_df, pick, height=540, mobile=False)
+    if fig is None:
+        st.warning("未安裝 plotly，無法顯示雷達圖。請把 `plotly` 加入 requirements 後重新部署。")
+        return
+
+    st.plotly_chart(fig, use_container_width=True)
 
     focus = int(pick[0])
     drow = predictions_df[predictions_df["馬號"].astype(int) == focus].iloc[0]
