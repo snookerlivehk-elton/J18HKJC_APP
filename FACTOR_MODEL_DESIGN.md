@@ -154,10 +154,10 @@
 ### 2. 完成時間的標準化 (Speed Figure Calculation)
 完成時間必須經過兩層校準，方能產生絕對能力分數：
 - **標準時間差 (Par Time Delta)**：
-  先計算出特定分桶 `(course + track + distance_m + class)` 的歷史平均完成時間作為 `Par Time`。將馬匹的實際時間減去 Par Time。
+  先以分桶 `(venue ST/HV + track + distance_m + class_num)` 的完成時間**分位數**（預設中位數；樣本不足回退粗桶）作為 `Par Time`。`time_delta = Par − 實際時間`（正＝較快）。
 - **當日場地偏差修正 (Daily Track Variant)**：
-  同一天的場地可能特別快（如壓實的草地）或特別慢。計算該賽馬日所有賽事時間相對於 Par Time 的平均偏差。
-- **最終速度指數**：`Speed Figure = Par Time Delta - Daily Track Variant`。將其轉化為 Z-Score。
+  同一天的場地可能特別快（如壓實的草地）或特別慢。按 `racing_date + venue + track` 對 time_delta 取平均偏差。
+- **最終速度指數**：`Speed Figure = time_delta − Daily Track Variant`。將其轉化為 Z-Score。
 
 ### 3. 分段時間與戰略剝離 (Finishing Speed Ratio, FSR)
 為了判斷一匹馬的末段時間 (L400m) 是否真的具備爆發力，還是只因為早段步速太慢而得益，引入 FSR 進行評估：

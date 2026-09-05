@@ -7,8 +7,8 @@ import ui_utils
 
 st.title("⏱️ 速度指數與絕對時間")
 st.caption(
-    "Par Time + 當日場地偏差 → Speed Figure；FSR 校正末段含金量；"
-    "可選 NLP 受阻時間補償。選排位後顯示 Peak / EMA / FSR。"
+    "Par＝ST/HV＋跑道＋距離＋班次碼的時間分位數（樣本不足回退粗桶）；"
+    "再扣當日場地偏差 → Speed Figure；FSR 校正；可選 NLP 時間補償。"
 )
 
 if not ui_utils.ensure_history_loaded():
@@ -23,6 +23,16 @@ with st.expander("⚙️ 參數調節", expanded=False):
     )
     ModelConfig.TIME_EMA_ALPHA = st.slider(
         "EMA Alpha", 0.1, 1.0, ModelConfig.TIME_EMA_ALPHA, 0.1
+    )
+    ModelConfig.SPEED_PAR_PERCENTILE = st.slider(
+        "Par 分位數（50＝中位數）",
+        30.0, 70.0, float(ModelConfig.SPEED_PAR_PERCENTILE), 5.0,
+        help="愈低＝Par 愈快（要求更高）；愈高＝Par 愈慢。",
+    )
+    ModelConfig.SPEED_PAR_MIN_N = st.number_input(
+        "細桶最少樣本數",
+        min_value=10, max_value=200, value=int(ModelConfig.SPEED_PAR_MIN_N), step=5,
+        help="不足則回退：同場地跑道距離／距離帶+班次／距離帶。",
     )
     apply_nlp = st.checkbox(
         "套用 NLP 受阻時間補償",
@@ -151,8 +161,11 @@ with st.expander("設計說明與優化建議"):
 - 寫入 `factor_scores`（SPEED）並進推論 `WEIGHT_SPEED_FIGURE`
 - 排位表顯示 Peak / EMA / FSR / NLP補償場
 
+**本版 Par 桶**
+- venue＝`extract_venue(race_id)`（ST/HV），班次＝`class_num`
+- Par＝桶內完成時間分位數（預設 50）；`n < SPEED_PAR_MIN_N` 回退粗桶
+
 **後續優化**
-- Par Time 改距離帶＋班次分位數，減少小樣本班次噪音
 - L400 改固定末 400m（非「最後一個 stage」近似）
 - Peak 與 EMA 雙特徵進 ML（現推論主要用 EMA→Z）
 """

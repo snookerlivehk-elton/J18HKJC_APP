@@ -20,6 +20,8 @@ from bucket_utils import (
     distance_band,
     parse_bucket_parts,
     parse_class_num,
+    extract_venue,
+    normalize_track,
 )
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
@@ -1405,7 +1407,13 @@ class FactorCalculator:
         return {"heat": heat, "scenario": scenario, "by_horse": by_horse, "top_n": top_n}
 
     def extract_time_and_fsr(self, df: pd.DataFrame) -> pd.DataFrame:
-        """提取完成時間與末段時間，計算速度指數與 FSR"""
+        """提取完成時間與末段時間，計算速度指數與 FSR。
+
+        Par Time（小切片修正）：
+        - 場地用 race_id 抽 ST/HV（勿用 J18 的「草地」course）
+        - 班次用 class_num（勿用原始 race_class 字串）
+        - Par = 桶內完成時間分位數（預設中位數），桶樣本 < MIN_N 則回退粗桶
+        """
         def time_to_seconds(t_str):
             if not isinstance(t_str, str) or not t_str:
                 return np.nan
@@ -1436,30 +1444,69 @@ class FactorCalculator:
         df = df.copy()
         df['final_time_sec'] = df['final_time'].apply(time_to_seconds)
         df['l400m_time_sec'] = df['raw_json'].apply(get_l400m_time)
-        
+
         # 計算平均速度 (m/s) 與 末段速度 (m/s)
-        # 假設 L400m 距離為 400 米
+        # 假設 L400m 距離為 400 米（後續可再精修真實末段距離）
         df['avg_speed'] = df['distance_m'] / df['final_time_sec']
         df['l400m_speed'] = 400.0 / df['l400m_time_sec']
-        
+
         # 計算 FSR (Finishing Speed Ratio)
         df['fsr'] = (df['avg_speed'] / df['l400m_speed']) * 100.0
-        
-        # ==========================================
-        # 計算 Speed Figure (絕對時間標準化)
-        # ==========================================
-        # 1. 計算 Par Time (同場地、同賽道、同距離、同班次的平均時間)
-        par_times = df.groupby(['course', 'track', 'distance_m', 'race_class'])['final_time_sec'].transform('mean')
-        df['time_delta'] = par_times - df['final_time_sec'] # 正數代表比平均快
-        
-        # 2. 計算 Daily Track Variant (當日場地偏差)
-        # 同一天同場地的平均 time_delta
-        daily_variant = df.groupby(['racing_date', 'course', 'track'])['time_delta'].transform('mean')
-        
-        # 3. 速度指數 (Speed Figure) = 自身時間差 - 當日場地偏差
-        df['speed_figure'] = df['time_delta'] - daily_variant
 
-        # 4. FSR 校正（白皮書：慢步速懲罰／快步速獎勵）
+        # ---------- Par 桶鍵 ----------
+        if 'class_num' not in df.columns:
+            if 'race_class' in df.columns:
+                df['class_num'] = df['race_class'].apply(self._parse_class_num)
+            else:
+                df['class_num'] = np.nan
+        rids = df['race_id'] if 'race_id' in df.columns else pd.Series([None] * len(df), index=df.index)
+        courses = df['course'] if 'course' in df.columns else pd.Series([None] * len(df), index=df.index)
+        df['venue'] = [extract_venue(race_id=a, course=b) for a, b in zip(rids, courses)]
+        if 'track' in df.columns:
+            df['track_norm'] = df['track'].apply(normalize_track)
+        else:
+            df['track_norm'] = 'UNK'
+        df['dist_band'] = df['distance_m'].apply(distance_band)
+
+        q = float(getattr(ModelConfig, 'SPEED_PAR_PERCENTILE', 50.0))
+        min_n = int(getattr(ModelConfig, 'SPEED_PAR_MIN_N', 30))
+        min_n_coarse = max(15, min_n // 2)
+
+        def _par_for_groups(frame: pd.DataFrame, keys: list, min_count: int) -> pd.Series:
+            out = pd.Series(np.nan, index=frame.index, dtype=float)
+            # dropna=False：保留 class_num 缺失為一組，但仍受 min_count 約束
+            for _, g in frame.groupby(keys, dropna=False):
+                s = pd.to_numeric(g['final_time_sec'], errors='coerce').dropna()
+                if len(s) < min_count:
+                    continue
+                val = float(np.nanpercentile(s.to_numpy(dtype=float), q))
+                out.loc[g.index] = val
+            return out
+
+        # 細 → 粗回退
+        par = _par_for_groups(df, ['venue', 'track_norm', 'distance_m', 'class_num'], min_n)
+        for keys, nreq in (
+            (['venue', 'track_norm', 'distance_m'], min_n),
+            (['venue', 'dist_band', 'class_num'], min_n_coarse),
+            (['venue', 'dist_band'], min_n_coarse),
+            (['venue', 'distance_m'], min_n_coarse),
+        ):
+            miss = par.isna() & df['final_time_sec'].notna()
+            if not miss.any():
+                break
+            fill = _par_for_groups(df, keys, nreq)
+            par = par.where(~miss, fill)
+
+        df['par_time'] = par
+        df['time_delta'] = df['par_time'] - df['final_time_sec']  # 正＝比 Par 快
+        # 當日場地偏差：用 venue（ST/HV）+ 正規化跑道
+        daily_variant = df.groupby(
+            ['racing_date', 'venue', 'track_norm'], dropna=False
+        )['time_delta'].transform('mean')
+        df['daily_variant'] = daily_variant
+        df['speed_figure'] = df['time_delta'] - df['daily_variant']
+
+        # FSR 校正（白皮書：慢步速懲罰／快步速獎勵）
         fsr = df['fsr'].clip(lower=85.0, upper=120.0)
         df['fsr_clipped'] = fsr
         pen = float(ModelConfig.FSR_PENALTY_THRESHOLD)

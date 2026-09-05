@@ -58,7 +58,7 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | HORSE | 距離帶粗桶 | 馬名 | `calculate_horse_factor`（可 NLP 受阻 + 降班） |
 | HORSE_JOCKEY | GLOBAL | `馬|騎` | 合作 Z + 換人 Δ（匹配時近距加權） |
 | PACE | GLOBAL | 馬名 | 跑法／追回 Z；頁面另算同場步速熱度 |
-| SPEED | GLOBAL | 馬名 | Peak/EMA；FSR 校正；可選 NLP 時間補償 |
+| SPEED | GLOBAL | 馬名 | Peak/EMA；Par＝venue+track+距離+班次**分位數**（樣本不足回退）；FSR；可選 NLP |
 
 推論加權見 `config.py`：`WEIGHT_*`（含 `WEIGHT_RECENT_FORM`、`WEIGHT_PACE`、`WEIGHT_SPEED_FIGURE`、Speed Guide 三項）。
 
@@ -294,7 +294,8 @@ OpenAPI：部署後 `/docs`。
 ### P1 — 模型品質
 
 - [ ] 步速形勢加權併入推論總分（現多在 Pace 頁）  
-- [ ] SPEED：固定末 400m、Par Time 分位數  
+- [x] SPEED：Par 桶修正（ST/HV＋class_num）+ 分位數／最少樣本回退（`SPEED_PAR_*`）  
+- [ ] SPEED：固定末 400m 真實距離；可選 HKJC 官方標準時間錨  
 - [ ] 降班三條件再校準；NLP 過濾假性腳軟／假性無追勢（白皮書 Phase 5）  
 - [ ] Peak vs EMA 雙特徵進總分／ML  
 - [ ] 用已結算快照校準 `SOFTMAX_TEMPERATURE`  
@@ -370,6 +371,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-05 | **SPEED Par 小切片**：`extract_venue`+`class_num` 分桶；`SPEED_PAR_PERCENTILE`／`MIN_N`；粗桶回退 |
 | 2026-09-05 | **階段完成／暫停自動化**：雙軌推介＋AI 獨立軌道就緒；待賽日結算跑通再開 Cron（§5.3／§6） |
 | 2026-09-05 | **AI 推介 UI**：賽日只顯示指數%（如 `72%`）；算式留詳情 |
 | 2026-09-05 | **AI 獨立軌道**：`form_ai_picks` 推介；快照鎖 ai_*；命中率訊號「AI評價×信心」；賽日並排模型／AI |

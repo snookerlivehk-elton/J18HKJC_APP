@@ -80,6 +80,9 @@ class ModelConfig:
     FSR_PENALTY_THRESHOLD = 105.0  # 步速過慢，開始懲罰末段時間的閥值 (%)
     FSR_BONUS_THRESHOLD = 95.0     # 步速極快，開始獎勵末段時間的閥值 (%)
     TIME_EMA_ALPHA = 0.5           # 近況時間趨勢的指數平滑衰減率
+    # Par Time：分桶分位數（50=中位數，較抗極端慢馬）；桶樣本不足則逐級回退
+    SPEED_PAR_PERCENTILE = 50.0
+    SPEED_PAR_MIN_N = 30
 
     # ==========================================
     # 9. 最終推論總分組合權重 (Inference Ensemble Weights)
