@@ -78,6 +78,7 @@ views/*_factor.py         # 各因子診斷頁
 pages/                   # 留空（勿自動掛頁，避免用戶看到管理選單）
 bucket_utils.py / config.py / factor_calculator.py / inference_engine.py
 meeting_pipeline.py / fixture_crawler.py / …
+prediction_api.py / prediction_export.py / start-api.sh   # 對外賽前預測 API
 schema.sql
 ```
 
@@ -141,10 +142,41 @@ J18_API_BASE_URL=...    # 公司內 J18 歷史 API 源站或完整 historyResult
 OPENAI_API_KEY=...      # 可選但 NLP 需要
 OPENAI_MODEL=gpt-4o-mini
 AUTH_BOOTSTRAP_ADMIN=...  # 僅庫內尚無 admin 時的開機通行碼
+PREDICTION_API_KEY=...    # 對外預測 API（獨立服務）；Header X-API-Key
+PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 # OpenRouter 時設 OPENAI_BASE_URL + 對應 model 名
 ```
 
 本地 `.env` 同上；**勿 commit**。`J18_API_BASE_URL` 可填 `https://api.j18.hk`（自動接 path）或完整 `…/historyResult`。密碼若曾貼在聊天室請輪替。
+
+### 2.4 賽前預測 API（外部平台）
+
+給另一平台拉**展示用預測**，並用本系統 `model_win_prob` + **對方即時獨贏小數賠率**算凱利／值搏指數。
+
+| 項目 | 說明 |
+|------|------|
+| 程式 | `prediction_api.py`（FastAPI）+ `prediction_export.py`（payload／Kelly） |
+| 啟動 | `bash start-api.sh` → `uvicorn prediction_api:app --host 0.0.0.0 --port $PORT` |
+| 部署 | **Railway 第二個服務**（勿與 Streamlit 同一 process）；共用同一 `DATABASE_URL*` |
+| 認證 | Header `X-API-Key: <PREDICTION_API_KEY>`；未設 key 時受保護路由回 503 |
+
+| Method | Path | 用途 |
+|--------|------|------|
+| GET | `/health` | 探活（無需 key） |
+| GET | `/v1/meetings?date=&course=` | 即將舉行賽日／場次清單 |
+| GET | `/v1/races/{race_id}/prediction` | 單場預測；可選 `odds=3:5.5,7:8`、`kelly_scale=0.5` |
+| POST | `/v1/races/prediction-with-odds` | body 傳 `win_odds` 後回傳含 Kelly 的預測 |
+| GET | `/v1/meetings/{date}/{course}/predictions` | 整日（較重；預設不含 factors） |
+| POST | `/v1/kelly` | 純算：已知 `p` + 小數賠率 → `kelly_fraction` / edge |
+
+Kelly：`f*=(b·p−q)/b`，`b=o−1`，`q=1−p`，`o`＝小數獨贏（例 `5.0`）。半凱利用 `kelly_scale=0.5`。展示以 **model_win_prob** 為主；`picks.win` / `picks.place` 與賽日速覽邏輯對齊；可選 Form AI 欄位。
+
+```bash
+curl -s -H "X-API-Key: $PREDICTION_API_KEY" \
+  "$API/v1/races/20260906ST01/prediction?odds=1:4.5,3:8&kelly_scale=0.5"
+```
+
+OpenAPI：部署後 `/docs`。
 
 ---
 
@@ -283,12 +315,12 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 |----|------|------|
 | A 因子／總分 | 可正可負（Z-Score + 加權） | 排序、診斷、雷達前的原料 |
 | B 雷達半徑 | 同場每軸 min-max → [0,1] | **只顯示**；不是勝率 |
-| C 模型勝率 | 場內 z(總分) → `softmax(/T)`，加總≈1 | 外傳凱利；`export_kelly_payload` |
+| C 模型勝率 | 場內 z(總分) → `softmax(/T)`，加總≈1 | 外傳凱利；`prediction_api` / `export_kelly_payload` |
 
 - **不要**把總分硬加常數變正數再當機率。  
 - **不要**把各因子 Z 改成同場瓜分 100%（破壞跨場比較與校正）。  
 - `SOFTMAX_WITHIN_RACE_Z`（預設 True）+ `SOFTMAX_TEMPERATURE`（預設 1.5）：壓低極端勝率。  
-- Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`。  
+- Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`（見 §2.4）。  
 
 ---
 
@@ -296,6 +328,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-05 | **賽前預測 API**：`prediction_api` + Kelly／即時賠率；`PREDICTION_API_KEY`；獨立 `start-api.sh` |
 | 2026-09-05 | **登入分權**：`auth_whitelist` + `AUTH_BOOTSTRAP_ADMIN`；user 僅賽日速覽；admin 全管理頁；`views/` + `st.navigation` |
 | 2026-09-05 | **UI**：登入頁／管理外殼／賽日速覽簡潔綠系；側欄中文由 Page title 提供 |
 | 2026-09-05 | **勝率**：場內 z → softmax（`SOFTMAX_WITHIN_RACE_Z`，T 預設 1.5） |
@@ -304,4 +337,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-05 — 登入分權、白名單、賽日速覽簡潔化。*
+*最後更新：2026-09-05 — 賽前預測 API（Kelly／外部平台）、登入分權、賽日速覽。*
