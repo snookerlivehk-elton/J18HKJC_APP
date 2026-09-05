@@ -81,9 +81,8 @@ pages/8_Speed_Figure…    # 速度指數 / FSR
 pages/9_HKJC_Speed…      # 官方 Speed Guide
 pages/10_Inference…      # 融合總分 + 分場次表 + 因子雷達圖
 pages/11_RaceDay_Mobile  # 手機優先賽日速覽（用戶向：場次按鈕＋勝率卡片＋雷達）
-pages/12_Factor_Calibration  # 各因子／總分獨立獨贏・入圍命中率（調權重用）
-radar_charts.py          # 共用 Plotly 雷達
-factor_calibration.py    # 因子命中統計引擎
+pages/12_Factor_Calibration  # 賽前快照→賽後結算→各因子獨贏／入圍命中率
+factor_calibration.py    # snapshot_meeting / settle_pending / evaluate_settled
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
 speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py
@@ -182,7 +181,8 @@ OPENAI_MODEL=gpt-4o-mini
 | 季前 | `fixture_crawler` → `fixtures` |
 | 賽前 ~2 日 | `racecard_crawler` + 可選 Pace 投影 |
 | 賽前 ~1 日（約中午） | `speedguide_crawler`（CMS JSON）／formguide（解析仍偏骨架） |
-| 賽後隔日 | `batch_crawler` → `run_all_factors(persist=True)` |
+| 賽前（排位齊） | `FactorCalibration.snapshot_meeting` 鎖預測快照 |
+| 賽後隔日 | `batch_crawler` → `run_all_factors` → `settle_pending` 結算命中 |
 | 賽日前 | 賽日 NLP 解析 → 再重算 HORSE/SPEED |
 
 `formguide_crawler` / 賽前 NLP：**未完整接進推論**。

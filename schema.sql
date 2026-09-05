@@ -269,3 +269,39 @@ CREATE TABLE upcoming_speedguide (
     raw_json JSONB,               -- 含 energyrequired、近績 energy 等
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 賽前預測快照（結算後比對 J18 名次，供因子命中率統計）
+CREATE TABLE prediction_snapshot_batches (
+    batch_id VARCHAR(64) PRIMARY KEY,
+    racing_date DATE NOT NULL,
+    course VARCHAR(10),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    settled_at TIMESTAMPTZ,
+    note TEXT
+);
+
+CREATE TABLE prediction_snapshots (
+    id SERIAL PRIMARY KEY,
+    batch_id VARCHAR(64) NOT NULL REFERENCES prediction_snapshot_batches(batch_id) ON DELETE CASCADE,
+    race_id VARCHAR(50) NOT NULL,
+    horse_no INT NOT NULL,
+    horse_name VARCHAR(100),
+    jockey_name VARCHAR(50),
+    trainer_name VARCHAR(50),
+    draw INT,
+    z_jockey NUMERIC,
+    z_trainer NUMERIC,
+    z_synergy NUMERIC,
+    z_draw NUMERIC,
+    z_horse NUMERIC,
+    z_pace NUMERIC,
+    z_speed NUMERIC,
+    sg_contrib NUMERIC,
+    total_score NUMERIC,
+    model_win_prob NUMERIC,
+    pred_rank INT,
+    finish_order_num INT,
+    UNIQUE (batch_id, race_id, horse_no)
+);
+CREATE INDEX idx_pred_snap_race ON prediction_snapshots(race_id);
+CREATE INDEX idx_pred_snap_batch ON prediction_snapshots(batch_id);

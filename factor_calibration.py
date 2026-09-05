@@ -1,325 +1,480 @@
 """
-各因子／綜合分／模型勝率 — 獨立勝出與入圍命中統計。
+賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率命中統計。
 
-口徑（v1）：
-  用「現行 factor_scores」對近期已完賽歷史場次做回溯排名。
-  適合比較因子相對強弱以調 WEIGHT_*；非嚴格無洩漏回測。
-  Speed Guide 無歷史存檔，不納入本統計。
+流程：
+  1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
+  2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
+  3. evaluate_settled() — 按快照分數算各訊號獨贏／入圍率
 
-入圍：依場內頭數 — ≤6 匹取前 2；≥7 匹取前 3（近似港隊位置）。
+入圍：≤6 匹前 2；≥7 匹前 3。
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Tuple
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
+from uuid import uuid4
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, create_engine
 
 from config import ModelConfig
 from factor_calculator import FactorCalculator
-from bucket_utils import (
-    make_bucket_id,
-    make_band_bucket_id,
-    normalize_person_name,
-    synergy_name,
-)
-from inference_engine import scores_to_win_probs
+from inference_engine import InferenceEngine, scores_to_win_probs
+from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+import os
 
+if USE_SQLITE:
+    DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
+else:
+    DATABASE_URL_SYNC = os.getenv(
+        "DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db"
+    )
 
 SIGNAL_DEFS = [
-    ("騎師分", "jockey_z", "WEIGHT_JOCKEY"),
-    ("練馬師分", "trainer_z", "WEIGHT_TRAINER"),
-    ("騎練分", "synergy_z", "WEIGHT_SYNERGY"),
-    ("檔位分", "draw_z", "WEIGHT_DRAW"),
-    ("近績分", "horse_z", "WEIGHT_RECENT_FORM"),
-    ("步速分", "pace_z", "WEIGHT_PACE"),
-    ("速度分", "speed_z", "WEIGHT_SPEED_FIGURE"),
+    ("騎師分", "z_jockey", "WEIGHT_JOCKEY"),
+    ("練馬師分", "z_trainer", "WEIGHT_TRAINER"),
+    ("騎練分", "z_synergy", "WEIGHT_SYNERGY"),
+    ("檔位分", "z_draw", "WEIGHT_DRAW"),
+    ("近績分", "z_horse", "WEIGHT_RECENT_FORM"),
+    ("步速分", "z_pace", "WEIGHT_PACE"),
+    ("速度分", "z_speed", "WEIGHT_SPEED_FIGURE"),
+    ("SG貢獻", "sg_contrib", None),
     ("綜合總分", "total_score", None),
     ("模型勝率", "model_win_prob", None),
 ]
 
 
 def place_cutoff(n_runners: int) -> int:
-    if n_runners <= 6:
-        return 2
-    return 3
+    return 2 if n_runners <= 6 else 3
 
 
-@dataclass
-class SignalStats:
-    signal: str
-    n_races: int
-    n_scored: int
-    win_hits: int
-    place_hits: int
-    baseline_win: float
-    coverage: float
+DDL_PG = """
+CREATE TABLE IF NOT EXISTS prediction_snapshot_batches (
+    batch_id VARCHAR(64) PRIMARY KEY,
+    racing_date DATE NOT NULL,
+    course VARCHAR(10),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    settled_at TIMESTAMPTZ,
+    note TEXT
+);
 
-    @property
-    def win_rate(self) -> float:
-        return self.win_hits / self.n_scored if self.n_scored else 0.0
+CREATE TABLE IF NOT EXISTS prediction_snapshots (
+    id SERIAL PRIMARY KEY,
+    batch_id VARCHAR(64) NOT NULL REFERENCES prediction_snapshot_batches(batch_id) ON DELETE CASCADE,
+    race_id VARCHAR(50) NOT NULL,
+    horse_no INT NOT NULL,
+    horse_name VARCHAR(100),
+    jockey_name VARCHAR(50),
+    trainer_name VARCHAR(50),
+    draw INT,
+    z_jockey NUMERIC,
+    z_trainer NUMERIC,
+    z_synergy NUMERIC,
+    z_draw NUMERIC,
+    z_horse NUMERIC,
+    z_pace NUMERIC,
+    z_speed NUMERIC,
+    sg_contrib NUMERIC,
+    total_score NUMERIC,
+    model_win_prob NUMERIC,
+    pred_rank INT,
+    finish_order_num INT,
+    UNIQUE (batch_id, race_id, horse_no)
+);
+CREATE INDEX IF NOT EXISTS idx_pred_snap_race ON prediction_snapshots(race_id);
+CREATE INDEX IF NOT EXISTS idx_pred_snap_batch ON prediction_snapshots(batch_id);
+"""
 
-    @property
-    def place_rate(self) -> float:
-        return self.place_hits / self.n_scored if self.n_scored else 0.0
+DDL_SQLITE = """
+CREATE TABLE IF NOT EXISTS prediction_snapshot_batches (
+    batch_id TEXT PRIMARY KEY,
+    racing_date DATE NOT NULL,
+    course TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    settled_at TEXT,
+    note TEXT
+);
 
-    def as_dict(self) -> dict:
-        return {
-            "訊號": self.signal,
-            "有效場次": self.n_scored,
-            "總場次": self.n_races,
-            "覆蓋率%": round(self.coverage * 100, 1),
-            "獨贏命中": self.win_hits,
-            "獨贏率%": round(self.win_rate * 100, 2),
-            "入圍命中": self.place_hits,
-            "入圍率%": round(self.place_rate * 100, 2),
-            "隨機獨贏基準%": round(self.baseline_win * 100, 2),
-            "獨贏相對隨機": round(self.win_rate / self.baseline_win, 2)
-            if self.baseline_win > 1e-9
-            else None,
-        }
+CREATE TABLE IF NOT EXISTS prediction_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id TEXT NOT NULL,
+    race_id TEXT NOT NULL,
+    horse_no INTEGER NOT NULL,
+    horse_name TEXT,
+    jockey_name TEXT,
+    trainer_name TEXT,
+    draw INTEGER,
+    z_jockey REAL,
+    z_trainer REAL,
+    z_synergy REAL,
+    z_draw REAL,
+    z_horse REAL,
+    z_pace REAL,
+    z_speed REAL,
+    sg_contrib REAL,
+    total_score REAL,
+    model_win_prob REAL,
+    pred_rank INTEGER,
+    finish_order_num INTEGER,
+    UNIQUE (batch_id, race_id, horse_no),
+    FOREIGN KEY (batch_id) REFERENCES prediction_snapshot_batches(batch_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pred_snap_race ON prediction_snapshots(race_id);
+CREATE INDEX IF NOT EXISTS idx_pred_snap_batch ON prediction_snapshots(batch_id);
+"""
 
 
 class FactorCalibration:
     def __init__(self):
+        self.engine = create_engine(DATABASE_URL_SYNC)
         self.calc = FactorCalculator()
+        self.infer = InferenceEngine()
+        self.ensure_tables()
 
-    def fetch_recent_races(self, lookback_days: int = 90, max_races: int = 400) -> pd.DataFrame:
+    def ensure_tables(self):
+        ddl = DDL_SQLITE if USE_SQLITE else DDL_PG
+        with self.engine.begin() as conn:
+            for stmt in ddl.split(";"):
+                s = stmt.strip()
+                if s:
+                    conn.execute(text(s))
+
+    # ---------- 賽前快照 ----------
+    def snapshot_meeting(
+        self,
+        racing_date: Optional[str] = None,
+        course: Optional[str] = None,
+        note: str = "",
+    ) -> dict:
+        """
+        對 upcoming 賽日全部場次跑 predict_race，寫入一批快照。
+        racing_date: YYYY-MM-DD；省略則取 upcoming 最新一日。
+        """
+        races = self.infer.get_upcoming_races()
+        if races.empty:
+            return {"ok": False, "error": "無 upcoming 賽事"}
+
+        races = races.copy()
+        races["_d"] = races["racing_date"].astype(str).str[:10]
+        if racing_date:
+            racing_date = racing_date.replace("/", "-")[:10]
+            races = races[races["_d"] == racing_date]
+        else:
+            racing_date = races["_d"].max()
+            races = races[races["_d"] == racing_date]
+
+        if course:
+            races = races[races["course"].astype(str).str.upper() == course.upper()]
+        if races.empty:
+            return {"ok": False, "error": f"找不到 {racing_date} {course or ''} 排位"}
+
+        course = str(races.iloc[0]["course"])
+        batch_id = f"{racing_date.replace('-', '')}{course}_{uuid4().hex[:8]}"
+
+        rows = []
+        for _, race in races.iterrows():
+            rid = race["race_id"]
+            pred, _info, _meta = self.infer.predict_race(rid)
+            if pred is None or pred.empty:
+                continue
+            for _, p in pred.iterrows():
+                rows.append(
+                    {
+                        "batch_id": batch_id,
+                        "race_id": rid,
+                        "horse_no": int(p["馬號"]),
+                        "horse_name": p.get("馬名"),
+                        "jockey_name": p.get("騎師"),
+                        "trainer_name": p.get("練馬師"),
+                        "draw": int(p["檔位"]) if pd.notna(p.get("檔位")) else None,
+                        "z_jockey": float(p.get("騎師分") or 0),
+                        "z_trainer": float(p.get("練馬師分") or 0),
+                        "z_synergy": float(p.get("騎練分") or 0),
+                        "z_draw": float(p.get("檔位分") or 0),
+                        "z_horse": float(p.get("近績分") or 0),
+                        "z_pace": float(p.get("步速分") or 0),
+                        "z_speed": float(p.get("速度分") or 0),
+                        "sg_contrib": float(p.get("SG貢獻") or 0),
+                        "total_score": float(p.get("總預測分") or 0),
+                        "model_win_prob": float(p.get("模型勝率") or 0),
+                        "pred_rank": int(p["預測排名"]) if pd.notna(p.get("預測排名")) else None,
+                        "finish_order_num": None,
+                    }
+                )
+
+        if not rows:
+            return {"ok": False, "error": "預測結果為空（請先重算 factor_scores）"}
+
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO prediction_snapshot_batches
+                    (batch_id, racing_date, course, note)
+                    VALUES (:batch_id, :racing_date, :course, :note)
+                    """
+                ),
+                {
+                    "batch_id": batch_id,
+                    "racing_date": racing_date,
+                    "course": course,
+                    "note": note or "pre-race snapshot",
+                },
+            )
+            for r in rows:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO prediction_snapshots (
+                            batch_id, race_id, horse_no, horse_name, jockey_name, trainer_name, draw,
+                            z_jockey, z_trainer, z_synergy, z_draw, z_horse, z_pace, z_speed,
+                            sg_contrib, total_score, model_win_prob, pred_rank, finish_order_num
+                        ) VALUES (
+                            :batch_id, :race_id, :horse_no, :horse_name, :jockey_name, :trainer_name, :draw,
+                            :z_jockey, :z_trainer, :z_synergy, :z_draw, :z_horse, :z_pace, :z_speed,
+                            :sg_contrib, :total_score, :model_win_prob, :pred_rank, :finish_order_num
+                        )
+                        """
+                    ),
+                    r,
+                )
+
+        return {
+            "ok": True,
+            "batch_id": batch_id,
+            "racing_date": racing_date,
+            "course": course,
+            "n_rows": len(rows),
+            "n_races": int(races["race_id"].nunique()),
+        }
+
+    # ---------- 賽後結算 ----------
+    def settle_pending(self) -> dict:
+        """
+        對未結算 batch：若 historical runners 已有該 race_id 名次，則回填 finish_order_num。
+        當 batch 內所有 race 都有至少一匹完賽名次時，標記 settled_at。
+        """
+        batches = pd.read_sql(
+            text(
+                "SELECT batch_id, racing_date, course FROM prediction_snapshot_batches "
+                "WHERE settled_at IS NULL ORDER BY racing_date"
+            ),
+            self.engine,
+        )
+        if batches.empty:
+            return {"ok": True, "settled_batches": [], "updated_rows": 0}
+
+        updated = 0
+        settled = []
+        for _, b in batches.iterrows():
+            batch_id = b["batch_id"]
+            snaps = pd.read_sql(
+                text(
+                    "SELECT id, race_id, horse_no, horse_name FROM prediction_snapshots "
+                    "WHERE batch_id = :b AND finish_order_num IS NULL"
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+            if snaps.empty:
+                # 已全部填完名次
+                self._mark_settled(batch_id)
+                settled.append(batch_id)
+                continue
+
+            race_ids = snaps["race_id"].unique().tolist()
+            results = self._fetch_results_for_races(race_ids)
+            if results.empty:
+                continue
+
+            # 匹配：優先 race_id + horse_no；fallback race_id + 正規化馬名
+            from bucket_utils import normalize_person_name
+
+            results = results.copy()
+            results["horse_key"] = results["horse_name"].apply(normalize_person_name)
+            snaps = snaps.copy()
+            snaps["horse_key"] = snaps["horse_name"].apply(normalize_person_name)
+
+            # horse_no in historical may not match upcoming numbering — match by name
+            merge = snaps.merge(
+                results[["race_id", "horse_key", "finish_order_num"]],
+                on=["race_id", "horse_key"],
+                how="left",
+                suffixes=("", "_res"),
+            )
+
+            with self.engine.begin() as conn:
+                for _, row in merge.iterrows():
+                    if pd.isna(row.get("finish_order_num")):
+                        continue
+                    conn.execute(
+                        text(
+                            "UPDATE prediction_snapshots SET finish_order_num = :f "
+                            "WHERE id = :id"
+                        ),
+                        {"f": int(row["finish_order_num"]), "id": int(row["id"])},
+                    )
+                    updated += 1
+
+            # 檢查是否整批可結算：每個 race_id 至少有完賽馬
+            left = pd.read_sql(
+                text(
+                    "SELECT race_id, COUNT(*) AS n, "
+                    "SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS filled "
+                    "FROM prediction_snapshots WHERE batch_id = :b GROUP BY race_id"
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+            if not left.empty and (left["filled"] > 0).all():
+                # 要求多數馬有名次（≥50%）才算結算完成
+                if (left["filled"] / left["n"] >= 0.5).all():
+                    self._mark_settled(batch_id)
+                    settled.append(batch_id)
+
+        return {"ok": True, "settled_batches": settled, "updated_rows": updated}
+
+    def _mark_settled(self, batch_id: str):
+        with self.engine.begin() as conn:
+            if USE_SQLITE:
+                conn.execute(
+                    text(
+                        "UPDATE prediction_snapshot_batches SET settled_at = :t WHERE batch_id = :b"
+                    ),
+                    {"t": datetime.now(timezone.utc).isoformat(), "b": batch_id},
+                )
+            else:
+                conn.execute(
+                    text(
+                        "UPDATE prediction_snapshot_batches SET settled_at = NOW() WHERE batch_id = :b"
+                    ),
+                    {"b": batch_id},
+                )
+
+    def _fetch_results_for_races(self, race_ids: List[str]) -> pd.DataFrame:
+        if not race_ids:
+            return pd.DataFrame()
+        # SQLAlchemy 綁定 IN
+        placeholders = ", ".join([f":r{i}" for i in range(len(race_ids))])
+        params = {f"r{i}": rid for i, rid in enumerate(race_ids)}
         q = text(
             f"""
-            WITH ranked AS (
-                SELECT
-                    m.racing_date,
-                    r.race_id,
-                    r.course,
-                    r.track,
-                    r.distance_m,
-                    ru.jockey_name,
-                    ru.trainer_name,
-                    ru.horse_name,
-                    ru.finish_order_num,
-                    ru.bar_draw AS draw,
-                    COUNT(*) OVER (PARTITION BY r.race_id) AS n_runners
-                FROM runners ru
-                JOIN races r ON ru.race_id = r.race_id
-                JOIN race_meetings m ON r.meeting_id = m.meeting_id
-                WHERE ru.finish_order_num IS NOT NULL
-                  AND r.distance_m IS NOT NULL
-                  AND m.racing_date >= (CURRENT_DATE - INTERVAL '{int(lookback_days)} days')
-                  AND m.racing_date < CURRENT_DATE
-            )
-            SELECT * FROM ranked
-            WHERE n_runners >= 4
-            ORDER BY racing_date DESC, race_id
-            """
-        )
-        try:
-            df = pd.read_sql(q, self.calc.engine)
-        except Exception:
-            df = self._fetch_recent_races_fallback(lookback_days)
-
-        if df.empty:
-            return df
-
-        race_ids = df["race_id"].drop_duplicates().head(max_races).tolist()
-        df = df[df["race_id"].isin(race_ids)].copy()
-        return self._prepare_runners(df)
-
-    def _fetch_recent_races_fallback(self, lookback_days: int) -> pd.DataFrame:
-        q = text(
-            """
-            SELECT
-                m.racing_date,
-                r.race_id, r.course, r.track, r.distance_m,
-                ru.jockey_name, ru.trainer_name, ru.horse_name,
-                ru.finish_order_num, ru.bar_draw AS draw
+            SELECT ru.race_id, ru.horse_name, ru.finish_order_num
             FROM runners ru
-            JOIN races r ON ru.race_id = r.race_id
-            JOIN race_meetings m ON r.meeting_id = m.meeting_id
-            WHERE ru.finish_order_num IS NOT NULL
-              AND r.distance_m IS NOT NULL
+            WHERE ru.race_id IN ({placeholders})
+              AND ru.finish_order_num IS NOT NULL
             """
         )
-        df = pd.read_sql(q, self.calc.engine)
-        if df.empty:
-            return df
-        df["racing_date"] = pd.to_datetime(df["racing_date"])
-        cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=lookback_days)
-        today = pd.Timestamp.today().normalize()
-        df = df[(df["racing_date"] >= cutoff) & (df["racing_date"] < today)]
-        if df.empty:
-            return df
-        df["n_runners"] = df.groupby("race_id")["finish_order_num"].transform("count")
-        return df[df["n_runners"] >= 4].copy()
+        return pd.read_sql(q, self.engine, params=params)
 
-    def _prepare_runners(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        df["racing_date"] = pd.to_datetime(df["racing_date"])
-        df["jockey_name"] = df["jockey_name"].apply(normalize_person_name)
-        df["trainer_name"] = df["trainer_name"].apply(normalize_person_name)
-        df["horse_name"] = df["horse_name"].apply(normalize_person_name)
-        df["fine_bucket"] = df.apply(
-            lambda r: make_bucket_id(
-                race_id=r["race_id"],
-                course=r["course"],
-                track=r["track"],
-                distance_m=r["distance_m"],
+    # ---------- 列表／統計 ----------
+    def list_batches(self) -> pd.DataFrame:
+        return pd.read_sql(
+            text(
+                """
+                SELECT b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note,
+                       COUNT(s.id) AS n_rows,
+                       SUM(CASE WHEN s.finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS n_filled
+                FROM prediction_snapshot_batches b
+                LEFT JOIN prediction_snapshots s ON b.batch_id = s.batch_id
+                GROUP BY b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note
+                ORDER BY b.racing_date DESC, b.created_at DESC
+                """
             ),
-            axis=1,
+            self.engine,
         )
-        df["band_bucket"] = df.apply(
-            lambda r: make_band_bucket_id(
-                race_id=r["race_id"],
-                course=r["course"],
-                distance_m=r["distance_m"],
-            ),
-            axis=1,
-        )
-        df["synergy"] = df.apply(
-            lambda r: synergy_name(r["jockey_name"], r["trainer_name"]), axis=1
-        )
-        df["draw_group"] = df["draw"].apply(self.calc._assign_draw_group)
-        return df
 
-    def _build_lookup(self) -> dict:
-        scores = self.calc.load_factor_scores(
-            factor_types=["JOCKEY", "TRAINER", "SYNERGY", "DRAW", "HORSE", "PACE", "SPEED"]
-        )
-        lookup = {}
-        if scores is None or scores.empty:
-            return lookup
-        for _, row in scores.iterrows():
-            key = (str(row["factor_type"]), str(row["bucket_id"]), str(row["entity_name"]))
-            lookup[key] = float(row["z_score"])
-        return lookup
-
-    @staticmethod
-    def _lz(lookup: dict, ft: str, bucket: str, name: str):
-        key = (ft, bucket, name)
-        if key in lookup:
-            return lookup[key], True
-        return 0.0, False
-
-    def score_runners(self, df: pd.DataFrame, lookup: dict) -> pd.DataFrame:
-        rows = []
-        for _, r in df.iterrows():
-            band = r["band_bucket"]
-            fine = r["fine_bucket"]
-            zj, hj = self._lz(lookup, "JOCKEY", band, r["jockey_name"])
-            zt, ht = self._lz(lookup, "TRAINER", band, r["trainer_name"])
-            zs, hs = self._lz(lookup, "SYNERGY", band, r["synergy"])
-            zd, hd = self._lz(lookup, "DRAW", fine, r["draw_group"])
-            zh, hh = self._lz(lookup, "HORSE", band, r["horse_name"])
-            zp, hp = self._lz(lookup, "PACE", "GLOBAL", r["horse_name"])
-            zv, hv = self._lz(lookup, "SPEED", "GLOBAL", r["horse_name"])
-
-            total = (
-                zj * ModelConfig.WEIGHT_JOCKEY
-                + zt * ModelConfig.WEIGHT_TRAINER
-                + zs * ModelConfig.WEIGHT_SYNERGY
-                + zd * ModelConfig.WEIGHT_DRAW
-                + zh * ModelConfig.WEIGHT_RECENT_FORM
-                + zp * ModelConfig.WEIGHT_PACE
-                + zv * ModelConfig.WEIGHT_SPEED_FIGURE
-            )
-            hit_n = int(hj) + int(ht) + int(hs) + int(hd) + int(hh) + int(hp) + int(hv)
-            rows.append(
-                {
-                    **{c: r[c] for c in df.columns},
-                    "jockey_z": zj,
-                    "trainer_z": zt,
-                    "synergy_z": zs,
-                    "draw_z": zd,
-                    "horse_z": zh,
-                    "pace_z": zp,
-                    "speed_z": zv,
-                    "total_score": total,
-                    "factor_hits": hit_n,
-                }
-            )
-
-        out = pd.DataFrame(rows)
-        if out.empty:
-            return out
-
-        probs = []
-        for _, g in out.groupby("race_id", sort=False):
-            p = scores_to_win_probs(
-                g["total_score"].to_numpy(), ModelConfig.SOFTMAX_TEMPERATURE
-            )
-            probs.append(pd.Series(p, index=g.index))
-        out["model_win_prob"] = pd.concat(probs).sort_index()
-        return out
-
-    def evaluate(
+    def evaluate_settled(
         self,
-        lookback_days: int = 90,
-        max_races: int = 400,
-        min_factor_hits: int = 2,
+        batch_ids: Optional[List[str]] = None,
+        only_settled: bool = True,
     ) -> Tuple[pd.DataFrame, dict]:
-        raw = self.fetch_recent_races(lookback_days=lookback_days, max_races=max_races)
-        meta = {
-            "lookback_days": lookback_days,
-            "max_races": max_races,
-            "n_runner_rows": len(raw),
-            "n_races": int(raw["race_id"].nunique()) if not raw.empty else 0,
-            "note": "現行 factor_scores 回溯；適合相對比較，非嚴格時點回測。不含 Speed Guide。",
-        }
-        if raw.empty:
-            return pd.DataFrame(), meta
+        """
+        對已結算（或指定）快照：每場每訊號取最高分馬，統計獨贏／入圍。
+        """
+        batches = self.list_batches()
+        if batches.empty:
+            return pd.DataFrame(), {"error": "尚無快照。請於賽前建立預測快照。"}
 
-        lookup = self._build_lookup()
-        if not lookup:
-            meta["error"] = "factor_scores 為空"
-            return pd.DataFrame(), meta
+        if batch_ids:
+            use = batches[batches["batch_id"].isin(batch_ids)]
+        elif only_settled:
+            use = batches[batches["settled_at"].notna()]
+        else:
+            use = batches[batches["n_filled"] > 0]
 
-        scored = self.score_runners(raw, lookup)
-        race_hit = scored.groupby("race_id")["factor_hits"].mean()
-        ok_races = race_hit[race_hit >= min_factor_hits].index
-        scored = scored[scored["race_id"].isin(ok_races)].copy()
-        meta["n_races_after_filter"] = int(scored["race_id"].nunique())
-        meta["avg_runners"] = (
-            float(scored.groupby("race_id").size().mean()) if not scored.empty else 0.0
+        if use.empty:
+            return pd.DataFrame(), {
+                "error": "尚無已結算快照。請等 J18 賽果入庫後執行「結算快照」。",
+                "n_batches": 0,
+            }
+
+        ids = use["batch_id"].tolist()
+        ph = ", ".join([f":b{i}" for i in range(len(ids))])
+        params = {f"b{i}": bid for i, bid in enumerate(ids)}
+        snaps = pd.read_sql(
+            text(f"SELECT * FROM prediction_snapshots WHERE batch_id IN ({ph})"),
+            self.engine,
+            params=params,
         )
+        # 只要有名次的列參與
+        snaps = snaps[snaps["finish_order_num"].notna()].copy()
+        if snaps.empty:
+            return pd.DataFrame(), {"error": "快照尚未回填名次"}
 
-        if scored.empty:
-            return pd.DataFrame(), meta
+        n_runners = snaps.groupby("race_id")["horse_no"].transform("count")
+        snaps["n_runners"] = n_runners
+        race_ids = snaps["race_id"].unique()
+        n_races = len(race_ids)
+        avg_runners = float(snaps.groupby("race_id").size().mean())
+        baseline = 1.0 / avg_runners if avg_runners else 0.0
 
-        baseline = 1.0 / meta["avg_runners"] if meta["avg_runners"] else 0.0
-        n_races = meta["n_races_after_filter"]
-        stats: List[SignalStats] = []
-
+        rows = []
         for label, col, _w in SIGNAL_DEFS:
             win_hits = place_hits = scored_races = 0
-            for _, g in scored.groupby("race_id"):
+            for _, g in snaps.groupby("race_id"):
+                if g["finish_order_num"].isna().all():
+                    continue
                 vals = pd.to_numeric(g[col], errors="coerce").fillna(0.0)
-                if (vals.abs() < 1e-12).all():
+                # SG 可能全 0（賽前無 Speed Guide）— 仍計入但覆蓋另計
+                if col == "sg_contrib" and (vals.abs() < 1e-12).all():
                     continue
                 scored_races += 1
-                top_val = vals.max()
-                contenders = g.loc[vals == top_val]
+                top = vals.max()
+                contenders = g.loc[vals == top]
                 finishes = contenders["finish_order_num"].astype(int)
-                n = int(g["n_runners"].iloc[0]) if "n_runners" in g.columns else len(g)
-                cut = place_cutoff(n)
+                cut = place_cutoff(int(g["n_runners"].iloc[0]))
                 if (finishes == 1).any():
                     win_hits += 1
                 if (finishes <= cut).any():
                     place_hits += 1
 
-            stats.append(
-                SignalStats(
-                    signal=label,
-                    n_races=n_races,
-                    n_scored=scored_races,
-                    win_hits=win_hits,
-                    place_hits=place_hits,
-                    baseline_win=baseline,
-                    coverage=scored_races / n_races if n_races else 0.0,
-                )
+            win_rate = win_hits / scored_races if scored_races else 0.0
+            place_rate = place_hits / scored_races if scored_races else 0.0
+            rows.append(
+                {
+                    "訊號": label,
+                    "有效場次": scored_races,
+                    "總場次": n_races,
+                    "覆蓋率%": round(100.0 * scored_races / n_races, 1) if n_races else 0,
+                    "獨贏命中": win_hits,
+                    "獨贏率%": round(win_rate * 100, 2),
+                    "入圍命中": place_hits,
+                    "入圍率%": round(place_rate * 100, 2),
+                    "隨機獨贏基準%": round(baseline * 100, 2),
+                    "獨贏相對隨機": round(win_rate / baseline, 2) if baseline > 1e-9 else None,
+                }
             )
 
-        stats_df = pd.DataFrame([s.as_dict() for s in stats])
-        if not stats_df.empty:
-            stats_df = stats_df.sort_values("獨贏率%", ascending=False).reset_index(drop=True)
-        return stats_df, meta
+        stats = pd.DataFrame(rows)
+        if not stats.empty:
+            stats = stats.sort_values("獨贏率%", ascending=False).reset_index(drop=True)
+
+        meta = {
+            "n_batches": len(ids),
+            "batch_ids": ids,
+            "n_races": n_races,
+            "avg_runners": avg_runners,
+            "note": "基於賽前快照 × 賽後 J18 名次（無洩漏）。",
+        }
+        return stats, meta

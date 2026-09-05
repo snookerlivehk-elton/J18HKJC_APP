@@ -92,6 +92,31 @@ with col3:
         st.warning("⚠️ 歷史爬蟲時間較長，建議在 Terminal 背景執行。這裡暫不提供一鍵觸發以免網頁逾時。")
 
 st.divider()
+st.subheader("📸 預測快照（賽前鎖分 → 賽後結算命中率）")
+st.caption("詳見「因子命中率」頁。此處快捷：為明日賽日鎖住各因子／總分／勝率。")
+sc1, sc2, sc3 = st.columns([2, 1, 1])
+with sc1:
+    snap_d = st.text_input("快照賽日 YYYY-MM-DD", value="2026-09-06", key="snap_date")
+with sc2:
+    snap_c = st.selectbox("快照場地", ["ST", "HV"], key="snap_course")
+with sc3:
+    st.write("")
+    st.write("")
+    if st.button("建立賽前快照", use_container_width=True):
+        from factor_calibration import FactorCalibration
+        with st.spinner("寫入快照…"):
+            r = FactorCalibration().snapshot_meeting(snap_d, snap_c)
+        if r.get("ok"):
+            st.success(f"✅ {r['batch_id']}（{r['n_races']} 場 / {r['n_rows']} 匹）")
+        else:
+            st.error(r.get("error"))
+if st.button("結算待處理快照（需 J18 賽果已入庫）"):
+    from factor_calibration import FactorCalibration
+    with st.spinner("結算中…"):
+        r = FactorCalibration().settle_pending()
+    st.info(f"更新 {r.get('updated_rows', 0)} 列；結算 batch：{r.get('settled_batches')}")
+
+st.divider()
 
 # ==========================================
 # 2. 賽前資料整備度監控 (Data Readiness)
