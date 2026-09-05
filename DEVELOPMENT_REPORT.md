@@ -69,9 +69,10 @@ factor_calculator.py     # 歷史抓取、各因子、NLP 補償、save/load fac
 inference_engine.py      # 排位查表預測
 nlp_processor.py         # OpenAI/OpenRouter JSON 受阻解析（只讀環境變數 Key）
 nlp_batch_job.py         # 本機/CI 大批次 NLP（可略過「無特別報告」）
-系統主頁.py              # 入口：載歷史、重算全部因子（側欄顯示「系統主頁」）
+系統主頁.py              # （已改回）入口請用 `ui_app.py`；側欄顯示 ui app
+ui_app.py                # 入口：載歷史、重算全部因子（`start.sh` 跑此檔）
 ui_utils.py              # 排位選擇、匹配面板、賽日 NLP 選項、NLP 新鮮度顯示
-pages/0_資料控制中心.py   # 排位／整備度快捷
+pages/0_資料控制中心.py   # 排位／整備度快捷（檔名＝側欄中文）
 pages/1_騎師因子.py
 pages/2_練馬師因子.py
 pages/3_騎練合作因子.py   # 粗桶
@@ -104,7 +105,7 @@ schema.sql
 - 推論：Fitness：`0`=倒轉拇指→`-1.5`，`1/2/3`=向上拇指→`0/1/2`；能量**同場 Z**；差值× `WEIGHT_SG_DELTA`  
 - CLI：`python speedguide_crawler.py`（可選 `--date` / `--course` 核對、`--races 1,2`）  
 
-Streamlit 多頁：`系統主頁.py` 為入口（`start.sh`）；`pages/` 檔名（去數字前綴）即側欄中文名。
+Streamlit 多頁：`ui_app.py` 為入口（`start.sh`；勿用中文主檔名以免 Railway 502）；`pages/` 中文檔名＝側欄中文。
 
 ---
 
