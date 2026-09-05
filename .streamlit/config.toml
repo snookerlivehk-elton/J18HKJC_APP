@@ -1,0 +1,3 @@
+[server]
+# 供 iOS「加至主畫面」與 PWA 讀取 /app/static/*
+enableStaticServing = true

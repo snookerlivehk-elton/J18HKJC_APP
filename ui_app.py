@@ -15,7 +15,7 @@ from auth_utils import (
     render_login_page,
     render_account_bar,
 )
-from ui_theme import inject_admin_css
+from ui_theme import inject_admin_css, inject_home_screen_icons
 
 _ROOT = Path(__file__).resolve().parent
 _LOGO = _ROOT / "assets" / "j18ai_plus_logo.png"
@@ -27,6 +27,9 @@ st.set_page_config(
     # 預設收合：手機不再一進來側欄蓋住內容（參數仍可用 ≡ 打開）
     initial_sidebar_state="collapsed",
 )
+
+# 必須在登入前後都注入，否則「加至主畫面」只抓到灰底字母 J
+inject_home_screen_icons()
 
 if _LOGO.is_file():
     st.logo(str(_LOGO), size="large")

@@ -2,6 +2,62 @@
 from __future__ import annotations
 
 
+def inject_home_screen_icons():
+    """
+    iOS／Android「加至主畫面」需要穩定的 apple-touch-icon URL。
+    Streamlit page_icon 多為暫存 blob，主畫面抓不到 → 只顯示灰底字母。
+    圖檔放 static/，並在 .streamlit/config.toml 開啟 enableStaticServing。
+    """
+    import streamlit.components.v1 as components
+
+    icon = "/app/static/apple-touch-icon.png"
+    manifest = "/app/static/manifest.webmanifest"
+    components.html(
+        f"""
+<script>
+(function () {{
+  const doc = window.parent.document;
+  const iconHref = {icon!r};
+  const manifestHref = {manifest!r};
+
+  function upsertLink(rel, href, sizes) {{
+    let sel = 'link[rel="' + rel + '"]';
+    if (sizes) sel += '[sizes="' + sizes + '"]';
+    let el = doc.querySelector(sel);
+    if (!el) {{
+      el = doc.createElement('link');
+      el.rel = rel;
+      if (sizes) el.sizes = sizes;
+      doc.head.appendChild(el);
+    }}
+    el.href = href;
+  }}
+
+  function upsertMeta(name, content) {{
+    let el = doc.querySelector('meta[name="' + name + '"]');
+    if (!el) {{
+      el = doc.createElement('meta');
+      el.name = name;
+      doc.head.appendChild(el);
+    }}
+    el.content = content;
+  }}
+
+  upsertLink('apple-touch-icon', iconHref, '180x180');
+  upsertLink('apple-touch-icon', iconHref, null);
+  upsertLink('icon', iconHref, '180x180');
+  upsertLink('manifest', manifestHref, null);
+  upsertMeta('apple-mobile-web-app-capable', 'yes');
+  upsertMeta('mobile-web-app-capable', 'yes');
+  upsertMeta('apple-mobile-web-app-title', 'J18AI Plus+');
+  upsertMeta('application-name', 'J18AI Plus+');
+}})();
+</script>
+        """,
+        height=0,
+    )
+
+
 def inject_login_css():
     import streamlit as st
     st.markdown(
