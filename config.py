@@ -95,7 +95,8 @@ class ModelConfig:
     WEIGHT_SPEED_FIGURE = 1.5
     WEIGHT_PACE = 0.8              # 跑法／追回指數 + 同場形勢加權
 
-    # 官方 Speed Guide 權重
+    # 官方 Speed Guide 權重（CMS：fitnessrating / speedproenergy / speedproenergydifference）
+    # ENERGY 在推論時改為同場 Z；DELTA 為官方主排序（正＝看好）
     WEIGHT_SG_FORM = 1.0
     WEIGHT_SG_ENERGY = 1.0
     WEIGHT_SG_DELTA = 0.5

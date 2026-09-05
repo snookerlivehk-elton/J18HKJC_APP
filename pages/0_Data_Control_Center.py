@@ -66,10 +66,11 @@ with col1:
 
 with col2:
     st.markdown("### ⚡ 抓取官方速勢能量")
-    sg_date = st.text_input("日期 (YYYY/MM/DD)", value="2026/09/06", key="sg_date")
-    sg_course = st.selectbox("場地", ["ST", "HV"], key="sg_course")
+    st.caption("讀 CMS JSON（非 HTML）；日期／場地僅核對，實際以 HKJC 當前 meeting 為準。")
+    sg_date = st.text_input("核對日期 (YYYY/MM/DD)", value="2026/09/06", key="sg_date")
+    sg_course = st.selectbox("核對場地", ["ST", "HV"], key="sg_course")
     if st.button("啟動速勢能量爬蟲", type="primary", use_container_width=True):
-        with st.spinner(f"正在背景抓取 {sg_date} {sg_course} 的速勢能量..."):
+        with st.spinner(f"正在抓取 Speed Guide（核對 {sg_date} {sg_course}）..."):
             try:
                 env = os.environ.copy()
                 result = subprocess.run(
@@ -78,9 +79,11 @@ with col2:
                 )
                 st.success("✅ 速勢能量抓取完成！請重新整理頁面以更新下方監控面板。")
                 with st.expander("查看執行日誌"):
-                    st.text(result.stdout)
+                    st.text(result.stdout or "(no stdout)")
+                    if result.stderr:
+                        st.text(result.stderr)
             except subprocess.CalledProcessError as e:
-                st.error(f"❌ 執行失敗：\n{e.stderr}")
+                st.error(f"❌ 執行失敗：\n{e.stderr or e.stdout}")
 
 with col3:
     st.markdown("### 📚 歷史賽果批量爬蟲")

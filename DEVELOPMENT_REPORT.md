@@ -24,7 +24,7 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 |------|-----------|------|
 | J18 歷史 API | `race_meetings`, `races`, `runners`, `text_reports` | `batch_crawler` / `etl_pipeline` |
 | HKJC 排位 | `upcoming_races`, `upcoming_runners` | `racecard_crawler`（注意欄位偏移：檔位/練馬師） |
-| HKJC Speed Guide | `upcoming_speedguide` | 賽前約 24–36h 才有資料屬正常 |
+| HKJC Speed Guide | `upcoming_speedguide` | CMS JSON：`consvc.hkjc.com/.../SpeedPro/current/sg_*`；賽前約 1 日中午上架 |
 | 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |
 
 - 雲端：`USE_SQLITE=false` + `DATABASE_URL` / `DATABASE_URL_SYNC`  
@@ -81,9 +81,18 @@ pages/8_Speed_Figure…    # 速度指數 / FSR
 pages/9_HKJC_Speed…      # 官方 Speed Guide
 pages/10_Inference…      # 預測儀表板
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
+speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py
 schema.sql
 ```
+
+#### Speed Guide 實作要點
+
+- **URL（給人看）**：https://racing.hkjc.com/zh-hk/local/info/speedpro/speedguide?raceno=1  
+- **真正資料**：`https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_index` 與 `sg_race_{N}`（UTF-8 BOM JSON）  
+- 欄位映射：`fitnessrating`→`form_rating`；`speedproenergy`→`speed_energy`；`speedproenergydifference`→`speed_energy_delta`  
+- 推論：Fitness：`0`=倒轉拇指→`-1.5`，`1/2/3`=向上拇指→`0/1/2`；能量**同場 Z**；差值× `WEIGHT_SG_DELTA`  
+- CLI：`python speedguide_crawler.py`（可選 `--date` / `--course` 核對、`--races 1,2`）  
 
 Streamlit 多頁：`ui_app.py` 為入口；`pages/` 自動掛載。
 
@@ -134,7 +143,7 @@ OPENAI_MODEL=gpt-4o-mini
 2. **排位表 HTML 欄位偏移**：檔位／練馬師索引錯會導致 draw=0、練馬師變閘號 → `racecard_looks_corrupt()`。  
 3. **細桶過嚴**：馬「有近績」≠ 命中本場條件；騎練／近績已改粗桶，檔位仍細桶。  
 4. **人馬 HORSE_JOCKEY**：合作本身 GLOBAL；現場近距加權 + 換人 Δ 層級回退（粗桶查騎師 Z）。  
-5. **Speed Guide 空白**：賽前太早無資料屬正常，推論對缺值給 0，不假裝官方分。  
+5. **Speed Guide**：頁面是 Next.js「正在加載」；真實資料在 CMS JSON（`sg_index` / `sg_race_N`），**勿再 scrape HTML**。Fitness 是 `0/1/2/3` 拇指數；能量推論用**同場 Z**；差值直接入分。缺值給 0。  
 6. **Streamlit 換頁**：長任務（NLP 批次）會停；非背景 job。  
 7. **`run_all_factors` 回傳**：`(jockey, trainer, synergy, draw, hj, horse, pace, speed)` — 改 UI 解包時注意數量。  
 
@@ -167,7 +176,7 @@ OPENAI_MODEL=gpt-4o-mini
 |------|------|
 | 季前 | `fixture_crawler` → `fixtures` |
 | 賽前 ~2 日 | `racecard_crawler` + 可選 Pace 投影 |
-| 賽前 ~1 日 | Speed Guide / formguide（formguide 解析仍偏骨架） |
+| 賽前 ~1 日（約中午） | `speedguide_crawler`（CMS JSON）／formguide（解析仍偏骨架） |
 | 賽後隔日 | `batch_crawler` → `run_all_factors(persist=True)` |
 | 賽日前 | 賽日 NLP 解析 → 再重算 HORSE/SPEED |
 
@@ -208,6 +217,10 @@ python -c "from factor_calculator import FactorCalculator; c=FactorCalculator();
 python -c "from inference_engine import InferenceEngine; e=InferenceEngine(); \
  r=e.get_upcoming_races(); print(len(r)); \
  print(e.predict_race(r.iloc[0].race_id)[2]['hit_counts'])"
+
+# Speed Guide（CMS；日期可省略，以 sg_index 為準）
+python speedguide_crawler.py --date 2026/09/06 --course ST
+# 或只抓第 1 場：python speedguide_crawler.py --races 1
 ```
 
 Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 等非全 0（重算後）。

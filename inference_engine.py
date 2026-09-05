@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import re
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import (
@@ -75,16 +76,53 @@ class InferenceEngine:
         )
 
     def _map_form_rating(self, rating: str) -> float:
-        """將狀態評級 (如 A, B, C) 轉換為數值分數"""
+        """
+        狀態評級 → 分數（與官方 UI 圖示一致）：
+          0 → thumb_down（倒轉拇指，狀態差）
+          1 → formGuide_1up
+          2 → formGuide_2up
+          3 → formGuide_3up
+        舊式字母評級仍相容。
+        """
         if pd.isna(rating):
             return 0.0
         r = str(rating).upper().strip()
+        if re.fullmatch(r"-?\d+", r):
+            n = int(r)
+            # 0=倒轉拇指（差）；1–3=向上拇指數量（愈多愈佳）
+            return {0: -1.5, 1: 0.0, 2: 1.0, 3: 2.0}.get(n, float(n) - 1.0)
         mapping = {
             'A+': 3.0, 'A': 2.0, 'A-': 1.0,
             'B+': 0.5, 'B': 0.0, 'B-': -0.5,
             'C': -1.0, 'D': -2.0,
         }
         return mapping.get(r, 0.0)
+
+    @staticmethod
+    def fitness_label(rating) -> str:
+        """UI 顯示用：把 Fitness 代碼翻成中文。"""
+        if pd.isna(rating) or str(rating).strip() == "":
+            return ""
+        r = str(rating).strip()
+        return {
+            "0": "👎 倒轉拇指",
+            "1": "👍×1",
+            "2": "👍×2",
+            "3": "👍×3",
+        }.get(r, r)
+
+    @staticmethod
+    def _within_field_z(series: pd.Series) -> pd.Series:
+        """同場 Z-Score；有效值 < 2 則全 0（不假裝官方分）。"""
+        s = pd.to_numeric(series, errors='coerce')
+        valid = s.dropna()
+        if len(valid) < 2:
+            return pd.Series(0.0, index=series.index)
+        sd = float(valid.std(ddof=0))
+        if sd < 1e-9:
+            return pd.Series(0.0, index=series.index)
+        mu = float(valid.mean())
+        return (s - mu) / sd
 
     def _build_score_lookup(self, scores_df: pd.DataFrame) -> dict:
         """(factor_type, bucket_id, entity_name) -> z_score"""
@@ -139,7 +177,13 @@ class InferenceEngine:
         }
         total_lookups = 0
 
-        for _, row in runners_df.iterrows():
+        # Speed Guide：能量同場 Z；差值本身已相對 ER，直接入分（正＝官方看好）
+        sg_energy_z = self._within_field_z(
+            runners_df['speed_energy'] if 'speed_energy' in runners_df.columns
+            else pd.Series(dtype=float)
+        )
+
+        for idx, row in runners_df.iterrows():
             j_name = normalize_person_name(row['jockey_name'])
             t_name = normalize_person_name(row['trainer_name'])
             h_name = normalize_person_name(row['horse_name'])
@@ -164,9 +208,16 @@ class InferenceEngine:
                     hit_counts[ft] += 1
 
             sg_form_score = self._map_form_rating(row.get('form_rating'))
-            sg_energy = float(row['speed_energy']) if pd.notna(row.get('speed_energy')) else 0.0
+            sg_energy = float(row['speed_energy']) if pd.notna(row.get('speed_energy')) else None
             sg_delta = float(row['speed_energy_delta']) if pd.notna(row.get('speed_energy_delta')) else 0.0
-            sg_energy_norm = (sg_energy - 100.0) / 10.0 if sg_energy > 0 else 0.0
+            ez = sg_energy_z.get(idx, 0.0)
+            sg_energy_norm = 0.0 if pd.isna(ez) else float(ez)
+
+            sg_contrib = (
+                (sg_form_score * ModelConfig.WEIGHT_SG_FORM) +
+                (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
+                (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
+            )
 
             total_score = (
                 (z_jockey * ModelConfig.WEIGHT_JOCKEY) +
@@ -176,9 +227,7 @@ class InferenceEngine:
                 (z_horse * ModelConfig.WEIGHT_RECENT_FORM) +
                 (z_pace * ModelConfig.WEIGHT_PACE) +
                 (z_speed * ModelConfig.WEIGHT_SPEED_FIGURE) +
-                (sg_form_score * ModelConfig.WEIGHT_SG_FORM) +
-                (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
-                (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
+                sg_contrib
             )
 
             hit_n = (
@@ -199,8 +248,10 @@ class InferenceEngine:
                 '步速分': round(z_pace, 2),
                 '速度分': round(z_speed, 2),
                 '命中': f"{hit_n}/7",
-                '狀態評級': row.get('form_rating'),
+                '狀態評級': self.fitness_label(row.get('form_rating')) or row.get('form_rating'),
+                '速勢能量': sg_energy,
                 '能量差值': sg_delta,
+                'SG貢獻': round(sg_contrib, 2),
                 '總預測分': round(total_score, 2),
             })
 

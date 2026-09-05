@@ -263,9 +263,9 @@ CREATE TABLE upcoming_speedguide (
     runner_id VARCHAR(50) PRIMARY KEY,
     race_id VARCHAR(50),
     horse_no INT,
-    form_rating VARCHAR(20),      -- 狀態評級 (例如 A, B, C 或數值)
-    speed_energy NUMERIC,         -- 速勢能量評估
-    speed_energy_delta NUMERIC,   -- 速勢能量評估差值
-    raw_json JSONB,
+    form_rating VARCHAR(20),      -- Fitness：0=倒轉拇指(差), 1/2/3=向上拇指數
+    speed_energy NUMERIC,         -- SpeedPRO Energy（速勢能量評估）
+    speed_energy_delta NUMERIC,   -- Energy − Energy Required（官方主排序）
+    raw_json JSONB,               -- 含 energyrequired、近績 energy 等
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
