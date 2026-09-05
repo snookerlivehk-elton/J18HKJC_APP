@@ -30,6 +30,7 @@ jobs:
         # 將 Railway 的資料庫連線網址設定在 GitHub Secrets 中
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         USE_SQLITE: "false"
+        J18_API_BASE_URL: ${{ secrets.J18_API_BASE_URL }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
         OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
