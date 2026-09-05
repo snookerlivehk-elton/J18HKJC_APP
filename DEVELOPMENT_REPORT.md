@@ -141,6 +141,7 @@ OPENAI_MODEL=gpt-4o-mini
 
 1. **`raw_json` 在 Postgres 是 `dict`**：不可無腦 `json.loads`；先 `isinstance(raw, dict)`（步速曾因此全空）。  
 2. **排位表 HTML 欄位偏移**：檔位／練馬師索引錯會導致 draw=0、練馬師變閘號 → `racecard_looks_corrupt()`。  
+   班次：本地球「一／二／三級賽」須能解析（勿只認「第X班／國際X級賽」）；`parse_class_num` 將級賽／表列視為 **第一班 (=1)**。  
 3. **細桶過嚴**：馬「有近績」≠ 命中本場條件；騎練／近績已改粗桶，檔位仍細桶。  
 4. **人馬 HORSE_JOCKEY**：合作本身 GLOBAL；現場近距加權 + 換人 Δ 層級回退（粗桶查騎師 Z）。  
 5. **Speed Guide**：頁面是 Next.js「正在加載」；真實資料在 CMS JSON（`sg_index` / `sg_race_N`），**勿再 scrape HTML**。Fitness 是 `0/1/2/3` 拇指數；能量推論用**同場 Z**；差值直接入分。缺值給 0。  

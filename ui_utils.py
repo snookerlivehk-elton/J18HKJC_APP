@@ -16,6 +16,7 @@ from bucket_utils import (
     is_valid_band_bucket,
     GLOBAL_BUCKET,
     parse_bucket_parts,
+    format_class_display,
 )
 
 
@@ -34,6 +35,7 @@ def get_upcoming_races_list():
         dist = row['distance_m']
         track = row['track']
         cls = row['class']
+        cls_disp = format_class_display(cls)
         bucket = make_bucket_id(
             race_id=row['race_id'],
             course=course,
@@ -47,7 +49,7 @@ def get_upcoming_races_list():
         )
         valid = "✓" if is_valid_bucket(bucket) else "✗"
         label = (
-            f"第 {num} 場 | {date} {course} {track or '-'} {dist or '?'}米 ({cls or '-'}) "
+            f"第 {num} 場 | {date} {course} {track or '-'} {dist or '?'}米 ({cls_disp}) "
             f"[{valid} {bucket} / 粗:{band}]"
         )
         options.append((row['race_id'], label))

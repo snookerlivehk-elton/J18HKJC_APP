@@ -8,6 +8,7 @@ import pandas as pd
 
 from inference_engine import InferenceEngine
 from config import ModelConfig
+from bucket_utils import format_class_display
 
 try:
     import plotly.graph_objects as go
@@ -156,7 +157,7 @@ race_options = []
 for _, row in races_df.iterrows():
     label = (
         f"第 {row['race_num']} 場｜{row['racing_date']} {row['course']} "
-        f"{row['track']} {row['distance_m']}米（{row['class']}）"
+        f"{row['track']} {row['distance_m']}米（{format_class_display(row['class'])}）"
     )
     race_options.append((row["race_id"], label, int(row["race_num"])))
 

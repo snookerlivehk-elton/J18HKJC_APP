@@ -220,3 +220,77 @@ def _is_na(val: Any) -> bool:
         return bool(pd.isna(val))
     except Exception:
         return val is None
+
+
+# 排位／歷史班次標籤（長詞優先，避免「國際三級賽」被切成「三級賽」前漏掉國際）
+RACE_CLASS_LABEL_RE = re.compile(
+    r"(國際[一二三]級賽|香港[一二三]級賽|[一二三]級賽|"
+    r"第[一二三四五]班|表列賽|新馬賽|"
+    r"Group\s*(?:III|II|I|[123])|G\s*([123]))",
+    re.IGNORECASE,
+)
+
+
+def extract_race_class_label(text: Any) -> str:
+    """從排位標題／內文抽出班次顯示字串（如『三級賽』『第四班』）。"""
+    if text is None or _is_na(text):
+        return ""
+    m = RACE_CLASS_LABEL_RE.search(str(text))
+    if not m:
+        return ""
+    label = m.group(0).strip()
+    # 正規化 Group / G1
+    g = re.match(r"Group\s*(III|II|I|[123])", label, re.I)
+    if g:
+        tok = g.group(1).upper()
+        mapping = {"I": "一級賽", "1": "一級賽", "II": "二級賽", "2": "二級賽", "III": "三級賽", "3": "三級賽"}
+        return mapping.get(tok, label)
+    g2 = re.match(r"G\s*([123])", label, re.I)
+    if g2:
+        return {"1": "一級賽", "2": "二級賽", "3": "三級賽"}[g2.group(1)]
+    return label
+
+
+def parse_class_num(race_class: Any):
+    """
+    班次 → 數字等級（愈大班次愈低）。
+    - 第五班→5 … 第一班→1
+    - 一／二／三級賽、國際／香港級賽、表列賽、Group → 皆視為 **第一班等級 (1)**
+    - 新馬賽 → None（特殊賽，不強行對齊）
+    """
+    if race_class is None or _is_na(race_class):
+        return None
+    s = str(race_class).strip()
+    if not s:
+        return None
+    if re.search(r"新馬", s):
+        return None
+    # 分級賽／表列 = 第一班等級
+    if re.search(
+        r"[一二三]級賽|表列賽|Group\s*(?:III|II|I|[123])|\bG\s*[123]\b",
+        s,
+        re.I,
+    ):
+        return 1
+    m = re.search(r"第([一二三四五六七八九十])班", s)
+    if m:
+        cmap = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+        return cmap.get(m.group(1))
+    m = re.search(r"(?:Class|班)\s*([1-5])", s, re.I)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"([1-5])\s*班", s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def format_class_display(race_class: Any) -> str:
+    """UI 顯示：三級賽 →『三級賽（≡第一班）』。"""
+    if race_class is None or _is_na(race_class) or not str(race_class).strip():
+        return "-"
+    s = str(race_class).strip()
+    n = parse_class_num(s)
+    if n == 1 and re.search(r"[一二三]級賽|表列賽|Group|\bG\s*[123]\b", s, re.I):
+        return f"{s}（≡第一班）"
+    return s

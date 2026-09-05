@@ -19,6 +19,7 @@ from bucket_utils import (
     distance_proximity_weight,
     distance_band,
     parse_bucket_parts,
+    parse_class_num,
 )
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
@@ -99,21 +100,8 @@ class FactorCalculator:
 
     @staticmethod
     def _parse_class_num(race_class) -> Optional[int]:
-        """第五班→5；Class 4→4；無法解析→None。"""
-        if race_class is None or (isinstance(race_class, float) and np.isnan(race_class)):
-            return None
-        s = str(race_class)
-        m = re.search(r"第([一二三四五六七八九十])班", s)
-        if m:
-            cmap = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
-            return cmap.get(m.group(1))
-        m = re.search(r"(?:Class|班)\s*([1-5])", s, re.I)
-        if m:
-            return int(m.group(1))
-        m = re.search(r"([1-5])\s*班", s)
-        if m:
-            return int(m.group(1))
-        return None
+        """第五班→5；一／二／三級賽→1（第一班等級）；無法解析→None。"""
+        return parse_class_num(race_class)
 
     @staticmethod
     def _parse_win_odds(raw_json, win_probability_raw) -> Optional[float]:

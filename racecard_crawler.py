@@ -5,6 +5,7 @@ import argparse
 import sqlite3
 import re
 from datetime import datetime
+from bucket_utils import extract_race_class_label
 
 # 官方排位表 URL 範例: https://racing.hkjc.com/zh-hk/local/information/racecard?racedate=2026/09/06&Racecourse=ST&RaceNo=1
 
@@ -95,25 +96,25 @@ class HKJCRaceCardCrawler:
             'ground': '未知' # 排位時通常未知
         }
 
-        # 從標題區塊提取班次、距離等
-        # 由於 HKJC 網頁結構，標題通常在 .f_fl .f_fs13
-        title_divs = tree.css('.f_fl.f_fs13')
+        # 從標題區塊提取班次、距離等（HKJC 多用 .f_fs13，不一定同時有 .f_fl）
+        title_divs = tree.css('.f_fs13') or tree.css('.f_fl.f_fs13')
         if title_divs:
-            # 整個標題列的文字拼起來
             text = " ".join([d.text(strip=True) for d in title_divs])
-            
-            # 尋找距離
+
             match_dist = re.search(r'(\d+)\s*米', text)
-            if match_dist: race_info['distance_m'] = int(match_dist.group(1))
-            
-            # 尋找班次
-            match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
-            if match_class: race_info['class'] = match_class.group(1)
-            
-            # 尋找賽道
+            if match_dist:
+                race_info['distance_m'] = int(match_dist.group(1))
+
+            race_info['class'] = extract_race_class_label(text)
+
+            # 賽名：常見「第 N 場 - XXX（讓賽）」
+            match_name = re.search(r'第\s*\d+\s*場\s*[-–—]\s*([^\d]{2,40}?)(?:\d{4}年|，|,|$)', text)
+            if match_name:
+                race_info['race_name'] = match_name.group(1).strip(' -–—')
+
             if '草地' in text:
                 match_track = re.search(r'"([A-Z\+]+)"', text)
-                if match_track: 
+                if match_track:
                     race_info['track'] = f'"{match_track.group(1)}" 賽道'
                 else:
                     race_info['track'] = '草地'
@@ -121,18 +122,16 @@ class HKJCRaceCardCrawler:
                 race_info['track'] = '全天候跑道'
             else:
                 race_info['track'] = '未知'
-                
+
         # 再次檢查：整頁文字 + 常見英文距離 (1200M)
-        if race_info['distance_m'] == 0 or race_info['track'] in ('', '未知'):
+        if race_info['distance_m'] == 0 or race_info['track'] in ('', '未知') or not race_info['class']:
             text = tree.body.text(strip=True) if tree.body else ""
             if race_info['distance_m'] == 0:
                 match_dist = re.search(r'(\d+)\s*米', text) or re.search(r'(\d+)\s*[Mm]', text)
                 if match_dist:
                     race_info['distance_m'] = int(match_dist.group(1))
             if not race_info['class']:
-                match_class = re.search(r'(第[一二三四五]班|國際[一二三]級賽|表列賽|新馬賽)', text)
-                if match_class:
-                    race_info['class'] = match_class.group(1)
+                race_info['class'] = extract_race_class_label(text)
             if race_info['track'] in ('', '未知'):
                 match_track = re.search(r'"([A-Z]\+?\d?)"', text) or re.search(r'\b([ABC](?:\+\d)?)\s*賽道', text)
                 if match_track:
