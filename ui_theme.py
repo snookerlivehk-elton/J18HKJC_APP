@@ -86,13 +86,9 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
   max-width: 440px !important;
 }
 [data-testid="stSidebar"] { min-width: 0; }
+/* 跟隨 Streamlit 主題，勿寫死淺色卡片（Dark 會白底淺字） */
 :root {
-  --ink: #14241c;
-  --muted: #5a6b62;
-  --line: #d5e0d9;
-  --card: #f7faf8;
   --accent: #0b6e4f;
-  --accent-soft: #e3f2eb;
   --warn: #c45c26;
 }
 </style>
