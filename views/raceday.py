@@ -87,10 +87,39 @@ st.markdown(
 .hc-metrics .m-val { font-weight: 700; margin-top: 0.1rem; color: var(--text-color) !important; }
 .hc-metrics .ai-pos { color: #2f9e6f !important; }
 .hc-metrics .ai-neg { color: #e07a45 !important; }
-.factor-chip {
-  display: inline-block; background: rgba(11,110,79,0.18);
-  border-radius: 7px; padding: 0.18rem 0.4rem; margin: 0.12rem 0.15rem 0.12rem 0;
-  font-size: 0.7rem; font-weight: 600; color: var(--text-color) !important;
+.rd-picks {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(128,128,128,0.3);
+}
+.rd-picks .sec {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+  opacity: 0.7; margin: 0.45rem 0 0.3rem;
+}
+.rd-picks .sec:first-child { margin-top: 0; }
+.rd-pick-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.4rem; padding: 0.28rem 0; font-size: 0.86rem;
+  border-bottom: 1px dashed rgba(128,128,128,0.2);
+}
+.rd-pick-row:last-child { border-bottom: none; }
+.rd-pick-row .left { min-width: 0; flex: 1; line-height: 1.3; }
+.rd-pick-row .tag {
+  display: inline-block; font-size: 0.65rem; font-weight: 700;
+  color: #2f9e6f; background: rgba(47,158,111,0.18);
+  border-radius: 999px; padding: 0.05rem 0.4rem; margin-right: 0.3rem;
+}
+.rd-pick-row .nm { font-weight: 700; }
+.rd-pick-row .right {
+  flex-shrink: 0; text-align: right; font-weight: 700; font-size: 0.82rem;
+}
+.rd-pick-row .ai {
+  display: block; font-size: 0.68rem; font-weight: 600; opacity: 0.85; margin-top: 0.05rem;
+}
+.rd-pick-row .ai.pos { color: #2f9e6f; }
+.rd-pick-row .ai.neg { color: #e07a45; }
+.rd-picks .note {
+  font-size: 0.68rem; opacity: 0.65; margin-top: 0.45rem; line-height: 1.35;
 }
 /* 場次數字 pill：壓低高度 */
 div[data-testid="stPills"] button {
@@ -217,6 +246,88 @@ try:
 except Exception:
     pass
 
+if pred_df.empty:
+    st.warning("此場暫無預測結果。")
+    st.stop()
+
+if "模型勝率" in pred_df.columns:
+    pred_df = pred_df.sort_values("模型勝率", ascending=False).reset_index(drop=True)
+else:
+    pred_df = pred_df.sort_values("總預測分", ascending=False).reset_index(drop=True)
+
+n_runners = len(pred_df)
+# 入圍名額：與命中率校正一致（≤6 前 2；≥7 前 3）
+place_n = 2 if n_runners <= 6 else 3
+# 爭勝：勝率最高 1～2 匹（第二名勝率 ≥ 頭馬 70% 才並列顯示）
+win_n = 1
+if n_runners >= 2 and "模型勝率" in pred_df.columns:
+    p0 = float(pred_df.iloc[0]["模型勝率"] or 0)
+    p1 = float(pred_df.iloc[1]["模型勝率"] or 0)
+    if p0 > 0 and p1 >= p0 * 0.70:
+        win_n = 2
+elif n_runners >= 2:
+    win_n = 2
+
+
+def _ai_bits(hno: int):
+    ai = ai_map.get(hno)
+    if ai is None or not pd.notna(ai.get("ai_score")):
+        return "", ""
+    sc = float(ai["ai_score"])
+    cf = float(ai["confidence"]) if pd.notna(ai.get("confidence")) else 0.0
+    combo = sc * cf
+    cls = "pos" if combo >= 0 else "neg"
+    return (
+        f'<span class="ai {cls}">{sc:+.1f}×{cf:.0%}＝{combo:+.2f}</span>',
+        combo,
+    )
+
+
+def _pick_rows(df_slice, tag_prefix: str) -> str:
+    parts = []
+    for i, (_, r) in enumerate(df_slice.iterrows(), start=1):
+        hno = int(r["馬號"])
+        name = r["馬名"]
+        prob = float(r["模型勝率%"]) if pd.notna(r.get("模型勝率%")) else 0.0
+        ai_html, _ = _ai_bits(hno)
+        parts.append(
+            f'<div class="rd-pick-row">'
+            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
+            f'<span class="nm">{hno} {name}</span></div>'
+            f'<div class="right">{prob:.1f}%{ai_html}</div>'
+            f"</div>"
+        )
+    return "".join(parts)
+
+
+win_html = _pick_rows(pred_df.head(win_n), "勝")
+place_html = _pick_rows(pred_df.head(place_n), "圍")
+
+# AI 旁路：評價×信心最高且為正、又不在爭勝名單內 → 「文字加分留意」
+ai_watch = ""
+best_ai = None
+best_combo = -999.0
+for _, r in pred_df.iterrows():
+    hno = int(r["馬號"])
+    _html, combo = _ai_bits(hno)
+    if not isinstance(combo, (int, float)):
+        continue
+    if float(combo) > best_combo:
+        best_combo = float(combo)
+        best_ai = r
+win_hnos = set(int(x) for x in pred_df.head(win_n)["馬號"].tolist())
+if best_ai is not None and best_combo >= 0.35 and int(best_ai["馬號"]) not in win_hnos:
+    bh = int(best_ai["馬號"])
+    ai_html, _ = _ai_bits(bh)
+    bp = float(best_ai["模型勝率%"]) if pd.notna(best_ai.get("模型勝率%")) else 0.0
+    ai_watch = (
+        f'<div class="sec">AI 文字加分留意</div>'
+        f'<div class="rd-pick-row">'
+        f'<div class="left"><span class="tag">AI</span>'
+        f'<span class="nm">{bh} {best_ai["馬名"]}</span></div>'
+        f'<div class="right">{bp:.1f}%{ai_html}</div></div>'
+    )
+
 cls_disp = format_class_display(race_row.get("class"))
 race_name = race_row.get("race_name") or ""
 meta_html = f"""
@@ -230,20 +341,19 @@ meta_html = f"""
     <div>班次 <b>{cls_disp}</b></div>
     <div>匹配 <b>{meta.get('match_rate', 0):.0%}</b></div>
   </div>
+  <div class="rd-picks">
+    <div class="sec">爭勝推介 · 模型勝率</div>
+    {win_html}
+    <div class="sec">入圍熱門 · 前{place_n}（本場 {n_runners} 匹）</div>
+    {place_html}
+    {ai_watch}
+    <div class="note">主推介跟勝率；AI＝近績文字觀點（評價×信心）。下方可展開每匹詳情。</div>
+  </div>
 </div>
 """
 st.markdown(meta_html, unsafe_allow_html=True)
 
-if pred_df.empty:
-    st.warning("此場暫無預測結果。")
-    st.stop()
-
-if "模型勝率" in pred_df.columns:
-    pred_df = pred_df.sort_values("模型勝率", ascending=False).reset_index(drop=True)
-else:
-    pred_df = pred_df.sort_values("總預測分", ascending=False).reset_index(drop=True)
-
-st.caption(f"{len(pred_df)} 匹 · 按模型勝率排序（主推介）")
+st.caption(f"全部 {n_runners} 匹 · 按模型勝率排序")
 
 for _, row in pred_df.iterrows():
     rank = int(row["預測排名"]) if pd.notna(row.get("預測排名")) else 0
