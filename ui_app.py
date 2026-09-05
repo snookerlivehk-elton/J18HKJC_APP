@@ -15,7 +15,7 @@ from auth_utils import (
     render_login_page,
     render_account_bar,
 )
-from ui_theme import inject_admin_css, inject_home_screen_icons
+from ui_theme import inject_admin_css, inject_home_screen_icons, render_main_nav
 
 _ROOT = Path(__file__).resolve().parent
 _LOGO = _ROOT / "assets" / "j18ai_plus_logo.png"
@@ -24,11 +24,9 @@ st.set_page_config(
     page_title="J18AI Plus+",
     page_icon=str(_LOGO) if _LOGO.is_file() else "🏇",
     layout="wide",
-    # 預設收合：手機不再一進來側欄蓋住內容（參數仍可用 ≡ 打開）
     initial_sidebar_state="collapsed",
 )
 
-# 必須在登入前後都注入，否則「加至主畫面」只抓到灰底字母 J
 inject_home_screen_icons()
 
 if _LOGO.is_file():
@@ -38,13 +36,11 @@ if not is_logged_in():
     render_login_page()
     st.stop()
 
-# 全站殼層 CSS（含手機收合側欄），不依賴各頁是否呼叫
 inject_admin_css()
 
 role = current_role()
 render_account_bar()
 
-# 依角色組裝導航（顯式 Page，不使用 pages/ 自動發現）
 home = st.Page("views/home.py", title="系統主頁", default=(role == ROLE_ADMIN))
 data_control = st.Page("views/data_control.py", title="資料控制中心")
 meeting_ops = st.Page("views/meeting_ops.py", title="賽日作戰室")
@@ -67,18 +63,18 @@ pace = st.Page("views/pace_factor.py", title="步速形勢")
 speed = st.Page("views/speed_factor.py", title="速度指數")
 sg = st.Page("views/speed_guide.py", title="官方速勢能量")
 
-# position=top：頁面選單在上方，避免手機側欄與主內容疊字
+# 隱藏預設導航（側欄／頂欄都會在手機變成透明抽屜疊字）
+# 改由主畫面「功能選單」st.page_link 切頁
 if role == ROLE_ADMIN:
-    nav = st.navigation(
-        {
-            "系統": [home, whitelist],
-            "營運": [data_control, meeting_ops],
-            "預測": [raceday, inference, calibration, form_ai],
-            "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
-        },
-        position="top",
-    )
+    sections = {
+        "系統": [home, whitelist],
+        "營運": [data_control, meeting_ops],
+        "預測": [raceday, inference, calibration, form_ai],
+        "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
+    }
+    nav = st.navigation(sections, position="hidden")
+    render_main_nav(sections)
 else:
-    nav = st.navigation([raceday], position="top")
+    nav = st.navigation([raceday], position="hidden")
 
 nav.run()

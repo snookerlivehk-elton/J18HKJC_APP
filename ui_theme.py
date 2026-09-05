@@ -6,7 +6,6 @@ def inject_home_screen_icons():
     """
     iOS／Android「加至主畫面」需要穩定的 apple-touch-icon URL。
     Streamlit page_icon 多為暫存 blob，主畫面抓不到 → 只顯示灰底字母。
-    圖檔放 static/，並在 .streamlit/config.toml 開啟 enableStaticServing。
     """
     import streamlit.components.v1 as components
 
@@ -58,6 +57,106 @@ def inject_home_screen_icons():
     )
 
 
+def inject_sidebar_solid_bg():
+    """
+    強制左側抽屜實心底色 + 遮罩（解決透明側欄與主內容疊字）。
+    用 JS 讀主區背景色，不依賴可能為透明的 CSS 變數。
+    """
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+<script>
+(function () {
+  const doc = window.parent.document;
+
+  function appBg() {
+    const root =
+      doc.querySelector('[data-testid="stAppViewContainer"]') ||
+      doc.querySelector('.stApp') ||
+      doc.body;
+    const bg = window.getComputedStyle(root).backgroundColor;
+    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+      const isLight = (doc.documentElement.dataset.theme === 'light');
+      return isLight ? '#ffffff' : '#0e1117';
+    }
+    return bg;
+  }
+
+  function paint(el, bg) {
+    if (!el) return;
+    el.style.setProperty('background', bg, 'important');
+    el.style.setProperty('background-color', bg, 'important');
+    el.style.setProperty('opacity', '1', 'important');
+  }
+
+  function ensureOverlay(show) {
+    let ov = doc.getElementById('j18-sidebar-scrim');
+    if (!ov) {
+      ov = doc.createElement('div');
+      ov.id = 'j18-sidebar-scrim';
+      ov.style.cssText = [
+        'position:fixed', 'inset:0', 'background:rgba(0,0,0,0.55)',
+        'z-index:999990', 'display:none', 'pointer-events:auto'
+      ].join(';');
+      ov.addEventListener('click', function () {
+        const btn = doc.querySelector('[data-testid="stSidebarCollapseButton"] button') ||
+                    doc.querySelector('button[kind="header"]');
+        // 點遮罩時嘗試點擊收合；找不到則只隱藏遮罩
+        const collapse = doc.querySelector('[data-testid="stBaseButton-headerNoPadding"]');
+        if (collapse) collapse.click();
+      });
+      doc.body.appendChild(ov);
+    }
+    ov.style.display = show ? 'block' : 'none';
+  }
+
+  function isSidebarOpen(sidebar) {
+    if (!sidebar) return false;
+    const aria = sidebar.getAttribute('aria-expanded');
+    if (aria === 'false') return false;
+    if (aria === 'true') return true;
+    const rect = sidebar.getBoundingClientRect();
+    return rect.width > 40 && rect.left > -20;
+  }
+
+  function fix() {
+    const sidebar =
+      doc.querySelector('section[data-testid="stSidebar"]') ||
+      doc.querySelector('[data-testid="stSidebar"]');
+    if (!sidebar) {
+      ensureOverlay(false);
+      return;
+    }
+    const bg = appBg();
+    const open = isSidebarOpen(sidebar);
+    paint(sidebar, bg);
+    paint(sidebar.querySelector(':scope > div'), bg);
+    paint(sidebar.querySelector('[data-testid="stSidebarContent"]'), bg);
+    paint(sidebar.querySelector('[data-testid="stSidebarUserContent"]'), bg);
+    paint(sidebar.querySelector('[data-testid="stVerticalBlock"]'), bg);
+    sidebar.style.setProperty('z-index', '999995', 'important');
+    sidebar.style.setProperty('box-shadow', open ? '8px 0 28px rgba(0,0,0,0.45)' : 'none', 'important');
+    // 窄螢幕才加遮罩
+    const narrow = window.parent.innerWidth <= 992;
+    ensureOverlay(narrow && open);
+  }
+
+  fix();
+  if (!window.__j18SidebarFix) {
+    window.__j18SidebarFix = true;
+    const mo = new MutationObserver(function () { fix(); });
+    mo.observe(doc.body, { childList: true, subtree: true, attributes: true });
+    window.parent.addEventListener('resize', fix);
+    setInterval(fix, 600);
+  }
+})();
+</script>
+        """,
+        height=0,
+    )
+
+
 def inject_login_css():
     import streamlit as st
     st.markdown(
@@ -69,10 +168,6 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
 .block-container { max-width: 420px; padding-top: 4rem !important; }
 .auth-wrap { text-align: center; margin-bottom: 0.5rem; }
 .auth-wrap img { border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
-.auth-brand {
-  display: inline-block; font-weight: 800; letter-spacing: 0.04em;
-  color: #c62828; font-size: 0.85rem; margin: 0;
-}
 .auth-card h1 {
   font-size: 1.55rem; font-weight: 800; margin: 0.55rem 0 0.4rem;
   color: var(--text-color, #14241c);
@@ -93,13 +188,29 @@ def inject_admin_css():
 html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif; }
 .block-container { padding-top: 0.85rem !important; max-width: 1200px; }
 
-/* 側欄僅作參數面板（頁面導航已改頂部） */
+/* 硬編碼實底（勿只靠可能透明的 CSS 變數） */
+section[data-testid="stSidebar"],
 [data-testid="stSidebar"] {
-  background-color: var(--secondary-background-color) !important;
-  border-right: 1px solid rgba(128, 128, 128, 0.25);
+  background-color: #0e1117 !important;
+  background: #0e1117 !important;
+  border-right: 1px solid rgba(128, 128, 128, 0.35);
 }
-[data-testid="stSidebar"] > div:first-child {
-  background-color: var(--secondary-background-color) !important;
+section[data-testid="stSidebar"] > div,
+[data-testid="stSidebar"] > div,
+[data-testid="stSidebarContent"],
+[data-testid="stSidebarUserContent"] {
+  background-color: #0e1117 !important;
+  background: #0e1117 !important;
+}
+/* Light theme */
+html[data-theme="light"] section[data-testid="stSidebar"],
+html[data-theme="light"] [data-testid="stSidebar"],
+html[data-theme="light"] section[data-testid="stSidebar"] > div,
+html[data-theme="light"] [data-testid="stSidebar"] > div,
+html[data-theme="light"] [data-testid="stSidebarContent"],
+html[data-theme="light"] [data-testid="stSidebarUserContent"] {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
 }
 
 .j18-page-head {
@@ -115,7 +226,14 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
   margin: 0.25rem 0 0; color: var(--text-color); opacity: 0.72; font-size: 0.9rem;
 }
 
-/* —— 平板／手機 —— */
+.j18-nav-box {
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 10px;
+  padding: 0.35rem 0.6rem 0.55rem;
+  margin-bottom: 0.75rem;
+  background: var(--secondary-background-color, rgba(128,128,128,0.08));
+}
+
 @media (max-width: 992px) {
   .block-container {
     padding-left: 0.85rem !important;
@@ -124,38 +242,27 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     max-width: 100% !important;
   }
   .j18-page-head h1 { font-size: 1.2rem; }
-  .j18-page-head p { font-size: 0.85rem; }
 
-  /* 收合側欄：徹底不佔位、不透出選單字 */
-  [data-testid="stSidebar"][aria-expanded="false"] {
-    display: none !important;
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    transform: translateX(-110%) !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-  }
-  /* 展開側欄：固定抽屜、實底蓋住主內容 */
+  section[data-testid="stSidebar"][aria-expanded="true"],
   [data-testid="stSidebar"][aria-expanded="true"] {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;
     bottom: 0 !important;
-    z-index: 1000002 !important;
+    z-index: 999995 !important;
     width: min(88vw, 320px) !important;
     min-width: 0 !important;
     max-width: 88vw !important;
     transform: none !important;
     visibility: visible !important;
-    background-color: var(--secondary-background-color) !important;
-    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.35);
+    background: #0e1117 !important;
+    background-color: #0e1117 !important;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.45) !important;
   }
-  [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-    background-color: var(--secondary-background-color) !important;
-    height: 100% !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
+  html[data-theme="light"] section[data-testid="stSidebar"][aria-expanded="true"],
+  html[data-theme="light"] [data-testid="stSidebar"][aria-expanded="true"] {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
   }
 
   section.main, [data-testid="stAppViewContainer"] > .main {
@@ -163,33 +270,16 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     width: 100% !important;
   }
 
-  /* 頂部導航可橫滑 */
-  [data-testid="stHeadingWithActionElements"],
-  header[data-testid="stHeader"],
-  [data-testid="stToolbar"] {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* 多欄直向堆疊 */
-  div[data-testid="stHorizontalBlock"] {
-    flex-wrap: wrap !important;
-  }
+  div[data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
   div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
     min-width: min(100%, 260px) !important;
     flex: 1 1 100% !important;
   }
-
-  [data-testid="stDataFrame"],
-  [data-testid="stTable"] {
+  [data-testid="stDataFrame"], [data-testid="stTable"] {
     max-width: 100%;
     overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
   }
-  .stButton > button,
-  .stDownloadButton > button {
-    min-height: 2.6rem;
-  }
+  .stButton > button, .stDownloadButton > button { min-height: 2.6rem; }
 }
 
 @media (max-width: 640px) {
@@ -202,14 +292,12 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     width: 100% !important;
     flex: 1 1 100% !important;
   }
-  section.main .stMarkdown h1 { font-size: 1.25rem !important; }
-  section.main .stMarkdown h2 { font-size: 1.08rem !important; }
-  section.main .stMarkdown h3 { font-size: 1rem !important; }
 }
 </style>
         """,
         unsafe_allow_html=True,
     )
+    inject_sidebar_solid_bg()
 
 
 def inject_user_css():
@@ -224,12 +312,17 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
   padding-bottom: 3.5rem !important;
   max-width: 440px !important;
 }
-[data-testid="stSidebar"] {
-  min-width: 0;
-  background-color: var(--secondary-background-color) !important;
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div {
+  background: #0e1117 !important;
+  background-color: #0e1117 !important;
 }
-[data-testid="stSidebar"] > div:first-child {
-  background-color: var(--secondary-background-color) !important;
+html[data-theme="light"] section[data-testid="stSidebar"],
+html[data-theme="light"] [data-testid="stSidebar"],
+html[data-theme="light"] [data-testid="stSidebar"] > div {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
 }
 :root {
   --accent: #0b6e4f;
@@ -241,23 +334,28 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     padding-right: 0.75rem !important;
     max-width: 100% !important;
   }
-  [data-testid="stSidebar"][aria-expanded="false"] {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-  }
-  [data-testid="stSidebar"][aria-expanded="true"] {
-    position: fixed !important;
-    z-index: 1000002 !important;
-    width: min(88vw, 320px) !important;
-    background-color: var(--secondary-background-color) !important;
-    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.35);
-  }
 }
 </style>
         """,
         unsafe_allow_html=True,
     )
+    inject_sidebar_solid_bg()
+
+
+def render_main_nav(sections: dict):
+    """
+    主內容區選頁（搭配 st.navigation(position='hidden')）。
+    不走左側透明抽屜，手機直屏可正常點選。
+    """
+    import streamlit as st
+
+    with st.expander("📑 功能選單（點此切換頁面）", expanded=False):
+        for section, pages in sections.items():
+            st.caption(section)
+            cols = st.columns(2)
+            for i, page in enumerate(pages):
+                with cols[i % 2]:
+                    st.page_link(page, label=page.title, use_container_width=True)
 
 
 def page_header(title: str, subtitle: str = ""):
