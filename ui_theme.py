@@ -18,9 +18,9 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
 }
 .auth-card h1 {
   font-size: 1.55rem; font-weight: 800; margin: 0.35rem 0 0.4rem;
-  color: #14241c;
+  color: var(--text-color, #14241c);
 }
-.auth-sub { color: #5a6b62; font-size: 0.92rem; margin: 0 0 1rem; }
+.auth-sub { color: var(--text-color, #5a6b62); opacity: 0.75; font-size: 0.92rem; margin: 0 0 1rem; }
 </style>
         """,
         unsafe_allow_html=True,
@@ -34,32 +34,38 @@ def inject_admin_css():
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap');
 html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif; }
-:root {
-  --j18-ink: #14241c;
-  --j18-muted: #5a6b62;
-  --j18-line: #d7e3dc;
-  --j18-accent: #0b6e4f;
-  --j18-bg: #f4f7f5;
-}
 .block-container { padding-top: 1.25rem !important; }
+
+/* 跟隨 Streamlit 主題，勿寫死淺色側欄（Dark 會白底淺字） */
 [data-testid="stSidebar"] {
-  background: #f7faf8;
-  border-right: 1px solid var(--j18-line);
+  background-color: var(--secondary-background-color) !important;
+  border-right: 1px solid rgba(128, 128, 128, 0.25);
 }
-div[data-testid="stSidebarNav"] span {
+[data-testid="stSidebar"] * {
+  color: inherit;
+}
+div[data-testid="stSidebarNav"] span,
+div[data-testid="stSidebarNav"] a,
+div[data-testid="stSidebarNav"] p {
+  color: var(--text-color) !important;
   font-weight: 500;
 }
+div[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"]:hover,
+div[data-testid="stSidebarNav"] [aria-selected="true"] {
+  background-color: rgba(128, 128, 128, 0.18) !important;
+}
+
 .j18-page-head {
-  border-bottom: 1px solid var(--j18-line);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.28);
   padding-bottom: 0.65rem;
   margin-bottom: 1rem;
 }
 .j18-page-head h1 {
   font-size: 1.45rem; font-weight: 800; margin: 0;
-  color: var(--j18-ink); letter-spacing: 0.01em;
+  color: var(--text-color); letter-spacing: 0.01em;
 }
 .j18-page-head p {
-  margin: 0.25rem 0 0; color: var(--j18-muted); font-size: 0.9rem;
+  margin: 0.25rem 0 0; color: var(--text-color); opacity: 0.72; font-size: 0.9rem;
 }
 </style>
         """,
