@@ -1,8 +1,10 @@
 """
-J18 量化系統入口：登入關卡 + 依角色導航。
+J18AI Plus+ 入口：登入關卡 + 依角色導航。
 用戶僅見賽日速覽；管理員見全部管理頁。
 """
 from __future__ import annotations
+
+from pathlib import Path
 
 import streamlit as st
 
@@ -14,12 +16,19 @@ from auth_utils import (
     render_sidebar_account,
 )
 
+_ROOT = Path(__file__).resolve().parent
+_LOGO = _ROOT / "assets" / "j18ai_plus_logo.png"
+
 st.set_page_config(
-    page_title="J18 量化系統",
+    page_title="J18AI Plus+",
+    page_icon=str(_LOGO) if _LOGO.is_file() else "🏇",
     layout="wide",
     # auto：窄螢幕預設收合側欄，避免蓋住主內容
     initial_sidebar_state="auto",
 )
+
+if _LOGO.is_file():
+    st.logo(str(_LOGO), size="large")
 
 if not is_logged_in():
     render_login_page()

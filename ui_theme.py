@@ -12,12 +12,13 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
 [data-testid="stSidebar"] { display: none; }
 .block-container { max-width: 420px; padding-top: 4rem !important; }
 .auth-wrap { text-align: center; margin-bottom: 0.5rem; }
+.auth-wrap img { border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .auth-brand {
-  display: inline-block; font-weight: 800; letter-spacing: 0.12em;
-  color: #0b6e4f; font-size: 0.85rem; margin: 0;
+  display: inline-block; font-weight: 800; letter-spacing: 0.04em;
+  color: #c62828; font-size: 0.85rem; margin: 0;
 }
 .auth-card h1 {
-  font-size: 1.55rem; font-weight: 800; margin: 0.35rem 0 0.4rem;
+  font-size: 1.55rem; font-weight: 800; margin: 0.55rem 0 0.4rem;
   color: var(--text-color, #14241c);
 }
 .auth-sub { color: var(--text-color, #5a6b62); opacity: 0.75; font-size: 0.92rem; margin: 0 0 1rem; }
