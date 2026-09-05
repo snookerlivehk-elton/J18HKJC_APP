@@ -79,7 +79,7 @@ pages/6_Recent_Form…     # 近績 + 賽日 NLP 解析
 pages/7_Pace_Sectional…  # 步速／跑法
 pages/8_Speed_Figure…    # 速度指數 / FSR
 pages/9_HKJC_Speed…      # 官方 Speed Guide
-pages/10_Inference…      # 預測儀表板
+pages/10_Inference…      # 融合總分 + 分場次表 + 因子雷達圖
 racecard_crawler.py      # 排位爬蟲（欄位索引易壞）
 speedguide_crawler.py    # Speed Guide：CMS JSON → upcoming_speedguide
 etl_pipeline.py / batch_crawler.py

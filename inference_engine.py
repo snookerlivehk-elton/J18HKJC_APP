@@ -43,17 +43,38 @@ class InferenceEngine:
         try:
             import sqlalchemy
             engine = sqlalchemy.create_engine(self.db_url)
-            query = f"""
+            # 參數化避免注入；評分欄若舊庫沒有則回退
+            queries = [
+                """
+                SELECT 
+                    r.horse_no, r.horse_name, r.draw, r.jockey_name, r.trainer_name, 
+                    r.handicap_weight, r.horse_weight, r.gear, r.rating, r.rating_delta,
+                    s.form_rating, s.speed_energy, s.speed_energy_delta
+                FROM upcoming_runners r
+                LEFT JOIN upcoming_speedguide s ON r.runner_id = s.runner_id
+                WHERE r.race_id = %(race_id)s
+                ORDER BY r.horse_no ASC
+                """,
+                """
                 SELECT 
                     r.horse_no, r.horse_name, r.draw, r.jockey_name, r.trainer_name, 
                     r.handicap_weight, r.horse_weight, r.gear,
                     s.form_rating, s.speed_energy, s.speed_energy_delta
                 FROM upcoming_runners r
                 LEFT JOIN upcoming_speedguide s ON r.runner_id = s.runner_id
-                WHERE r.race_id = '{race_id}'
+                WHERE r.race_id = %(race_id)s
                 ORDER BY r.horse_no ASC
-            """
-            return pd.read_sql(query, engine)
+                """,
+            ]
+            last_err = None
+            for query in queries:
+                try:
+                    return pd.read_sql(query, engine, params={"race_id": race_id})
+                except Exception as e:
+                    last_err = e
+                    continue
+            print(f"Error fetching runners for {race_id}: {last_err}")
+            return pd.DataFrame()
         except Exception as e:
             print(f"Error fetching runners for {race_id}: {e}")
             return pd.DataFrame()
@@ -240,6 +261,11 @@ class InferenceEngine:
                 '檔位': row['draw'],
                 '騎師': j_name,
                 '練馬師': t_name,
+                '負磅': row.get('handicap_weight'),
+                '體重': row.get('horse_weight'),
+                '評分': row.get('rating'),
+                '評分升降': row.get('rating_delta'),
+                '配備': row.get('gear'),
                 '騎師分': round(z_jockey, 2),
                 '練馬師分': round(z_trainer, 2),
                 '騎練分': round(z_synergy, 2),

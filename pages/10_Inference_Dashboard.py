@@ -1,104 +1,283 @@
+"""
+推論儀表板：分場次融合總分 + 各因子雷達圖。
+"""
+from __future__ import annotations
+
 import streamlit as st
 import pandas as pd
+
 from inference_engine import InferenceEngine
+from config import ModelConfig
+
+try:
+    import plotly.graph_objects as go
+except ImportError:
+    go = None
 
 st.set_page_config(page_title="Inference Dashboard", layout="wide")
 
-st.title("🔮 明日賽事推論預測引擎 (Inference Dashboard)")
-st.markdown("""
-**主流程**：讀取排位表 → 粗桶匹配騎練／近績、細桶匹配檔位 → 查 `factor_scores` → 加權排名。  
+st.title("🔮 賽事融合預測（總分 + 雷達圖）")
+st.markdown(
+    "選場後自動融合各因子加權總分。"
+    "表格看**基本資料與總分**；下方雷達圖看**各因子形狀**（同場可疊加對比）。"
+)
 
-請先：① 資料控制中心抓排位 ② 主頁「重算並寫入因子分數」③ 本頁選場預測。  
-""")
+RADAR_AXES = [
+    ("騎師分", "騎師"),
+    ("練馬師分", "練馬師"),
+    ("騎練分", "騎練"),
+    ("檔位分", "檔位"),
+    ("近績分", "近績"),
+    ("步速分", "步速"),
+    ("速度分", "速度"),
+    ("SG貢獻", "速勢"),
+]
+
+SUMMARY_COLS = [
+    "預測排名", "馬號", "馬名", "檔位", "騎師", "練馬師",
+    "負磅", "體重", "評分", "評分升降", "配備",
+    "命中", "SG貢獻", "總預測分",
+]
+
+FACTOR_COLS = [
+    "預測排名", "馬號", "馬名",
+    "騎師分", "練馬師分", "騎練分", "檔位分",
+    "近績分", "步速分", "速度分", "SG貢獻", "總預測分",
+]
+
+
+def _radar_radius(series: pd.Series) -> pd.Series:
+    """各軸映到 [0, 1]。Z clip±2.5；SG 同場 min-max。"""
+    s = pd.to_numeric(series, errors="coerce").fillna(0.0)
+    if series.name == "SG貢獻":
+        lo, hi = float(s.min()), float(s.max())
+        if hi - lo < 1e-9:
+            return pd.Series(0.5, index=s.index)
+        return (s - lo) / (hi - lo)
+    clipped = s.clip(-2.5, 2.5)
+    return (clipped + 2.5) / 5.0
+
+
+def build_radar_figure(df: pd.DataFrame, horse_nos: list):
+    df = df.reset_index(drop=True)
+    categories = [label for _, label in RADAR_AXES]
+    cats_closed = categories + [categories[0]]
+    norm = {col: _radar_radius(df[col].rename(col)) for col, _ in RADAR_AXES}
+
+    fig = go.Figure()
+    palette = [
+        "#1f77b4", "#d62728", "#2ca02c", "#ff7f0e",
+        "#9467bd", "#8c564b", "#e377c2", "#17becf",
+    ]
+    for i, hno in enumerate(horse_nos):
+        hits = df.index[df["馬號"].astype(int) == int(hno)].tolist()
+        if not hits:
+            continue
+        idx = hits[0]
+        row = df.loc[idx]
+        r_vals = [float(norm[col].iloc[idx]) for col, _ in RADAR_AXES]
+        r_vals = r_vals + [r_vals[0]]
+        label = f"{int(hno)} {row['馬名']}（#{int(row['預測排名'])}｜{row['總預測分']}）"
+        fig.add_trace(
+            go.Scatterpolar(
+                r=r_vals,
+                theta=cats_closed,
+                fill="toself",
+                name=label,
+                line=dict(color=palette[i % len(palette)], width=2),
+                opacity=0.75,
+            )
+        )
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 1], tickvals=[0.25, 0.5, 0.75, 1.0]),
+            angularaxis=dict(direction="clockwise", rotation=90),
+        ),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.28, x=0),
+        margin=dict(l=40, r=40, t=48, b=96),
+        height=540,
+        title="各因子雷達圖（半徑已同場正規化，比較形狀用）",
+    )
+    return fig
+
+
+def highlight_top3(s):
+    if s["預測排名"] == 1:
+        return ["background-color: #ffd700; color: black"] * len(s)
+    if s["預測排名"] == 2:
+        return ["background-color: #e3e4e5; color: black"] * len(s)
+    if s["預測排名"] == 3:
+        return ["background-color: #cd7f32; color: black"] * len(s)
+    return [""] * len(s)
+
 
 engine = InferenceEngine()
 races_df = engine.get_upcoming_races()
 
 if races_df.empty:
-    st.warning("⚠️ 目前沒有即將舉行的賽事。請先到「資料控制中心」抓取排位表。")
+    st.warning("目前沒有即將舉行的賽事。請先到「資料控制中心」抓取排位表。")
     st.stop()
 
 scores_preview = engine.calc.load_factor_scores(
-    factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE', 'SPEED']
+    factor_types=["JOCKEY", "TRAINER", "SYNERGY", "DRAW", "HORSE", "PACE", "SPEED"]
 )
 if scores_preview.empty:
-    st.error("❌ `factor_scores` 是空的。請回主頁執行「重算並寫入因子分數」後再預測。")
+    st.error("`factor_scores` 是空的。請回主頁執行「重算並寫入因子分數」後再預測。")
     st.stop()
-else:
-    types = sorted(scores_preview['factor_type'].unique().tolist())
-    st.caption(f"目前資料庫已有 {len(scores_preview)} 筆因子分數（類型：{types}）。")
 
-st.subheader("🗓️ 選擇場次")
+types = sorted(scores_preview["factor_type"].unique().tolist())
+st.caption(f"資料庫已有 {len(scores_preview)} 筆因子分數（{types}）。")
+
+with st.sidebar.expander("融合權重（ModelConfig）", expanded=False):
+    ModelConfig.WEIGHT_JOCKEY = st.slider("騎師", 0.0, 3.0, float(ModelConfig.WEIGHT_JOCKEY), 0.1)
+    ModelConfig.WEIGHT_TRAINER = st.slider("練馬師", 0.0, 3.0, float(ModelConfig.WEIGHT_TRAINER), 0.1)
+    ModelConfig.WEIGHT_SYNERGY = st.slider("騎練", 0.0, 3.0, float(ModelConfig.WEIGHT_SYNERGY), 0.1)
+    ModelConfig.WEIGHT_DRAW = st.slider("檔位", 0.0, 3.0, float(ModelConfig.WEIGHT_DRAW), 0.1)
+    ModelConfig.WEIGHT_RECENT_FORM = st.slider("近績", 0.0, 3.0, float(ModelConfig.WEIGHT_RECENT_FORM), 0.1)
+    ModelConfig.WEIGHT_PACE = st.slider("步速", 0.0, 3.0, float(ModelConfig.WEIGHT_PACE), 0.1)
+    ModelConfig.WEIGHT_SPEED_FIGURE = st.slider("速度", 0.0, 3.0, float(ModelConfig.WEIGHT_SPEED_FIGURE), 0.1)
+    ModelConfig.WEIGHT_SG_FORM = st.slider("SG·Fitness", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1)
+    ModelConfig.WEIGHT_SG_ENERGY = st.slider("SG·能量Z", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1)
+    ModelConfig.WEIGHT_SG_DELTA = st.slider("SG·差值", -1.0, 3.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1)
 
 race_options = []
 for _, row in races_df.iterrows():
-    date = row['racing_date']
-    course = row['course']
-    num = row['race_num']
-    dist = row['distance_m']
-    track = row['track']
-    cls = row['class']
-    label = f"第 {num} 場 | {date} {course} {track} {dist}米 ({cls})"
-    race_options.append((row['race_id'], label))
+    label = (
+        f"第 {row['race_num']} 場｜{row['racing_date']} {row['course']} "
+        f"{row['track']} {row['distance_m']}米（{row['class']}）"
+    )
+    race_options.append((row["race_id"], label, int(row["race_num"])))
 
-selected_race_id = st.selectbox(
-    "請選擇要進行預測的賽事：",
-    options=[opt[0] for opt in race_options],
-    format_func=lambda x: next(opt[1] for opt in race_options if opt[0] == x)
+view_mode = st.radio("檢視模式", ["單場深入", "整日總覽"], horizontal=True)
+
+weight_key = (
+    ModelConfig.WEIGHT_JOCKEY,
+    ModelConfig.WEIGHT_TRAINER,
+    ModelConfig.WEIGHT_SYNERGY,
+    ModelConfig.WEIGHT_DRAW,
+    ModelConfig.WEIGHT_RECENT_FORM,
+    ModelConfig.WEIGHT_PACE,
+    ModelConfig.WEIGHT_SPEED_FIGURE,
+    ModelConfig.WEIGHT_SG_FORM,
+    ModelConfig.WEIGHT_SG_ENERGY,
+    ModelConfig.WEIGHT_SG_DELTA,
 )
 
-if st.button("🚀 執行因子匹配預測", type="primary"):
-    with st.spinner("正在以排位條件查詢 factor_scores..."):
-        try:
-            predictions_df, race_info, meta = engine.predict_race(selected_race_id)
 
-            if not meta.get('bucket_valid') and not meta.get('band_bucket_valid'):
-                st.error(
-                    f"此場 Bucket 無效：細=`{meta.get('bucket_id')}`／粗=`{meta.get('band_bucket_id')}`。"
-                    "排位表可能缺少跑道或距離，請重新抓取排位表。"
-                )
-                st.stop()
+@st.cache_data(ttl=120, show_spinner="計算融合分數…")
+def _cached_predict(race_id: str, _weights: tuple):
+    eng = InferenceEngine()
+    df, info, meta = eng.predict_race(race_id)
+    info_dict = info.to_dict() if hasattr(info, "to_dict") else (dict(info) if info is not None else {})
+    safe_info = {}
+    for k, v in info_dict.items():
+        if hasattr(v, "item"):
+            try:
+                safe_info[k] = v.item()
+                continue
+            except Exception:
+                pass
+        safe_info[k] = str(v) if hasattr(v, "isoformat") else v
+    return {
+        "df": df.to_dict(orient="list") if df is not None and not df.empty else {},
+        "columns": list(df.columns) if df is not None and not df.empty else [],
+        "info": safe_info,
+        "meta": meta,
+    }
 
-            st.info(
-                f"細桶(檔位)：`{meta['bucket_id']}`　｜　"
-                f"粗桶(騎練/近績)：`{meta.get('band_bucket_id')}`　｜　"
-                f"因子表列數：{meta['factor_rows']}　｜　"
-                f"匹配率：{meta['match_rate']:.0%}　"
-                f"（J{meta['hit_counts']['JOCKEY']} "
-                f"T{meta['hit_counts']['TRAINER']} "
-                f"S{meta['hit_counts']['SYNERGY']} "
-                f"D{meta['hit_counts']['DRAW']} "
-                f"H{meta['hit_counts'].get('HORSE', 0)} "
-                f"P{meta['hit_counts'].get('PACE', 0)} "
-                f"V{meta['hit_counts'].get('SPEED', 0)}）"
-            )
 
-            if meta['match_rate'] == 0:
-                st.warning(
-                    "匹配率為 0%：請用主頁「重算並寫入 factor_scores」產生距離帶粗桶鍵（如 ST_SPRINT），"
-                    "並確認排位距離/跑道正確。"
-                )
+def load_prediction(race_id: str):
+    payload = _cached_predict(race_id, weight_key)
+    if not payload["columns"]:
+        return pd.DataFrame(), payload["info"], payload["meta"]
+    return pd.DataFrame(payload["df"], columns=payload["columns"]), payload["info"], payload["meta"]
 
-            if predictions_df.empty:
-                st.warning("無法產出預測，可能是該場沒有馬匹排位資料。")
-            else:
-                st.subheader("🏆 預測排名結果")
 
-                def highlight_top3(s):
-                    if s['預測排名'] == 1:
-                        return ['background-color: #ffd700; color: black'] * len(s)
-                    if s['預測排名'] == 2:
-                        return ['background-color: #e3e4e5; color: black'] * len(s)
-                    if s['預測排名'] == 3:
-                        return ['background-color: #cd7f32; color: black'] * len(s)
-                    return [''] * len(s)
+def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
+    predictions_df, _race_info, meta = load_prediction(race_id)
 
-                st.dataframe(
-                    predictions_df.style.apply(highlight_top3, axis=1),
-                    use_container_width=True,
-                    height=500
-                )
-                st.caption("「命中」欄表示該馬四項核心因子（騎/練/騎練/檔）有幾項成功查到歷史 Z-Score。")
+    st.markdown(f"### {race_label}")
+    if not meta.get("bucket_valid") and not meta.get("band_bucket_valid"):
+        st.error(
+            f"Bucket 無效：細=`{meta.get('bucket_id')}`／粗=`{meta.get('band_bucket_id')}`。"
+        )
+        return
 
-        except Exception as e:
-            st.error(f"推論過程發生錯誤: {e}")
+    hc = meta.get("hit_counts") or {}
+    st.caption(
+        f"細桶 `{meta.get('bucket_id')}`｜粗桶 `{meta.get('band_bucket_id')}`｜"
+        f"匹配率 {meta.get('match_rate', 0):.0%}｜"
+        f"J{hc.get('JOCKEY', 0)} T{hc.get('TRAINER', 0)} S{hc.get('SYNERGY', 0)} "
+        f"D{hc.get('DRAW', 0)} H{hc.get('HORSE', 0)} P{hc.get('PACE', 0)} V{hc.get('SPEED', 0)}"
+    )
+
+    if predictions_df.empty:
+        st.warning("此場無預測結果。")
+        return
+
+    show = [c for c in SUMMARY_COLS if c in predictions_df.columns]
+    st.dataframe(
+        predictions_df[show].style.apply(highlight_top3, axis=1),
+        use_container_width=True,
+        height=320 if compact else 440,
+        hide_index=True,
+    )
+
+    if compact:
+        return
+
+    with st.expander("各因子分數明細", expanded=False):
+        fcols = [c for c in FACTOR_COLS if c in predictions_df.columns]
+        st.dataframe(predictions_df[fcols], use_container_width=True, hide_index=True)
+
+    if go is None:
+        st.warning("未安裝 plotly，無法顯示雷達圖。請把 `plotly` 加入 requirements 後重新部署。")
+        return
+
+    st.subheader("因子雷達圖")
+    default_top = [int(x) for x in predictions_df.head(3)["馬號"].tolist()]
+    all_labels = {
+        int(r["馬號"]): f"{int(r['馬號'])} {r['馬名']}（#{int(r['預測排名'])}｜總分 {r['總預測分']}）"
+        for _, r in predictions_df.iterrows()
+    }
+    pick = st.multiselect(
+        "疊加顯示的馬（建議 2–4 匹）",
+        options=list(all_labels.keys()),
+        default=default_top,
+        format_func=lambda x: all_labels.get(x, str(x)),
+        key=f"radar_pick_{race_id}",
+    )
+    if not pick:
+        st.info("請至少選一匹馬。")
+        return
+
+    st.plotly_chart(build_radar_figure(predictions_df, pick), use_container_width=True)
+
+    focus = int(pick[0])
+    drow = predictions_df[predictions_df["馬號"].astype(int) == focus].iloc[0]
+    st.caption(f"原始因子分（未正規化）— {int(drow['馬號'])} {drow['馬名']}")
+    cols = st.columns(len(RADAR_AXES))
+    for i, (col, label) in enumerate(RADAR_AXES):
+        cols[i].metric(label, f"{float(drow[col]):.2f}")
+
+
+if view_mode == "整日總覽":
+    st.info("整日總覽每場顯示基本資料與融合總分；切換「單場深入」可看雷達圖。")
+    for race_id, label, _num in race_options:
+        render_race_block(race_id, label, compact=True)
+        st.divider()
+else:
+    selected_race_id = st.selectbox(
+        "選擇場次",
+        options=[o[0] for o in race_options],
+        format_func=lambda x: next(o[1] for o in race_options if o[0] == x),
+    )
+    label = next(o[1] for o in race_options if o[0] == selected_race_id)
+    c1, c2 = st.columns([1, 5])
+    with c1:
+        if st.button("重新計算", type="secondary"):
+            _cached_predict.clear()
+            st.rerun()
+    render_race_block(selected_race_id, label, compact=False)
