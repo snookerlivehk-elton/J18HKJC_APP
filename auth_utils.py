@@ -255,6 +255,7 @@ def render_sidebar_account():
     via = st.session_state.get(SESSION_VIA, "")
     with st.sidebar:
         st.caption(f"{'管理' if role == ROLE_ADMIN else '用戶'}｜{identity}")
+        st.caption("手機／平板：點左上角 ≡ 開關選單")
         if via == "bootstrap":
             st.warning("開機通行碼模式")
         if st.button("登出", use_container_width=True):

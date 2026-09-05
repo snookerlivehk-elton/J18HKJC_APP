@@ -17,7 +17,8 @@ from auth_utils import (
 st.set_page_config(
     page_title="J18 量化系統",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # auto：窄螢幕預設收合側欄，避免蓋住主內容
+    initial_sidebar_state="auto",
 )
 
 if not is_logged_in():
