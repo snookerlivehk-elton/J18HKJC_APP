@@ -332,6 +332,17 @@ def _model_pick_rows(df_slice, tag_prefix: str) -> str:
     return "".join(parts) if parts else '<div class="rd-pick-empty">—</div>'
 
 
+def _fmt_ai_display(combo) -> str:
+    """推介列簡潔顯示：72%(+0.72)，不秀評價×信心算式。"""
+    if combo is None:
+        return "—"
+    try:
+        c = float(combo)
+    except (TypeError, ValueError):
+        return "—"
+    return f"{c * 100:.0f}%({c:+.2f})"
+
+
 def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
     if not picks:
         return '<div class="rd-pick-empty">尚無 AI 評價</div>'
@@ -339,13 +350,7 @@ def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
     for i, r in enumerate(picks, start=1):
         hno = r.get("horse_no")
         name = r.get("horse_name") or ""
-        sc = r.get("ai_score")
-        cf = r.get("confidence")
-        combo = r.get("ai_combo")
-        right = "—"
-        if combo is not None and sc is not None:
-            cf_s = f"{float(cf):.0%}" if cf is not None else "—"
-            right = f"{float(sc):+.1f}×{cf_s}＝{float(combo):+.2f}"
+        right = _fmt_ai_display(r.get("ai_combo"))
         parts.append(
             f'<div class="rd-pick-row">'
             f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
@@ -385,14 +390,14 @@ meta_html = f"""
         {place_html}
       </div>
       <div class="rd-picks-col ai-col">
-        <div class="col-title">AI 馬評 · 評價×信心</div>
+        <div class="col-title">AI 馬評 · 推介指數</div>
         <div class="sec">爭勝</div>
         {ai_win_html}
         <div class="sec">入圍 · 前{ai_place_n}</div>
         {ai_place_html}
       </div>
     </div>
-    <div class="note">雙軌獨立：左＝量化勝率；右＝AI 參考因子＋賽績指引後的馬評（不混入總分）。本場 {n_runners} 匹。</div>
+    <div class="note">雙軌獨立：左＝量化勝率；右＝AI 推介指數（評價×信心，僅顯示結果）。算式見下方馬匹詳情。本場 {n_runners} 匹。</div>
   </div>
 </div>
 """
@@ -421,8 +426,8 @@ for _, row in pred_df.iterrows():
         ai_cls = "ai-pos" if ai_combo >= 0 else "ai-neg"
         ai_badge = " · AI推介" if hno in ai_pick_hnos else ""
         ai_block = (
-            f'<div><div class="m-lbl">AI 馬評（評價×信心）{ai_badge}</div>'
-            f'<div class="m-val {ai_cls}">{ai_score:+.2f}×{ai_conf:.0%}＝{ai_combo:+.2f}</div></div>'
+            f'<div><div class="m-lbl">AI 推介指數{ai_badge}</div>'
+            f'<div class="m-val {ai_cls}">{_fmt_ai_display(ai_combo)}</div></div>'
         )
     else:
         ai_block = (
@@ -473,7 +478,8 @@ for _, row in pred_df.iterrows():
 
         if ai is not None:
             st.markdown(
-                f"**AI 評價**（{float(ai['ai_score']):+.2f}｜信心 {float(ai['confidence']):.0%}）  \n"
+                f"**AI 評價**（{float(ai['ai_score']):+.2f} × 信心 {float(ai['confidence']):.0%} "
+                f"＝ {_fmt_ai_display(float(ai['ai_score']) * float(ai['confidence']))}）  \n"
                 f"{ai.get('summary') or ''}"
             )
         else:
@@ -486,4 +492,4 @@ for _, row in pred_df.iterrows():
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-st.caption("雙軌：模型勝率｜AI 馬評（評價×信心）。AI 不混入總分。雷達：中心＝同場該軸最低（可負）、外緣＝最高；點圖可看原始分。")
+st.caption("雙軌：模型勝率｜AI 推介指數。算式在馬匹詳情；AI 不混入總分。雷達：中心＝同場最低（可負）、外緣＝最高。")
