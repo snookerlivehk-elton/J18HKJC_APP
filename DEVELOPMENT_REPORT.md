@@ -1,8 +1,9 @@
 # J18 賽馬量化預測系統 — AI 開發交接手冊
 
-> **給下一位 AI / 開發者**：先讀本文件，再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
+> **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
 > 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。
+> **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**
 
 ---
 
@@ -190,12 +191,34 @@ OpenAPI：部署後 `/docs`。
 5. **Speed Guide**：頁面是 Next.js「正在加載」；真實資料在 CMS JSON（`sg_index` / `sg_race_N`），**勿再 scrape HTML**。Fitness 是 `0/1/2/3` 拇指數；能量推論用**同場 Z**；差值直接入分。缺值給 0。  
 6. **Streamlit 換頁**：長任務（NLP 批次）會停；非背景 job。  
 7. **`run_all_factors` 回傳**：`(jockey, trainer, synergy, draw, hj, horse, pace, speed)` — 改 UI 解包時注意數量。  
+8. **UI 被 GitHub 同事更新後**：本地舊 `views/`／`ui_theme.py` 推上去會蓋掉最新版面 — 見 §4.1。  
 
 ---
 
 ## 4. 開發慣例（給 AI）
 
-- **改 Bucket / 公式後**：更新計算 + 匹配 UI + `inference_engine` + 手冊；提醒使用者重算 `factor_scores`。  
+### 4.1 UI 與 GitHub 協作（必讀）
+
+> **GitHub 上會有 UI 同事持續優化頁面 UI。**  
+> 本地工作區與 `origin/main` 的 UI 程式**有機會不同**；下次開發**計算邏輯／資料結構／推論／API 時，禁止用本機舊 UI 蓋掉 GitHub 上已合併的最新 UI**。
+
+| 可改（邏輯／結構） | 勿輕易覆蓋（UI 外觀／互動） |
+|--------------------|------------------------------|
+| `factor_calculator.py`、`inference_engine.py`、`config.py`、`bucket_utils.py` | `ui_theme.py`、`ui_app.py`、`auth_utils.py`（登入／導航殼） |
+| `*_crawler.py`、`meeting_pipeline.py`、`etl_pipeline.py` | `views/*.py` 的版面、CSS、元件排版、文案樣式 |
+| `prediction_api.py`、`prediction_export.py`、schema／DB | `assets/`、靜態圖示、品牌展示相關 |
+
+**開工前 SOP**
+
+1. `git fetch origin` → `git status`／`git log HEAD..origin/main`：確認遠端是否有新 UI commit。  
+2. 有遠端更新先 **`git pull`（或 rebase）** 再改邏輯；衝突時：**保留 GitHub 側 UI／樣式相關 hunk**，只合併你的計算／API 變更。  
+3. Commit 前用 `git diff` 自查：是否誤含僅本地的舊 `ui_theme`／`views` 排版；有則還原那些檔再提交。  
+4. 若必須動 UI（例如新欄位一定要顯示）：**先 pull 最新 UI**，再最小改動；勿整檔覆蓋。  
+5. **計算邏輯與結構以本手冊／白皮書為準；視覺以 GitHub `main` 最新為準。**
+
+### 4.2 一般慣例
+
+- **改 Bucket / 公式後**：更新計算 + 匹配 UI（在**最新** UI 上最小改動）+ `inference_engine` + 手冊；提醒使用者重算 `factor_scores`。  
 - **因子頁模式**：可從 DB 載歷史計算（`ui_utils.get_history_df_for_compute`），不要只綁主頁 session。  
 - **落庫**：`save_factor_scores` 只保留標準欄位；診斷欄（跑法、Peak、NLP場次）可留 session／回傳 DataFrame。  
 - **名稱**：一律 `normalize_person_name`（去括號磅數）；騎練組合用 `synergy_name`。  
@@ -205,7 +228,7 @@ OpenAPI：部署後 `/docs`。
 建議實作順序（新因子）：
 
 1. `factor_calculator` 純函式 + 可落庫  
-2. 專頁匹配／診斷  
+2. 專頁匹配／診斷（基於最新 UI，勿覆蓋同事樣式）  
 3. `inference_engine` + `WEIGHT_*`  
 4. `run_all_factors` / 主頁  
 5. 更新本手冊  
@@ -328,6 +351,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-05 | **手冊 §4.1**：GitHub UI 同事會優化版面；開發邏輯時勿用本地舊 UI 覆蓋 `main` |
 | 2026-09-05 | **賽前預測 API**：`prediction_api` + Kelly／即時賠率；`PREDICTION_API_KEY`；獨立 `start-api.sh` |
 | 2026-09-05 | **登入分權**：`auth_whitelist` + `AUTH_BOOTSTRAP_ADMIN`；user 僅賽日速覽；admin 全管理頁；`views/` + `st.navigation` |
 | 2026-09-05 | **UI**：登入頁／管理外殼／賽日速覽簡潔綠系；側欄中文由 Page title 提供 |
@@ -337,4 +361,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-05 — 賽前預測 API（Kelly／外部平台）、登入分權、賽日速覽。*
+*最後更新：2026-09-05 — §4.1 UI／GitHub 協作注意、賽前預測 API、登入分權。*
