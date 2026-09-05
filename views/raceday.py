@@ -369,6 +369,8 @@ ai_place_n = ai_picks.get("place_cutoff") or place_n
 
 cls_disp = format_class_display(race_row.get("class"))
 race_name = race_row.get("race_name") or ""
+pace_label = meta.get("pace_scenario") or "未知"
+pace_note = meta.get("pace_scenario_note") or ""
 meta_html = f"""
 <div class="rd-meta">
   <div class="title">第 {int(race_row['race_num'])} 場{' · ' + race_name if race_name else ''}</div>
@@ -378,6 +380,7 @@ meta_html = f"""
     <div>賽道 <b>{race_row.get('track') or '-'}</b></div>
     <div>距離 <b>{race_row.get('distance_m') or '-'} 米</b></div>
     <div>班次 <b>{cls_disp}</b></div>
+    <div>預計步速 <b>{pace_label}</b></div>
     <div>匹配 <b>{meta.get('match_rate', 0):.0%}</b></div>
   </div>
   <div class="rd-picks">
@@ -402,6 +405,8 @@ meta_html = f"""
 </div>
 """
 st.markdown(meta_html, unsafe_allow_html=True)
+if pace_note:
+    st.caption(pace_note)
 
 st.caption(f"全部 {n_runners} 匹 · 按模型勝率排序")
 

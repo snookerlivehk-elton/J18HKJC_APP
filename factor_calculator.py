@@ -1341,15 +1341,15 @@ class FactorCalculator:
         out = grouped.rename(columns={"horse_name_clean": "entity_name"})
         out["factor_type"] = "PACE"
         out["bucket_id"] = GLOBAL_BUCKET
-        # factor_scores 標準欄；其餘診斷欄留在 session / 回傳表
+        # factor_scores：標準欄 + early_speed_z／running_style（預計步速）
         return out
 
     def project_race_pace(self, pace_df: pd.DataFrame, horse_names: list) -> dict:
         """
         同場步速形勢：
         - heat：前 N 名 early_speed_z 加總（顯示用）
-        - scenario：依「夠快的爭搶馬數量」判定（超快互燒／中性／偏慢獨走）
-          不可用固定 heat≥2.5：12 匹場前 3 名全局 Z 期望和常 >2.5，會幾乎全判超快。
+        - scenario：依「夠快的爭搶馬數量」判定（偏快／中性／偏慢）
+          不可用固定 heat≥2.5：12 匹場前 3 名全局 Z 期望和常 >2.5，會幾乎全判偏快。
         """
         top_n = int(getattr(ModelConfig, "EARLY_SPEED_TOP_N", 3))
         fast_z = float(getattr(ModelConfig, "PACE_EARLY_FAST_Z", 1.0))
@@ -1397,7 +1397,7 @@ class FactorCalculator:
 
         # 劇本：數「夠快」的爭搶馬（對齊白皮書互燒 vs 獨走），不用 heat 絕對門檻
         if n_contenders >= hot_min:
-            scenario = "超快步速"
+            scenario = "偏快步速"
         elif n_contenders <= cold_max:
             scenario = "偏慢步速"
         else:
@@ -1411,11 +1411,11 @@ class FactorCalculator:
             style = str(row[style_col]) if style_col else ""
             base_z = float(row[z_col]) if z_col and pd.notna(row.get(z_col)) else 0.0
             bonus = 0.0
-            if scenario == "超快步速" and "後追" in style:
+            if scenario == "偏快步速" and "後追" in style:
                 bonus = closer_w * 0.5
             elif scenario == "偏慢步速" and "前領" in style:
                 bonus = front_w * 0.5
-            elif scenario == "超快步速" and "前領" in style:
+            elif scenario == "偏快步速" and "前領" in style:
                 bonus = -0.25
             elif scenario == "偏慢步速" and "後追" in style:
                 bonus = -0.25
@@ -1633,6 +1633,29 @@ class FactorCalculator:
         out["bucket_id"] = GLOBAL_BUCKET
         return out
 
+    def _ensure_pace_score_columns(self, conn) -> None:
+        """確保 factor_scores 有 PACE 預計步速所需欄位（既有庫相容）。"""
+        stmts = [
+            "ALTER TABLE factor_scores ADD COLUMN IF NOT EXISTS early_speed_z DOUBLE PRECISION",
+            "ALTER TABLE factor_scores ADD COLUMN IF NOT EXISTS running_style VARCHAR(40)",
+        ]
+        if USE_SQLITE:
+            # SQLite 舊版無 IF NOT EXISTS：失敗則略過
+            for raw in (
+                "ALTER TABLE factor_scores ADD COLUMN early_speed_z REAL",
+                "ALTER TABLE factor_scores ADD COLUMN running_style TEXT",
+            ):
+                try:
+                    conn.execute(text(raw))
+                except Exception:
+                    pass
+            return
+        for s in stmts:
+            try:
+                conn.execute(text(s))
+            except Exception:
+                pass
+
     def save_factor_scores(self, *factor_dfs) -> int:
         """將因子分數寫入 factor_scores（先清再寫，避免舊 bucket 殘留）。"""
         frames = [f for f in factor_dfs if f is not None and not f.empty]
@@ -1646,11 +1669,13 @@ class FactorCalculator:
             if col not in combined.columns:
                 raise ValueError(f"factor score missing column: {col}")
 
-        out = combined[required].copy()
+        optional = [c for c in ('early_speed_z', 'running_style') if c in combined.columns]
+        out = combined[required + optional].copy()
         out['entity_name'] = out['entity_name'].astype(str)
         out['calculated_at'] = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
 
         with self.engine.begin() as conn:
+            self._ensure_pace_score_columns(conn)
             # 只覆蓋本次有計算的 factor_type，保留未來其他類型空間
             types = tuple(sorted(out['factor_type'].unique().tolist()))
             if len(types) == 1:

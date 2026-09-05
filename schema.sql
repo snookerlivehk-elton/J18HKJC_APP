@@ -197,6 +197,8 @@ CREATE TABLE factor_scores (
     adjusted_score NUMERIC NOT NULL,     -- 貝葉斯平滑後的原始分數
     z_score NUMERIC NOT NULL,            -- 同分桶內的標準化分數 (Z-Score)
     calculated_at TIMESTAMPTZ DEFAULT NOW(),
+    early_speed_z NUMERIC,               -- PACE：早段速度 Z（預計步速用）
+    running_style VARCHAR(40),           -- PACE：跑法標籤
     UNIQUE(factor_type, bucket_id, entity_name)
 );
 

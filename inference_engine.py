@@ -343,9 +343,46 @@ class InferenceEngine:
             'softmax_temperature': ModelConfig.SOFTMAX_TEMPERATURE,
             'softmax_within_race_z': ModelConfig.SOFTMAX_WITHIN_RACE_Z,
             'win_prob_sum': float(df_result['模型勝率'].sum()) if not df_result.empty else 0.0,
+            **self._pace_scenario_meta(scores_df, runners_df),
         }
 
         return df_result, race_info, meta
+
+    def _pace_board_from_scores(self, scores_df: pd.DataFrame) -> pd.DataFrame:
+        """從 factor_scores 抽出 PACE 表（含 early_speed_z／跑法，供預計步速）。"""
+        if scores_df is None or scores_df.empty:
+            return pd.DataFrame()
+        pace = scores_df[scores_df['factor_type'] == 'PACE'].copy()
+        if pace.empty:
+            return pd.DataFrame()
+        return pace
+
+    def _pace_scenario_meta(self, scores_df: pd.DataFrame, runners_df: pd.DataFrame) -> dict:
+        """預計步速（偏慢／中性／偏快）；缺早段 Z 時標示需重算。"""
+        empty = {
+            'pace_scenario': '未知',
+            'pace_heat': None,
+            'pace_contenders': None,
+        }
+        if runners_df is None or runners_df.empty or 'horse_name' not in runners_df.columns:
+            return empty
+        pace = self._pace_board_from_scores(scores_df)
+        if pace.empty:
+            return empty
+        if 'early_speed_z' not in pace.columns or pace['early_speed_z'].isna().all():
+            return {
+                'pace_scenario': '未知',
+                'pace_heat': None,
+                'pace_contenders': None,
+                'pace_scenario_note': '請重算步速因子以寫入早段速度',
+            }
+        proj = self.calc.project_race_pace(pace, runners_df['horse_name'].tolist())
+        return {
+            'pace_scenario': proj.get('scenario') or '未知',
+            'pace_heat': proj.get('heat'),
+            'pace_contenders': proj.get('n_contenders'),
+            'pace_fast_z': proj.get('fast_z'),
+        }
 
     def export_kelly_payload(self, race_id: str) -> dict:
         """
@@ -386,6 +423,7 @@ class InferenceEngine:
                 'distance_m': info.get('distance_m'),
                 'track': info.get('track'),
                 'class': info.get('class'),
+                'expected_pace': meta.get('pace_scenario'),
             },
             'meta': {
                 'bucket_id': meta.get('bucket_id'),

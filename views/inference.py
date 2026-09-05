@@ -174,7 +174,9 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         return
 
     hc = meta.get("hit_counts") or {}
+    pace_sc = meta.get("pace_scenario") or "未知"
     st.caption(
+        f"預計步速 **{pace_sc}**｜"
         f"細桶 `{meta.get('bucket_id')}`｜粗桶 `{meta.get('band_bucket_id')}`｜"
         f"匹配率 {meta.get('match_rate', 0):.0%}｜"
         f"J{hc.get('JOCKEY', 0)} T{hc.get('TRAINER', 0)} S{hc.get('SYNERGY', 0)} "
@@ -183,6 +185,8 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         f"場內z={meta.get('softmax_within_race_z')}｜"
         f"勝率加總={meta.get('win_prob_sum', 0):.4f}"
     )
+    if meta.get("pace_scenario_note"):
+        st.caption(meta["pace_scenario_note"])
 
     if predictions_df.empty:
         st.warning("此場無預測結果。")
@@ -190,10 +194,11 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
 
     if not compact and "模型勝率%" in predictions_df.columns:
         top = predictions_df.iloc[0]
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("首位總分", f"{top['總預測分']:.2f}")
         m2.metric("首位模型勝率", f"{top['模型勝率%']:.1f}%")
         m3.metric("場內馬數", f"{len(predictions_df)}")
+        m4.metric("預計步速", pace_sc)
 
     show = [c for c in SUMMARY_COLS if c in predictions_df.columns]
     st.dataframe(
