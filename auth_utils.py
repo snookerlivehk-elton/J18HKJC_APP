@@ -243,6 +243,11 @@ def render_login_page():
                 st.rerun()
             else:
                 st.error(msg)
+    st.link_button(
+        "進入J18主頁",
+        "https://j18.hk/",
+        use_container_width=True,
+    )
 
 
 def render_account_bar():
