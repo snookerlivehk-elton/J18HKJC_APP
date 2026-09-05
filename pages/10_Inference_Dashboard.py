@@ -16,10 +16,14 @@ except ImportError:
 
 st.set_page_config(page_title="Inference Dashboard", layout="wide")
 
-st.title("🔮 賽事融合預測（總分 + 雷達圖）")
+st.title("🔮 賽事融合預測（總分 + 勝率 + 雷達圖）")
 st.markdown(
-    "選場後自動融合各因子加權總分。"
-    "表格看**基本資料與總分**；下方雷達圖看**各因子形狀**（同場可疊加對比）。"
+    """
+**三層勿混用**
+1. **因子／總分**（可正可負，Z-Score）— 內部排序與加權  
+2. **雷達半徑**（同場 0–1）— 只為圖形展示，不是勝率  
+3. **模型勝率**（同場 softmax，加總≈100%）— 給凱利／外傳系統用  
+"""
 )
 
 RADAR_AXES = [
@@ -36,26 +40,26 @@ RADAR_AXES = [
 SUMMARY_COLS = [
     "預測排名", "馬號", "馬名", "檔位", "騎師", "練馬師",
     "負磅", "體重", "評分", "評分升降", "配備",
-    "命中", "SG貢獻", "總預測分",
+    "命中", "SG貢獻", "總預測分", "模型勝率%",
 ]
 
 FACTOR_COLS = [
     "預測排名", "馬號", "馬名",
     "騎師分", "練馬師分", "騎練分", "檔位分",
-    "近績分", "步速分", "速度分", "SG貢獻", "總預測分",
+    "近績分", "步速分", "速度分", "SG貢獻", "總預測分", "模型勝率%",
 ]
 
 
 def _radar_radius(series: pd.Series) -> pd.Series:
-    """各軸映到 [0, 1]。Z clip±2.5；SG 同場 min-max。"""
+    """
+    各軸映到 [0, 1]（只供雷達顯示）。
+    同場 min-max：最低分→0、最高分→1，負的原始 Z 也能完整展開在圖上。
+    """
     s = pd.to_numeric(series, errors="coerce").fillna(0.0)
-    if series.name == "SG貢獻":
-        lo, hi = float(s.min()), float(s.max())
-        if hi - lo < 1e-9:
-            return pd.Series(0.5, index=s.index)
-        return (s - lo) / (hi - lo)
-    clipped = s.clip(-2.5, 2.5)
-    return (clipped + 2.5) / 5.0
+    lo, hi = float(s.min()), float(s.max())
+    if hi - lo < 1e-9:
+        return pd.Series(0.5, index=s.index)
+    return (s - lo) / (hi - lo)
 
 
 def build_radar_figure(df: pd.DataFrame, horse_nos: list):
@@ -98,7 +102,7 @@ def build_radar_figure(df: pd.DataFrame, horse_nos: list):
         legend=dict(orientation="h", yanchor="bottom", y=-0.28, x=0),
         margin=dict(l=40, r=40, t=48, b=96),
         height=540,
-        title="各因子雷達圖（半徑已同場正規化，比較形狀用）",
+        title="各因子雷達圖（每軸同場 min-max→0~1；負分也能展滿圖）",
     )
     return fig
 
@@ -141,6 +145,12 @@ with st.sidebar.expander("融合權重（ModelConfig）", expanded=False):
     ModelConfig.WEIGHT_SG_FORM = st.slider("SG·Fitness", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_FORM), 0.1)
     ModelConfig.WEIGHT_SG_ENERGY = st.slider("SG·能量Z", 0.0, 3.0, float(ModelConfig.WEIGHT_SG_ENERGY), 0.1)
     ModelConfig.WEIGHT_SG_DELTA = st.slider("SG·差值", -1.0, 3.0, float(ModelConfig.WEIGHT_SG_DELTA), 0.1)
+    st.divider()
+    ModelConfig.SOFTMAX_TEMPERATURE = st.slider(
+        "SOFTMAX 溫度（勝率尖銳度）",
+        0.5, 8.0, float(ModelConfig.SOFTMAX_TEMPERATURE), 0.1,
+        help="愈小→熱門勝率愈高；愈大→各馬勝率愈平均。不影響總分排序。",
+    )
 
 race_options = []
 for _, row in races_df.iterrows():
@@ -163,6 +173,7 @@ weight_key = (
     ModelConfig.WEIGHT_SG_FORM,
     ModelConfig.WEIGHT_SG_ENERGY,
     ModelConfig.WEIGHT_SG_DELTA,
+    ModelConfig.SOFTMAX_TEMPERATURE,
 )
 
 
@@ -210,12 +221,20 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         f"細桶 `{meta.get('bucket_id')}`｜粗桶 `{meta.get('band_bucket_id')}`｜"
         f"匹配率 {meta.get('match_rate', 0):.0%}｜"
         f"J{hc.get('JOCKEY', 0)} T{hc.get('TRAINER', 0)} S{hc.get('SYNERGY', 0)} "
-        f"D{hc.get('DRAW', 0)} H{hc.get('HORSE', 0)} P{hc.get('PACE', 0)} V{hc.get('SPEED', 0)}"
+        f"D{hc.get('DRAW', 0)} H{hc.get('HORSE', 0)} P{hc.get('PACE', 0)} V{hc.get('SPEED', 0)}｜"
+        f"softmax T={meta.get('softmax_temperature')}｜勝率加總={meta.get('win_prob_sum', 0):.4f}"
     )
 
     if predictions_df.empty:
         st.warning("此場無預測結果。")
         return
+
+    if not compact and "模型勝率%" in predictions_df.columns:
+        top = predictions_df.iloc[0]
+        m1, m2, m3 = st.columns(3)
+        m1.metric("首位總分", f"{top['總預測分']:.2f}")
+        m2.metric("首位模型勝率", f"{top['模型勝率%']:.1f}%")
+        m3.metric("場內馬數", f"{len(predictions_df)}")
 
     show = [c for c in SUMMARY_COLS if c in predictions_df.columns]
     st.dataframe(
@@ -228,9 +247,25 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
     if compact:
         return
 
-    with st.expander("各因子分數明細", expanded=False):
+    with st.expander("各因子分數明細（可負；原始 Z）", expanded=False):
         fcols = [c for c in FACTOR_COLS if c in predictions_df.columns]
         st.dataframe(predictions_df[fcols], use_container_width=True, hide_index=True)
+
+    with st.expander("外傳凱利／賠率系統 JSON", expanded=False):
+        import json
+        payload = engine.export_kelly_payload(race_id)
+        st.code(json.dumps(payload, ensure_ascii=False, indent=2), language="json")
+        st.download_button(
+            "下載本場 JSON",
+            data=json.dumps(payload, ensure_ascii=False, indent=2),
+            file_name=f"kelly_payload_{race_id}.json",
+            mime="application/json",
+            key=f"dl_kelly_{race_id}",
+        )
+        st.caption(
+            "Kelly：小數賠率 o、b=o−1、p=model_win_prob、q=1−p → f*=(b·p−q)/b。"
+            "只傳勝率與總分；即時賠率由對方系統接入。"
+        )
 
     if go is None:
         st.warning("未安裝 plotly，無法顯示雷達圖。請把 `plotly` 加入 requirements 後重新部署。")

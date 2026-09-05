@@ -101,6 +101,10 @@ class ModelConfig:
     WEIGHT_SG_ENERGY = 1.0
     WEIGHT_SG_DELTA = 0.5
 
+    # 總分 → 同場勝率（softmax）。溫度愈小愈集中在高分馬；愈大愈平均。
+    # 凱利／外傳系統應使用「模型勝率」，不要用原始總分或硬平移成正數。
+    SOFTMAX_TEMPERATURE = 2.0
+
     # 步速熱度：同場取 early speed 最高前 N 名加總
     EARLY_SPEED_TOP_N = 3
 

@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import re
+import numpy as np
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 from bucket_utils import (
@@ -17,6 +18,26 @@ if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
     DATABASE_URL_SYNC = os.getenv("DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db")
+
+
+def scores_to_win_probs(scores, temperature: float = None) -> np.ndarray:
+    """
+    同場總分 → 勝率（加總 = 1）。
+
+    使用 softmax：P_i = exp(s_i / T) / Σ exp(s_j / T)
+    - 負分完全沒問題（Z-Score / 總分可正可負）
+    - 勿改成「全部加常數變正數」再當機率——相對差距才是勝率來源
+    - temperature 愈小，高分馬勝率愈尖；愈大愈接近均分
+    """
+    arr = np.asarray(scores, dtype=float)
+    if arr.size == 0:
+        return arr
+    t = float(temperature if temperature is not None else ModelConfig.SOFTMAX_TEMPERATURE)
+    t = max(t, 1e-6)
+    x = arr / t
+    x = x - np.max(x)  # 數值穩定
+    ex = np.exp(x)
+    return ex / ex.sum()
 
 
 class InferenceEngine:
@@ -285,6 +306,12 @@ class InferenceEngine:
         if not df_result.empty:
             df_result = df_result.sort_values('總預測分', ascending=False).reset_index(drop=True)
             df_result.insert(0, '預測排名', df_result.index + 1)
+            probs = scores_to_win_probs(
+                df_result['總預測分'].to_numpy(),
+                ModelConfig.SOFTMAX_TEMPERATURE,
+            )
+            df_result['模型勝率'] = np.round(probs, 4)
+            df_result['模型勝率%'] = np.round(probs * 100.0, 2)
 
         meta = {
             'bucket_id': fine_bucket,
@@ -294,6 +321,63 @@ class InferenceEngine:
             'factor_rows': 0 if scores_df is None else len(scores_df),
             'match_rate': (sum(hit_counts.values()) / total_lookups) if total_lookups else 0.0,
             'hit_counts': hit_counts,
+            'softmax_temperature': ModelConfig.SOFTMAX_TEMPERATURE,
+            'win_prob_sum': float(df_result['模型勝率'].sum()) if not df_result.empty else 0.0,
         }
 
         return df_result, race_info, meta
+
+    def export_kelly_payload(self, race_id: str) -> dict:
+        """
+        給外部凱利／賠率系統的穩定 JSON 結構。
+        使用模型勝率（非原始總分）；賠率與注碼由對方系統填入。
+        """
+        df, race_info, meta = self.predict_race(race_id)
+        info = race_info.to_dict() if hasattr(race_info, 'to_dict') else (dict(race_info) if race_info is not None else {})
+        runners = []
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                runners.append({
+                    'horse_no': int(row['馬號']) if pd.notna(row['馬號']) else None,
+                    'horse_name': row['馬名'],
+                    'draw': int(row['檔位']) if pd.notna(row.get('檔位')) else None,
+                    'jockey': row.get('騎師'),
+                    'trainer': row.get('練馬師'),
+                    'total_score': float(row['總預測分']),
+                    'model_win_prob': float(row['模型勝率']),
+                    'rank': int(row['預測排名']),
+                    'factors': {
+                        'jockey': float(row['騎師分']),
+                        'trainer': float(row['練馬師分']),
+                        'synergy': float(row['騎練分']),
+                        'draw': float(row['檔位分']),
+                        'form': float(row['近績分']),
+                        'pace': float(row['步速分']),
+                        'speed': float(row['速度分']),
+                        'speed_guide': float(row['SG貢獻']),
+                    },
+                })
+        return {
+            'race_id': race_id,
+            'race': {
+                'racing_date': str(info.get('racing_date', '')),
+                'course': info.get('course'),
+                'race_num': info.get('race_num'),
+                'distance_m': info.get('distance_m'),
+                'track': info.get('track'),
+                'class': info.get('class'),
+            },
+            'meta': {
+                'bucket_id': meta.get('bucket_id'),
+                'band_bucket_id': meta.get('band_bucket_id'),
+                'match_rate': meta.get('match_rate'),
+                'softmax_temperature': meta.get('softmax_temperature'),
+                'win_prob_sum': meta.get('win_prob_sum'),
+            },
+            'runners': runners,
+            'note': (
+                'model_win_prob sums to ~1 within the race. '
+                'Kelly: f*=(b*p-q)/b with decimal odds o, b=o-1, q=1-p. '
+                'Do not shift total_score to be positive for probabilities.'
+            ),
+        }

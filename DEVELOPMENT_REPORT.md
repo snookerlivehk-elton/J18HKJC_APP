@@ -236,6 +236,18 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 | **`schema.sql`** | 表結構（含 `text_reports.nlp_result`） |
 | **`config.py`** | 可調參數唯一來源 |
 
+### 分數／勝率／凱利（三層）
+
+| 層 | 內容 | 用途 |
+|----|------|------|
+| A 因子／總分 | 可正可負（Z-Score + 加權） | 排序、診斷、雷達前的原料 |
+| B 雷達半徑 | 同場每軸 min-max → [0,1] | **只顯示**；不是勝率 |
+| C 模型勝率 | `softmax(總分 / T)`，同場加總≈1 | 外傳凱利；`export_kelly_payload` |
+
+- **不要**把總分硬加常數變正數再當機率——相對差距才是勝率來源。  
+- `SOFTMAX_TEMPERATURE`（預設 2.0）：愈小愈尖、愈大愈平均。  
+- Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`。  
+
 ---
 
 *最後更新：2026-09-05 — 對齊距離帶粗桶、賽日 NLP、PACE/SPEED 落庫與推論、raw_json dict 修復。*
