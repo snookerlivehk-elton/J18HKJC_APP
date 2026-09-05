@@ -1,9 +1,10 @@
 # J18 賽馬量化預測系統 — AI 開發交接手冊
 
-> **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
+> **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**、**§5.3／§6 階段閘門**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
-> 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。
-> **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**
+> 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。  
+> **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**  
+> **現階段**：手動作戰至「賽日結算跑通」前，**勿開工全系統 Cron／自動代運作**。
 
 ---
 
@@ -252,10 +253,15 @@ OpenAPI：部署後 `/docs`。
 3. **賽前**建立預測快照（鎖總分＋當版模型勝率）  
 4. 改了勝率公式／權重後：**必須重建快照**再賽  
 
-### 5.3 賽後自動化 — 開發流程（下一階段）
+### 5.3 賽後自動化 — 開發流程（下一階段，**尚未開工**）
 
-> **原則**：狀態機 + 短 Cron tick（約 30–60 分），依 readiness 重試；禁止無限狂爬。  
-> **上線時機**：至少一場「賽前快照 → 賽後結算」手動跑通後再掛 Cron。
+> **階段閘門（2026-09 起）**  
+> 本階段產品能力（雙軌推介、AI 獨立馬評、預測 API、手動作戰室）**先凍結大範圍自動化開發**。  
+> **待至少一場完整賽日跑通**：賽前快照（含 AI）→ 賽後 J18 名次入庫 → 結算快照 → 命中率可讀。  
+> **驗收通過後**再開發全系統自動代運作（Cron／`meeting_tick`）。在此之前只做手動作戰室與必要 bugfix。
+
+> **原則**（開工後）：狀態機 + 短 Cron tick（約 30–60 分），依 readiness 重試；禁止無限狂爬。  
+> **上線時機**：上述閘門通過後再掛 Cron。
 
 | 步驟 | 觸發 | 動作 | 成功準則 |
 |------|------|------|----------|
@@ -294,12 +300,22 @@ OpenAPI：部署後 `/docs`。
 - [ ] Peak vs EMA 雙特徵進總分／ML  
 - [ ] 用已結算快照校準 `SOFTMAX_TEMPERATURE`  
 
-### P2 — 自動化與產品
+### P2 — 自動化與產品（**閘門後再做**）
 
-- [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）  
-- [ ] **賽前**：fixtures／排位／SG／快照 tick  
-- [ ] Form AI：**保持獨立馬評軌道**（推介＋快照命中）；**不要**併入 `WEIGHT_*`／總分  
+- [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）— **等本賽日結算跑通**  
+- [ ] **賽前**：fixtures／排位／SG／快照 tick — 同上  
+- [x] Form AI：獨立馬評軌道（推介＋快照命中；不併入 `WEIGHT_*`）  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
+
+### 階段完成（2026-09-05）— 暫停點
+
+已交付、可手動作戰：
+
+- 登入分權、賽日速覽雙軌（模型勝率%｜AI 推介指數%）  
+- Form AI 獨立軌道 + 進度條；快照鎖 `ai_*`；命中訊號「AI評價×信心」  
+- 賽前預測 API（Kelly）；雷達同場 min/max（含負分）  
+
+**下一步（人工）**：本賽日完場 → RESULTS → 結算快照 → 對照命中率。通過後再開 §5.3 全自動。
 
 ---
 
@@ -347,6 +363,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 - `SOFTMAX_WITHIN_RACE_Z`（預設 True）+ `SOFTMAX_TEMPERATURE`（預設 1.5）：壓低極端勝率。  
 - Kelly：`p=model_win_prob`，小數賠率 `o`，`b=o-1`，`q=1-p`，`f*=(b p - q)/b`（見 §2.4）。  
 - AI 推介：`form_ai_picks.py`；賽前快照鎖 `ai_*`；`evaluate_settled` 訊號「AI評價×信心」。重建快照才含 AI 欄。  
+- 用戶 UI 推介列：AI 只顯示指數**百分比**（如 `72%`）；評價×信心算式僅在馬匹詳情。  
 
 ---
 
@@ -354,6 +371,8 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-05 | **階段完成／暫停自動化**：雙軌推介＋AI 獨立軌道就緒；待賽日結算跑通再開 Cron（§5.3／§6） |
+| 2026-09-05 | **AI 推介 UI**：賽日只顯示指數%（如 `72%`）；算式留詳情 |
 | 2026-09-05 | **AI 獨立軌道**：`form_ai_picks` 推介；快照鎖 ai_*；命中率訊號「AI評價×信心」；賽日並排模型／AI |
 | 2026-09-05 | **手冊 §4.1**：GitHub UI 同事會優化版面；開發邏輯時勿用本地舊 UI 覆蓋 `main` |
 | 2026-09-05 | **賽前預測 API**：`prediction_api` + Kelly／即時賠率；`PREDICTION_API_KEY`；獨立 `start-api.sh` |
@@ -365,4 +384,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-05 — §4.1 UI／GitHub 協作注意、賽前預測 API、登入分權。*
+*最後更新：2026-09-05 — 階段完成（雙軌＋AI 獨立）；待賽日結算後再開全自動。*
