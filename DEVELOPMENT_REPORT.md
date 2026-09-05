@@ -337,7 +337,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 | 層 | 內容 | 用途 |
 |----|------|------|
 | A 因子／總分 | 可正可負（Z-Score + 加權） | 排序、診斷、雷達前的原料 |
-| B 雷達半徑 | 同場每軸 min-max → [0,1] | **只顯示**；不是勝率 |
+| B 雷達半徑 | 同場每軸 min→中心、max→外緣（圖上 [0,1]；原始可負） | **只顯示**；hover 看原始 Z；不是勝率 |
 | C 模型勝率 | 場內 z(總分) → `softmax(/T)`，加總≈1 | 外傳凱利；`prediction_api` / `export_kelly_payload` |
 | D **AI 馬評（獨立）** | `ai_score`×`confidence`＝`ai_combo` | **不混入**總分／權重；並排推介 + 快照命中統計 |
 

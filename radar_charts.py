@@ -1,4 +1,10 @@
-"""共用雷達圖：同場因子 min-max → [0,1]，供推論頁／賽日速覽使用。"""
+"""共用雷達圖：同場每軸 min-max 相對位置，供推論頁／賽日速覽使用。
+
+圖形半徑仍為 [0,1]（極座標無法可靠畫負半徑），但：
+  - 中心 = 該軸同場最低原始分（可為負）
+  - 外緣 = 該軸同場最高原始分
+  - hover 顯示原始 Z（含負值），不會把負分改成 0 再畫
+"""
 from __future__ import annotations
 
 import pandas as pd
@@ -21,11 +27,20 @@ RADAR_AXES = [
 
 
 def radar_radius(series: pd.Series) -> pd.Series:
-    s = pd.to_numeric(series, errors="coerce").fillna(0.0)
-    lo, hi = float(s.min()), float(s.max())
-    if hi - lo < 1e-9:
+    """
+    同場該軸：min → 0（圖心）、max → 1（外緣）。
+    負的原始分只要是同場最低，就落在中心；不會先 clamp 成 0。
+    缺值不填 0（避免假的「絕對零」扭曲 min/max），正規化後填 0.5。
+    """
+    s = pd.to_numeric(series, errors="coerce")
+    valid = s.dropna()
+    if valid.empty:
         return pd.Series(0.5, index=s.index)
-    return (s - lo) / (hi - lo)
+    lo, hi = float(valid.min()), float(valid.max())
+    if hi - lo < 1e-9:
+        out = pd.Series(0.5, index=s.index)
+        return out
+    return ((s - lo) / (hi - lo)).fillna(0.5)
 
 
 def build_radar_figure(
@@ -41,7 +56,7 @@ def build_radar_figure(
     df = df.reset_index(drop=True)
     categories = [label for _, label in RADAR_AXES]
     cats_closed = categories + [categories[0]]
-    norm = {col: radar_radius(df[col].rename(col)) for col, _ in RADAR_AXES}
+    norm = {col: radar_radius(df[col]) for col, _ in RADAR_AXES if col in df.columns}
 
     fig = go.Figure()
     palette = [
@@ -54,27 +69,57 @@ def build_radar_figure(
             continue
         idx = hits[0]
         row = df.loc[idx]
-        r_vals = [float(norm[col].iloc[idx]) for col, _ in RADAR_AXES]
-        r_vals = r_vals + [r_vals[0]]
+        r_vals = []
+        raw_vals = []
+        for col, _ in RADAR_AXES:
+            if col not in norm:
+                r_vals.append(0.5)
+                raw_vals.append(None)
+                continue
+            r_vals.append(float(norm[col].iloc[idx]))
+            v = row.get(col)
+            try:
+                raw_vals.append(float(v) if pd.notna(v) else None)
+            except (TypeError, ValueError):
+                raw_vals.append(None)
+        r_closed = r_vals + [r_vals[0]]
+        raw_closed = raw_vals + [raw_vals[0]]
         label = f"{int(hno)} {row['馬名']}"
         fig.add_trace(
             go.Scatterpolar(
-                r=r_vals,
+                r=r_closed,
                 theta=cats_closed,
                 fill="toself",
                 name=label,
+                customdata=raw_closed,
+                hovertemplate=(
+                    "%{theta}<br>"
+                    "原始分 %{customdata:+.2f}<br>"
+                    "同場相對 %{r:.0%}"
+                    "<extra>%{fullData.name}</extra>"
+                ),
                 line=dict(color=palette[i % len(palette)], width=2),
                 opacity=0.8,
             )
         )
 
+    default_title = title or (
+        "雷達：中心＝同場該軸最低（可負），外緣＝最高"
+        if not mobile
+        else ""
+    )
     fig.update_layout(
         polar=dict(
             bgcolor="rgba(0,0,0,0)",
             radialaxis=dict(
                 visible=True,
                 range=[0, 1],
-                tickvals=[0.5, 1.0] if mobile else [0.25, 0.5, 0.75, 1.0],
+                tickvals=[0.0, 0.5, 1.0] if mobile else [0.0, 0.25, 0.5, 0.75, 1.0],
+                ticktext=(
+                    ["最低", "中", "最高"]
+                    if mobile
+                    else ["同場最低", "", "中", "", "同場最高"]
+                ),
                 tickfont=dict(size=10 if mobile else 11),
                 gridcolor="rgba(20,40,30,0.15)",
             ),
@@ -87,9 +132,9 @@ def build_radar_figure(
         ),
         showlegend=len(horse_nos) > 1,
         legend=dict(orientation="h", yanchor="bottom", y=-0.35, x=0, font=dict(size=11)),
-        margin=dict(l=28, r=28, t=36 if title else 12, b=48 if len(horse_nos) > 1 else 24),
+        margin=dict(l=28, r=28, t=36 if default_title else 12, b=48 if len(horse_nos) > 1 else 24),
         height=height,
-        title=dict(text=title, font=dict(size=14)) if title else None,
+        title=dict(text=default_title, font=dict(size=13)) if default_title else None,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Noto Sans TC, Segoe UI, sans-serif", color="#1a2e24"),

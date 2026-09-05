@@ -486,4 +486,4 @@ for _, row in pred_df.iterrows():
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-st.caption("雙軌：模型勝率｜AI 馬評（評價×信心）。AI 不混入總分；雷達為同場相對形狀。")
+st.caption("雙軌：模型勝率｜AI 馬評（評價×信心）。AI 不混入總分。雷達：中心＝同場該軸最低（可負）、外緣＝最高；點圖可看原始分。")

@@ -10,33 +10,18 @@ from inference_engine import InferenceEngine
 from config import ModelConfig
 from bucket_utils import format_class_display
 from ui_theme import inject_admin_css, page_header
-
-try:
-    import plotly.graph_objects as go
-except ImportError:
-    go = None
+from radar_charts import build_radar_figure, RADAR_AXES
 
 inject_admin_css()
 page_header("融合預測", "總分排序 · 場內 z 勝率 · 雷達展示")
 st.markdown(
     """
 **三層勿混用**
-1. **因子／總分**（歷史 Z + 加權）— 排序  
-2. **雷達**（同場 0–1）— 只顯示  
+1. **因子／總分**（歷史 Z + 加權，可正可負）— 排序  
+2. **雷達**（同場每軸最低→中心、最高→外緣；原始負分完整參與）— 只顯示  
 3. **模型勝率**（場內 z → softmax）— Kelly／外傳  
 """
 )
-
-RADAR_AXES = [
-    ("騎師分", "騎師"),
-    ("練馬師分", "練馬師"),
-    ("騎練分", "騎練"),
-    ("檔位分", "檔位"),
-    ("近績分", "近績"),
-    ("步速分", "步速"),
-    ("速度分", "速度"),
-    ("SG貢獻", "速勢"),
-]
 
 SUMMARY_COLS = [
     "預測排名", "馬號", "馬名", "檔位", "騎師", "練馬師",
@@ -49,63 +34,6 @@ FACTOR_COLS = [
     "騎師分", "練馬師分", "騎練分", "檔位分",
     "近績分", "步速分", "速度分", "SG貢獻", "總預測分", "模型勝率%",
 ]
-
-
-def _radar_radius(series: pd.Series) -> pd.Series:
-    """
-    各軸映到 [0, 1]（只供雷達顯示）。
-    同場 min-max：最低分→0、最高分→1，負的原始 Z 也能完整展開在圖上。
-    """
-    s = pd.to_numeric(series, errors="coerce").fillna(0.0)
-    lo, hi = float(s.min()), float(s.max())
-    if hi - lo < 1e-9:
-        return pd.Series(0.5, index=s.index)
-    return (s - lo) / (hi - lo)
-
-
-def build_radar_figure(df: pd.DataFrame, horse_nos: list):
-    df = df.reset_index(drop=True)
-    categories = [label for _, label in RADAR_AXES]
-    cats_closed = categories + [categories[0]]
-    norm = {col: _radar_radius(df[col].rename(col)) for col, _ in RADAR_AXES}
-
-    fig = go.Figure()
-    palette = [
-        "#1f77b4", "#d62728", "#2ca02c", "#ff7f0e",
-        "#9467bd", "#8c564b", "#e377c2", "#17becf",
-    ]
-    for i, hno in enumerate(horse_nos):
-        hits = df.index[df["馬號"].astype(int) == int(hno)].tolist()
-        if not hits:
-            continue
-        idx = hits[0]
-        row = df.loc[idx]
-        r_vals = [float(norm[col].iloc[idx]) for col, _ in RADAR_AXES]
-        r_vals = r_vals + [r_vals[0]]
-        label = f"{int(hno)} {row['馬名']}（#{int(row['預測排名'])}｜{row['總預測分']}）"
-        fig.add_trace(
-            go.Scatterpolar(
-                r=r_vals,
-                theta=cats_closed,
-                fill="toself",
-                name=label,
-                line=dict(color=palette[i % len(palette)], width=2),
-                opacity=0.75,
-            )
-        )
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 1], tickvals=[0.25, 0.5, 0.75, 1.0]),
-            angularaxis=dict(direction="clockwise", rotation=90),
-        ),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.28, x=0),
-        margin=dict(l=40, r=40, t=48, b=96),
-        height=540,
-        title="各因子雷達圖（每軸同場 min-max→0~1；負分也能展滿圖）",
-    )
-    return fig
 
 
 def highlight_top3(s):
@@ -297,7 +225,10 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         st.info("請至少選一匹馬。")
         return
 
-    st.plotly_chart(build_radar_figure(predictions_df, pick), use_container_width=True)
+    st.plotly_chart(
+        build_radar_figure(predictions_df, pick, height=540, mobile=False),
+        use_container_width=True,
+    )
 
     focus = int(pick[0])
     drow = predictions_df[predictions_df["馬號"].astype(int) == focus].iloc[0]
