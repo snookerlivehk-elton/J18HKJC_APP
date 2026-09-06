@@ -12,6 +12,7 @@ from radar_charts import build_radar_figure, factor_rows_for_horse
 from form_ai_analyst import FormAIAnalyst
 from form_ai_picks import build_ai_picks, compute_ai_combo
 from ui_theme import inject_user_css
+from promo import raceday_promo_html
 from auth_utils import is_admin
 from factor_calibration import place_cutoff
 from score_share import select_picks_by_share, win_pick_count_from_shares
@@ -146,6 +147,23 @@ st.markdown(
 @media (max-width: 420px) {
   .rd-picks-dual { grid-template-columns: 1fr; }
 }
+.rd-promo {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.55rem;
+  background: linear-gradient(90deg, #1a2e5c 0%, #304170 100%);
+  color: #f4f7ff;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.8rem;
+}
+.rd-promo-kicker {
+  font-weight: 800; color: #ffe48d; letter-spacing: 0.04em;
+}
+.rd-promo-copy { flex: 1; min-width: 8rem; opacity: 0.92; }
+.rd-promo a {
+  color: #ffe48d !important; font-weight: 700; text-decoration: none !important;
+  margin-left: auto;
+}
 /* 場次數字 pill：壓低高度 */
 div[data-testid="stPills"] button {
   min-width: 2.4rem !important;
@@ -168,6 +186,7 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+st.markdown(raceday_promo_html(), unsafe_allow_html=True)
 
 engine = InferenceEngine()
 races_df = engine.get_upcoming_races()

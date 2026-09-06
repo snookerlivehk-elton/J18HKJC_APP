@@ -267,22 +267,15 @@ def try_login(raw: str) -> Tuple[bool, str]:
 
 
 def render_login_page():
-    """簡潔登入頁（未登入時由 ui_app 呼叫）。"""
+    """j18.hk 風格推廣落地 + Plus+ 白名單登入（未登入時由 ui_app 呼叫）。"""
     import streamlit as st
+    from promo import promo_cta_html, promo_hero_html, promo_member_heading_html
     from ui_theme import inject_login_css
 
     inject_login_css()
-    st.markdown(
-        """
-        <div class="auth-wrap">
-          <div class="auth-card">
-            <h1>J18AI Plus+</h1>
-            <p class="auth-sub">請輸入白名單內的 Email 或通行碼</p>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(promo_hero_html(), unsafe_allow_html=True)
+    st.markdown(promo_cta_html(), unsafe_allow_html=True)
+    st.markdown(promo_member_heading_html(), unsafe_allow_html=True)
     with st.form("login_form", clear_on_submit=False):
         token = st.text_input("Email 或通行碼", type="default", placeholder="you@example.com 或通行碼")
         submitted = st.form_submit_button("進入", type="primary", use_container_width=True)
@@ -293,11 +286,6 @@ def render_login_page():
                 st.rerun()
             else:
                 st.error(msg)
-    st.link_button(
-        "進入J18主頁",
-        "https://j18.hk/",
-        use_container_width=True,
-    )
 
 
 def render_account_bar():

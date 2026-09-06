@@ -50,6 +50,7 @@ def inject_home_screen_icons():
   upsertMeta('mobile-web-app-capable', 'yes');
   upsertMeta('apple-mobile-web-app-title', 'J18AI Plus+');
   upsertMeta('application-name', 'J18AI Plus+');
+  upsertMeta('description', 'J18 全港首創綜合賽馬系統｜專業分析 實時數據 一機在手 助你提高命中率');
 }})();
 </script>
         """,
@@ -158,21 +159,102 @@ def inject_sidebar_solid_bg():
 
 
 def inject_login_css():
+    """j18.hk 推廣彈窗風格：深藍底 + 金黃主標 + 白底會員卡。"""
     import streamlit as st
     st.markdown(
         """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap');
-html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif; }
+html, body, [class*="css"] { font-family: "Noto Sans TC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+
 [data-testid="stSidebar"] { display: none; }
-.block-container { max-width: 420px; padding-top: 4rem !important; }
-.auth-wrap { text-align: center; margin-bottom: 0.5rem; }
-.auth-wrap img { border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
-.auth-card h1 {
-  font-size: 1.55rem; font-weight: 800; margin: 0.55rem 0 0.4rem;
-  color: var(--text-color, #14241c);
+header[data-testid="stHeader"] { background: transparent !important; }
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main {
+  background: linear-gradient(180deg, #1a2e5c 0%, #243a6e 48%, #1d2b62 100%) !important;
 }
-.auth-sub { color: var(--text-color, #5a6b62); opacity: 0.75; font-size: 0.92rem; margin: 0 0 1rem; }
+.block-container {
+  max-width: 440px;
+  padding-top: 1.6rem !important;
+  padding-bottom: 2.4rem !important;
+}
+
+.j18-promo { text-align: center; color: #fff; margin: 0 0 0.85rem; }
+.j18-badge {
+  display: inline-block;
+  background: linear-gradient(180deg, #ffa659 0%, #ff7a2e 100%);
+  color: #fff; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.04em;
+  border-radius: 10px; padding: 0.35rem 0.7rem; margin-bottom: 0.55rem;
+  box-shadow: 0 4px 14px rgba(255, 122, 46, 0.35);
+}
+.j18-kicker {
+  margin: 0 0 0.25rem; font-size: 0.82rem; font-weight: 600;
+  color: #c9d6f0; letter-spacing: 0.04em;
+}
+.j18-promo h1 {
+  font-size: 1.72rem; font-weight: 800; margin: 0.15rem 0 0.45rem;
+  color: #ffe48d; letter-spacing: 0.04em; line-height: 1.25;
+}
+.j18-tag {
+  margin: 0 auto 0.7rem; max-width: 22rem;
+  color: #e8eef8; opacity: 0.92; font-size: 0.86rem; line-height: 1.5;
+}
+.j18-pills {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem;
+}
+.j18-pill {
+  background: rgba(255,255,255,0.12); color: #ffeeb8;
+  border: 1px solid rgba(255,228,141,0.35);
+  border-radius: 999px; padding: 0.18rem 0.55rem;
+  font-size: 0.72rem; font-weight: 700;
+}
+
+.j18-cta { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.2rem 0 1.05rem; }
+.j18-btn {
+  display: block; text-align: center; text-decoration: none !important;
+  font-weight: 800; font-size: 0.95rem; border-radius: 10px;
+  padding: 0.72rem 0.8rem; line-height: 1.2;
+}
+.j18-btn-gold {
+  background: linear-gradient(180deg, #ffe48d 0%, #f6c960 100%);
+  color: #1a2e5c !important; box-shadow: 0 4px 12px rgba(246, 201, 96, 0.35);
+}
+.j18-btn-wa {
+  background: #24b679; color: #fff !important;
+}
+.j18-btn-cs {
+  background: #304170; color: #9ec5ff !important;
+  border: 1px solid #6caaf9;
+}
+.j18-social {
+  text-align: center; margin-top: 0.15rem;
+  font-size: 0.78rem; color: #9aa8c7;
+}
+.j18-social a { color: #c9d6f0 !important; text-decoration: none !important; font-weight: 600; }
+.j18-social span { margin: 0 0.35rem; opacity: 0.6; }
+
+.j18-member-head { text-align: center; margin: 0 0 0.35rem; }
+.j18-member-head h2 {
+  margin: 0; font-size: 1.02rem; font-weight: 800; color: #fff;
+}
+.j18-member-head p {
+  margin: 0.2rem 0 0; font-size: 0.8rem; color: #c9d6f0; opacity: 0.9;
+}
+
+div[data-testid="stForm"] {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem 1.05rem;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+}
+div[data-testid="stForm"] label, div[data-testid="stForm"] p {
+  color: #333 !important;
+}
+div[data-testid="stForm"] button[kind="primary"] {
+  background: #3d5a8f !important;
+  border-color: #3d5a8f !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+}
 </style>
         """,
         unsafe_allow_html=True,

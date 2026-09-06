@@ -30,12 +30,12 @@ st.set_page_config(
 
 inject_home_screen_icons()
 
-if _LOGO.is_file():
-    st.logo(str(_LOGO), size="large")
-
 if not is_logged_in():
     render_login_page()
     st.stop()
+
+if _LOGO.is_file():
+    st.logo(str(_LOGO), size="large")
 
 inject_admin_css()
 
