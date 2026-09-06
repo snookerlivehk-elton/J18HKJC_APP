@@ -371,6 +371,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-06 | **場內份額制**：因子／模型／AI 以分差比率瓜分 100%（非負）；推介動態最多 5 匹、AI 低信心可略過 |
 | 2026-09-05 | **預計步速上賽日／推論**：每場顯示偏慢／中性／偏快；`factor_scores` 落庫 `early_speed_z`／跑法 |
 | 2026-09-05 | **步速劇本修正**：形勢改依爭搶馬數（早段 Z≥門檻），不再用 heat≥2.5（幾乎全判超快） |
 | 2026-09-05 | **SPEED Par 小切片**：`extract_venue`+`class_num` 分桶；`SPEED_PAR_PERCENTILE`／`MIN_N`；粗桶回退 |

@@ -169,11 +169,12 @@ def build_race_prediction(
             item["implied_prob"] = round(1.0 / float(o), 6) if float(o) > 0 else None
         runners.append(item)
 
-    # 爭勝 1～2；入圍前 place_n（模型軌道）
-    win_n = 1
-    if n >= 2 and runners[0].get("model_win_prob") and runners[1].get("model_win_prob"):
-        if runners[1]["model_win_prob"] >= runners[0]["model_win_prob"] * 0.70:
-            win_n = 2
+    # 爭勝 1～2；推介動態最多 PICK_MAX（模型軌道）
+    from score_share import select_picks_by_share, win_pick_count_from_shares
+
+    probs = [float(r["model_win_prob"] or 0) for r in runners]
+    win_n = win_pick_count_from_shares(probs) if probs else 1
+    pick_n = select_picks_by_share(probs) if probs else 0
 
     def _slim(r: dict) -> dict:
         return {
@@ -185,6 +186,7 @@ def build_race_prediction(
             "ai_combo": (r.get("ai") or {}).get("ai_combo"),
             "ai_score": (r.get("ai") or {}).get("ai_score"),
             "confidence": (r.get("ai") or {}).get("confidence"),
+            "ai_share_pct": (r.get("ai") or {}).get("ai_share_pct"),
             "kelly_fraction": r.get("kelly_fraction"),
             "edge_vs_market": r.get("edge_vs_market"),
         }
@@ -206,6 +208,19 @@ def build_race_prediction(
             }
         )
     ai_picks = build_ai_picks(ai_pick_rows, n_runners=n)
+    # 把 AI 場內份額寫回 runners.ai
+    share_map = {
+        int(x["horse_no"]): x.get("ai_share_pct")
+        for x in (ai_picks.get("ranked") or [])
+        if x.get("horse_no") is not None
+    }
+    for r in runners:
+        hno = r.get("horse_no")
+        if r.get("ai") is not None and hno in share_map:
+            r["ai"]["ai_share_pct"] = share_map[hno]
+            r["ai"]["ai_share"] = (
+                None if share_map[hno] is None else float(share_map[hno]) / 100.0
+            )
 
     return {
         "ok": True,
@@ -220,11 +235,14 @@ def build_race_prediction(
             "race_name": info.get("race_name"),
             "n_runners": n,
             "place_cutoff": place_n,
+            "pick_n": pick_n,
+            "expected_pace": meta.get("pace_scenario"),
         },
         "meta": {
             "bucket_id": meta.get("bucket_id"),
             "band_bucket_id": meta.get("band_bucket_id"),
             "match_rate": meta.get("match_rate"),
+            "win_prob_method": meta.get("win_prob_method"),
             "softmax_temperature": meta.get("softmax_temperature"),
             "softmax_within_race_z": meta.get("softmax_within_race_z"),
             "win_prob_sum": meta.get("win_prob_sum"),
@@ -232,11 +250,12 @@ def build_race_prediction(
         },
         "picks": {
             "win": [_slim(r) for r in runners[:win_n]],
-            "place": [_slim(r) for r in runners[:place_n]],
+            "place": [_slim(r) for r in runners[:pick_n]],
             "ai_win": ai_picks.get("win") or [],
             "ai_place": ai_picks.get("place") or [],
             "ai_available": bool(ai_picks.get("available")),
-            "note": "model=win_prob track; ai=independent form-AI handicapper (score×confidence); not mixed into model weights",
+            "ai_skipped_low_confidence": bool(ai_picks.get("skipped_low_confidence")),
+            "note": "shares=within-race score-gap proportions (sum 100%); ai independent; pick_n dynamic ≤PICK_MAX",
         },
         "runners": runners,
         "kelly": {

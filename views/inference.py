@@ -18,9 +18,9 @@ page_header("融合預測", "總分排序 · 場內 z 勝率 · 雷達展示")
 st.markdown(
     """
 **三層勿混用**
-1. **因子／總分**（歷史 Z + 加權，可正可負）— 排序  
-2. **雷達**（同場每軸最低→中心、最高→外緣；原始負分完整參與）— 只顯示  
-3. **模型勝率**（場內 z → softmax）— Kelly／外傳  
+1. **因子／總分**（歷史加權後，場內改為分差比率瓜分 **100%**，非負）— 排序與顯示  
+2. **雷達**（同場每軸相對高低）— 只顯示  
+3. **模型份額**（總分場內瓜分 100%）— Kelly／外傳  
 """
 )
 
@@ -181,9 +181,8 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
         f"匹配率 {meta.get('match_rate', 0):.0%}｜"
         f"J{hc.get('JOCKEY', 0)} T{hc.get('TRAINER', 0)} S{hc.get('SYNERGY', 0)} "
         f"D{hc.get('DRAW', 0)} H{hc.get('HORSE', 0)} P{hc.get('PACE', 0)} V{hc.get('SPEED', 0)}｜"
-        f"softmax T={meta.get('softmax_temperature')}｜"
-        f"場內z={meta.get('softmax_within_race_z')}｜"
-        f"勝率加總={meta.get('win_prob_sum', 0):.4f}"
+        f"方法 {meta.get('win_prob_method', 'share')}｜"
+        f"份額加總={meta.get('win_prob_sum', 0):.4f}"
     )
     if meta.get("pace_scenario_note"):
         st.caption(meta["pace_scenario_note"])

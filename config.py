@@ -104,10 +104,20 @@ class ModelConfig:
     WEIGHT_SG_ENERGY = 1.0
     WEIGHT_SG_DELTA = 0.5
 
-    # 總分 → 同場勝率。先場內 z-score 再 softmax，避免加權總分絕對差造成 80% vs 0.2%。
-    # T 愈小愈尖、愈大愈平均。場內 z 後分數約在 ±2～3，預設 T=1.5 較贴近真實獨贏分佈。
+    # 總分 → 同場勝率／份額（預設：分差比率瓜分 100%，非負）
+    # "share"＝相對場內最低分差再比例瓜分；"softmax"＝舊場內 z + softmax
+    WIN_PROB_METHOD = "share"
     SOFTMAX_WITHIN_RACE_Z = True
     SOFTMAX_TEMPERATURE = 1.5
+
+    # 推介隻數（爭勝仍 1～2；入圍／推介列動態 2～5）
+    PICK_MAX = 5
+    PICK_MIN = 2
+    PICK_MIN_SHARE = 0.07          # 絕對份額門檻（約 7%）
+    PICK_REL_TO_LEADER = 0.45      # 相對頭馬：低於此比例且低於 MIN_SHARE 則截斷
+    PICK_CUMULATIVE_CAP = 0.78     # 累積份額達此可停（已滿 MIN）
+    PICK_AI_MIN_CONFIDENCE = 0.30  # 場內最高信心低於此 → 不推 AI
+    PICK_AI_MIN_SHARE = 0.06       # AI 單匹最低份額
 
     # 步速熱度／形勢劇本
     # heat 顯示用：同場 early_speed_z 最高前 N 名加總（僅供參考）

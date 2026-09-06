@@ -14,6 +14,8 @@ from form_ai_picks import build_ai_picks, compute_ai_combo
 from ui_theme import inject_user_css
 from auth_utils import is_admin
 from factor_calibration import place_cutoff
+from score_share import select_picks_by_share, win_pick_count_from_shares
+from config import ModelConfig
 
 try:
     import plotly.graph_objects as go  # noqa: F401
@@ -279,18 +281,19 @@ else:
     pred_df = pred_df.sort_values("總預測分", ascending=False).reset_index(drop=True)
 
 n_runners = len(pred_df)
-place_n = place_cutoff(n_runners)
-# 爭勝：勝率最高 1～2 匹（第二名勝率 ≥ 頭馬 70% 才並列顯示）
+settle_place_n = place_cutoff(n_runners)
+# 爭勝 1～2；推介列動態最多 PICK_MAX（分差份額公式）
 win_n = 1
-if n_runners >= 2 and "模型勝率" in pred_df.columns:
-    p0 = float(pred_df.iloc[0]["模型勝率"] or 0)
-    p1 = float(pred_df.iloc[1]["模型勝率"] or 0)
-    if p0 > 0 and p1 >= p0 * 0.70:
-        win_n = 2
+pick_n = min(2, n_runners)
+if n_runners >= 1 and "模型勝率" in pred_df.columns:
+    probs = [float(x or 0) for x in pred_df["模型勝率"].tolist()]
+    win_n = win_pick_count_from_shares(probs)
+    pick_n = select_picks_by_share(probs)
 elif n_runners >= 2:
     win_n = 2
+    pick_n = min(int(getattr(ModelConfig, "PICK_MAX", 5)), n_runners)
 
-# AI 獨立軌道推介（評價×信心；不混入模型）
+# AI 獨立軌道推介（評價×信心 → 場內份額%；不混入模型）
 ai_rows = []
 for _, r in pred_df.iterrows():
     hno = int(r["馬號"])
@@ -314,6 +317,11 @@ ai_pick_hnos = {
     for x in (ai_picks.get("win") or []) + (ai_picks.get("place") or [])
     if x.get("horse_no") is not None
 }
+ai_share_by_hno = {
+    int(r["horse_no"]): r.get("ai_share_pct")
+    for r in (ai_picks.get("ranked") or [])
+    if r.get("horse_no") is not None and r.get("ai_share_pct") is not None
+}
 
 
 def _model_pick_rows(df_slice, tag_prefix: str) -> str:
@@ -332,25 +340,26 @@ def _model_pick_rows(df_slice, tag_prefix: str) -> str:
     return "".join(parts) if parts else '<div class="rd-pick-empty">—</div>'
 
 
-def _fmt_ai_display(combo) -> str:
-    """推介列簡潔顯示：僅指數百分比（如 72%），不秀算式與 combo 括號。"""
-    if combo is None:
+def _fmt_ai_display(share_pct) -> str:
+    """推介列：場內 AI 份額%（瓜分 100%）。"""
+    if share_pct is None:
         return "—"
     try:
-        c = float(combo)
+        return f"{float(share_pct):.0f}%"
     except (TypeError, ValueError):
         return "—"
-    return f"{c * 100:.0f}%"
 
 
 def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
     if not picks:
+        if ai_picks.get("skipped_low_confidence"):
+            return f'<div class="rd-pick-empty">{ai_picks.get("message") or "信心不足，本場不推"}</div>'
         return '<div class="rd-pick-empty">尚無 AI 評價</div>'
     parts = []
     for i, r in enumerate(picks, start=1):
         hno = r.get("horse_no")
         name = r.get("horse_name") or ""
-        right = _fmt_ai_display(r.get("ai_combo"))
+        right = _fmt_ai_display(r.get("ai_share_pct"))
         parts.append(
             f'<div class="rd-pick-row">'
             f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
@@ -362,10 +371,10 @@ def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
 
 
 win_html = _model_pick_rows(pred_df.head(win_n), "勝")
-place_html = _model_pick_rows(pred_df.head(place_n), "圍")
+place_html = _model_pick_rows(pred_df.head(pick_n), "推")
 ai_win_html = _ai_pick_rows(ai_picks.get("win") or [], "勝")
-ai_place_html = _ai_pick_rows(ai_picks.get("place") or [], "圍")
-ai_place_n = ai_picks.get("place_cutoff") or place_n
+ai_place_html = _ai_pick_rows(ai_picks.get("place") or [], "推")
+ai_pick_n = ai_picks.get("pick_n") or len(ai_picks.get("place") or [])
 
 cls_disp = format_class_display(race_row.get("class"))
 race_name = race_row.get("race_name") or ""
@@ -386,21 +395,21 @@ meta_html = f"""
   <div class="rd-picks">
     <div class="rd-picks-dual">
       <div class="rd-picks-col">
-        <div class="col-title">模型 · 勝率</div>
+        <div class="col-title">模型 · 勝率份額</div>
         <div class="sec">爭勝</div>
         {win_html}
-        <div class="sec">入圍 · 前{place_n}</div>
+        <div class="sec">推介 · 前{pick_n}</div>
         {place_html}
       </div>
       <div class="rd-picks-col ai-col">
-        <div class="col-title">AI 馬評 · 推介指數</div>
+        <div class="col-title">AI 馬評 · 份額</div>
         <div class="sec">爭勝</div>
         {ai_win_html}
-        <div class="sec">入圍 · 前{ai_place_n}</div>
+        <div class="sec">推介 · 前{ai_pick_n}</div>
         {ai_place_html}
       </div>
     </div>
-    <div class="note">雙軌獨立：左＝量化勝率%；右＝AI 推介指數%。明細與算式見下方馬匹詳情。本場 {n_runners} 匹。</div>
+    <div class="note">雙軌獨立：左＝模型場內份額%（加總100%）；右＝AI 評價×信心場內份額%。推介最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹，信心不足可不推。本場 {n_runners} 匹。</div>
   </div>
 </div>
 """
@@ -416,7 +425,6 @@ for _, row in pred_df.iterrows():
     top_cls = "top1" if rank == 1 else ("pick" if hno in ai_pick_hnos else "")
     name = row["馬名"]
     prob = float(row["模型勝率%"]) if pd.notna(row.get("模型勝率%")) else 0.0
-    total = float(row["總預測分"]) if pd.notna(row.get("總預測分")) else 0.0
     jockey = row.get("騎師") or "-"
     trainer = row.get("練馬師") or "-"
     draw = row.get("檔位")
@@ -424,15 +432,17 @@ for _, row in pred_df.iterrows():
     bw = row.get("體重")
 
     ai = ai_map.get(hno)
-    if ai is not None and pd.notna(ai.get("ai_score")):
-        ai_score = float(ai["ai_score"])
-        ai_conf = float(ai["confidence"]) if pd.notna(ai.get("confidence")) else 0.0
-        ai_combo = ai_score * ai_conf
-        ai_cls = "ai-pos" if ai_combo >= 0 else "ai-neg"
+    ai_pct = ai_share_by_hno.get(hno)
+    if ai is not None and pd.notna(ai.get("ai_score")) and ai_pct is not None:
         ai_badge = " · AI推介" if hno in ai_pick_hnos else ""
         ai_block = (
-            f'<div><div class="m-lbl">AI 推介指數{ai_badge}</div>'
-            f'<div class="m-val {ai_cls}">{_fmt_ai_display(ai_combo)}</div></div>'
+            f'<div><div class="m-lbl">AI 份額{ai_badge}</div>'
+            f'<div class="m-val">{_fmt_ai_display(ai_pct)}</div></div>'
+        )
+    elif ai is not None and pd.notna(ai.get("ai_score")):
+        ai_block = (
+            '<div><div class="m-lbl">AI 馬評</div>'
+            '<div class="m-val" style="opacity:0.5">計算中</div></div>'
         )
     else:
         ai_block = (
@@ -457,7 +467,7 @@ for _, row in pred_df.iterrows():
     </div>
     <div class="hc-prob">
       <div class="pct">{prob:.1f}%</div>
-      <div class="lbl">模型勝率</div>
+      <div class="lbl">模型份額</div>
     </div>
   </div>
   <div class="hc-sub">
@@ -466,8 +476,8 @@ for _, row in pred_df.iterrows():
   </div>
   <div class="hc-metrics">
     <div>
-      <div class="m-lbl">統計總分</div>
-      <div class="m-val">{total:.2f}</div>
+      <div class="m-lbl">模型份額</div>
+      <div class="m-val">{prob:.1f}%</div>
     </div>
     {ai_block}
   </div>
@@ -478,14 +488,17 @@ for _, row in pred_df.iterrows():
     with st.expander(f"詳情 · {hno} {name}", expanded=(rank == 1)):
         chips = []
         for label, val in factor_rows_for_horse(row):
-            chips.append(f'<span class="factor-chip">{label} {val:+.2f}</span>')
-        st.markdown("".join(chips), unsafe_allow_html=True)
+            try:
+                chips.append(f'<span class="factor-chip">{label} {float(val):.1f}%</span>')
+            except (TypeError, ValueError):
+                chips.append(f'<span class="factor-chip">{label} —</span>')
+        st.markdown("".join(chips) if chips else "—", unsafe_allow_html=True)
 
-        if ai is not None:
-            combo = float(ai["ai_score"]) * float(ai["confidence"])
+        if ai is not None and pd.notna(ai.get("ai_score")):
+            combo = float(ai["ai_score"]) * float(ai["confidence"] or 0)
             st.markdown(
-                f"**AI 評價**（指數 **{_fmt_ai_display(combo)}**；"
-                f"{float(ai['ai_score']):+.2f} × 信心 {float(ai['confidence']):.0%}＝{combo:+.2f}）  \n"
+                f"**AI 評價**（場內份額 **{_fmt_ai_display(ai_pct)}**；"
+                f"原始 {float(ai['ai_score']):+.2f} × 信心 {float(ai['confidence'] or 0):.0%}＝{combo:+.2f}）  \n"
                 f"{ai.get('summary') or ''}"
             )
         else:
@@ -498,4 +511,7 @@ for _, row in pred_df.iterrows():
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-st.caption("雙軌：模型勝率%｜AI 推介指數%。算式在馬匹詳情；AI 不混入總分。")
+st.caption(
+    "雙軌：模型／AI 皆為場內分差比率瓜分 100%（非負）。"
+    f"推介動態最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹；AI 信心不足可不推。結算入圍定義仍為前{settle_place_n}。"
+)

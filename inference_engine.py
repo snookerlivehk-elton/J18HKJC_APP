@@ -25,18 +25,23 @@ def scores_to_win_probs(
     temperature: float = None,
     *,
     within_race_z: bool = None,
+    method: str = None,
 ) -> np.ndarray:
     """
-    同場總分 → 勝率（加總 = 1）。
+    同場總分 → 勝率（加總 = 1，非負）。
 
-    預設流程：
-      1) 同場 z-score（壓掉加權總分絕對分差爆炸）
-      2) softmax：P_i = exp(s'_i / T) / Σ exp(s'_j / T)
+    預設 method=share（ModelConfig.WIN_PROB_METHOD）：
+      d_i = s_i − min(s)，P_i = d_i / Σd（分差比率瓜分 100%）
 
-    - 負分完全沒問題；勿改成「全部加常數變正數」再當機率
-    - temperature 愈小，高分馬勝率愈尖；愈大愈接近均分
-    - within_race_z=False 可退回舊行為（直接對原始總分 softmax）
+    method=softmax（舊）：
+      可選場內 z → softmax(/T)
     """
+    from score_share import scores_to_share_probs
+
+    mode = (method or getattr(ModelConfig, "WIN_PROB_METHOD", "share") or "share").lower()
+    if mode == "share":
+        return scores_to_share_probs(scores)
+
     arr = np.asarray(scores, dtype=float)
     if arr.size == 0:
         return arr
@@ -54,7 +59,7 @@ def scores_to_win_probs(
     t = float(temperature if temperature is not None else ModelConfig.SOFTMAX_TEMPERATURE)
     t = max(t, 1e-6)
     x = arr / t
-    x = x - np.max(x)  # 數值穩定
+    x = x - np.max(x)
     ex = np.exp(x)
     return ex / ex.sum()
 
@@ -325,12 +330,21 @@ class InferenceEngine:
         if not df_result.empty:
             df_result = df_result.sort_values('總預測分', ascending=False).reset_index(drop=True)
             df_result.insert(0, '預測排名', df_result.index + 1)
-            probs = scores_to_win_probs(
-                df_result['總預測分'].to_numpy(),
-                ModelConfig.SOFTMAX_TEMPERATURE,
-            )
+            probs = scores_to_win_probs(df_result['總預測分'].to_numpy())
             df_result['模型勝率'] = np.round(probs, 4)
             df_result['模型勝率%'] = np.round(probs * 100.0, 2)
+
+            # 各因子：場內分差比率瓜分 100%（非負顯示；排序與原始 Z 同場一致）
+            from score_share import scores_to_share_probs
+            factor_share_cols = [
+                '騎師分', '練馬師分', '騎練分', '檔位分',
+                '近績分', '步速分', '速度分', 'SG貢獻',
+            ]
+            for col in factor_share_cols:
+                if col not in df_result.columns:
+                    continue
+                sh = scores_to_share_probs(df_result[col].to_numpy(dtype=float))
+                df_result[col] = np.round(sh * 100.0, 2)
 
         meta = {
             'bucket_id': fine_bucket,
@@ -340,6 +354,7 @@ class InferenceEngine:
             'factor_rows': 0 if scores_df is None else len(scores_df),
             'match_rate': (sum(hit_counts.values()) / total_lookups) if total_lookups else 0.0,
             'hit_counts': hit_counts,
+            'win_prob_method': getattr(ModelConfig, 'WIN_PROB_METHOD', 'share'),
             'softmax_temperature': ModelConfig.SOFTMAX_TEMPERATURE,
             'softmax_within_race_z': ModelConfig.SOFTMAX_WITHIN_RACE_Z,
             'win_prob_sum': float(df_result['模型勝率'].sum()) if not df_result.empty else 0.0,

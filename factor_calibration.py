@@ -7,7 +7,7 @@
   2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
   3. evaluate_settled() — 按快照分數算各訊號獨贏／入圍率（含 AI評價×信心）
 
-入圍：≤6 匹前 2；≥7 匹前 3。
+入圍：結算定義為前 4（場內少於 4 匹則取全場）。
 """
 from __future__ import annotations
 
@@ -48,7 +48,11 @@ SIGNAL_DEFS = [
 
 
 def place_cutoff(n_runners: int) -> int:
-    return 2 if n_runners <= 6 else 3
+    """結算入圍：前 4；場內少於 4 匹則取全場。"""
+    n = int(n_runners or 0)
+    if n <= 0:
+        return 4
+    return min(4, n)
 
 
 DDL_PG = """
