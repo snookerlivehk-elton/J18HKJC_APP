@@ -1,3 +1,7 @@
 [server]
 # 供 iOS「加至主畫面」與 PWA 讀取 /app/static/*
 enableStaticServing = true
+
+[theme]
+# 對齊 j18.hk 登錄鈕深藍（Streamlit primary 預設為紅）
+primaryColor = "#3d5a8f"

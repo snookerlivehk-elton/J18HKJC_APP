@@ -249,11 +249,23 @@ div[data-testid="stForm"] {
 div[data-testid="stForm"] label, div[data-testid="stForm"] p {
   color: #333 !important;
 }
-div[data-testid="stForm"] button[kind="primary"] {
+div[data-testid="stForm"] button,
+div[data-testid="stForm"] [data-testid="stBaseButton-primary"],
+div[data-testid="stForm"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button,
+.stFormSubmitButton button,
+.stApp button,
+section.main button,
+[data-testid="stMain"] button {
   background: #3d5a8f !important;
-  border-color: #3d5a8f !important;
+  background-color: #3d5a8f !important;
+  background-image: none !important;
+  border: none !important;
   color: #fff !important;
   font-weight: 800 !important;
+}
+.stApp button p, .stApp button span, .stApp button div {
+  color: #fff !important;
 }
 </style>
         """,
