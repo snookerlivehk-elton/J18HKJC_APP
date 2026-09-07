@@ -1,0 +1,340 @@
+{
+  "schema": "jjjc.results.v1",
+  "race_date": "2026-09-06",
+  "venue_code": "ST",
+  "source_preference": [
+    "official_hkjc",
+    "j18_fallback"
+  ],
+  "generated_at": "2026-09-07T06:46:59.566Z",
+  "race_count": 1,
+  "runner_count": 14,
+  "races": [
+    {
+      "race_id": "20260906ST01",
+      "meeting_id": "2026-09-06_ST",
+      "race_date": "2026-09-05",
+      "venue_code": "ST",
+      "race_no": 1,
+      "race_name": "GLENEALY HANDICAP",
+      "race_class": "Class 5",
+      "distance_m": 1200,
+      "going": "GOOD GLENEALY HANDICAP Course",
+      "course": "TURF - \"A\" Course",
+      "source": "official_hkjc",
+      "fetched_at": "2026-09-07T06:46:31.493Z",
+      "dividends": [
+        {
+          "pool": "Pool",
+          "amount": null,
+          "combination": "Winning Combination"
+        },
+        {
+          "pool": "WIN",
+          "amount": 57.5,
+          "combination": "13"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 18,
+          "combination": "13"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 42.5,
+          "combination": "7"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 25,
+          "combination": "2"
+        },
+        {
+          "pool": "QUINELLA",
+          "amount": 495.5,
+          "combination": "7,13"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 148,
+          "combination": "7,13"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 106.5,
+          "combination": "2,13"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 171,
+          "combination": "2,7"
+        },
+        {
+          "pool": "FORECAST",
+          "amount": 873,
+          "combination": "13,7"
+        },
+        {
+          "pool": "TIERCE",
+          "amount": 7242,
+          "combination": "13,7,2"
+        },
+        {
+          "pool": "TRIO",
+          "amount": 1433,
+          "combination": "2,7,13"
+        },
+        {
+          "pool": "FIRST 4",
+          "amount": 18603,
+          "combination": "2,7,10,13"
+        },
+        {
+          "pool": "QUARTET",
+          "amount": 176603,
+          "combination": "13,7,2,10"
+        }
+      ],
+      "runners": [
+        {
+          "horse_no": 13,
+          "finish_order_num": 1,
+          "finishing_position": 1,
+          "finishing_position_raw": "1",
+          "horse_name": "GOOD FORTUNE",
+          "horse_code": "H349",
+          "jockey_name": "H Y Yuen",
+          "trainer_name": "P C Ng",
+          "actual_weight": 112,
+          "declared_horse_weight": 1083,
+          "draw": 5,
+          "lbw": "---",
+          "running_position": "7 7 1",
+          "finish_time": "1:08.59",
+          "win_odds": 5.7
+        },
+        {
+          "horse_no": 7,
+          "finish_order_num": 2,
+          "finishing_position": 2,
+          "finishing_position_raw": "2",
+          "horse_name": "SO MY FOLKS",
+          "horse_code": "K456",
+          "jockey_name": "H Bowman",
+          "trainer_name": "C S Shum",
+          "actual_weight": 131,
+          "declared_horse_weight": 1069,
+          "draw": 2,
+          "lbw": "2-3/4",
+          "running_position": "4 3 2",
+          "finish_time": "1:09.04",
+          "win_odds": 15
+        },
+        {
+          "horse_no": 2,
+          "finish_order_num": 3,
+          "finishing_position": 3,
+          "finishing_position_raw": "3",
+          "horse_name": "FOREVER FANCY",
+          "horse_code": "K354",
+          "jockey_name": "C Y Ho",
+          "trainer_name": "K W Lui",
+          "actual_weight": 134,
+          "declared_horse_weight": 1200,
+          "draw": 1,
+          "lbw": "3-1/4",
+          "running_position": "8 6 3",
+          "finish_time": "1:09.11",
+          "win_odds": 9.3
+        },
+        {
+          "horse_no": 10,
+          "finish_order_num": 4,
+          "finishing_position": 4,
+          "finishing_position_raw": "4",
+          "horse_name": "RUNJEET",
+          "horse_code": "K276",
+          "jockey_name": "L Ferraris",
+          "trainer_name": "D J Whyte",
+          "actual_weight": 127,
+          "declared_horse_weight": 1127,
+          "draw": 13,
+          "lbw": "3-1/2",
+          "running_position": "2 2 4",
+          "finish_time": "1:09.17",
+          "win_odds": 74
+        },
+        {
+          "horse_no": 11,
+          "finish_order_num": 5,
+          "finishing_position": 5,
+          "finishing_position_raw": "5",
+          "horse_name": "YEE CHEONG RAIDER",
+          "horse_code": "J176",
+          "jockey_name": "A Badel",
+          "trainer_name": "B Crawford",
+          "actual_weight": 125,
+          "declared_horse_weight": 1131,
+          "draw": 3,
+          "lbw": "4-1/4",
+          "running_position": "14 10 5",
+          "finish_time": "1:09.29",
+          "win_odds": 6.7
+        },
+        {
+          "horse_no": 4,
+          "finish_order_num": 6,
+          "finishing_position": 6,
+          "finishing_position_raw": "6",
+          "horse_name": "SUNNY Q",
+          "horse_code": "J223",
+          "jockey_name": "Z Purton",
+          "trainer_name": "W Y So",
+          "actual_weight": 134,
+          "declared_horse_weight": 1146,
+          "draw": 7,
+          "lbw": "4-3/4",
+          "running_position": "12 14 6",
+          "finish_time": "1:09.36",
+          "win_odds": 2.3
+        },
+        {
+          "horse_no": 3,
+          "finish_order_num": 7,
+          "finishing_position": 7,
+          "finishing_position_raw": "7",
+          "horse_name": "POWER PATCH",
+          "horse_code": "L100",
+          "jockey_name": "P N Wong",
+          "trainer_name": "K L Man",
+          "actual_weight": 127,
+          "declared_horse_weight": 1258,
+          "draw": 14,
+          "lbw": "5",
+          "running_position": "5 5 7",
+          "finish_time": "1:09.41",
+          "win_odds": 17
+        },
+        {
+          "horse_no": 8,
+          "finish_order_num": 8,
+          "finishing_position": 8,
+          "finishing_position_raw": "8",
+          "horse_name": "GROOVY FEELING",
+          "horse_code": "J515",
+          "jockey_name": "B Avdulla",
+          "trainer_name": "J Richards",
+          "actual_weight": 129,
+          "declared_horse_weight": 1125,
+          "draw": 10,
+          "lbw": "5-3/4",
+          "running_position": "6 8 8",
+          "finish_time": "1:09.52",
+          "win_odds": 37
+        },
+        {
+          "horse_no": 1,
+          "finish_order_num": 9,
+          "finishing_position": 9,
+          "finishing_position_raw": "9",
+          "horse_name": "BEAUTY GEMINI",
+          "horse_code": "L129",
+          "jockey_name": "Y L Chung",
+          "trainer_name": "A S Cruz",
+          "actual_weight": 132,
+          "declared_horse_weight": 1148,
+          "draw": 9,
+          "lbw": "5-3/4",
+          "running_position": "3 4 9",
+          "finish_time": "1:09.53",
+          "win_odds": 54
+        },
+        {
+          "horse_no": 12,
+          "finish_order_num": 10,
+          "finishing_position": 10,
+          "finishing_position_raw": "10",
+          "horse_name": "GIMME FIVE",
+          "horse_code": "J099",
+          "jockey_name": "K C Leung",
+          "trainer_name": "Y S Tsui",
+          "actual_weight": 123,
+          "declared_horse_weight": 1078,
+          "draw": 4,
+          "lbw": "6",
+          "running_position": "11 9 10",
+          "finish_time": "1:09.56",
+          "win_odds": 41
+        },
+        {
+          "horse_no": 6,
+          "finish_order_num": 11,
+          "finishing_position": 11,
+          "finishing_position_raw": "11",
+          "horse_name": "VERBIER",
+          "horse_code": "J187",
+          "jockey_name": "E C W Wong",
+          "trainer_name": "C Fownes",
+          "actual_weight": 129,
+          "declared_horse_weight": 1248,
+          "draw": 12,
+          "lbw": "8",
+          "running_position": "1 1 11",
+          "finish_time": "1:09.86",
+          "win_odds": 22
+        },
+        {
+          "horse_no": 5,
+          "finish_order_num": 12,
+          "finishing_position": 12,
+          "finishing_position_raw": "12",
+          "horse_name": "RISING ELITE",
+          "horse_code": "K544",
+          "jockey_name": "K Teetan",
+          "trainer_name": "W K Mo",
+          "actual_weight": 132,
+          "declared_horse_weight": 1074,
+          "draw": 8,
+          "lbw": "8-1/4",
+          "running_position": "9 12 12",
+          "finish_time": "1:09.93",
+          "win_odds": 10
+        },
+        {
+          "horse_no": 14,
+          "finish_order_num": 13,
+          "finishing_position": 13,
+          "finishing_position_raw": "13",
+          "horse_name": "SPARKLE AND GOLD",
+          "horse_code": "K259",
+          "jockey_name": "M L Yeung",
+          "trainer_name": "C H Yip",
+          "actual_weight": 120,
+          "declared_horse_weight": 1148,
+          "draw": 11,
+          "lbw": "8-1/2",
+          "running_position": "13 13 13",
+          "finish_time": "1:09.96",
+          "win_odds": 101
+        },
+        {
+          "horse_no": 9,
+          "finish_order_num": 14,
+          "finishing_position": 14,
+          "finishing_position_raw": "14",
+          "horse_name": "EMERGING STAR",
+          "horse_code": "K390",
+          "jockey_name": "J Orman",
+          "trainer_name": "C W Chang",
+          "actual_weight": 127,
+          "declared_horse_weight": 1133,
+          "draw": 6,
+          "lbw": "9-1/4",
+          "running_position": "10 11 14",
+          "finish_time": "1:10.08",
+          "win_odds": 149
+        }
+      ]
+    }
+  ]
+}
