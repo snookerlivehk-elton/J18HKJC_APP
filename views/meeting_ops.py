@@ -209,6 +209,32 @@ for stage, label in STAGES:
                 else:
                     st.error(r.get("error"))
                 st.rerun()
+        elif stage == "RESULTS":
+            if a1.button("同步 jjjc 賽果", key=f"act_res_{stage}"):
+                with st.spinner("jjjc results export → runners…"):
+                    r = pipe.run_action(racing_date, course, "sync_jjjc_results")
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    st.success(
+                        f"寫入 {r.get('runner_upserted')} 匹／{r.get('race_count')} 場"
+                    )
+                    st.json(
+                        {
+                            k: r.get(k)
+                            for k in (
+                                "ok",
+                                "race_ids",
+                                "runner_upserted",
+                                "payout_upserted",
+                                "detail",
+                                "error",
+                            )
+                            if r.get(k) is not None
+                        }
+                    )
+                else:
+                    st.error(r.get("error") or r)
+                st.rerun()
         elif stage == "SETTLED":
             if a1.button("結算快照", key=f"act_set_{stage}"):
                 with st.spinner("settle…"):
@@ -232,6 +258,6 @@ for stage, label in STAGES:
 
 st.divider()
 st.caption(
-    "RACECARD 優先「同步 jjjc 排位」（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
+    "RACECARD／RESULTS 優先同步 jjjc（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
     "官方 SG 未上架時狀態為 waiting，不必強行失敗。"
 )

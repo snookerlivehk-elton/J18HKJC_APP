@@ -433,7 +433,7 @@ class MeetingPipeline:
         row = pd.read_sql(q, self.engine, params={"p": prefix}).iloc[0]
         races, runners = int(row["races"] or 0), int(row["runners"] or 0)
         if races == 0:
-            return STATUS_WAITING, "歷史庫尚無名次（待 J18 賽後更新）"
+            return STATUS_WAITING, "歷史庫尚無名次（待 jjjc 同步或 J18 賽後更新）"
         return STATUS_OK, f"{races} 場已有名次、{runners} 匹"
 
     def check_settled(self, racing_date: str, course: str) -> Tuple[str, str]:
@@ -516,6 +516,19 @@ class MeetingPipeline:
                 from jjjc_racecard_sync import sync_meeting
 
                 out = sync_meeting(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
+            if action == "sync_jjjc_results":
+                from jjjc_results_sync import sync_meeting as sync_results
+
+                out = sync_results(
                     racing_date=racing_date,
                     course=course,
                     race_no=kwargs.get("race_no"),
