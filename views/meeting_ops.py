@@ -92,11 +92,42 @@ for stage, label in STAGES:
 
         # 節點動作
         if stage == "RACECARD":
-            if a1.button("重抓排位", key=f"act_rc_{stage}"):
-                with st.spinner("racecard…"):
+            if a1.button("同步 jjjc 排位", key=f"act_rc_sync_{stage}"):
+                with st.spinner("jjjc racecard export → upcoming_*…"):
+                    r = pipe.run_action(racing_date, course, "sync_jjjc_racecard")
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    st.success(
+                        f"寫入 {r.get('runner_upserted')} 匹／{r.get('race_count')} 場"
+                    )
+                    st.json(
+                        {
+                            k: r.get(k)
+                            for k in (
+                                "ok",
+                                "race_ids",
+                                "runner_upserted",
+                                "source",
+                                "detail",
+                                "error",
+                            )
+                            if r.get(k) is not None
+                        }
+                    )
+                else:
+                    st.error(r.get("error") or r)
+                st.rerun()
+            if st.button("備援：重抓 HKJC HTML 排位", key=f"act_rc_html_{stage}"):
+                with st.spinner("racecard HTML…"):
                     r = pipe.run_action(racing_date, course, "crawl_racecard")
                 st.session_state.pop("ops_ready", None)
-                st.json({k: r.get(k) for k in ("ok", "error", "stdout", "stderr") if k in r or r.get(k)})
+                st.json(
+                    {
+                        k: r.get(k)
+                        for k in ("ok", "error", "stdout", "stderr")
+                        if k in r or r.get(k)
+                    }
+                )
                 st.rerun()
         elif stage == "SPEEDGUIDE":
             if a1.button("重抓 SG", key=f"act_sg_{stage}"):
@@ -200,4 +231,7 @@ for stage, label in STAGES:
             st.rerun()
 
 st.divider()
-st.caption("NLP／賽果節點多為可選或賽後；官方 SG 未上架時狀態為 waiting，不必強行失敗。")
+st.caption(
+    "RACECARD 優先「同步 jjjc 排位」（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
+    "官方 SG 未上架時狀態為 waiting，不必強行失敗。"
+)

@@ -512,6 +512,19 @@ class MeetingPipeline:
                 self.refresh_readiness(racing_date, course)
                 return {"ok": ok, "stdout": r.stdout[-2000:], "stderr": r.stderr[-1000:]}
 
+            if action == "sync_jjjc_racecard":
+                from jjjc_racecard_sync import sync_meeting
+
+                out = sync_meeting(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
             if action == "crawl_speedguide":
                 r = subprocess.run(
                     ["python", "speedguide_crawler.py", "--date", d_slash, "--course", course],

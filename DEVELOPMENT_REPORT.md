@@ -25,11 +25,13 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | 來源 | 表 / 產物 | 說明 |
 |------|-----------|------|
 | J18 歷史 API | `race_meetings`, `races`, `runners`, `text_reports` | `batch_crawler` / `etl_pipeline` |
-| HKJC 排位 | `upcoming_races`, `upcoming_runners` | `racecard_crawler`（注意欄位偏移：檔位/練馬師） |
+| **api_jjjc 排位** | `upcoming_races`, `upcoming_runners` | `jjjc_racecard_sync.py` ← `GET /api/export/racecard`（`jjjc.racecard.v1`）；join=`race_id`+`horse_no` |
+| HKJC 排位（備援） | 同上 | `racecard_crawler` HTML；作戰室保留「備援重抓」 |
 | HKJC Speed Guide | `upcoming_speedguide` | CMS JSON：`consvc.hkjc.com/.../SpeedPro/current/sg_*`；賽前約 1 日中午上架 |
 | 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |
 
 - 雲端：`USE_SQLITE=false` + `DATABASE_URL` / `DATABASE_URL_SYNC`  
+- 排位同步需：`JJJC_API_BASE`（api_jjjc 根網址，無尾斜線；亦相容 `JJJC_RESULTS_API_BASE`）  
 - 本地可 SQLite，但與 Railway 開發請對齊 Postgres  
 - `start.sh`：**只跑 Streamlit**，部署時不要重爬整年歷史  
 
@@ -141,6 +143,7 @@ USE_SQLITE=false
 DATABASE_URL=...
 DATABASE_URL_SYNC=...   # SQLAlchemy 用的同步 URL
 J18_API_BASE_URL=...    # 公司內 J18 歷史 API 源站或完整 historyResult URL（費用敏感，勿寫死／勿公開）
+JJJC_API_BASE=...       # api_jjjc 根網址（排位／賽果 export；無尾斜線）
 OPENAI_API_KEY=...      # 可選但 NLP 需要
 OPENAI_MODEL=gpt-4o-mini
 AUTH_BOOTSTRAP_ADMIN=...  # 僅庫內尚無 admin 時的開機通行碼
