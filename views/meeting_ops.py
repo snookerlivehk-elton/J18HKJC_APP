@@ -263,9 +263,20 @@ for stage, label in STAGES:
             if a1.button("結算快照", key=f"act_set_{stage}"):
                 with st.spinner("settle…"):
                     r = pipe.run_action(racing_date, course, "settle")
+                st.session_state["ops_settle_result"] = r
                 st.session_state.pop("ops_ready", None)
-                st.info(r)
                 st.rerun()
+            last = st.session_state.get("ops_settle_result")
+            if last:
+                msg = last.get("message") or last
+                if last.get("settled_batches"):
+                    st.success(msg)
+                elif last.get("updated_rows"):
+                    st.warning(msg)
+                else:
+                    st.info(msg)
+                if last.get("match_stats"):
+                    st.caption(f"配對細節：{last.get('match_stats')}")
 
         if a2.button("人工放行 OK", key=f"ok_{stage}"):
             pipe.set_stage(racing_date, course, stage, STATUS_OK, "人工放行", manual=True)

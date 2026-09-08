@@ -464,7 +464,8 @@ class FactorCalibration:
     def settle_pending(self) -> dict:
         """
         對未結算 batch：若 historical runners 已有該 race_id 名次，則回填 finish_order_num。
-        當 batch 內所有 race 都有至少一匹完賽名次時，標記 settled_at。
+        匹配優先 race_id+horse_no（避免中英馬名不一致），再 fallback 正規化馬名。
+        當 batch 內每場 ≥50% 馬有名次時，標記 settled_at。
         """
         batches = pd.read_sql(
             text(
@@ -484,6 +485,7 @@ class FactorCalibration:
         updated = 0
         settled = []
         waiting_results = []
+        match_stats = []
         for _, b in batches.iterrows():
             batch_id = b["batch_id"]
             snaps = pd.read_sql(
@@ -506,36 +508,78 @@ class FactorCalibration:
                 waiting_results.append(batch_id)
                 continue
 
-            # 匹配：優先 race_id + horse_no；fallback race_id + 正規化馬名
             from bucket_utils import normalize_person_name
 
             results = results.copy()
+            results["horse_no"] = pd.to_numeric(results["horse_no"], errors="coerce")
             results["horse_key"] = results["horse_name"].apply(normalize_person_name)
+            # 英文名大小寫不敏感
+            results["horse_key_l"] = results["horse_key"].str.lower()
+
             snaps = snaps.copy()
+            snaps["horse_no"] = pd.to_numeric(snaps["horse_no"], errors="coerce")
             snaps["horse_key"] = snaps["horse_name"].apply(normalize_person_name)
+            snaps["horse_key_l"] = snaps["horse_key"].str.lower()
 
-            # horse_no in historical may not match upcoming numbering — match by name
-            merge = snaps.merge(
-                results[["race_id", "horse_key", "finish_order_num"]],
-                on=["race_id", "horse_key"],
+            finish_by_id: dict = {}
+            matched_by_no = matched_by_name = 0
+
+            # 1) race_id + horse_no（主路徑：中英馬名不一致時仍可配）
+            by_no = snaps.merge(
+                results[["race_id", "horse_no", "finish_order_num"]].dropna(subset=["horse_no"]),
+                on=["race_id", "horse_no"],
                 how="left",
-                suffixes=("", "_res"),
+                suffixes=("", "_r"),
             )
+            for _, row in by_no.iterrows():
+                if pd.isna(row.get("finish_order_num")):
+                    continue
+                finish_by_id[int(row["id"])] = int(row["finish_order_num"])
+                matched_by_no += 1
 
-            with self.engine.begin() as conn:
-                for _, row in merge.iterrows():
+            # 2) fallback：race_id + 正規化馬名（大小寫不敏感）
+            still = snaps[~snaps["id"].astype(int).isin(finish_by_id)].copy()
+            if not still.empty:
+                by_name = still.merge(
+                    results[["race_id", "horse_key_l", "finish_order_num"]].dropna(
+                        subset=["horse_key_l"]
+                    ),
+                    on=["race_id", "horse_key_l"],
+                    how="left",
+                    suffixes=("", "_r"),
+                )
+                for _, row in by_name.iterrows():
                     if pd.isna(row.get("finish_order_num")):
                         continue
+                    rid = int(row["id"])
+                    if rid in finish_by_id:
+                        continue
+                    finish_by_id[rid] = int(row["finish_order_num"])
+                    matched_by_name += 1
+
+            with self.engine.begin() as conn:
+                for sid, fin in finish_by_id.items():
                     conn.execute(
                         text(
                             "UPDATE prediction_snapshots SET finish_order_num = :f "
                             "WHERE id = :id"
                         ),
-                        {"f": int(row["finish_order_num"]), "id": int(row["id"])},
+                        {"f": int(fin), "id": int(sid)},
                     )
                     updated += 1
 
-            # 檢查是否整批可結算：每個 race_id 至少有完賽馬
+            unmatched = int(len(snaps) - len(finish_by_id))
+            match_stats.append(
+                {
+                    "batch_id": batch_id,
+                    "snap_rows": int(len(snaps)),
+                    "matched_by_no": int(matched_by_no),
+                    "matched_by_name": int(matched_by_name),
+                    "unmatched": unmatched,
+                }
+            )
+
+            # 檢查是否整批可結算
             left = pd.read_sql(
                 text(
                     "SELECT race_id, COUNT(*) AS n, "
@@ -546,24 +590,29 @@ class FactorCalibration:
                 params={"b": batch_id},
             )
             if not left.empty and (left["filled"] > 0).all():
-                # 要求多數馬有名次（≥50%）才算結算完成
                 if (left["filled"] / left["n"] >= 0.5).all():
                     self._mark_settled(batch_id)
                     settled.append(batch_id)
+
+        msg = f"更新 {updated} 列；新結算 {len(settled)} batch"
+        if waiting_results:
+            msg += f"；尚待賽果 {len(waiting_results)} batch（先同步 jjjc／J18 名次）"
+        if match_stats and updated == 0 and not settled:
+            sample = match_stats[0]
+            msg += (
+                f"；配對失敗（例 `{sample['batch_id']}`："
+                f"no={sample['matched_by_no']} name={sample['matched_by_name']} "
+                f"未配={sample['unmatched']}）。"
+                "若賽果為英文名、快照為中文名，請更新後重試（已改優先馬號配對）。"
+            )
 
         return {
             "ok": True,
             "settled_batches": settled,
             "updated_rows": updated,
             "waiting_results": waiting_results,
-            "message": (
-                f"更新 {updated} 列；新結算 {len(settled)} batch"
-                + (
-                    f"；尚待賽果 {len(waiting_results)} batch（先同步 jjjc／J18 名次）"
-                    if waiting_results
-                    else ""
-                )
-            ),
+            "match_stats": match_stats,
+            "message": msg,
         }
 
     def _mark_settled(self, batch_id: str):
@@ -591,7 +640,7 @@ class FactorCalibration:
         params = {f"r{i}": rid for i, rid in enumerate(race_ids)}
         q = text(
             f"""
-            SELECT ru.race_id, ru.horse_name, ru.finish_order_num
+            SELECT ru.race_id, ru.horse_no, ru.horse_name, ru.finish_order_num
             FROM runners ru
             WHERE ru.race_id IN ({placeholders})
               AND ru.finish_order_num IS NOT NULL
