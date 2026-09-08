@@ -1,13 +1,13 @@
 """
-廣告輸出模組：預測快照後自動生成宣傳海報 PNG + 文案。
+廣告輸出模組：預測快照後自動生成全賽日宣傳海報。
 
-每場產出：
-  - {race_id}_model.jpg  模型 · 勝率份額推介
-  - {race_id}_ai.jpg     AI 馬評 · 份額推介
-  - {race_id}_copy.json  宣傳文案（模型／AI）
+每次產出（固定檔名，下次覆蓋）：
+  - ad_output/model.jpg   全賽日 · 模型勝率份額推介
+  - ad_output/ai.jpg      全賽日 · AI 馬評份額推介
+  - ad_output/copy.json   宣傳文案
 
-模版：assets/ad_templates/model_base.jpg、ai_base.jpg（可替換；亦相容 .png）
-輸出：ad_output/{batch_id}/（JPEG 以控制體積，避免 Streamlit／反向代理 502）
+單張 JPEG 目標 ≤ AD_OUTPUT_MAX_KB（預設 800KB）。
+模版：assets/ad_templates/model_base.jpg、ai_base.jpg
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -25,7 +26,6 @@ from score_share import select_picks_by_share, win_pick_count_from_shares
 ROOT = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT / "assets" / "ad_templates"
 LOGO_PATH = ROOT / "assets" / "j18ai_plus_logo.png"
-# 內嵌 CJK 字型優先（Railway 等容器通常沒有系統中文字型；缺字會變 □ 且 load_default 字極小）
 BUNDLED_FONT = ROOT / "assets" / "fonts" / "wqy-microhei.ttc"
 FONT_CANDIDATES = [
     str(BUNDLED_FONT),
@@ -36,20 +36,24 @@ FONT_CANDIDATES = [
     "C:/Windows/Fonts/msyh.ttc",
 ]
 
-# 1080×1920 海報字級（px）— 以推介列可讀為優先
-FONT_SIZE = {
-    "brand": 52,
-    "title": 78,
-    "sub": 44,
-    "row": 56,
-    "tag": 36,
-    "pct": 60,
-    "small": 32,
-}
+POSTER_W = 1080
+POSTER_H = 1920
+MODEL_FILE = "model.jpg"
+AI_FILE = "ai.jpg"
+COPY_FILE = "copy.json"
+
+
+def _max_bytes() -> int:
+    try:
+        from config import ModelConfig
+
+        kb = int(getattr(ModelConfig, "AD_OUTPUT_MAX_KB", 800) or 800)
+    except Exception:
+        kb = int(os.getenv("AD_OUTPUT_MAX_KB") or 800)
+    return max(100, kb) * 1024
 
 
 def default_output_dir() -> Path:
-    """環境變數 AD_OUTPUT_DIR 優先，其次 ModelConfig.AD_OUTPUT_DIR，否則專案 ad_output/。"""
     custom = str(os.getenv("AD_OUTPUT_DIR") or "").strip()
     if not custom:
         try:
@@ -97,7 +101,6 @@ def _find_font() -> Optional[str]:
 
 
 def _load_font(size: int):
-    """載入可縮放的 TrueType／TTC；禁止退回 load_default（會導致中文 □ 且字級無效）。"""
     from PIL import ImageFont
 
     path = _find_font()
@@ -133,7 +136,6 @@ def font_status() -> Dict[str, Any]:
 
 
 def _template_path(track: str) -> Path:
-    """優先 jpg（體積小），其次 png。"""
     stem = "model_base" if track == "model" else "ai_base"
     for ext in (".jpg", ".jpeg", ".png"):
         p = TEMPLATE_DIR / f"{stem}{ext}"
@@ -143,7 +145,6 @@ def _template_path(track: str) -> Path:
 
 
 def ensure_default_templates() -> None:
-    """若缺模版則畫簡單漸層底圖（可被 assets 內 jpg/png 覆蓋）。"""
     TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     from PIL import Image
 
@@ -156,7 +157,7 @@ def ensure_default_templates() -> None:
         png = TEMPLATE_DIR / name.replace(".jpg", ".png")
         if path.is_file() or png.is_file():
             continue
-        w, h = 1080, 1920
+        w, h = POSTER_W, POSTER_H
         img = Image.new("RGB", (w, h), c0)
         px = img.load()
         for y in range(h):
@@ -166,7 +167,7 @@ def ensure_default_templates() -> None:
             b = int(c0[2] * (1 - t) + c1[2] * t)
             for x in range(w):
                 px[x, y] = (r, g, b)
-        img.save(path, "JPEG", quality=85, optimize=True)
+        img.save(path, "JPEG", quality=82, optimize=True)
 
 
 def build_payload_from_prediction(
@@ -176,10 +177,6 @@ def build_payload_from_prediction(
     pred_df: pd.DataFrame,
     ai_map: Optional[Dict[int, Tuple]] = None,
 ) -> RaceAdPayload:
-    """
-    從 predict_race 結果 + AI map 組裝與賽日速覽一致的推介。
-    ai_map: horse_no -> (ai_score, confidence, ai_combo)
-    """
     from form_ai_picks import build_ai_picks, compute_ai_combo
 
     info = race_info.to_dict() if hasattr(race_info, "to_dict") else (dict(race_info) if race_info is not None else {})
@@ -237,16 +234,14 @@ def build_payload_from_prediction(
     if not ai_skipped:
         win_set = {int(x["horse_no"]) for x in (ai_pack.get("win") or []) if x.get("horse_no") is not None}
         place = (ai_pack.get("place") or []) or (ai_pack.get("win") or [])
-        for i, x in enumerate(place, start=1):
+        for x in place:
             hno = int(x["horse_no"])
-            pct = float(x.get("ai_share_pct") or 0)
-            tag = "爭勝" if hno in win_set else "推介"
             ai_picks.append(
                 PickItem(
                     horse_no=hno,
                     horse_name=str(x.get("horse_name") or ""),
-                    share_pct=round(pct, 1),
-                    tag=tag,
+                    share_pct=round(float(x.get("ai_share_pct") or 0), 1),
+                    tag="爭勝" if hno in win_set else "推介",
                 )
             )
 
@@ -274,7 +269,6 @@ def build_payload_from_snapshot_rows(
     race_num: Any = None,
     race_name: str = "",
 ) -> RaceAdPayload:
-    """從已寫入快照的列（含 ai_*）重建推介。"""
     from form_ai_picks import build_ai_picks, compute_ai_combo
 
     df = pd.DataFrame(list(rows))
@@ -287,7 +281,6 @@ def build_payload_from_snapshot_rows(
             race_name=race_name,
         )
 
-    # 快照存的可能是 share% 欄位名稱已變；優先 model_win_prob
     if "model_win_prob" in df.columns:
         df = df.sort_values("model_win_prob", ascending=False).reset_index(drop=True)
     elif "total_score" in df.columns:
@@ -357,7 +350,6 @@ def build_payload_from_snapshot_rows(
 
 
 def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
-    """宣傳文案（繁中）。track=model|ai"""
     date_s = payload.racing_date
     course = payload.course
     rn = payload.race_num
@@ -390,20 +382,99 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
     }
 
 
+def generate_meeting_copy(payloads: Sequence[RaceAdPayload], track: str) -> Dict[str, str]:
+    if not payloads:
+        return {"track": track, "headline": "", "full": "", "cta": ""}
+    date_s = payloads[0].racing_date
+    course = payloads[0].course
+    if track == "model":
+        headline = f"【J18AI Plus+ 模型推介】{date_s} {course} 全賽日"
+        label = "模型"
+    else:
+        headline = f"【J18AI Plus+ AI 馬評】{date_s} {course} 全賽日"
+        label = "AI 馬評"
+    lines = []
+    for p in payloads:
+        rn = p.race_num if p.race_num is not None else "?"
+        picks = p.model_picks if track == "model" else p.ai_picks
+        if track == "ai" and p.ai_skipped and not picks:
+            body = p.ai_skip_message or "信心不足略過"
+        elif not picks:
+            body = "暫無推介"
+        else:
+            body = "、".join(
+                f"{x.tag}#{x.horse_no}{x.horse_name}({x.share_pct:.0f}%)" for x in picks
+            )
+        lines.append(f"R{rn} {body}")
+    cta = "數據僅供參考，投注前請自行判斷。關注 J18.hk 獲取更多賽日速覽。"
+    full = f"{headline}\n" + "\n".join(lines) + f"\n\n{cta}"
+    return {"track": track, "headline": headline, "label": label, "full": full, "cta": cta}
+
+
 def _draw_text(draw, xy, text, font, fill, *, anchor="lt"):
     draw.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
-def render_poster_png(
-    payload: RaceAdPayload,
+def _short_name(name: str, max_chars: int = 4) -> str:
+    s = str(name or "").strip()
+    if len(s) <= max_chars:
+        return s
+    return s[:max_chars]
+
+
+def _format_picks_line(picks: Sequence[PickItem], *, compact: bool) -> str:
+    if not picks:
+        return "—"
+    parts = []
+    name_len = 3 if compact else 4
+    for p in picks:
+        nm = _short_name(p.horse_name, name_len)
+        if compact:
+            parts.append(f"{'勝' if p.tag == '爭勝' else '推'}#{p.horse_no}{nm}{p.share_pct:.0f}%")
+        else:
+            parts.append(f"{p.tag} #{p.horse_no}{nm} {p.share_pct:.0f}%")
+    return "  ".join(parts)
+
+
+def _save_jpeg_under(path: Path, rgb, *, max_bytes: Optional[int] = None) -> Dict[str, Any]:
+    """寫入 JPEG，必要時降品質／縮圖以壓到 max_bytes 內。"""
+    from PIL import Image
+
+    limit = max_bytes if max_bytes is not None else _max_bytes()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img = rgb.convert("RGB")
+    used_q = 82
+    scale = 1.0
+    data = b""
+    for attempt in range(12):
+        work = img
+        if scale < 0.999:
+            nw = max(640, int(img.width * scale))
+            nh = max(960, int(img.height * scale))
+            work = img.resize((nw, nh), Image.Resampling.LANCZOS)
+        buf = BytesIO()
+        work.save(buf, format="JPEG", quality=used_q, optimize=True)
+        data = buf.getvalue()
+        if len(data) <= limit:
+            path.write_bytes(data)
+            return {"bytes": len(data), "quality": used_q, "scale": scale, "path": str(path)}
+        if used_q > 55:
+            used_q -= 5
+        else:
+            scale *= 0.9
+            used_q = max(50, used_q)
+    path.write_bytes(data)
+    return {"bytes": len(data), "quality": used_q, "scale": scale, "path": str(path), "over_limit": len(data) > limit}
+
+
+def render_meeting_poster(
+    payloads: Sequence[RaceAdPayload],
     *,
     track: str,
     out_path: Path,
-) -> Path:
-    """
-    在海報模版上疊加品牌 Logo、場次資訊與推介列表，輸出高品質 PNG。
-    track: model | ai
-    """
+) -> Dict[str, Any]:
+    """全賽日推介 → 單張 1080×1920 海報。"""
     from PIL import Image, ImageDraw
 
     ensure_default_templates()
@@ -413,229 +484,179 @@ def render_poster_png(
         tpl_path = _template_path(track)
 
     base = Image.open(tpl_path).convert("RGBA")
-    target_w, target_h = 1080, 1920
-    target = (target_w, target_h)
+    target = (POSTER_W, POSTER_H)
     if base.size != target:
         base = base.resize(target, Image.Resampling.LANCZOS)
 
-    picks = payload.model_picks if track == "model" else payload.ai_picks
-    n_picks = max(len(picks), 1)
-    # 推介少時拉高行距／字級，避免下半空白、字相對卡片過小
-    if n_picks <= 2:
-        row_h, row_gap, size_boost = 168, 28, 8
-    elif n_picks <= 3:
-        row_h, row_gap, size_boost = 150, 24, 4
-    elif n_picks <= 4:
-        row_h, row_gap, size_boost = 136, 20, 2
-    else:
-        row_h, row_gap, size_boost = 122, 16, 0
+    races = sorted(
+        list(payloads),
+        key=lambda p: (
+            int(p.race_num) if str(p.race_num).isdigit() else 999,
+            str(p.race_id),
+        ),
+    )
+    n = max(len(races), 1)
+    compact = n >= 10
+    very_compact = n >= 12
 
-    font_brand = _load_font(FONT_SIZE["brand"])
-    font_title = _load_font(FONT_SIZE["title"])
-    font_sub = _load_font(FONT_SIZE["sub"] + size_boost // 2)
-    font_row = _load_font(FONT_SIZE["row"] + size_boost)
-    font_tag = _load_font(FONT_SIZE["tag"] + size_boost // 2)
-    font_pct = _load_font(FONT_SIZE["pct"] + size_boost)
-    font_small = _load_font(FONT_SIZE["small"])
+    # 字級隨場次數縮放（優先可讀）
+    if very_compact:
+        fs = {"brand": 42, "sub": 32, "date": 30, "race": 30, "pick": 26, "foot": 24}
+        header_h, foot_h, gap = 170, 90, 6
+    elif compact:
+        fs = {"brand": 46, "sub": 34, "date": 32, "race": 34, "pick": 28, "foot": 24}
+        header_h, foot_h, gap = 180, 96, 8
+    elif n >= 8:
+        fs = {"brand": 48, "sub": 36, "date": 32, "race": 36, "pick": 30, "foot": 26}
+        header_h, foot_h, gap = 190, 100, 8
+    else:
+        fs = {"brand": 52, "sub": 38, "date": 34, "race": 38, "pick": 32, "foot": 26}
+        header_h, foot_h, gap = 210, 104, 10
+
+    font_brand = _load_font(fs["brand"])
+    font_sub = _load_font(fs["sub"])
+    font_date = _load_font(fs["date"])
+    font_race = _load_font(fs["race"])
+    font_pick = _load_font(fs["pick"])
+    font_foot = _load_font(fs["foot"])
 
     accent = (212, 175, 106) if track == "model" else (120, 220, 210)
     white = (245, 245, 242)
-    muted = (200, 205, 200)
-
-    rn = payload.race_num
-    title = f"第 {rn} 場" if rn is not None else payload.race_id
-    meta_line = f"{payload.racing_date}　{payload.course}"
-    if payload.distance_m:
-        meta_line += f"　{payload.distance_m}米"
-    if payload.track:
-        meta_line += f"　{payload.track}"
-
-    header_bottom = 250
-    y_meta = header_bottom + 90
-    if payload.race_name:
-        y0 = y_meta + 130
-    else:
-        y0 = y_meta + 90
-
-    list_h = n_picks * row_h + max(0, n_picks - 1) * row_gap
-    panel_top = max(220, header_bottom - 24)
-    panel_bottom = min(target_h - 140, y0 + list_h + 48)
-    if track == "ai" and payload.ai_skipped and not picks:
-        panel_bottom = max(panel_bottom, y0 + 160)
+    muted = (190, 198, 195)
 
     overlay = Image.new("RGBA", target, (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
     od.rounded_rectangle(
-        (40, panel_top, target_w - 40, panel_bottom),
-        radius=28,
-        fill=(0, 0, 0, 130),
+        (28, 28, POSTER_W - 28, POSTER_H - 28),
+        radius=24,
+        fill=(0, 0, 0, 150),
     )
     base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
 
-    # Logo
     if LOGO_PATH.is_file():
         try:
             logo = Image.open(LOGO_PATH).convert("RGBA")
-            logo.thumbnail((170, 170), Image.Resampling.LANCZOS)
-            base.paste(logo, (56, 56), logo)
+            logo.thumbnail((110, 110) if compact else (130, 130), Image.Resampling.LANCZOS)
+            base.paste(logo, (48, 44), logo)
             draw = ImageDraw.Draw(base)
         except Exception:
             pass
 
-    brand = "J18AI Plus+"
-    _draw_text(draw, (250, 78), brand, font_brand, white)
-    track_label = "模型 · 勝率份額" if track == "model" else "AI 馬評 · 份額"
-    _draw_text(draw, (250, 140), track_label, font_sub, accent)
+    _draw_text(draw, (190, 54), "J18AI Plus+", font_brand, white)
+    track_label = "模型 · 全賽日勝率份額" if track == "model" else "AI 馬評 · 全賽日份額"
+    _draw_text(draw, (190, 104), track_label, font_sub, accent)
 
-    _draw_text(draw, (64, header_bottom), title, font_title, white)
-    if payload.race_name:
-        _draw_text(draw, (64, y_meta), str(payload.race_name)[:28], font_sub, muted)
-        _draw_text(draw, (64, y_meta + 58), meta_line, font_small, muted)
-    else:
-        _draw_text(draw, (64, y_meta), meta_line, font_sub, muted)
-
-    if track == "ai" and payload.ai_skipped and not picks:
-        _draw_text(
-            draw,
-            (72, y0 + 40),
-            payload.ai_skip_message or "本場 AI 信心不足，暫不推介",
-            font_row,
-            muted,
-        )
-    else:
-        for i, p in enumerate(picks):
-            y = y0 + i * (row_h + row_gap)
-            card = Image.new("RGBA", (target_w - 128, row_h), (255, 255, 255, 36))
-            base.paste(card, (64, y), card)
-            draw = ImageDraw.Draw(base)
-            tag_col = accent if p.tag == "爭勝" else (180, 190, 185)
-            cy = y + row_h // 2
-            _draw_text(draw, (92, cy), p.tag, font_tag, tag_col, anchor="lm")
-            name = f"#{p.horse_no}  {p.horse_name}"
-            _draw_text(draw, (230, cy), name, font_row, white, anchor="lm")
-            _draw_text(
-                draw,
-                (target_w - 92, cy),
-                f"{p.share_pct:.0f}%",
-                font_pct,
-                accent,
-                anchor="rm",
-            )
-
-    foot = "數據僅供參考 · 非投注建議"
-    draw = ImageDraw.Draw(base)
-    _draw_text(draw, (target_w // 2, target_h - 110), foot, font_small, muted, anchor="mm")
+    date_s = races[0].racing_date if races else ""
+    course = races[0].course if races else ""
     _draw_text(
         draw,
-        (target_w // 2, target_h - 60),
+        (48, header_h - 24),
+        f"{date_s}　{course}　共 {len(races)} 場",
+        font_date,
+        muted,
+    )
+
+    body_top = header_h + 4
+    body_bottom = POSTER_H - foot_h
+    avail = max(body_bottom - body_top, 200)
+    slot = max(int((avail - gap * max(n - 1, 0)) / n), 72)
+
+    def _wrap_picks(text: str, max_w: int) -> List[str]:
+        if not text:
+            return ["—"]
+        if font_pick.getlength(text) <= max_w:
+            return [text]
+        units = text.split("  ")
+        lines: List[str] = []
+        cur = ""
+        for u in units:
+            trial = u if not cur else f"{cur}  {u}"
+            if font_pick.getlength(trial) <= max_w:
+                cur = trial
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = u
+        if cur:
+            lines.append(cur)
+        if len(lines) > 2:
+            second = "  ".join(lines[1:])
+            while second and font_pick.getlength(second) > max_w:
+                second = second[:-2]
+            if second and not second.endswith("…"):
+                second = second.rstrip(" ·") + "…"
+            return [lines[0], second]
+        return lines or ["—"]
+
+    y = body_top
+    max_w = POSTER_W - 120
+    for race in races:
+        picks = race.model_picks if track == "model" else race.ai_picks
+        rn = race.race_num if race.race_num is not None else "?"
+        meta = f"第{rn}場"
+        if race.distance_m:
+            meta += f" · {race.distance_m}m"
+
+        bar_h = max(slot - 2, 56)
+        bar = Image.new("RGBA", (POSTER_W - 80, bar_h), (255, 255, 255, 24))
+        base.paste(bar, (40, y), bar)
+        draw = ImageDraw.Draw(base)
+
+        if track == "ai" and race.ai_skipped and not picks:
+            pick_lines = [race.ai_skip_message or "AI 信心不足 · 本場略過"]
+        else:
+            pick_lines = _wrap_picks(
+                _format_picks_line(picks, compact=compact or very_compact or n >= 8),
+                max_w,
+            )
+
+        block_h = fs["race"] + 6 + len(pick_lines) * (fs["pick"] + 4)
+        ty = y + max(8, (bar_h - block_h) // 2)
+        _draw_text(draw, (56, ty), meta, font_race, accent)
+        py = ty + fs["race"] + 4
+        for line in pick_lines:
+            col = muted if (track == "ai" and race.ai_skipped and not picks) else white
+            _draw_text(draw, (56, py), line, font_pick, col)
+            py += fs["pick"] + 4
+
+        y += slot + gap
+
+    foot = "數據僅供參考 · 非投注建議 · J18.hk"
+    draw = ImageDraw.Draw(base)
+    _draw_text(draw, (POSTER_W // 2, POSTER_H - 58), foot, font_foot, muted, anchor="mm")
+    _draw_text(
+        draw,
+        (POSTER_W // 2, POSTER_H - 28),
         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        font_small,
+        font_foot,
         (140, 145, 140),
         anchor="mm",
     )
 
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    rgb = base.convert("RGB")
-    # JPEG：單場約 200–400KB；大 PNG 會令 Streamlit 一次預覽多場時 502
-    suffix = out_path.suffix.lower()
-    if suffix in (".jpg", ".jpeg"):
-        rgb.save(out_path, "JPEG", quality=88, optimize=True)
-    else:
-        rgb.save(out_path, "PNG", optimize=True)
-    return out_path
+    meta = _save_jpeg_under(Path(out_path), base.convert("RGB"))
+    return meta
 
 
-def render_race_ads(
+# 相容舊測試／呼叫：單場仍可渲染（內部轉成 1 場 meeting）
+def render_poster_png(
     payload: RaceAdPayload,
     *,
-    batch_id: str,
-    output_root: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """為單場生成 model/ai 兩張 PNG + copy json。"""
-    root = Path(output_root or default_output_dir()) / str(batch_id)
-    root.mkdir(parents=True, exist_ok=True)
-    rid = payload.race_id
-    model_path = root / f"{rid}_model.jpg"
-    ai_path = root / f"{rid}_ai.jpg"
-    copy_path = root / f"{rid}_copy.json"
-
-    render_poster_png(payload, track="model", out_path=model_path)
-    render_poster_png(payload, track="ai", out_path=ai_path)
-
-    model_copy = generate_copy(payload, "model")
-    ai_copy = generate_copy(payload, "ai")
-    copies = {
-        "race_id": rid,
-        "racing_date": payload.racing_date,
-        "course": payload.course,
-        "race_num": payload.race_num,
-        "race_name": payload.race_name,
-        "distance": payload.distance_m,
-        "model": model_copy,
-        "ai": ai_copy,
-        "model_copy": model_copy.get("full"),
-        "ai_copy": ai_copy.get("full"),
-        "model_file": model_path.name,
-        "ai_file": ai_path.name,
-        "model_picks": [asdict(p) for p in payload.model_picks],
-        "ai_picks": [asdict(p) for p in payload.ai_picks],
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    copy_path.write_text(json.dumps(copies, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {
-        "race_id": rid,
-        "race_no": payload.race_num,
-        "race_name": payload.race_name,
-        "distance": payload.distance_m,
-        "model_png": str(model_path),
-        "ai_png": str(ai_path),
-        "copy_json": str(copy_path),
-        "model_copy": model_copy.get("full"),
-        "ai_copy": ai_copy.get("full"),
-        "model_file": model_path.name,
-        "ai_file": ai_path.name,
-        "model_picks_n": len(payload.model_picks),
-        "ai_picks_n": len(payload.ai_picks),
-    }
-
-
-def _write_batch_manifest(
-    *,
-    batch_id: str,
-    root: Path,
-    results: Sequence[Dict[str, Any]],
-    racing_date: str = "",
-    course: str = "",
+    track: str,
+    out_path: Path,
 ) -> Path:
-    races = []
-    for r in results:
-        races.append(
-            {
-                "race_id": r.get("race_id"),
-                "race_no": r.get("race_no"),
-                "race_name": r.get("race_name") or "",
-                "distance": r.get("distance"),
-                "model_file": r.get("model_file"),
-                "ai_file": r.get("ai_file"),
-                "model_copy": r.get("model_copy"),
-                "ai_copy": r.get("ai_copy"),
-            }
-        )
-    manifest = {
-        "meeting": {
-            "batch_id": batch_id,
-            "racing_date": racing_date,
-            "course": course,
-            "n_races": len(races),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        "races": races,
+    render_meeting_poster([payload], track=track, out_path=out_path)
+    return Path(out_path)
+
+
+def latest_paths(output_root: Optional[Path] = None) -> Dict[str, Path]:
+    root = Path(output_root) if output_root else default_output_dir()
+    return {
+        "root": root,
+        "model": root / MODEL_FILE,
+        "ai": root / AI_FILE,
+        "copy": root / COPY_FILE,
     }
-    path = root / "copy.json"
-    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path
 
 
 def generate_ads_for_meeting_predictions(
@@ -647,15 +668,13 @@ def generate_ads_for_meeting_predictions(
     course: str = "",
 ) -> Dict[str, Any]:
     """
-    race_items: list of {
-      race_id, race_info, pred_df, ai_map?
-    }
+    全賽日 → 僅 2 張海報（model.jpg / ai.jpg），寫入 output_root 根目錄並覆蓋舊檔。
     """
     out_root = Path(output_root) if output_root else default_output_dir()
-    batch_dir = out_root / str(batch_id)
-    batch_dir.mkdir(parents=True, exist_ok=True)
-    results = []
-    errors = []
+    out_root.mkdir(parents=True, exist_ok=True)
+    payloads: List[RaceAdPayload] = []
+    errors: List[Dict[str, str]] = []
+
     for item in race_items:
         rid = str(item["race_id"])
         try:
@@ -669,30 +688,69 @@ def generate_ads_for_meeting_predictions(
                 racing_date = payload.racing_date
             if not course and payload.course:
                 course = payload.course
-            results.append(
-                render_race_ads(payload, batch_id=batch_id, output_root=out_root)
-            )
+            payloads.append(payload)
         except Exception as e:
             errors.append({"race_id": rid, "error": str(e)})
 
-    manifest_path = _write_batch_manifest(
-        batch_id=batch_id,
-        root=batch_dir,
-        results=results,
-        racing_date=racing_date,
-        course=course,
-    )
-    files_written = len(results) * 3 + (1 if results else 0)  # 2 png + copy per race + manifest
+    if not payloads:
+        return {
+            "ok": False,
+            "error": "無有效場次可產出海報",
+            "batch_id": batch_id,
+            "errors": errors,
+        }
+
+    paths = latest_paths(out_root)
+    model_meta = render_meeting_poster(payloads, track="model", out_path=paths["model"])
+    ai_meta = render_meeting_poster(payloads, track="ai", out_path=paths["ai"])
+
+    model_copy = generate_meeting_copy(payloads, "model")
+    ai_copy = generate_meeting_copy(payloads, "ai")
+    manifest = {
+        "meeting": {
+            "batch_id": batch_id,
+            "racing_date": racing_date,
+            "course": course,
+            "n_races": len(payloads),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "model_file": MODEL_FILE,
+            "ai_file": AI_FILE,
+            "max_kb": _max_bytes() // 1024,
+            "model_bytes": model_meta.get("bytes"),
+            "ai_bytes": ai_meta.get("bytes"),
+        },
+        "model_copy": model_copy.get("full"),
+        "ai_copy": ai_copy.get("full"),
+        "races": [
+            {
+                "race_id": p.race_id,
+                "race_no": p.race_num,
+                "race_name": p.race_name,
+                "distance": p.distance_m,
+                "model_picks": [asdict(x) for x in p.model_picks],
+                "ai_picks": [asdict(x) for x in p.ai_picks],
+                "ai_skipped": p.ai_skipped,
+            }
+            for p in payloads
+        ],
+    }
+    paths["copy"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
     return {
         "ok": len(errors) == 0,
         "batch_id": batch_id,
-        "n_races": len(results),
-        "races_written": len(results),
-        "files_written": files_written,
-        "results": results,
+        "n_races": len(payloads),
+        "races_written": len(payloads),
+        "files_written": 3,
         "errors": errors,
-        "output_dir": str(batch_dir),
-        "copy_json": str(manifest_path),
+        "output_dir": str(out_root),
+        "model_file": str(paths["model"]),
+        "ai_file": str(paths["ai"]),
+        "copy_json": str(paths["copy"]),
+        "model_bytes": model_meta.get("bytes"),
+        "ai_bytes": ai_meta.get("bytes"),
+        "model_meta": model_meta,
+        "ai_meta": ai_meta,
     }
 
 
@@ -701,7 +759,6 @@ def generate_ads_from_snapshot_batch(
     *,
     output_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """從已寫入 DB 的預測快照重產海報（不重跑推論）。"""
     from sqlalchemy import text
 
     from factor_calibration import FactorCalibration
@@ -738,10 +795,21 @@ def generate_ads_from_snapshot_batch(
     except Exception:
         pass
 
-    out_root = Path(output_root) if output_root else default_output_dir()
-    results = []
-    errors = []
-    for rid, g in snaps.groupby("race_id"):
+    payloads: List[RaceAdPayload] = []
+    errors: List[Dict[str, str]] = []
+    # 依 race_num 排序
+    groups = list(snaps.groupby("race_id"))
+
+    def _sort_key(item):
+        rid, g = item
+        rm = race_meta.get(str(rid), {})
+        rn = rm.get("race_num")
+        try:
+            return (0, int(rn))
+        except Exception:
+            return (1, str(rid))
+
+    for rid, g in sorted(groups, key=_sort_key):
         try:
             rm = race_meta.get(str(rid), {})
             payload = build_payload_from_snapshot_rows(
@@ -756,73 +824,113 @@ def generate_ads_from_snapshot_batch(
                 payload.distance_m = rm.get("distance_m")
             if rm.get("track"):
                 payload.track = str(rm.get("track"))
-            results.append(
-                render_race_ads(payload, batch_id=batch_id, output_root=out_root)
-            )
+            payloads.append(payload)
         except Exception as e:
             errors.append({"race_id": str(rid), "error": str(e)})
 
-    batch_dir = out_root / str(batch_id)
-    manifest_path = _write_batch_manifest(
-        batch_id=batch_id,
-        root=batch_dir,
-        results=results,
-        racing_date=racing_date,
-        course=course,
-    )
+    # 轉成 generate_ads_for_meeting_predictions 可吃的假 items 太重；直接渲染
+    if not payloads:
+        return {"ok": False, "error": "無有效場次", "batch_id": batch_id, "errors": errors}
+
+    out_root = Path(output_root) if output_root else default_output_dir()
+    out_root.mkdir(parents=True, exist_ok=True)
+    paths = latest_paths(out_root)
+    model_meta = render_meeting_poster(payloads, track="model", out_path=paths["model"])
+    ai_meta = render_meeting_poster(payloads, track="ai", out_path=paths["ai"])
+    model_copy = generate_meeting_copy(payloads, "model")
+    ai_copy = generate_meeting_copy(payloads, "ai")
+    manifest = {
+        "meeting": {
+            "batch_id": batch_id,
+            "racing_date": racing_date,
+            "course": course,
+            "n_races": len(payloads),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "model_file": MODEL_FILE,
+            "ai_file": AI_FILE,
+            "max_kb": _max_bytes() // 1024,
+            "model_bytes": model_meta.get("bytes"),
+            "ai_bytes": ai_meta.get("bytes"),
+        },
+        "model_copy": model_copy.get("full"),
+        "ai_copy": ai_copy.get("full"),
+        "races": [
+            {
+                "race_id": p.race_id,
+                "race_no": p.race_num,
+                "race_name": p.race_name,
+                "distance": p.distance_m,
+                "model_picks": [asdict(x) for x in p.model_picks],
+                "ai_picks": [asdict(x) for x in p.ai_picks],
+                "ai_skipped": p.ai_skipped,
+            }
+            for p in payloads
+        ],
+    }
+    paths["copy"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
         "ok": len(errors) == 0,
         "batch_id": batch_id,
-        "n_races": len(results),
-        "races_written": len(results),
-        "files_written": len(results) * 3 + (1 if results else 0),
-        "results": results,
+        "n_races": len(payloads),
+        "races_written": len(payloads),
+        "files_written": 3,
         "errors": errors,
-        "output_dir": str(batch_dir),
-        "copy_json": str(manifest_path),
+        "output_dir": str(out_root),
+        "model_file": str(paths["model"]),
+        "ai_file": str(paths["ai"]),
+        "copy_json": str(paths["copy"]),
+        "model_bytes": model_meta.get("bytes"),
+        "ai_bytes": ai_meta.get("bytes"),
     }
 
 
 def list_ad_batches(output_root: Optional[Path] = None) -> List[str]:
+    """相容舊 UI：若根目錄有最新海報則回傳 ['latest']。"""
     root = Path(output_root) if output_root else default_output_dir()
-    if not root.is_dir():
-        return []
-    out = []
-    for p in sorted(root.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        has_img = list(p.glob("*.jpg")) or list(p.glob("*.jpeg")) or list(p.glob("*.png"))
-        if p.is_dir() and (has_img or (p / "copy.json").is_file()):
-            out.append(p.name)
-    return out
+    paths = latest_paths(root)
+    if paths["model"].is_file() or paths["ai"].is_file() or paths["copy"].is_file():
+        return ["latest"]
+    return []
 
 
 def load_copy_json(batch_dir: Path) -> Dict[str, Any]:
-    path = Path(batch_dir) / "copy.json"
-    if not path.is_file():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def list_batch_outputs(batch_id: str, output_root: Optional[Path] = None) -> List[Path]:
-    d = (Path(output_root) if output_root else default_output_dir()) / batch_id
-    if not d.is_dir():
-        return []
-    imgs = sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
-    return imgs + sorted(d.glob("*_copy.json"))
+    # batch_dir 可能是 out_root 或 out_root/latest
+    for cand in (Path(batch_dir) / COPY_FILE, Path(batch_dir).parent / COPY_FILE, Path(batch_dir)):
+        if cand.name == COPY_FILE and cand.is_file():
+            try:
+                return json.loads(cand.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        if cand.is_dir():
+            p = cand / COPY_FILE
+            if p.is_file():
+                try:
+                    return json.loads(p.read_text(encoding="utf-8"))
+                except Exception:
+                    return {}
+    root = default_output_dir()
+    p = root / COPY_FILE
+    if p.is_file():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
 
 
 def list_batch_images(batch_dir: Path) -> List[Path]:
-    d = Path(batch_dir)
-    if not d.is_dir():
-        return []
-    return sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
+    root = Path(batch_dir)
+    if root.name == "latest":
+        root = root.parent
+    paths = latest_paths(root)
+    out = []
+    for key in ("model", "ai"):
+        if paths[key].is_file():
+            out.append(paths[key])
+    return out
 
 
 def make_preview_jpeg(path: Path, *, max_width: int = 540, quality: int = 72) -> bytes:
-    """瀏覽用縮圖（避免一次把多張全尺寸圖塞進 Streamlit media）。"""
-    from io import BytesIO
     from PIL import Image
 
     im = Image.open(path).convert("RGB")
@@ -836,14 +944,15 @@ def make_preview_jpeg(path: Path, *, max_width: int = 540, quality: int = 72) ->
 
 
 def zip_batch_bytes(batch_dir: Path) -> bytes:
-    """打包批次內海報＋文案為 zip。"""
-    import io
     import zipfile
 
-    buf = io.BytesIO()
     root = Path(batch_dir)
+    if root.name == "latest":
+        root = root.parent
+    buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for p in sorted(root.iterdir()):
-            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".json"}:
+        for name in (MODEL_FILE, AI_FILE, COPY_FILE):
+            p = root / name
+            if p.is_file():
                 zf.write(p, arcname=p.name)
     return buf.getvalue()

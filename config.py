@@ -139,9 +139,10 @@ class ModelConfig:
     PICK_AI_MIN_CONFIDENCE = 0.30  # 場內最高信心低於此 → 不推 AI
     PICK_AI_MIN_SHARE = 0.06       # AI 單匹最低份額
 
-    # 廣告海報：快照後自動產出 model/ai PNG（見 ad_poster.py）
+    # 廣告海報：快照後自動產出全賽日 model/ai JPEG（見 ad_poster.py；固定檔名覆蓋）
     AD_OUTPUT_ON_SNAPSHOT = True
     AD_OUTPUT_DIR = ""  # 空＝專案 ad_output/；可設絕對路徑
+    AD_OUTPUT_MAX_KB = 800  # 單張上限（降 JPEG 品質／必要時縮圖）
 
     # 步速熱度／形勢劇本
     # heat 顯示用：同場 early_speed_z 最高前 N 名加總（僅供參考）

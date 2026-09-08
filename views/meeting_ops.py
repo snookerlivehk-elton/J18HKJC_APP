@@ -297,8 +297,10 @@ for stage, label in STAGES:
                     ad = last_snap.get("ad_output") or {}
                     if ad.get("ok") or ad.get("races_written"):
                         st.info(
-                            f"廣告輸出：{ad.get('races_written', ad.get('n_races', 0))} 場 · "
-                            f"`{ad.get('output_dir', '')}`（營運 → 廣告輸出 可預覽下載）"
+                            f"廣告輸出：全賽日 {ad.get('races_written', ad.get('n_races', 0))} 場 → "
+                            f"2 張海報 · 模型 {int(ad.get('model_bytes') or 0) // 1024}KB / "
+                            f"AI {int(ad.get('ai_bytes') or 0) // 1024}KB · "
+                            f"`{ad.get('output_dir', '')}`（營運 → 廣告輸出）"
                         )
                     elif ad.get("error"):
                         st.caption(f"廣告輸出略過／失敗：{ad.get('error')}")
