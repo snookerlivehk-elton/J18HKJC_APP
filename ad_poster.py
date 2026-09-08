@@ -368,7 +368,7 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
         parts = [f"{p.tag} #{p.horse_no} {p.horse_name}（{p.share_pct:.0f}%）" for p in picks]
         body = "、".join(parts)
 
-    cta = "數據僅供參考，投注前請自行判斷。關注 J18AI Plus+ 獲取更多賽日速覽。"
+    cta = "數據僅供參考，投注前請自行判斷。關注 J18.hk 獲取更多賽日速覽。"
     full = f"{headline}\n{line}{body}\n\n{cta}"
     return {
         "track": track,
