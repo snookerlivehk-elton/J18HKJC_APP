@@ -19,6 +19,16 @@ st.caption(
 
 out_root = default_output_dir()
 st.info(f"輸出目錄：`{out_root}`（可用環境變數 `AD_OUTPUT_DIR` 覆寫）")
+try:
+    from ad_poster import font_status
+
+    fs = font_status()
+    if fs.get("ok"):
+        st.caption(f"字型：`{fs.get('path')}`")
+    else:
+        st.error(f"CJK 字型不可用：{fs.get('error') or '未找到 assets/fonts/wqy-microhei.ttc'}")
+except Exception as e:
+    st.warning(f"字型檢查失敗：{e}")
 
 tab_browse, tab_regen = st.tabs(["瀏覽輸出", "手動重產"])
 

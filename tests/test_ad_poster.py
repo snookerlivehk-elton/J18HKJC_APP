@@ -57,6 +57,23 @@ def test_build_payload_and_copy():
     assert "金光飛馳" in model_copy["full"] or "銀河之星" in model_copy["full"]
 
 
+def test_bundled_cjk_font_and_glyph_size():
+    """Railway 無系統中文字型時，必須用內嵌字型；中文 bbox 高度應接近字級。"""
+    from ad_poster import BUNDLED_FONT, _find_font, _load_font, font_status
+
+    assert BUNDLED_FONT.is_file(), "assets/fonts/wqy-microhei.ttc 必須隨 repo 部署"
+    st = font_status()
+    assert st["ok"], st
+    assert _find_font()
+    font = _load_font(48)
+    # FreeTypeFont.getbbox；預設點陣字對中文幾乎無高度
+    bbox = font.getbbox("爭勝 金光飛馳")
+    h = bbox[3] - bbox[1]
+    w = bbox[2] - bbox[0]
+    assert h >= 36, f"中文字高過矮（疑似非 TrueType）: {h}"
+    assert w >= 180, f"中文字寬過窄（疑似缺字）: {w}"
+
+
 def test_render_png_and_meeting_ads(tmp_path: Path):
     payload = RaceAdPayload(
         race_id="demo_r1",

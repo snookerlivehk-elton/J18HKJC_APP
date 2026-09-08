@@ -25,12 +25,27 @@ from score_share import select_picks_by_share, win_pick_count_from_shares
 ROOT = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT / "assets" / "ad_templates"
 LOGO_PATH = ROOT / "assets" / "j18ai_plus_logo.png"
+# 內嵌 CJK 字型優先（Railway 等容器通常沒有系統中文字型；缺字會變 □ 且 load_default 字極小）
+BUNDLED_FONT = ROOT / "assets" / "fonts" / "wqy-microhei.ttc"
 FONT_CANDIDATES = [
+    str(BUNDLED_FONT),
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     "/System/Library/Fonts/PingFang.ttc",
     "C:/Windows/Fonts/msyh.ttc",
 ]
+
+# 1080×1920 海報字級（px）— 以推介列可讀為優先
+FONT_SIZE = {
+    "brand": 52,
+    "title": 78,
+    "sub": 44,
+    "row": 56,
+    "tag": 36,
+    "pct": 60,
+    "small": 32,
+}
 
 
 def default_output_dir() -> Path:
@@ -73,22 +88,48 @@ class RaceAdPayload:
 
 
 def _find_font() -> Optional[str]:
-    for p in FONT_CANDIDATES:
+    env = str(os.getenv("AD_FONT_PATH") or "").strip()
+    candidates = ([env] if env else []) + FONT_CANDIDATES
+    for p in candidates:
         if p and Path(p).is_file():
             return p
     return None
 
 
 def _load_font(size: int):
+    """載入可縮放的 TrueType／TTC；禁止退回 load_default（會導致中文 □ 且字級無效）。"""
     from PIL import ImageFont
 
     path = _find_font()
+    if not path:
+        raise RuntimeError(
+            "找不到 CJK 字型：請確認 assets/fonts/wqy-microhei.ttc 已部署，"
+            "或設定環境變數 AD_FONT_PATH"
+        )
+    last_err: Optional[Exception] = None
+    for index in (0, 1):
+        try:
+            return ImageFont.truetype(path, size=int(size), index=index)
+        except Exception as e:
+            last_err = e
+            continue
+    try:
+        return ImageFont.truetype(path, size=int(size))
+    except Exception as e:
+        raise RuntimeError(f"無法載入字型 {path}: {e or last_err}") from e
+
+
+def font_status() -> Dict[str, Any]:
+    path = _find_font()
+    ok = False
+    err = None
     if path:
         try:
-            return ImageFont.truetype(path, size=size)
-        except Exception:
-            pass
-    return ImageFont.load_default()
+            f = _load_font(40)
+            ok = hasattr(f, "getbbox") or hasattr(f, "getsize")
+        except Exception as e:
+            err = str(e)
+    return {"path": path, "ok": ok, "error": err}
 
 
 def ensure_default_templates() -> None:
@@ -361,42 +402,34 @@ def render_poster_png(
         ensure_default_templates()
 
     base = Image.open(tpl_path).convert("RGBA")
-    # 統一輸出尺寸（Instagram story 友好）
-    target = (1080, 1920)
+    target_w, target_h = 1080, 1920
+    target = (target_w, target_h)
     if base.size != target:
         base = base.resize(target, Image.Resampling.LANCZOS)
 
-    # 輕微壓暗中下區以利文字
-    overlay = Image.new("RGBA", target, (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
-    od.rectangle((60, 420, 1020, 1680), fill=(0, 0, 0, 110))
-    base = Image.alpha_composite(base, overlay)
+    picks = payload.model_picks if track == "model" else payload.ai_picks
+    n_picks = max(len(picks), 1)
+    # 推介少時拉高行距／字級，避免下半空白、字相對卡片過小
+    if n_picks <= 2:
+        row_h, row_gap, size_boost = 168, 28, 8
+    elif n_picks <= 3:
+        row_h, row_gap, size_boost = 150, 24, 4
+    elif n_picks <= 4:
+        row_h, row_gap, size_boost = 136, 20, 2
+    else:
+        row_h, row_gap, size_boost = 122, 16, 0
 
-    draw = ImageDraw.Draw(base)
-    font_brand = _load_font(42)
-    font_title = _load_font(56)
-    font_sub = _load_font(34)
-    font_row = _load_font(40)
-    font_tag = _load_font(28)
-    font_small = _load_font(26)
+    font_brand = _load_font(FONT_SIZE["brand"])
+    font_title = _load_font(FONT_SIZE["title"])
+    font_sub = _load_font(FONT_SIZE["sub"] + size_boost // 2)
+    font_row = _load_font(FONT_SIZE["row"] + size_boost)
+    font_tag = _load_font(FONT_SIZE["tag"] + size_boost // 2)
+    font_pct = _load_font(FONT_SIZE["pct"] + size_boost)
+    font_small = _load_font(FONT_SIZE["small"])
 
     accent = (212, 175, 106) if track == "model" else (120, 220, 210)
     white = (245, 245, 242)
     muted = (200, 205, 200)
-
-    # Logo
-    if LOGO_PATH.is_file():
-        try:
-            logo = Image.open(LOGO_PATH).convert("RGBA")
-            logo.thumbnail((220, 220), Image.Resampling.LANCZOS)
-            base.paste(logo, (80, 80), logo)
-        except Exception:
-            pass
-
-    brand = "J18AI Plus+"
-    _draw_text(draw, (320, 120), brand, font_brand, white)
-    track_label = "模型 · 勝率份額" if track == "model" else "AI 馬評 · 份額"
-    _draw_text(draw, (320, 175), track_label, font_sub, accent)
 
     rn = payload.race_num
     title = f"第 {rn} 場" if rn is not None else payload.race_id
@@ -405,55 +438,86 @@ def render_poster_png(
         meta_line += f"　{payload.distance_m}米"
     if payload.track:
         meta_line += f"　{payload.track}"
-    _draw_text(draw, (80, 340), title, font_title, white)
-    if payload.race_name:
-        _draw_text(draw, (80, 410), str(payload.race_name)[:28], font_sub, muted)
-        _draw_text(draw, (80, 460), meta_line, font_small, muted)
-        y0 = 540
-    else:
-        _draw_text(draw, (80, 410), meta_line, font_sub, muted)
-        y0 = 500
 
-    picks = payload.model_picks if track == "model" else payload.ai_picks
+    header_bottom = 250
+    y_meta = header_bottom + 90
+    if payload.race_name:
+        y0 = y_meta + 130
+    else:
+        y0 = y_meta + 90
+
+    list_h = n_picks * row_h + max(0, n_picks - 1) * row_gap
+    panel_top = max(220, header_bottom - 24)
+    panel_bottom = min(target_h - 140, y0 + list_h + 48)
+    if track == "ai" and payload.ai_skipped and not picks:
+        panel_bottom = max(panel_bottom, y0 + 160)
+
+    overlay = Image.new("RGBA", target, (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle(
+        (40, panel_top, target_w - 40, panel_bottom),
+        radius=28,
+        fill=(0, 0, 0, 130),
+    )
+    base = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(base)
+
+    # Logo
+    if LOGO_PATH.is_file():
+        try:
+            logo = Image.open(LOGO_PATH).convert("RGBA")
+            logo.thumbnail((170, 170), Image.Resampling.LANCZOS)
+            base.paste(logo, (56, 56), logo)
+            draw = ImageDraw.Draw(base)
+        except Exception:
+            pass
+
+    brand = "J18AI Plus+"
+    _draw_text(draw, (250, 78), brand, font_brand, white)
+    track_label = "模型 · 勝率份額" if track == "model" else "AI 馬評 · 份額"
+    _draw_text(draw, (250, 140), track_label, font_sub, accent)
+
+    _draw_text(draw, (64, header_bottom), title, font_title, white)
+    if payload.race_name:
+        _draw_text(draw, (64, y_meta), str(payload.race_name)[:28], font_sub, muted)
+        _draw_text(draw, (64, y_meta + 58), meta_line, font_small, muted)
+    else:
+        _draw_text(draw, (64, y_meta), meta_line, font_sub, muted)
+
     if track == "ai" and payload.ai_skipped and not picks:
         _draw_text(
             draw,
-            (80, y0 + 40),
+            (72, y0 + 40),
             payload.ai_skip_message or "本場 AI 信心不足，暫不推介",
             font_row,
             muted,
         )
     else:
         for i, p in enumerate(picks):
-            y = y0 + i * 130
-            # row card
-            card = Image.new("RGBA", (920, 110), (255, 255, 255, 28))
-            base.paste(card, (80, y), card)
+            y = y0 + i * (row_h + row_gap)
+            card = Image.new("RGBA", (target_w - 128, row_h), (255, 255, 255, 36))
+            base.paste(card, (64, y), card)
             draw = ImageDraw.Draw(base)
             tag_col = accent if p.tag == "爭勝" else (180, 190, 185)
-            _draw_text(draw, (110, y + 35), p.tag, font_tag, tag_col)
+            cy = y + row_h // 2
+            _draw_text(draw, (92, cy), p.tag, font_tag, tag_col, anchor="lm")
+            name = f"#{p.horse_no}  {p.horse_name}"
+            _draw_text(draw, (230, cy), name, font_row, white, anchor="lm")
             _draw_text(
                 draw,
-                (220, y + 28),
-                f"#{p.horse_no}  {p.horse_name}",
-                font_row,
-                white,
-            )
-            _draw_text(
-                draw,
-                (920, y + 32),
+                (target_w - 92, cy),
                 f"{p.share_pct:.0f}%",
-                font_row,
+                font_pct,
                 accent,
-                anchor="rt",
+                anchor="rm",
             )
 
     foot = "數據僅供參考 · 非投注建議"
     draw = ImageDraw.Draw(base)
-    _draw_text(draw, (540, 1820), foot, font_small, muted, anchor="mm")
+    _draw_text(draw, (target_w // 2, target_h - 110), foot, font_small, muted, anchor="mm")
     _draw_text(
         draw,
-        (540, 1865),
+        (target_w // 2, target_h - 60),
         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         font_small,
         (140, 145, 140),
