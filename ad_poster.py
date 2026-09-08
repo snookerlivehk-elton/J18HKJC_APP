@@ -2,12 +2,12 @@
 廣告輸出模組：預測快照後自動生成宣傳海報 PNG + 文案。
 
 每場產出：
-  - {race_id}_model.png  模型 · 勝率份額推介
-  - {race_id}_ai.png     AI 馬評 · 份額推介
+  - {race_id}_model.jpg  模型 · 勝率份額推介
+  - {race_id}_ai.jpg     AI 馬評 · 份額推介
   - {race_id}_copy.json  宣傳文案（模型／AI）
 
-模版：assets/ad_templates/model_base.png、ai_base.png（可替換）
-輸出：ad_output/{batch_id}/
+模版：assets/ad_templates/model_base.jpg、ai_base.jpg（可替換；亦相容 .png）
+輸出：ad_output/{batch_id}/（JPEG 以控制體積，避免 Streamlit／反向代理 502）
 """
 from __future__ import annotations
 
@@ -132,18 +132,29 @@ def font_status() -> Dict[str, Any]:
     return {"path": path, "ok": ok, "error": err}
 
 
+def _template_path(track: str) -> Path:
+    """優先 jpg（體積小），其次 png。"""
+    stem = "model_base" if track == "model" else "ai_base"
+    for ext in (".jpg", ".jpeg", ".png"):
+        p = TEMPLATE_DIR / f"{stem}{ext}"
+        if p.is_file():
+            return p
+    return TEMPLATE_DIR / f"{stem}.jpg"
+
+
 def ensure_default_templates() -> None:
-    """若缺模版則畫簡單漸層底圖（可被 assets 內 PNG 覆蓋）。"""
+    """若缺模版則畫簡單漸層底圖（可被 assets 內 jpg/png 覆蓋）。"""
     TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     from PIL import Image
 
     specs = {
-        "model_base.png": ((8, 48, 32), (4, 18, 14)),
-        "ai_base.png": ((10, 40, 52), (8, 16, 28)),
+        "model_base.jpg": ((8, 48, 32), (4, 18, 14)),
+        "ai_base.jpg": ((10, 40, 52), (8, 16, 28)),
     }
     for name, (c0, c1) in specs.items():
         path = TEMPLATE_DIR / name
-        if path.is_file():
+        png = TEMPLATE_DIR / name.replace(".jpg", ".png")
+        if path.is_file() or png.is_file():
             continue
         w, h = 1080, 1920
         img = Image.new("RGB", (w, h), c0)
@@ -155,7 +166,7 @@ def ensure_default_templates() -> None:
             b = int(c0[2] * (1 - t) + c1[2] * t)
             for x in range(w):
                 px[x, y] = (r, g, b)
-        img.save(path, "PNG")
+        img.save(path, "JPEG", quality=85, optimize=True)
 
 
 def build_payload_from_prediction(
@@ -396,10 +407,10 @@ def render_poster_png(
     from PIL import Image, ImageDraw
 
     ensure_default_templates()
-    tpl_name = "model_base.png" if track == "model" else "ai_base.png"
-    tpl_path = TEMPLATE_DIR / tpl_name
+    tpl_path = _template_path(track)
     if not tpl_path.is_file():
         ensure_default_templates()
+        tpl_path = _template_path(track)
 
     base = Image.open(tpl_path).convert("RGBA")
     target_w, target_h = 1080, 1920
@@ -527,7 +538,12 @@ def render_poster_png(
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rgb = base.convert("RGB")
-    rgb.save(out_path, "PNG", optimize=True)
+    # JPEG：單場約 200–400KB；大 PNG 會令 Streamlit 一次預覽多場時 502
+    suffix = out_path.suffix.lower()
+    if suffix in (".jpg", ".jpeg"):
+        rgb.save(out_path, "JPEG", quality=88, optimize=True)
+    else:
+        rgb.save(out_path, "PNG", optimize=True)
     return out_path
 
 
@@ -541,8 +557,8 @@ def render_race_ads(
     root = Path(output_root or default_output_dir()) / str(batch_id)
     root.mkdir(parents=True, exist_ok=True)
     rid = payload.race_id
-    model_path = root / f"{rid}_model.png"
-    ai_path = root / f"{rid}_ai.png"
+    model_path = root / f"{rid}_model.jpg"
+    ai_path = root / f"{rid}_ai.jpg"
     copy_path = root / f"{rid}_copy.json"
 
     render_poster_png(payload, track="model", out_path=model_path)
@@ -773,7 +789,8 @@ def list_ad_batches(output_root: Optional[Path] = None) -> List[str]:
         return []
     out = []
     for p in sorted(root.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        if p.is_dir() and (list(p.glob("*.png")) or (p / "copy.json").is_file()):
+        has_img = list(p.glob("*.jpg")) or list(p.glob("*.jpeg")) or list(p.glob("*.png"))
+        if p.is_dir() and (has_img or (p / "copy.json").is_file()):
             out.append(p.name)
     return out
 
@@ -792,4 +809,41 @@ def list_batch_outputs(batch_id: str, output_root: Optional[Path] = None) -> Lis
     d = (Path(output_root) if output_root else default_output_dir()) / batch_id
     if not d.is_dir():
         return []
-    return sorted(d.glob("*.png")) + sorted(d.glob("*_copy.json"))
+    imgs = sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
+    return imgs + sorted(d.glob("*_copy.json"))
+
+
+def list_batch_images(batch_dir: Path) -> List[Path]:
+    d = Path(batch_dir)
+    if not d.is_dir():
+        return []
+    return sorted(d.glob("*.jpg")) + sorted(d.glob("*.jpeg")) + sorted(d.glob("*.png"))
+
+
+def make_preview_jpeg(path: Path, *, max_width: int = 540, quality: int = 72) -> bytes:
+    """瀏覽用縮圖（避免一次把多張全尺寸圖塞進 Streamlit media）。"""
+    from io import BytesIO
+    from PIL import Image
+
+    im = Image.open(path).convert("RGB")
+    w, h = im.size
+    if w > max_width:
+        nh = int(h * (max_width / float(w)))
+        im = im.resize((max_width, nh), Image.Resampling.LANCZOS)
+    buf = BytesIO()
+    im.save(buf, format="JPEG", quality=quality, optimize=True)
+    return buf.getvalue()
+
+
+def zip_batch_bytes(batch_dir: Path) -> bytes:
+    """打包批次內海報＋文案為 zip。"""
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    root = Path(batch_dir)
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for p in sorted(root.iterdir()):
+            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".json"}:
+                zf.write(p, arcname=p.name)
+    return buf.getvalue()

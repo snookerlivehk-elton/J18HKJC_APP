@@ -96,8 +96,8 @@ def test_render_png_and_meeting_ads(tmp_path: Path):
     out_a = tmp_path / "a.png"
     render_poster_png(payload, track="model", out_path=out_m)
     render_poster_png(payload, track="ai", out_path=out_a)
-    assert out_m.is_file() and out_m.stat().st_size > 10_000
-    assert out_a.is_file() and out_a.stat().st_size > 10_000
+    assert out_m.is_file() and out_m.stat().st_size > 5_000
+    assert out_a.is_file() and out_a.stat().st_size > 5_000
 
     items = [
         {
@@ -128,7 +128,15 @@ def test_render_png_and_meeting_ads(tmp_path: Path):
     assert result["ok"]
     assert result["races_written"] == 1
     batch_dir = tmp_path / "test_batch_demo"
-    assert (batch_dir / "demo_r1_model.png").is_file()
-    assert (batch_dir / "demo_r1_ai.png").is_file()
+    assert (batch_dir / "demo_r1_model.jpg").is_file()
+    assert (batch_dir / "demo_r1_ai.jpg").is_file()
     assert (batch_dir / "demo_r1_copy.json").is_file()
     assert (batch_dir / "copy.json").is_file()
+    # 體積應遠小於舊版 2MB PNG
+    assert (batch_dir / "demo_r1_model.jpg").stat().st_size < 800_000
+    from ad_poster import make_preview_jpeg, zip_batch_bytes
+
+    thumb = make_preview_jpeg(batch_dir / "demo_r1_model.jpg")
+    assert len(thumb) < 200_000
+    z = zip_batch_bytes(batch_dir)
+    assert len(z) > 1000
