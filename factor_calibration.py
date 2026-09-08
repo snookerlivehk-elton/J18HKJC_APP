@@ -474,10 +474,16 @@ class FactorCalibration:
             self.engine,
         )
         if batches.empty:
-            return {"ok": True, "settled_batches": [], "updated_rows": 0}
+            return {
+                "ok": True,
+                "settled_batches": [],
+                "updated_rows": 0,
+                "message": "沒有未結算的快照 batch",
+            }
 
         updated = 0
         settled = []
+        waiting_results = []
         for _, b in batches.iterrows():
             batch_id = b["batch_id"]
             snaps = pd.read_sql(
@@ -497,6 +503,7 @@ class FactorCalibration:
             race_ids = snaps["race_id"].unique().tolist()
             results = self._fetch_results_for_races(race_ids)
             if results.empty:
+                waiting_results.append(batch_id)
                 continue
 
             # 匹配：優先 race_id + horse_no；fallback race_id + 正規化馬名
@@ -544,7 +551,20 @@ class FactorCalibration:
                     self._mark_settled(batch_id)
                     settled.append(batch_id)
 
-        return {"ok": True, "settled_batches": settled, "updated_rows": updated}
+        return {
+            "ok": True,
+            "settled_batches": settled,
+            "updated_rows": updated,
+            "waiting_results": waiting_results,
+            "message": (
+                f"更新 {updated} 列；新結算 {len(settled)} batch"
+                + (
+                    f"；尚待賽果 {len(waiting_results)} batch（先同步 jjjc／J18 名次）"
+                    if waiting_results
+                    else ""
+                )
+            ),
+        }
 
     def _mark_settled(self, batch_id: str):
         with self.engine.begin() as conn:

@@ -8,8 +8,9 @@ import ui_param_help as ph
 
 st.title("📉🤖 近績與 NLP 因子")
 st.caption(
-    "基礎近績 = 馬匹在**距離帶粗桶**（如 ST_SPRINT）的歷史表現；"
-    "NLP 受阻補償寫回 raw_score 後再算 Z（需先解析 text_reports）。"
+    "基礎近績 = 馬匹在**距離帶粗桶**（如 ST_SPRINT）的歷史表現。"
+    "預設 stakeholder：受阻為獨立干擾持份者（不烤進 raw）；缺沿路走勢只降覆蓋、不阻擋推論。"
+    "legacy 模式才會把 NLP 補償寫回 raw_score。需先解析 text_reports。"
 )
 
 if not ui_utils.ensure_history_loaded():

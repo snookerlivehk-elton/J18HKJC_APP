@@ -364,6 +364,52 @@ class MeetingPipeline:
         types = sorted(df["factor_type"].unique().tolist())
         return STATUS_OK, f"{len(df)} 筆；類型 {types}"
 
+    def check_nlp(self, racing_date: str, course: str) -> Tuple[str, str]:
+        """
+        NLP／沿路走勢評述為可選強化，不阻擋快照與賽後結算。
+        無評述＝干擾持份者低 coverage，無需人工放行。
+        """
+        # 粗略：庫內是否已有任何 nlp_result（不綁本賽日——賽後評述屬歷史強化）
+        try:
+            q = text(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE nlp_result IS NOT NULL) AS done,
+                  COUNT(*) AS total
+                FROM text_reports
+                WHERE entity_type = 'runner'
+                """
+            )
+            if USE_SQLITE:
+                q = text(
+                    """
+                    SELECT
+                      SUM(CASE WHEN nlp_result IS NOT NULL THEN 1 ELSE 0 END) AS done,
+                      COUNT(*) AS total
+                    FROM text_reports
+                    WHERE entity_type = 'runner'
+                    """
+                )
+            row = pd.read_sql(q, self.engine).iloc[0]
+            done, total = int(row["done"] or 0), int(row["total"] or 0)
+        except Exception:
+            done, total = 0, 0
+
+        if total == 0:
+            return (
+                STATUS_OK,
+                "可選｜尚無 text_reports；無沿路走勢亦可建快照／結算（干擾降覆蓋），無需人工放行",
+            )
+        if done == 0:
+            return (
+                STATUS_OK,
+                "可選｜評述尚未解析；不阻擋快照／結算。有評述後再批次 NLP→重算干擾→revision",
+            )
+        return (
+            STATUS_OK,
+            f"可選｜已解析 {done}/{total}；本節點不阻擋快照／結算",
+        )
+
     def check_form_ai(self, racing_date: str, course: str) -> Tuple[str, str]:
         d = racing_date.replace("-", "")[:8]
         prefix = f"{d}{course}"
@@ -508,7 +554,7 @@ class MeetingPipeline:
             "SPEEDGUIDE": self.check_speedguide(racing_date, course),
             "FORMGUIDE": self.check_formguide(racing_date, course),
             "FACTORS": self.check_factors(),
-            "NLP": (STATUS_PENDING, "可選；於近績頁／批次手動"),
+            "NLP": self.check_nlp(racing_date, course),
             "FORM_AI": self.check_form_ai(racing_date, course),
             "SNAPSHOT": self.check_snapshot(racing_date, course),
             "RESULTS": self.check_results(racing_date, course),

@@ -67,14 +67,22 @@ if do_snap:
         st.error(result.get("error", "失敗"))
 
 st.subheader("② 賽後：結算快照")
-st.caption("需先有 J18 歷史賽果（`runners.finish_order_num`）。按馬名匹配名次。")
+st.caption(
+    "只需 `runners.finish_order_num`（jjjc／J18 賽果）。"
+    "**與 NLP／沿路走勢無關**——無評述也可結算。按馬名匹配名次。"
+)
 if st.button("結算所有待處理快照", use_container_width=False):
     with st.spinner("比對賽果中…"):
         settled = cal.settle_pending()
-    st.info(
+    st.info(settled.get("message") or (
         f"更新名次 {settled.get('updated_rows', 0)} 列；"
         f"新結算 batch：{settled.get('settled_batches') or '（無）'}"
-    )
+    ))
+    if settled.get("waiting_results"):
+        st.warning(
+            "以下 batch 尚無名次可配對（請先 RESULTS 同步）："
+            + ", ".join(settled["waiting_results"])
+        )
 
 st.subheader("③ 快照清單")
 batches = cal.list_batches()

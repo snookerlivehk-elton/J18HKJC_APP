@@ -283,6 +283,7 @@ for stage, label in STAGES:
 st.divider()
 st.caption(
     "RACECARD／RESULTS 優先同步 jjjc（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
-    "官方 SG／走勢評述未上架時可建 provisional 快照；資料到位後用「修訂快照 revision」。"
-    "因子可先無 NLP 重算；干擾為獨立持份者，不阻塞管線。"
+    "【重要】NLP／沿路走勢＝可選強化，**不必人工放行**，也不阻擋「建立快照」或「結算快照」。"
+    "無評述時干擾通道自動降覆蓋；有評述後再解析→重算干擾→修訂快照即可。"
+    "結算只依賴：賽前快照 × 賽果名次（finish_order），與當日走勢評述無關。"
 )
