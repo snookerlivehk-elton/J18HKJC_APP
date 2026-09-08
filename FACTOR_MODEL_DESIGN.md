@@ -1,6 +1,7 @@
 # J18 Quant Model - 因子模型設計白皮書 (Factor Model Design)
 
 > **實作／運維交接**：請先讀 [`DEVELOPMENT_REPORT.md`](DEVELOPMENT_REPORT.md)。  
+> **規劃中**：推論覆蓋度、干擾值獨立持份者、provisional／revision 快照 — [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。落地後本白皮書 Phase 4／推論章需同步修訂。  
 > 本檔定義數學與產品原則；交接手冊記載現行 Bucket 政策（騎練／近績＝距離帶粗桶、檔位＝細桶等）、`factor_scores` 類型與部署後重算流程。
 
 ## 1. 核心理念
