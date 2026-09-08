@@ -11,6 +11,7 @@ j18_local.db
 # 日誌
 *.log
 crawler.log
+logs/
 
 # Python 暫存檔
 __pycache__/

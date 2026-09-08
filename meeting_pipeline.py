@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -569,6 +570,110 @@ class MeetingPipeline:
             out[stage] = {"status": st, "detail": detail, "manual": False}
         return out
 
+    def start_form_ai_background(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        only_missing: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        後台啟動 Form AI（subprocess，關閉手機頁面不中斷）。
+        進度寫入 background_jobs；用 get_form_ai_job 查詢。
+        """
+        import form_ai_batch_job as faj
+
+        faj.ensure_jobs_table(self.engine)
+        # 若已有 running，避免重複開
+        latest = faj.latest_job(
+            self.engine, job_type="form_ai", racing_date=racing_date, course=course
+        )
+        if latest and str(latest.get("status") or "") == "running":
+            return {
+                "ok": False,
+                "error": "已有 Form AI 任務進行中",
+                "job_id": latest.get("job_id"),
+                "job": latest,
+            }
+
+        job_id = faj.create_job(
+            self.engine,
+            job_type="form_ai",
+            racing_date=racing_date[:10],
+            course=course.upper(),
+            detail="ops background start",
+        )
+        root = os.path.dirname(os.path.abspath(__file__))
+        log_dir = os.path.join(root, "logs")
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+        except Exception:
+            log_dir = "/tmp"
+        log_path = os.path.join(log_dir, f"form_ai_{job_id}.log")
+        cmd = [
+            sys.executable,
+            "form_ai_batch_job.py",
+            "--date",
+            racing_date[:10],
+            "--course",
+            course.upper(),
+            "--job-id",
+            job_id,
+            "--sleep",
+            "0.15",
+        ]
+        if not only_missing:
+            cmd.append("--all")
+
+        env = os.environ.copy()
+        try:
+            with open(log_path, "ab", buffering=0) as logf:
+                # 脫離 Streamlit session：關閉 stdin，stdout/err → log
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=root,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=logf,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            faj.update_job(
+                self.engine,
+                job_id,
+                status="running",
+                detail=f"pid={proc.pid} log={log_path}",
+                progress={"phase": "spawned", "pid": proc.pid, "log": log_path},
+            )
+            return {
+                "ok": True,
+                "job_id": job_id,
+                "pid": proc.pid,
+                "log_path": log_path,
+                "message": "已後台啟動；可關閉本頁，稍後按「重新整理進度」",
+            }
+        except Exception as e:
+            faj.update_job(
+                self.engine, job_id, status="failed", detail=str(e), finished=True
+            )
+            return {"ok": False, "error": str(e), "job_id": job_id}
+
+    def get_form_ai_job(
+        self, racing_date: str, course: str, job_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        import form_ai_batch_job as faj
+
+        faj.ensure_jobs_table(self.engine)
+        if job_id:
+            job = faj.get_job(self.engine, job_id)
+        else:
+            job = faj.latest_job(
+                self.engine, job_type="form_ai", racing_date=racing_date, course=course
+            )
+        if not job:
+            return {"ok": True, "job": None, "message": "尚無後台任務"}
+        return {"ok": True, "job": job}
+
     def run_action(self, racing_date: str, course: str, action: str, **kwargs) -> Dict[str, Any]:
         """手動節點動作。kwargs：如 run_form_ai 的 only_missing、progress_cb。"""
         d_slash = racing_date.replace("-", "/")
@@ -690,6 +795,19 @@ class MeetingPipeline:
                     done += out.get("done", 0)
                 self.refresh_readiness(racing_date, course)
                 return {"ok": True, "done": done, "n_races": n_races}
+
+            if action == "start_form_ai_background":
+                out = self.start_form_ai_background(
+                    racing_date,
+                    course,
+                    only_missing=bool(kwargs.get("only_missing", True)),
+                )
+                return out
+
+            if action == "form_ai_job_status":
+                return self.get_form_ai_job(
+                    racing_date, course, job_id=kwargs.get("job_id")
+                )
 
             if action == "snapshot":
                 from factor_calibration import FactorCalibration

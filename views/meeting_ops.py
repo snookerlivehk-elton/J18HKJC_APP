@@ -168,11 +168,34 @@ for stage, label in STAGES:
                 value=True,
                 key=f"ai_only_miss_{stage}",
             )
-            if a1.button("跑 Form AI", key=f"act_ai_{stage}"):
+            st.caption(
+                "建議用「後台啟動」：關掉手機／換頁也不中斷。"
+                "前台「跑 Form AI」仍可用，但必須保持本頁開啟。"
+            )
+            if a1.button("後台啟動 Form AI", key=f"act_ai_bg_{stage}", type="primary"):
+                r = pipe.run_action(
+                    racing_date,
+                    course,
+                    "start_form_ai_background",
+                    only_missing=only_miss,
+                )
+                st.session_state["ops_form_ai_job"] = r.get("job_id")
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    st.success(r.get("message") or f"job `{r.get('job_id')}`")
+                else:
+                    st.error(r.get("error") or r)
+                    if r.get("job_id"):
+                        st.session_state["ops_form_ai_job"] = r.get("job_id")
+                st.rerun()
+            if a2.button("重新整理進度", key=f"act_ai_stat_{stage}"):
+                st.session_state.pop("ops_ready", None)
+                st.rerun()
+            if a3.button("前台跑（需開頁）", key=f"act_ai_fg_{stage}"):
                 prog = st.progress(0.0, text="準備中…")
                 line = st.empty()
                 detail = st.empty()
-                st.info("請留在本頁至完成；換頁會中斷 Streamlit 長任務。")
+                st.warning("請留在本頁至完成；換頁／手機斷線會中斷。建議改用後台啟動。")
 
                 def on_prog(info: dict):
                     ri = int(info.get("race_index") or 1)
@@ -208,6 +231,42 @@ for stage, label in STAGES:
                 else:
                     st.error(r.get("error"))
                 st.rerun()
+
+            # 顯示最新後台任務狀態
+            st_job = pipe.get_form_ai_job(
+                racing_date,
+                course,
+                job_id=st.session_state.get("ops_form_ai_job"),
+            )
+            job = (st_job or {}).get("job")
+            if job:
+                st_status = str(job.get("status") or "")
+                prog = job.get("progress_json") or {}
+                if isinstance(prog, str):
+                    try:
+                        import json as _json
+                        prog = _json.loads(prog)
+                    except Exception:
+                        prog = {}
+                st.write(
+                    f"**後台任務** `{job.get('job_id')}` — **{st_status}**  \n"
+                    f"{job.get('detail') or ''}"
+                )
+                if isinstance(prog, dict) and prog:
+                    ri = prog.get("race_index")
+                    rn = prog.get("race_count")
+                    if ri and rn:
+                        st.progress(
+                            min(1.0, float(ri) / float(rn)),
+                            text=f"場次 {ri}/{rn} · {prog.get('race_id') or ''}",
+                        )
+                    st.caption(str(prog))
+                if st_status in ("ok", "ok_with_errors"):
+                    st.success("Form AI 後台已完成；可重新檢查 readiness 後繼續快照。")
+                elif st_status == "failed":
+                    st.error("後台失敗，請看 detail／Railway log。")
+                elif st_status == "running":
+                    st.info("進行中——可關閉本頁，稍後回來按「重新整理進度」。")
         elif stage == "SNAPSHOT":
             if a1.button("建立快照", key=f"act_snap_{stage}"):
                 with st.spinner("snapshot…"):

@@ -18,7 +18,8 @@ inject_admin_css()
 page_header("賽績指引 + AI 評價", "獨立馬評軌道（不混入模型總分）")
 st.caption(
     "CMS Form Guide 近績文字 + 系統量化統計 → 文字評價與 AI 獨立分（−2～+2）。"
-    "可重用、進賽日速覽並排推介。長任務請留在本頁。"
+    "長任務請用作戰室「後台啟動 Form AI」或 GitHub Actions（Form AI Background Job），"
+    "不必一直開著手機頁面。"
 )
 
 engine = InferenceEngine()

@@ -1,0 +1,57 @@
+name: Form AI Background Job
+
+# 手機可在 GitHub Actions 手動觸發，無需一直開著 Streamlit
+on:
+  workflow_dispatch:
+    inputs:
+      racing_date:
+        description: "賽日 YYYY-MM-DD"
+        required: true
+        type: string
+      course:
+        description: "場地 ST 或 HV"
+        required: true
+        type: choice
+        options:
+          - ST
+          - HV
+      only_missing:
+        description: "只補尚未有 AI 的馬"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  form-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Form AI batch
+        env:
+          USE_SQLITE: "false"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_SYNC: ${{ secrets.DATABASE_URL_SYNC }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+        run: |
+          DATE="${{ inputs.racing_date }}"
+          COURSE="${{ inputs.course }}"
+          ARGS=(--date "$DATE" --course "$COURSE" --create-job --sleep 0.2)
+          if [ "${{ inputs.only_missing }}" != "true" ]; then
+            ARGS+=(--all)
+          fi
+          echo "Running: python form_ai_batch_job.py ${ARGS[*]}"
+          python form_ai_batch_job.py "${ARGS[@]}"

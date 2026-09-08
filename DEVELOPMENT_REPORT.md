@@ -129,6 +129,9 @@ Streamlit：`ui_app.py` + `views/`；`streamlit>=1.40`（`st.navigation`／`st.P
 - 結果寫入 `text_reports.nlp_result`（JSON），**可重用**；只處理 `nlp_result IS NULL`。  
 - UI：**整個賽日解析**（該日該場地所有排位馬）+ 自動略過空白／「無特別報告」。  
 - 換頁會中斷 Streamlit 同步迴圈；長跑用 `python nlp_batch_job.py --limit 200`。  
+- **Form AI 長跑**：作戰室按「後台啟動 Form AI」（可關頁）；或  
+  `python form_ai_batch_job.py --date YYYY-MM-DD --course ST`；  
+  或 GitHub Actions → **Form AI Background Job**（workflow_dispatch）。  
 - **解析 ≠ 已入近績/速度**：必須再跑對應計算（或主頁重算）。近績頁有「NLP vs 近績分數時間」警示。  
 
 兩種 NLP 用途（勿混）：
