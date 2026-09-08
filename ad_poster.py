@@ -25,7 +25,8 @@ from score_share import select_picks_by_share, win_pick_count_from_shares
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT / "assets" / "ad_templates"
-LOGO_PATH = ROOT / "assets" / "j18ai_plus_logo.png"
+LOGO_PATH = ROOT / "assets" / "j18_hk_logo.jpg"
+BRAND_NAME = "J18.HK"
 BUNDLED_FONT = ROOT / "assets" / "fonts" / "wqy-microhei.ttc"
 FONT_CANDIDATES = [
     str(BUNDLED_FONT),
@@ -356,12 +357,12 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
     title = f"第{rn}場" if rn is not None else payload.race_id
     if track == "model":
         picks = payload.model_picks
-        headline = f"【J18AI Plus+ 模型推介】{date_s} {course} {title}"
+        headline = f"【{BRAND_NAME} 模型推介】{date_s} {course} {title}"
         line = "模型 · 勝率份額推介："
         empty = "本場暫無模型推介。"
     else:
         picks = payload.ai_picks
-        headline = f"【J18AI Plus+ AI 馬評】{date_s} {course} {title}"
+        headline = f"【{BRAND_NAME} AI 馬評】{date_s} {course} {title}"
         line = "AI 馬評 · 份額推介："
         empty = payload.ai_skip_message or "本場 AI 信心不足／暫無評價，不推。"
 
@@ -371,7 +372,7 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
         parts = [f"{p.tag} #{p.horse_no} {p.horse_name}（{p.share_pct:.0f}%）" for p in picks]
         body = "、".join(parts)
 
-    cta = "數據僅供參考，投注前請自行判斷。關注 J18.hk 獲取更多賽日速覽。"
+    cta = f"數據僅供參考，投注前請自行判斷。關注 {BRAND_NAME} 獲取更多賽日速覽。"
     full = f"{headline}\n{line}{body}\n\n{cta}"
     return {
         "track": track,
@@ -388,10 +389,10 @@ def generate_meeting_copy(payloads: Sequence[RaceAdPayload], track: str) -> Dict
     date_s = payloads[0].racing_date
     course = payloads[0].course
     if track == "model":
-        headline = f"【J18AI Plus+ 模型推介】{date_s} {course} 全賽日"
+        headline = f"【{BRAND_NAME} 模型推介】{date_s} {course} 全賽日"
         label = "模型"
     else:
-        headline = f"【J18AI Plus+ AI 馬評】{date_s} {course} 全賽日"
+        headline = f"【{BRAND_NAME} AI 馬評】{date_s} {course} 全賽日"
         label = "AI 馬評"
     lines = []
     for p in payloads:
@@ -406,7 +407,7 @@ def generate_meeting_copy(payloads: Sequence[RaceAdPayload], track: str) -> Dict
                 f"{x.tag}#{x.horse_no}{x.horse_name}({x.share_pct:.0f}%)" for x in picks
             )
         lines.append(f"R{rn} {body}")
-    cta = "數據僅供參考，投注前請自行判斷。關注 J18.hk 獲取更多賽日速覽。"
+    cta = f"數據僅供參考，投注前請自行判斷。關注 {BRAND_NAME} 獲取更多賽日速覽。"
     full = f"{headline}\n" + "\n".join(lines) + f"\n\n{cta}"
     return {"track": track, "headline": headline, "label": label, "full": full, "cta": cta}
 
@@ -543,7 +544,7 @@ def render_meeting_poster(
         except Exception:
             pass
 
-    _draw_text(draw, (190, 54), "J18AI Plus+", font_brand, white)
+    _draw_text(draw, (190, 54), BRAND_NAME, font_brand, white)
     track_label = "模型 · 全賽日勝率份額" if track == "model" else "AI 馬評 · 全賽日份額"
     _draw_text(draw, (190, 104), track_label, font_sub, accent)
 
@@ -622,7 +623,7 @@ def render_meeting_poster(
 
         y += slot + gap
 
-    foot = "數據僅供參考 · 非投注建議 · J18.hk"
+    foot = f"數據僅供參考 · 非投注建議 · {BRAND_NAME}"
     draw = ImageDraw.Draw(base)
     _draw_text(draw, (POSTER_W // 2, POSTER_H - 58), foot, font_foot, muted, anchor="mm")
     _draw_text(

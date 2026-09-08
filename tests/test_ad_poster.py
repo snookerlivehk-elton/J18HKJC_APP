@@ -165,4 +165,6 @@ def test_meeting_poster_overwrite_and_size(tmp_path: Path):
         "model",
     )
     assert "全賽日" in mc["headline"]
-    assert "J18.hk" in mc["full"]
+    assert "J18.HK" in mc["full"]
+    assert "J18AI" not in mc["full"]
+    assert "J18AI" not in mc["headline"]
