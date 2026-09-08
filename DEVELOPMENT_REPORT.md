@@ -390,6 +390,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-08 | **廣告輸出修復**：內嵌 CJK 字型；輸出改 JPEG＋單場預覽／ZIP，避免一次載入多張大圖導致 502 |
 | 2026-09-08 | **廣告輸出模組**：快照後自動生成模型／AI 海報 PNG + 文案（`ad_poster.py`、`views/ad_output.py`）；模版 `assets/ad_templates/` |
 | 2026-09-06 | **場內份額制**：因子／模型／AI 以分差比率瓜分 100%（非負）；推介動態最多 5 匹、AI 低信心可略過 |
 | 2026-09-05 | **預計步速上賽日／推論**：每場顯示偏慢／中性／偏快；`factor_scores` 落庫 `early_speed_z`／跑法 |
