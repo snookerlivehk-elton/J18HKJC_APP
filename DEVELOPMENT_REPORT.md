@@ -3,7 +3,8 @@
 > **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**、**§5.3／§6 階段閘門**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > **覆蓋度持份者（已落地）**：見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。預設 `COVERAGE_MODE=on`、`INTERFERENCE_MODE=stakeholder`；缺評述／SG 可建 provisional 快照，資料到位後 `revise_snapshot`。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
-> 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。  
+> **部署（2026-09 起暫時雙軌）**：**阿里雲為主要運作系統**（例：`http://47.83.164.64`）；**Railway**（`j18hkjc-app.up.railway.app`）暫時並行。所有開發／驗證須**先顧及阿里雲環境**（路徑、字型、Nginx／反向代理、本機碟、記憶體限制），再兼顾 Railway。  
+> 程式碼仍經 **GitHub `snookerlivehk-elton/J18HKJC_APP` `main`** 發布；本機 `.env` 連同一套（或對應環境的）Postgres（勿提交密碼）。  
 > **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**  
 > **現階段**：手動作戰至「賽日結算跑通」前，**勿開工全系統 Cron／自動代運作**。
 
@@ -117,9 +118,19 @@ Streamlit：`ui_app.py` + `views/`；`streamlit>=1.40`（`st.navigation`／`st.P
 
 ## 2. 運維 Runbook（改碼後必做）
 
+### 2.0 雙軌部署（阿里雲優先）
+
+| 環境 | 角色 | 備註 |
+|------|------|------|
+| **阿里雲**（例 `47.83.164.64`） | **主要運作系統** | 開發／驗收以這邊為準；注意 Nginx／反向代理逾時、本機 `ad_output/`、系統資源 |
+| **Railway** | 暫時並行 | 與阿里雲同 repo `main`；ephemeral 碟、重佈署會清本機檔 |
+| GitHub `main` | 唯一發佈來源 | 兩邊都應跟 `main`；功能先在阿里雲確認再視為完成 |
+
+**開發原則**：新功能、修 bug、效能／體積（如海報 ≤800KB）、靜態資源路徑，**先確保阿里雲可跑**；勿只在本機或只在 Railway 通過就結案。
+
 ### 2.1 部署後
 
-1. Railway 部署完成  
+1. 阿里雲／Railway 部署完成（以阿里雲為主驗收）  
 2. 主頁 **「重算並寫入 factor_scores」**（Bucket 規則或因子公式變更後**必須**重算，否則匹配率歸零）  
 3. 若改了排位爬蟲欄位：資料控制中心 **重新抓排位**  
 4. 近績要吃 NLP：賽日模式解析 → 再算近績／主頁重算  
@@ -390,6 +401,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-08 | **雙軌部署說明**：阿里雲＝主要運作；Railway 暫時並行；開發須先顧及阿里雲 |
 | 2026-09-08 | **廣告輸出改版**：全賽日模型／AI 各一張（固定 `model.jpg`/`ai.jpg` 覆蓋）；單張 ≤800KB；緊湊排版 |
 | 2026-09-08 | **廣告輸出修復**：內嵌 CJK 字型；輸出改 JPEG＋單場預覽／ZIP，避免一次載入多張大圖導致 502 |
 | 2026-09-08 | **廣告輸出模組**：快照後自動生成模型／AI 海報 PNG + 文案（`ad_poster.py`、`views/ad_output.py`）；模版 `assets/ad_templates/` |
