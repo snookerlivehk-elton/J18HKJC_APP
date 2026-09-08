@@ -76,6 +76,7 @@ views/home.py            # 系統主頁（載歷史、重算因子）
 views/whitelist.py       # 白名單 CRUD（僅 admin）
 views/data_control.py    # 資料控制中心
 views/meeting_ops.py     # 賽日作戰室
+views/ad_output.py       # 廣告輸出（快照後海報 PNG + 文案）
 views/raceday.py         # 賽日速覽（用戶主畫面）
 views/inference.py       # 融合預測
 views/calibration.py     # 因子命中率
@@ -389,6 +390,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-08 | **廣告輸出模組**：快照後自動生成模型／AI 海報 PNG + 文案（`ad_poster.py`、`views/ad_output.py`）；模版 `assets/ad_templates/` |
 | 2026-09-06 | **場內份額制**：因子／模型／AI 以分差比率瓜分 100%（非負）；推介動態最多 5 匹、AI 低信心可略過 |
 | 2026-09-05 | **預計步速上賽日／推論**：每場顯示偏慢／中性／偏快；`factor_scores` 落庫 `early_speed_z`／跑法 |
 | 2026-09-05 | **步速劇本修正**：形勢改依爭搶馬數（早段 Z≥門檻），不再用 heat≥2.5（幾乎全判超快） |
@@ -407,4 +409,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-08 — 覆蓋度持份者／干擾獨立化／可降級快照已落地。*
+*最後更新：2026-09-08 — 廣告輸出模組（快照後海報）／覆蓋度持份者已落地。*

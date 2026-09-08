@@ -289,6 +289,7 @@ class FactorCalibration:
         rows = []
         meta_reasons = []
         any_provisional = False
+        ad_race_items = []
         for _, race in races.iterrows():
             rid = race["race_id"]
             pred, _info, meta = self.infer.predict_race(rid)
@@ -301,6 +302,14 @@ class FactorCalibration:
                     if r not in meta_reasons:
                         meta_reasons.append(r)
             ai_map = ai_by_race.get(str(rid), {})
+            ad_race_items.append(
+                {
+                    "race_id": str(rid),
+                    "race_info": _info if _info is not None else race,
+                    "pred_df": pred.copy(),
+                    "ai_map": ai_map,
+                }
+            )
             for _, p in pred.iterrows():
                 hno = int(p["馬號"])
                 sc, cf, combo = ai_map.get(hno, (None, None, None))
@@ -403,7 +412,7 @@ class FactorCalibration:
                 )
 
         n_ai = sum(1 for r in rows if r.get("ai_combo") is not None)
-        return {
+        out = {
             "ok": True,
             "batch_id": batch_id,
             "racing_date": racing_date,
@@ -416,6 +425,24 @@ class FactorCalibration:
             "revision_of": revision_of,
             "provisional_reasons": meta_reasons,
         }
+
+        # 快照成功後自動產出廣告海報（模型＋AI 各一）
+        if bool(getattr(ModelConfig, "AD_OUTPUT_ON_SNAPSHOT", True)) and ad_race_items:
+            try:
+                from ad_poster import default_output_dir, generate_ads_for_meeting_predictions
+
+                ad_out = generate_ads_for_meeting_predictions(
+                    batch_id=batch_id,
+                    race_items=ad_race_items,
+                    output_root=default_output_dir(),
+                    racing_date=str(racing_date)[:10],
+                    course=str(course),
+                )
+                out["ad_output"] = ad_out
+            except Exception as e:
+                out["ad_output"] = {"ok": False, "error": str(e)}
+
+        return out
 
     def revise_snapshot(
         self,

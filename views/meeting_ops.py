@@ -272,26 +272,38 @@ for stage, label in STAGES:
                 with st.spinner("snapshot…"):
                     r = pipe.run_action(racing_date, course, "snapshot")
                 st.session_state.pop("ops_ready", None)
-                if r.get("ok"):
-                    msg = r.get("batch_id", r)
-                    if r.get("provisional"):
-                        st.warning(f"provisional 快照 `{msg}`（{', '.join(r.get('provisional_reasons') or [])}）")
-                    else:
-                        st.success(msg)
-                else:
-                    st.error(r.get("error"))
+                st.session_state["ops_snapshot_result"] = r
                 st.rerun()
             if a2.button("修訂快照 revision", key=f"act_rev_{stage}"):
                 with st.spinner("revise snapshot…"):
                     r = pipe.run_action(racing_date, course, "revise_snapshot")
                 st.session_state.pop("ops_ready", None)
-                if r.get("ok"):
-                    st.success(
-                        f"revision `{r.get('batch_id')}` ← `{r.get('revision_of')}`"
-                    )
-                else:
-                    st.error(r.get("error"))
+                st.session_state["ops_snapshot_result"] = r
                 st.rerun()
+            last_snap = st.session_state.get("ops_snapshot_result")
+            if last_snap:
+                if last_snap.get("ok"):
+                    msg = last_snap.get("batch_id", last_snap)
+                    if last_snap.get("provisional"):
+                        st.warning(
+                            f"provisional 快照 `{msg}`（{', '.join(last_snap.get('provisional_reasons') or [])}）"
+                        )
+                    elif last_snap.get("revision_of"):
+                        st.success(
+                            f"revision `{msg}` ← `{last_snap.get('revision_of')}`"
+                        )
+                    else:
+                        st.success(f"快照 `{msg}`")
+                    ad = last_snap.get("ad_output") or {}
+                    if ad.get("ok") or ad.get("races_written"):
+                        st.info(
+                            f"廣告輸出：{ad.get('races_written', ad.get('n_races', 0))} 場 · "
+                            f"`{ad.get('output_dir', '')}`（營運 → 廣告輸出 可預覽下載）"
+                        )
+                    elif ad.get("error"):
+                        st.caption(f"廣告輸出略過／失敗：{ad.get('error')}")
+                else:
+                    st.error(last_snap.get("error"))
         elif stage == "RESULTS":
             if a1.button("同步 jjjc 賽果", key=f"act_res_{stage}"):
                 with st.spinner("jjjc results export → runners…"):
