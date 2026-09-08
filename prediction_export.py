@@ -147,6 +147,7 @@ def build_race_prediction(
             "total_score": float(row["總預測分"]) if pd.notna(row.get("總預測分")) else None,
             "model_win_prob": p,
             "model_win_prob_pct": float(row["模型勝率%"]) if pd.notna(row.get("模型勝率%")) else None,
+            "model_coverage": float(row["模型覆蓋"]) if pd.notna(row.get("模型覆蓋")) else None,
             "pred_rank": int(row["預測排名"]) if pd.notna(row.get("預測排名")) else None,
             "ai": ai.get(hno) if hno is not None else None,
         }
@@ -246,6 +247,11 @@ def build_race_prediction(
             "softmax_temperature": meta.get("softmax_temperature"),
             "softmax_within_race_z": meta.get("softmax_within_race_z"),
             "win_prob_sum": meta.get("win_prob_sum"),
+            "coverage_mode": meta.get("coverage_mode"),
+            "interference_mode": meta.get("interference_mode"),
+            "avg_model_coverage": meta.get("avg_model_coverage"),
+            "provisional": meta.get("provisional"),
+            "provisional_reasons": meta.get("provisional_reasons"),
             "kelly_fraction_scale": kelly_fraction_scale,
         },
         "picks": {

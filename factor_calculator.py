@@ -5,8 +5,9 @@ from sqlalchemy import create_engine, text
 import os
 import json
 import re
-from typing import Optional
+from typing import Optional, Tuple
 from config import ModelConfig
+from score_compose import coverage_from_ratio, interference_mode
 from bucket_utils import (
     make_bucket_id,
     make_band_bucket_id,
@@ -833,6 +834,200 @@ class FactorCalculator:
         out["excuse_severity"] = sevs
         return out
 
+    @staticmethod
+    def compute_interference_form_delta(base_raw: float, excuse_info: dict) -> float:
+        """
+        單場近績干擾值＝補償後 raw − 原 raw（獨立持份者，不寫回 raw）。
+        與 apply_nlp_excuse_boost 同一套 stage／severity 公式。
+        """
+        if not excuse_info:
+            return 0.0
+        sev = float(excuse_info.get("severity") or 0.0)
+        stage = str(excuse_info.get("excuse_stage") or "none")
+        mult_map = {
+            "early": float(ModelConfig.EXCUSE_MULTIPLIER_EARLY),
+            "middle": float(ModelConfig.EXCUSE_MULTIPLIER_MIDDLE),
+            "late": float(ModelConfig.EXCUSE_MULTIPLIER_LATE),
+        }
+        late_cap = float(ModelConfig.EXCUSE_MULTIPLIER_LATE)
+        place_w = float(ModelConfig.PLACE_WEIGHT)
+        mult = mult_map.get(stage, 1.0)
+        base = float(base_raw)
+        if base > 0:
+            boosted = base * (1.0 + (mult - 1.0) * sev)
+        else:
+            boosted = place_w * sev * (mult / late_cap) * 0.85
+        return float(boosted - base)
+
+    @staticmethod
+    def compute_interference_speed_boost(excuse_info: dict) -> float:
+        """單場速度干擾值（時間向小幅上修），與 calculate_speed_factor 內公式一致。"""
+        if not excuse_info:
+            return 0.0
+        sev = float(excuse_info.get("severity") or 0.0)
+        stage = str(excuse_info.get("excuse_stage") or "none")
+        stage_w = {"early": 0.6, "middle": 1.0, "late": 1.3}.get(stage, 0.8)
+        return float(0.12 * sev * stage_w)
+
+    def _attach_runner_ids(self, df: pd.DataFrame) -> pd.DataFrame:
+        out = df.copy()
+        if "runner_id" in out.columns and out["runner_id"].notna().any():
+            return out
+        try:
+            ids = pd.read_sql(
+                "SELECT runner_id, race_id, horse_name FROM runners WHERE finish_order_num IS NOT NULL",
+                self.engine,
+            )
+            ids["horse_name"] = ids["horse_name"].apply(normalize_person_name)
+            if "horse_name" in out.columns:
+                out["horse_name"] = out["horse_name"].apply(normalize_person_name)
+            out = out.merge(ids, on=["race_id", "horse_name"], how="left")
+        except Exception as e:
+            print(f"attach runner_id failed: {e}")
+        return out
+
+    def load_nlp_status_map(self) -> dict:
+        """
+        runner_id -> {
+          has_result, skipped, has_excuse, excuse_stage, severity, reason
+        }
+        ABSENT_TRUE：有解析且無受阻；DELAY：無 nlp_result。
+        """
+        self.ensure_nlp_result_column()
+        try:
+            df = pd.read_sql(
+                text(
+                    """
+                    SELECT entity_id, nlp_result
+                    FROM text_reports
+                    WHERE entity_type = 'runner'
+                    """
+                ),
+                self.engine,
+            )
+        except Exception as e:
+            print(f"load_nlp_status_map failed: {e}")
+            return {}
+
+        out = {}
+        for _, row in df.iterrows():
+            rid = str(row["entity_id"])
+            raw = row.get("nlp_result")
+            if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+                continue
+            try:
+                obj = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(obj, dict):
+                continue
+            skipped = bool(obj.get("skipped"))
+            has_excuse = bool(obj.get("has_excuse")) and not skipped
+            out[rid] = {
+                "has_result": True,
+                "skipped": skipped,
+                "has_excuse": has_excuse,
+                "excuse_stage": str(obj.get("excuse_stage") or "none").lower(),
+                "severity": float(obj.get("severity") or 0.0),
+                "reason": obj.get("reason", ""),
+            }
+        return out
+
+    def horse_nlp_coverage_and_interference(
+        self,
+        df: pd.DataFrame = None,
+        lookback: Optional[int] = None,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        依近窗計算每匹馬：
+          - INTERFERENCE_FORM / INTERFERENCE_SPEED（GLOBAL）：z_score＝干擾信號
+          - coverage 欄＝解析覆蓋率（有 nlp_result 且非純空缺）
+        回傳 (form_df, speed_df)；可為空表。
+        """
+        if df is None or df.empty:
+            df = self.fetch_historical_data()
+        if df is None or df.empty:
+            return pd.DataFrame(), pd.DataFrame()
+
+        lb = int(
+            lookback
+            if lookback is not None
+            else getattr(ModelConfig, "NLP_COVERAGE_LOOKBACK_RACES", 5)
+        )
+        work = df.copy()
+        if "raw_score" not in work.columns:
+            work = self.calculate_base_score(work)
+        work = self._attach_runner_ids(work)
+        if "horse_name" not in work.columns:
+            return pd.DataFrame(), pd.DataFrame()
+        work["horse_name"] = work["horse_name"].apply(normalize_person_name)
+        work = work.sort_values(["horse_name", "racing_date"], ascending=[True, False])
+
+        status_map = self.load_nlp_status_map()
+        excuse_map = self.load_excuse_map()
+
+        form_rows = []
+        speed_rows = []
+        for horse, group in work.groupby("horse_name"):
+            window = group.head(lb)
+            if window.empty:
+                continue
+            n = len(window)
+            parsed = 0
+            form_vals = []
+            speed_vals = []
+            for _, row in window.iterrows():
+                rid = str(row.get("runner_id")) if pd.notna(row.get("runner_id")) else ""
+                st = status_map.get(rid)
+                if st and st.get("has_result") and not st.get("skipped"):
+                    parsed += 1
+                info = excuse_map.get(rid) if rid else None
+                if not info and st and st.get("has_excuse"):
+                    info = {
+                        "severity": st.get("severity", 0.0),
+                        "excuse_stage": st.get("excuse_stage", "none"),
+                    }
+                # ABSENT_TRUE：有解析無受阻 → delta=0 但仍計入 parsed
+                form_vals.append(
+                    self.compute_interference_form_delta(float(row.get("raw_score") or 0.0), info or {})
+                    if info
+                    else 0.0
+                )
+                speed_vals.append(
+                    self.compute_interference_speed_boost(info or {}) if info else 0.0
+                )
+
+            ratio = parsed / n if n else 0.0
+            cov = coverage_from_ratio(ratio)
+            # 窗內干擾均值（已解析無受阻＝0，拉低極端）
+            i_form = float(np.mean(form_vals)) if form_vals else 0.0
+            i_speed = float(np.mean(speed_vals)) if speed_vals else 0.0
+            base = {
+                "entity_name": normalize_person_name(horse),
+                "actual_runs": int(n),
+                "weighted_runs": float(parsed),
+                "coverage": float(cov),
+                "parsed_ratio": float(ratio),
+                "bucket_id": GLOBAL_BUCKET,
+            }
+            form_rows.append({**base, "adjusted_score": i_form, "factor_type": "INTERFERENCE_FORM"})
+            speed_rows.append({**base, "adjusted_score": i_speed, "factor_type": "INTERFERENCE_SPEED"})
+
+        def _to_z(rows: list, ftype: str) -> pd.DataFrame:
+            out = pd.DataFrame(rows)
+            if out.empty:
+                return out
+            sd = float(out["adjusted_score"].std() or 0.0)
+            mu = float(out["adjusted_score"].mean() or 0.0)
+            if sd < 1e-9:
+                out["z_score"] = 0.0
+            else:
+                out["z_score"] = (out["adjusted_score"] - mu) / sd
+            out["factor_type"] = ftype
+            return out
+
+        return _to_z(form_rows, "INTERFERENCE_FORM"), _to_z(speed_rows, "INTERFERENCE_SPEED")
+
     def apply_class_drop_boost(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         白皮書 Phase 4 降班三條件（簡化實作）：
@@ -910,7 +1105,11 @@ class FactorCalculator:
         return result
 
     def calculate_horse_factor(self, df: pd.DataFrame = None, apply_nlp: bool = True) -> pd.DataFrame:
-        """馬匹近績：距離帶粗桶；可選套用 NLP 受阻補償與降班修正後再算 Z。"""
+        """
+        馬匹近績：距離帶粗桶；降班修正後再算 Z。
+        - INTERFERENCE_MODE=legacy 且 apply_nlp：受阻補償烤進 raw（舊行為）
+        - stakeholder：基礎近績不烤 NLP；干擾見 calculate_interference_factors
+        """
         if df is None or df.empty:
             df = self.fetch_historical_data()
         if df.empty:
@@ -919,7 +1118,8 @@ class FactorCalculator:
         work = df.copy()
         if "raw_score" not in work.columns:
             work = self.calculate_base_score(work)
-        if apply_nlp:
+        mode = interference_mode()
+        if apply_nlp and mode == "legacy":
             work = self.apply_nlp_excuse_boost(work)
         work = self.apply_class_drop_boost(work)
 
@@ -935,6 +1135,10 @@ class FactorCalculator:
             return out
         out["factor_type"] = "HORSE"
         return out.rename(columns={"horse_name_clean": "entity_name"})
+
+    def calculate_interference_factors(self, df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """獨立干擾持份者（僅 stakeholder 模式需要落庫）。"""
+        return self.horse_nlp_coverage_and_interference(df)
 
     def _jockey_z_lookup(self, jockey_scores: pd.DataFrame) -> dict:
         """(bucket_id, jockey_name) -> z_score；另建 jockey 跨桶平均作後備。"""
@@ -1554,8 +1758,8 @@ class FactorCalculator:
     def calculate_speed_factor(self, df: pd.DataFrame = None, apply_nlp: bool = True) -> pd.DataFrame:
         """
         速度指數 Peak / EMA → factor_scores (SPEED, GLOBAL)。
-        - adjusted_score / z_score 基於近況 EMA（FSR 校正後）
-        - 可選：NLP 受阻時對該場 speed_figure 輕度補償（時間被干擾灌差）
+        - legacy + apply_nlp：受阻時間補償併入 sf_used
+        - stakeholder：基礎 SF 不併 NLP；干擾見 calculate_interference_factors
         """
         if df is None or df.empty:
             df = self.fetch_historical_data()
@@ -1568,8 +1772,10 @@ class FactorCalculator:
             return pd.DataFrame()
 
         work["sf_used"] = work["speed_figure_fsr"]
+        mode = interference_mode()
+        use_legacy_nlp = bool(apply_nlp) and mode == "legacy"
 
-        if apply_nlp:
+        if use_legacy_nlp:
             excuse_map = self.load_excuse_map()
             if excuse_map and "runner_id" not in work.columns:
                 try:
@@ -1588,11 +1794,7 @@ class FactorCalculator:
                     if not info:
                         boosts.append(0.0)
                         continue
-                    sev = float(info.get("severity") or 0.0)
-                    stage = str(info.get("excuse_stage") or "none")
-                    stage_w = {"early": 0.6, "middle": 1.0, "late": 1.3}.get(stage, 0.8)
-                    # 受阻通常令完成時間變慢 → SF 偏低；給予秒差級小幅補償
-                    boosts.append(0.12 * sev * stage_w)
+                    boosts.append(self.compute_interference_speed_boost(info))
                 work["nlp_time_boost"] = boosts
                 work["sf_used"] = work["sf_used"] + work["nlp_time_boost"]
             else:
@@ -1634,16 +1836,18 @@ class FactorCalculator:
         return out
 
     def _ensure_pace_score_columns(self, conn) -> None:
-        """確保 factor_scores 有 PACE 預計步速所需欄位（既有庫相容）。"""
+        """確保 factor_scores 有 PACE／coverage 所需欄位（既有庫相容）。"""
         stmts = [
             "ALTER TABLE factor_scores ADD COLUMN IF NOT EXISTS early_speed_z DOUBLE PRECISION",
             "ALTER TABLE factor_scores ADD COLUMN IF NOT EXISTS running_style VARCHAR(40)",
+            "ALTER TABLE factor_scores ADD COLUMN IF NOT EXISTS coverage DOUBLE PRECISION",
         ]
         if USE_SQLITE:
             # SQLite 舊版無 IF NOT EXISTS：失敗則略過
             for raw in (
                 "ALTER TABLE factor_scores ADD COLUMN early_speed_z REAL",
                 "ALTER TABLE factor_scores ADD COLUMN running_style TEXT",
+                "ALTER TABLE factor_scores ADD COLUMN coverage REAL",
             ):
                 try:
                     conn.execute(text(raw))
@@ -1669,7 +1873,7 @@ class FactorCalculator:
             if col not in combined.columns:
                 raise ValueError(f"factor score missing column: {col}")
 
-        optional = [c for c in ('early_speed_z', 'running_style') if c in combined.columns]
+        optional = [c for c in ('early_speed_z', 'running_style', 'coverage') if c in combined.columns]
         out = combined[required + optional].copy()
         out['entity_name'] = out['entity_name'].astype(str)
         out['calculated_at'] = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
@@ -1761,9 +1965,17 @@ class FactorCalculator:
         print("Calculating Speed Figure / FSR (GLOBAL)...")
         speed_df = self.calculate_speed_factor(df, apply_nlp=apply_nlp)
 
+        iff_df = pd.DataFrame()
+        ifs_df = pd.DataFrame()
+        if interference_mode() == "stakeholder":
+            print("Calculating Interference stakeholders (FORM/SPEED)...")
+            # apply_nlp=False 時仍可算覆蓋（多數為 DELAY→低 coverage）；有 NLP 則寫入 I
+            iff_df, ifs_df = self.calculate_interference_factors(df)
+
         if persist:
             n = self.save_factor_scores(
-                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df, speed_df
+                jockey_df, trainer_df, synergy_df, draw_df, hj_df, horse_df, pace_df, speed_df,
+                iff_df, ifs_df,
             )
             print(f"Saved {n} factor score rows to factor_scores.")
 

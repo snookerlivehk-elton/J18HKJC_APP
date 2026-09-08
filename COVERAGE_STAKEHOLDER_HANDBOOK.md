@@ -1,6 +1,6 @@
 # 覆蓋度持份者模型 — 一次性開發手冊
 
-> **狀態**：設計已凍結，待實作（本輪只交文件，未改業務邏輯）。  
+> **狀態**：**已實作**（本 branch：`COVERAGE_MODE=on`、`INTERFERENCE_MODE=stakeholder`）。  
 > **前置閱讀**：[`DEVELOPMENT_REPORT.md`](DEVELOPMENT_REPORT.md)（運維／賽日 SOP）、[`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > **問題陳述**：HKJC／賽後「沿路走勢評述」上架時間不定；現行 NLP 受阻補償烤進近績／速度 raw，缺資料時整條結算易停滯。同時推論 miss 以 `z=0` 進場卻仍吃滿 `WEIGHT_*`，覆蓋率資訊（`命中 n/7`）未進分數。  
 > **目標**：可降級推論、不阻塞快照；每個資料源＝value＋coverage 持份者；干擾獨立成干擾值 \(I\)；缺資料縮有效權重、可補丁重算。
@@ -69,8 +69,8 @@ C_h = \frac{\sum_k w_k\, c_{h,k}}{\sum_k w_k}
 
 ```python
 # 合成模式
-COVERAGE_MODE = "off"          # off | shadow | on
-INTERFERENCE_MODE = "legacy"   # legacy（烤進 raw）| stakeholder（獨立 I）
+COVERAGE_MODE = "on"           # off | shadow | on（已預設 on）
+INTERFERENCE_MODE = "stakeholder"  # legacy | stakeholder（已預設 stakeholder）
 
 # 覆蓋曲線（MISS / DELAY）
 COVERAGE_MISS_DEFAULT = 0.0    # 查表完全 miss 時該因子 coverage

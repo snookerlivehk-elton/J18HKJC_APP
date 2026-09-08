@@ -153,6 +153,15 @@ for stage, label in STAGES:
                 else:
                     st.error(r.get("error"))
                 st.rerun()
+            if a2.button("重算（含 NLP／干擾）", key=f"act_fac_nlp_{stage}"):
+                with st.spinner("factor_scores + interference…"):
+                    r = pipe.run_action(racing_date, course, "run_factors_with_nlp")
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    st.success(r.get("msg"))
+                else:
+                    st.error(r.get("error"))
+                st.rerun()
         elif stage == "FORM_AI":
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",
@@ -205,7 +214,22 @@ for stage, label in STAGES:
                     r = pipe.run_action(racing_date, course, "snapshot")
                 st.session_state.pop("ops_ready", None)
                 if r.get("ok"):
-                    st.success(r.get("batch_id", r))
+                    msg = r.get("batch_id", r)
+                    if r.get("provisional"):
+                        st.warning(f"provisional 快照 `{msg}`（{', '.join(r.get('provisional_reasons') or [])}）")
+                    else:
+                        st.success(msg)
+                else:
+                    st.error(r.get("error"))
+                st.rerun()
+            if a2.button("修訂快照 revision", key=f"act_rev_{stage}"):
+                with st.spinner("revise snapshot…"):
+                    r = pipe.run_action(racing_date, course, "revise_snapshot")
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    st.success(
+                        f"revision `{r.get('batch_id')}` ← `{r.get('revision_of')}`"
+                    )
                 else:
                     st.error(r.get("error"))
                 st.rerun()
@@ -259,5 +283,6 @@ for stage, label in STAGES:
 st.divider()
 st.caption(
     "RACECARD／RESULTS 優先同步 jjjc（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
-    "官方 SG 未上架時狀態為 waiting，不必強行失敗。"
+    "官方 SG／走勢評述未上架時可建 provisional 快照；資料到位後用「修訂快照 revision」。"
+    "因子可先無 NLP 重算；干擾為獨立持份者，不阻塞管線。"
 )

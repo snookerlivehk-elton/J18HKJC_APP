@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import re
+import json
 import numpy as np
 from config import ModelConfig
 from factor_calculator import FactorCalculator
@@ -14,6 +15,16 @@ from bucket_utils import (
 )
 
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+from score_compose import (
+    compose_total,
+    coverage_mode,
+    hit_coverage,
+    interference_mode,
+    legacy_total_from_parts,
+    make_stakeholder,
+    miss_coverage,
+    pick_score_for_ranking,
+)
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
@@ -191,50 +202,69 @@ class InferenceEngine:
         return (s - mu) / sd
 
     def _build_score_lookup(self, scores_df: pd.DataFrame) -> dict:
-        """(factor_type, bucket_id, entity_name) -> z_score"""
+        """(factor_type, bucket_id, entity_name) -> {z_score, coverage?}"""
         lookup = {}
         if scores_df is None or scores_df.empty:
             return lookup
+        has_cov = "coverage" in scores_df.columns
         for _, row in scores_df.iterrows():
             key = (
                 str(row['factor_type']),
                 str(row['bucket_id']),
                 str(row['entity_name']),
             )
-            lookup[key] = float(row['z_score'])
+            cov = None
+            if has_cov and pd.notna(row.get("coverage")):
+                try:
+                    cov = float(row["coverage"])
+                except (TypeError, ValueError):
+                    cov = None
+            lookup[key] = {"z": float(row['z_score']), "coverage": cov}
         return lookup
 
     def _lookup_z(self, lookup: dict, factor_type: str, bucket_id: str, entity_name: str):
-        """回傳 (z_score, hit: bool)。查不到明確標 miss，不靜默造假。"""
+        """回傳 (z_score, hit: bool, coverage: float)。查不到明確標 miss。"""
         key = (factor_type, bucket_id, entity_name)
         if key in lookup:
-            return lookup[key], True
-        return 0.0, False
+            entry = lookup[key]
+            if isinstance(entry, dict):
+                z = float(entry.get("z", 0.0))
+                cov = entry.get("coverage")
+                if cov is None:
+                    cov = hit_coverage()
+                return z, True, float(cov)
+            return float(entry), True, hit_coverage()
+        return 0.0, False, miss_coverage()
 
     def predict_race(self, race_id: str, df_hist: pd.DataFrame = None) -> tuple:
         """
         執行單場賽事推論（查表模式）：
-        騎練/近績用距離帶粗桶；檔位用細桶；可選 HORSE Z。
+        騎練/近績用距離帶粗桶；檔位用細桶；coverage 持份者合成總分。
         """
         races_df = self.get_upcoming_races()
         if races_df.empty:
-            return pd.DataFrame(), None
+            return pd.DataFrame(), None, {}
 
         matched = races_df[races_df['race_id'] == race_id]
         if matched.empty:
-            return pd.DataFrame(), None
+            return pd.DataFrame(), None, {}
 
         race_info = matched.iloc[0]
         runners_df = self.get_race_runners(race_id)
         if runners_df.empty:
-            return pd.DataFrame(), race_info
+            return pd.DataFrame(), race_info, {}
 
         fine_bucket = self.get_race_bucket(race_info)
         band_bucket = self.get_race_band_bucket(race_info)
-        scores_df = self.calc.load_factor_scores(
-            factor_types=['JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE', 'SPEED']
-        )
+        factor_types = [
+            'JOCKEY', 'TRAINER', 'SYNERGY', 'DRAW', 'HORSE', 'PACE', 'SPEED',
+            'INTERFERENCE_FORM', 'INTERFERENCE_SPEED',
+        ]
+        scores_df = self.calc.load_factor_scores(factor_types=factor_types)
         lookup = self._build_score_lookup(scores_df)
+        mode = coverage_mode()
+        iff_mode = interference_mode()
+        use_i = iff_mode == "stakeholder"
 
         results = []
         hit_counts = {
@@ -242,12 +272,19 @@ class InferenceEngine:
             'HORSE': 0, 'PACE': 0, 'SPEED': 0,
         }
         total_lookups = 0
+        provisional_reasons_race = []
 
         # Speed Guide：能量同場 Z；差值本身已相對 ER，直接入分（正＝官方看好）
+        has_sg_energy_col = 'speed_energy' in runners_df.columns
         sg_energy_z = self._within_field_z(
-            runners_df['speed_energy'] if 'speed_energy' in runners_df.columns
+            runners_df['speed_energy'] if has_sg_energy_col
             else pd.Series(dtype=float)
         )
+        sg_present_n = 0
+        if has_sg_energy_col:
+            sg_present_n = int(pd.to_numeric(runners_df['speed_energy'], errors='coerce').notna().sum())
+        if sg_present_n == 0:
+            provisional_reasons_race.append("sg_missing")
 
         for idx, row in runners_df.iterrows():
             j_name = normalize_person_name(row['jockey_name'])
@@ -256,13 +293,13 @@ class InferenceEngine:
             syn_name = synergy_name(j_name, t_name)
             draw_group = self.calc._assign_draw_group(row['draw'])
 
-            z_jockey, hit_j = self._lookup_z(lookup, 'JOCKEY', band_bucket, j_name)
-            z_trainer, hit_t = self._lookup_z(lookup, 'TRAINER', band_bucket, t_name)
-            z_synergy, hit_s = self._lookup_z(lookup, 'SYNERGY', band_bucket, syn_name)
-            z_draw, hit_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
-            z_horse, hit_h = self._lookup_z(lookup, 'HORSE', band_bucket, h_name)
-            z_pace, hit_p = self._lookup_z(lookup, 'PACE', 'GLOBAL', h_name)
-            z_speed, hit_sp = self._lookup_z(lookup, 'SPEED', 'GLOBAL', h_name)
+            z_jockey, hit_j, c_j = self._lookup_z(lookup, 'JOCKEY', band_bucket, j_name)
+            z_trainer, hit_t, c_t = self._lookup_z(lookup, 'TRAINER', band_bucket, t_name)
+            z_synergy, hit_s, c_s = self._lookup_z(lookup, 'SYNERGY', band_bucket, syn_name)
+            z_draw, hit_d, c_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
+            z_horse, hit_h, c_h = self._lookup_z(lookup, 'HORSE', band_bucket, h_name)
+            z_pace, hit_p, c_p = self._lookup_z(lookup, 'PACE', 'GLOBAL', h_name)
+            z_speed, hit_sp, c_sp = self._lookup_z(lookup, 'SPEED', 'GLOBAL', h_name)
 
             for ft, hit in (
                 ('JOCKEY', hit_j), ('TRAINER', hit_t),
@@ -273,33 +310,100 @@ class InferenceEngine:
                 if hit:
                     hit_counts[ft] += 1
 
-            sg_form_score = self._map_form_rating(row.get('form_rating'))
+            # SG 子項：有欄位值 → present；缺 → coverage=0
+            form_raw = row.get('form_rating')
+            sg_form_present = pd.notna(form_raw) and str(form_raw).strip() != ""
+            sg_form_score = self._map_form_rating(form_raw) if sg_form_present else 0.0
             sg_energy = float(row['speed_energy']) if pd.notna(row.get('speed_energy')) else None
-            sg_delta = float(row['speed_energy_delta']) if pd.notna(row.get('speed_energy_delta')) else 0.0
-            ez = sg_energy_z.get(idx, 0.0)
-            sg_energy_norm = 0.0 if pd.isna(ez) else float(ez)
+            sg_energy_present = sg_energy is not None
+            sg_delta_present = pd.notna(row.get('speed_energy_delta'))
+            sg_delta = float(row['speed_energy_delta']) if sg_delta_present else 0.0
+            ez = sg_energy_z.get(idx, 0.0) if sg_energy_present else 0.0
+            sg_energy_norm = 0.0 if (not sg_energy_present or pd.isna(ez)) else float(ez)
 
-            sg_contrib = (
+            # 干擾持份者
+            i_form, hit_if, c_if = self._lookup_z(lookup, 'INTERFERENCE_FORM', 'GLOBAL', h_name)
+            i_speed, hit_is, c_is = self._lookup_z(lookup, 'INTERFERENCE_SPEED', 'GLOBAL', h_name)
+            if use_i:
+                # 無列＝DELAY：I=0、coverage 低（miss_coverage）；有列則用落庫 coverage
+                if not hit_if:
+                    i_form, c_if = 0.0, miss_coverage()
+                if not hit_is:
+                    i_speed, c_is = 0.0, miss_coverage()
+                # 有列但 I≈0 且 coverage 高＝ABSENT_TRUE（已反映在落庫 coverage）
+            else:
+                i_form, i_speed, c_if, c_is = 0.0, 0.0, 0.0, 0.0
+                hit_if = hit_is = False
+
+            stakeholders = [
+                make_stakeholder("JOCKEY", z_jockey, present=hit_j, coverage=c_j if hit_j else miss_coverage(), base_weight=ModelConfig.WEIGHT_JOCKEY),
+                make_stakeholder("TRAINER", z_trainer, present=hit_t, coverage=c_t if hit_t else miss_coverage(), base_weight=ModelConfig.WEIGHT_TRAINER),
+                make_stakeholder("SYNERGY", z_synergy, present=hit_s, coverage=c_s if hit_s else miss_coverage(), base_weight=ModelConfig.WEIGHT_SYNERGY),
+                make_stakeholder("DRAW", z_draw, present=hit_d, coverage=c_d if hit_d else miss_coverage(), base_weight=ModelConfig.WEIGHT_DRAW),
+                make_stakeholder("HORSE", z_horse, present=hit_h, coverage=c_h if hit_h else miss_coverage(), base_weight=ModelConfig.WEIGHT_RECENT_FORM),
+                make_stakeholder("PACE", z_pace, present=hit_p, coverage=c_p if hit_p else miss_coverage(), base_weight=ModelConfig.WEIGHT_PACE),
+                make_stakeholder("SPEED", z_speed, present=hit_sp, coverage=c_sp if hit_sp else miss_coverage(), base_weight=ModelConfig.WEIGHT_SPEED_FIGURE),
+                make_stakeholder("SG_FORM", sg_form_score, present=sg_form_present, coverage=1.0 if sg_form_present else 0.0, base_weight=ModelConfig.WEIGHT_SG_FORM),
+                make_stakeholder("SG_ENERGY", sg_energy_norm, present=sg_energy_present, coverage=1.0 if sg_energy_present else 0.0, base_weight=ModelConfig.WEIGHT_SG_ENERGY),
+                make_stakeholder("SG_DELTA", sg_delta, present=sg_delta_present, coverage=1.0 if sg_delta_present else 0.0, base_weight=ModelConfig.WEIGHT_SG_DELTA),
+            ]
+            if use_i:
+                stakeholders.extend([
+                    make_stakeholder(
+                        "INTERFERENCE_FORM", i_form,
+                        present=True,  # DELAY 亦 present 語意上「通道開啟」但 value=0；用 coverage 懲罰
+                        coverage=c_if,
+                        base_weight=float(getattr(ModelConfig, "WEIGHT_INTERFERENCE_FORM", 0.4)),
+                    ),
+                    make_stakeholder(
+                        "INTERFERENCE_SPEED", i_speed,
+                        present=True,
+                        coverage=c_is,
+                        base_weight=float(getattr(ModelConfig, "WEIGHT_INTERFERENCE_SPEED", 0.3)),
+                    ),
+                ])
+
+            cov_total, model_cov, breakdown = compose_total(stakeholders)
+
+            sg_contrib_legacy = (
                 (sg_form_score * ModelConfig.WEIGHT_SG_FORM) +
                 (sg_energy_norm * ModelConfig.WEIGHT_SG_ENERGY) +
                 (sg_delta * ModelConfig.WEIGHT_SG_DELTA)
             )
+            # 顯示用 SG 貢獻：coverage 模式下用 effective 加總
+            sg_eff = (
+                breakdown.get("SG_FORM", {}).get("effective", 0.0)
+                + breakdown.get("SG_ENERGY", {}).get("effective", 0.0)
+                + breakdown.get("SG_DELTA", {}).get("effective", 0.0)
+            )
 
-            total_score = (
-                (z_jockey * ModelConfig.WEIGHT_JOCKEY) +
-                (z_trainer * ModelConfig.WEIGHT_TRAINER) +
-                (z_synergy * ModelConfig.WEIGHT_SYNERGY) +
-                (z_draw * ModelConfig.WEIGHT_DRAW) +
-                (z_horse * ModelConfig.WEIGHT_RECENT_FORM) +
-                (z_pace * ModelConfig.WEIGHT_PACE) +
-                (z_speed * ModelConfig.WEIGHT_SPEED_FIGURE) +
-                sg_contrib
+            legacy_score = legacy_total_from_parts(
+                z_jockey=z_jockey, z_trainer=z_trainer, z_synergy=z_synergy,
+                z_draw=z_draw, z_horse=z_horse, z_pace=z_pace, z_speed=z_speed,
+                sg_form=sg_form_score, sg_energy=sg_energy_norm, sg_delta=sg_delta,
+                i_form=i_form if use_i else 0.0,
+                i_speed=i_speed if use_i else 0.0,
+                include_interference=False,  # legacy 路徑不含獨立 I（舊行為）
+            )
+
+            total_score = pick_score_for_ranking(
+                legacy_score=legacy_score,
+                coverage_score=cov_total,
+                mode=mode,
             )
 
             hit_n = (
                 int(hit_j) + int(hit_t) + int(hit_s) + int(hit_d)
                 + int(hit_h) + int(hit_p) + int(hit_sp)
             )
+            row_reasons = list(provisional_reasons_race)
+            if use_i and (c_if < 0.5 or c_is < 0.5):
+                if "nlp_pending" not in row_reasons:
+                    row_reasons.append("nlp_pending")
+            if hit_n < 5:
+                row_reasons.append("low_match")
+
+            import json as _json
             results.append({
                 '馬號': row['horse_no'],
                 '馬名': row['horse_name'],
@@ -318,12 +422,19 @@ class InferenceEngine:
                 '近績分': round(z_horse, 2),
                 '步速分': round(z_pace, 2),
                 '速度分': round(z_speed, 2),
+                '干擾近績': round(i_form, 2) if use_i else None,
+                '干擾速度': round(i_speed, 2) if use_i else None,
                 '命中': f"{hit_n}/7",
                 '狀態評級': self.fitness_label(row.get('form_rating')) or row.get('form_rating'),
                 '速勢能量': sg_energy,
-                '能量差值': sg_delta,
-                'SG貢獻': round(sg_contrib, 2),
+                '能量差值': sg_delta if sg_delta_present else None,
+                'SG貢獻': round(sg_eff if mode == "on" else sg_contrib_legacy, 2),
                 '總預測分': round(total_score, 2),
+                '總預測分_legacy': round(legacy_score, 2),
+                '總預測分_coverage': round(cov_total, 2),
+                '模型覆蓋': round(model_cov, 4),
+                'coverage_json': json.dumps(breakdown, ensure_ascii=False),
+                'provisional_reasons': ",".join(row_reasons),
             })
 
         df_result = pd.DataFrame(results)
@@ -346,6 +457,10 @@ class InferenceEngine:
                 sh = scores_to_share_probs(df_result[col].to_numpy(dtype=float))
                 df_result[col] = np.round(sh * 100.0, 2)
 
+        avg_cov = float(df_result['模型覆蓋'].mean()) if not df_result.empty and '模型覆蓋' in df_result.columns else 0.0
+        provisional = bool(provisional_reasons_race) or (
+            not df_result.empty and df_result['provisional_reasons'].astype(str).str.len().gt(0).any()
+        )
         meta = {
             'bucket_id': fine_bucket,
             'band_bucket_id': band_bucket,
@@ -358,6 +473,11 @@ class InferenceEngine:
             'softmax_temperature': ModelConfig.SOFTMAX_TEMPERATURE,
             'softmax_within_race_z': ModelConfig.SOFTMAX_WITHIN_RACE_Z,
             'win_prob_sum': float(df_result['模型勝率'].sum()) if not df_result.empty else 0.0,
+            'coverage_mode': mode,
+            'interference_mode': iff_mode,
+            'avg_model_coverage': avg_cov,
+            'provisional': provisional,
+            'provisional_reasons': list(dict.fromkeys(provisional_reasons_race)),
             **self._pace_scenario_meta(scores_df, runners_df),
         }
 

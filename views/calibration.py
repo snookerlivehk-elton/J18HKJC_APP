@@ -124,6 +124,11 @@ st.caption(meta.get("note", ""))
 
 st.dataframe(stats_df, use_container_width=True, hide_index=True, height=420)
 
+cov_b = meta.get("coverage_buckets") or []
+if cov_b:
+    st.subheader("覆蓋度分桶（綜合總分）")
+    st.dataframe(pd.DataFrame(cov_b), use_container_width=True, hide_index=True)
+
 if px is not None and not stats_df.empty:
     melt = stats_df.melt(
         id_vars=["訊號"],

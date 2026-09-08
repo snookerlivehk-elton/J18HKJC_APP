@@ -392,7 +392,7 @@ class MeetingPipeline:
     def check_snapshot(self, racing_date: str, course: str) -> Tuple[str, str]:
         q = text(
             """
-            SELECT batch_id, settled_at,
+            SELECT batch_id, settled_at, note,
                    (SELECT COUNT(*) FROM prediction_snapshots s WHERE s.batch_id=b.batch_id) AS n
             FROM prediction_snapshot_batches b
             WHERE CAST(racing_date AS TEXT) LIKE :d AND course=:c
@@ -402,7 +402,7 @@ class MeetingPipeline:
         if not USE_SQLITE:
             q = text(
                 """
-                SELECT batch_id, settled_at,
+                SELECT batch_id, settled_at, note, provisional, snapshot_kind, revision_of,
                        (SELECT COUNT(*) FROM prediction_snapshots s WHERE s.batch_id=b.batch_id) AS n
                 FROM prediction_snapshot_batches b
                 WHERE racing_date = CAST(:d AS DATE) AND course=:c
@@ -412,11 +412,42 @@ class MeetingPipeline:
         try:
             df = pd.read_sql(q, self.engine, params={"d": racing_date[:10], "c": course})
         except Exception:
-            return STATUS_PENDING, "尚無快照表"
+            # 舊庫無 provisional 欄
+            try:
+                q2 = text(
+                    """
+                    SELECT batch_id, settled_at,
+                           (SELECT COUNT(*) FROM prediction_snapshots s WHERE s.batch_id=b.batch_id) AS n
+                    FROM prediction_snapshot_batches b
+                    WHERE CAST(racing_date AS TEXT) LIKE :d AND course=:c
+                    ORDER BY created_at DESC
+                    """
+                )
+                if not USE_SQLITE:
+                    q2 = text(
+                        """
+                        SELECT batch_id, settled_at,
+                               (SELECT COUNT(*) FROM prediction_snapshots s WHERE s.batch_id=b.batch_id) AS n
+                        FROM prediction_snapshot_batches b
+                        WHERE racing_date = CAST(:d AS DATE) AND course=:c
+                        ORDER BY created_at DESC
+                        """
+                    )
+                df = pd.read_sql(q2, self.engine, params={"d": racing_date[:10], "c": course})
+            except Exception:
+                return STATUS_PENDING, "尚無快照表"
         if df.empty:
             return STATUS_PENDING, "尚未建立預測快照"
         row = df.iloc[0]
-        return STATUS_OK, f"最新 batch `{row['batch_id']}`（{int(row['n'])} 列）"
+        tags = []
+        if "snapshot_kind" in df.columns and pd.notna(row.get("snapshot_kind")):
+            tags.append(str(row["snapshot_kind"]))
+        if "provisional" in df.columns and bool(row.get("provisional")):
+            tags.append("provisional")
+        if "revision_of" in df.columns and pd.notna(row.get("revision_of")):
+            tags.append(f"rev←{row['revision_of']}")
+        tag_s = f" [{', '.join(tags)}]" if tags else ""
+        return STATUS_OK, f"最新 batch `{row['batch_id']}`{tag_s}（{int(row['n'])} 列）"
 
     def check_results(self, racing_date: str, course: str) -> Tuple[str, str]:
         d = racing_date.replace("-", "")[:8]
@@ -557,11 +588,21 @@ class MeetingPipeline:
             if action == "run_factors":
                 from factor_calculator import FactorCalculator
                 calc = FactorCalculator()
+                # stakeholder 模式：基礎因子不烤 NLP；干擾通道另行落庫（可低 coverage）
                 result = calc.run_all_factors(persist=True, apply_nlp=False)
                 if result is None or result[0] is None:
                     return {"ok": False, "error": "無歷史數據或計算失敗"}
                 self.refresh_readiness(racing_date, course)
-                return {"ok": True, "msg": "已重算並寫入 factor_scores"}
+                return {"ok": True, "msg": "已重算並寫入 factor_scores（可降級／無 NLP）"}
+
+            if action == "run_factors_with_nlp":
+                from factor_calculator import FactorCalculator
+                calc = FactorCalculator()
+                result = calc.run_all_factors(persist=True, apply_nlp=True)
+                if result is None or result[0] is None:
+                    return {"ok": False, "error": "無歷史數據或計算失敗"}
+                self.refresh_readiness(racing_date, course)
+                return {"ok": True, "msg": "已重算 factor_scores（含干擾持份者／legacy NLP）"}
 
             if action == "run_form_ai":
                 from form_ai_analyst import FormAIAnalyst
@@ -607,6 +648,17 @@ class MeetingPipeline:
             if action == "snapshot":
                 from factor_calibration import FactorCalibration
                 out = FactorCalibration().snapshot_meeting(racing_date, course)
+                self.refresh_readiness(racing_date, course)
+                return out
+
+            if action == "revise_snapshot":
+                from factor_calibration import FactorCalibration
+                out = FactorCalibration().revise_snapshot(
+                    racing_date,
+                    course,
+                    base_batch_id=kwargs.get("base_batch_id"),
+                    note=kwargs.get("note") or "",
+                )
                 self.refresh_readiness(racing_date, course)
                 return out
 

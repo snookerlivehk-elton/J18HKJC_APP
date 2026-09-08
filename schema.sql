@@ -294,7 +294,10 @@ CREATE TABLE prediction_snapshot_batches (
     course VARCHAR(10),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     settled_at TIMESTAMPTZ,
-    note TEXT
+    note TEXT,
+    provisional BOOLEAN DEFAULT FALSE,
+    snapshot_kind VARCHAR(20) DEFAULT 'primary',
+    revision_of VARCHAR(64)
 );
 
 CREATE TABLE prediction_snapshots (
@@ -317,6 +320,9 @@ CREATE TABLE prediction_snapshots (
     total_score NUMERIC,
     model_win_prob NUMERIC,
     pred_rank INT,
+    model_coverage NUMERIC,
+    coverage_json TEXT,
+    provisional BOOLEAN DEFAULT FALSE,
     finish_order_num INT,
     UNIQUE (batch_id, race_id, horse_no)
 );

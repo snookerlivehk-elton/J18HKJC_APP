@@ -124,6 +124,20 @@ WEIGHT_SG_DELTA = (
     "官方能量差值（常為官方主排序訊號）權重；可為負（反向）。"
     "調高→更跟官方能量差排序；調負→刻意對沖官方差值。"
 )
+WEIGHT_INTERFERENCE_FORM = (
+    "獨立「近績干擾值」持份者權重（stakeholder 模式）。"
+    "缺評述／NLP 時此項 coverage 下降、不阻塞結算；調高→受阻補償對總分影響更大。"
+)
+WEIGHT_INTERFERENCE_SPEED = (
+    "獨立「速度干擾值」持份者權重（stakeholder 模式）。"
+    "缺資料時降 coverage；調高→時間向受阻上修更影響總分。"
+)
+COVERAGE_MODE = (
+    "off＝舊式滿權重；shadow＝並行算新總分但排序用舊；on＝正式用 coverage 合成。"
+)
+INTERFERENCE_MODE = (
+    "legacy＝NLP 烤進近績／速度 raw；stakeholder＝干擾獨立持份者（建議）。"
+)
 SOFTMAX_Z = (
     "僅在 WIN_PROB_METHOD=softmax 時有效：勝率前是否先做場內 z-score。"
     "現行預設為 share（分差瓜分），此項通常無作用。"

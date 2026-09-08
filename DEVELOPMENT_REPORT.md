@@ -1,7 +1,7 @@
 # J18 賽馬量化預測系統 — AI 開發交接手冊
 
 > **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**、**§5.3／§6 階段閘門**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
-> **規劃中（尚未改碼）**：覆蓋度持份者／干擾值獨立化／可降級快照 — 見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)（五階段一次性開發手冊）。  
+> **覆蓋度持份者（已落地）**：見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。預設 `COVERAGE_MODE=on`、`INTERFERENCE_MODE=stakeholder`；缺評述／SG 可建 provisional 快照，資料到位後 `revise_snapshot`。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
 > 生產環境：**GitHub `snookerlivehk-elton/J18HKJC_APP` → Railway Streamlit**；本機 `.env` 連同一套 Postgres（勿提交密碼）。  
 > **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**  
@@ -135,8 +135,18 @@ Streamlit：`ui_app.py` + `views/`；`streamlit>=1.40`（`st.navigation`／`st.P
 
 | 用途 | 行為 |
 |------|------|
-| 近績 HORSE | 受阻 → 調整該場 **raw_score（名次向）** |
-| 速度 SPEED | 受阻 → 該場 **Speed Figure 小幅上修（時間向）** |
+| 近績 HORSE | **legacy**：受阻 → 調整該場 raw_score；**stakeholder（預設）**：基礎近績不烤 NLP |
+| 速度 SPEED | **legacy**：受阻 → SF 小幅上修；**stakeholder**：基礎 SF 不併 NLP |
+| 干擾持份者 | `INTERFERENCE_FORM`／`INTERFERENCE_SPEED` 獨立落庫；缺評述 → I=0 + coverage↓ |
+
+### 2.2b 可降級賽日路徑（覆蓋度持份者）
+
+1. 排位齊 → **重算因子**（可不待 NLP；干擾通道可低覆蓋）  
+2. SG／評述未到也可 **建立快照**（`provisional=true`）  
+3. NLP／SG 到位 → **重算（含 NLP／干擾）** → 作戰室 **修訂快照 revision**（追加 batch，不覆寫已結算）  
+4. 賽後照常 RESULTS → 結算；校準頁可見覆蓋度分桶  
+
+開關：`config.COVERAGE_MODE`（off/shadow/on）、`INTERFERENCE_MODE`（legacy/stakeholder）。細節見手冊。
 
 ### 2.3 環境變數（Railway）
 
@@ -385,6 +395,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 | 2026-09-05 | **AI 獨立軌道**：`form_ai_picks` 推介；快照鎖 ai_*；命中率訊號「AI評價×信心」；賽日並排模型／AI |
 | 2026-09-05 | **手冊 §4.1**：GitHub UI 同事會優化版面；開發邏輯時勿用本地舊 UI 覆蓋 `main` |
 | 2026-09-05 | **賽前預測 API**：`prediction_api` + Kelly／即時賠率；`PREDICTION_API_KEY`；獨立 `start-api.sh` |
+| 2026-09-08 | **覆蓋度持份者**：`score_compose`；miss 降權；干擾獨立 I；provisional／revision 快照；見 `COVERAGE_STAKEHOLDER_HANDBOOK.md` |
 | 2026-09-05 | **登入分權**：`auth_whitelist` + `AUTH_BOOTSTRAP_ADMIN`；user 僅賽日速覽；admin 全管理頁；`views/` + `st.navigation` |
 | 2026-09-05 | **UI**：登入頁／管理外殼／賽日速覽簡潔綠系；側欄中文由 Page title 提供 |
 | 2026-09-05 | **勝率**：場內 z → softmax（`SOFTMAX_WITHIN_RACE_Z`，T 預設 1.5） |
@@ -393,4 +404,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-05 — 階段完成（雙軌＋AI 獨立）；待賽日結算後再開全自動。*
+*最後更新：2026-09-08 — 覆蓋度持份者／干擾獨立化／可降級快照已落地。*

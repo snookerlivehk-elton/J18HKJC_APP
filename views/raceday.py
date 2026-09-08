@@ -391,6 +391,7 @@ meta_html = f"""
     <div>班次 <b>{cls_disp}</b></div>
     <div>預計步速 <b>{pace_label}</b></div>
     <div>匹配 <b>{meta.get('match_rate', 0):.0%}</b></div>
+    <div>覆蓋 <b>{(meta.get('avg_model_coverage') or 0):.0%}</b>{' · provisional' if meta.get('provisional') else ''}</div>
   </div>
   <div class="rd-picks">
     <div class="rd-picks-dual">

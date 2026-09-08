@@ -93,6 +93,7 @@ class ModelConfig:
     WEIGHT_TRAINER = 0.8
     WEIGHT_SYNERGY = 0.5
     WEIGHT_DRAW = 1.2
+    # 人馬 HJ：診斷／專頁用；總分合成刻意不納入（避免雙重計騎師）。若要入模改 score_compose 清單。
     WEIGHT_HORSE_JOCKEY = 0.5
     WEIGHT_RECENT_FORM = 1.5
     WEIGHT_SPEED_FIGURE = 1.5
@@ -103,6 +104,25 @@ class ModelConfig:
     WEIGHT_SG_FORM = 1.0
     WEIGHT_SG_ENERGY = 1.0
     WEIGHT_SG_DELTA = 0.5
+
+    # ==========================================
+    # 9b. 覆蓋度持份者／干擾值（見 COVERAGE_STAKEHOLDER_HANDBOOK.md）
+    # ==========================================
+    # off＝舊式滿權重；shadow＝並行算新總分但排序用舊；on＝正式用 coverage 合成
+    COVERAGE_MODE = "on"             # off | shadow | on
+    # legacy＝NLP 烤進 HORSE/SPEED raw；stakeholder＝獨立干擾持份者
+    INTERFERENCE_MODE = "stakeholder"  # legacy | stakeholder
+
+    COVERAGE_MISS_DEFAULT = 0.0      # 查表完全 miss 時該因子 coverage
+    COVERAGE_PARTIAL_FLOOR = 0.15    # 部分覆蓋下限
+    NLP_COVERAGE_LOOKBACK_RACES = 5
+    NLP_COVERAGE_MIN_PARSED_RATIO = 0.0
+
+    WEIGHT_INTERFERENCE_FORM = 0.4   # 近績名次向干擾值
+    WEIGHT_INTERFERENCE_SPEED = 0.3  # 速度時間向干擾值
+
+    PICK_MIN_MODEL_COVERAGE = 0.35   # C_h 低於此 → 模型推介可降權／不出
+    SNAPSHOT_ALLOW_PROVISIONAL = True
 
     # 總分 → 同場勝率／份額（預設：分差比率瓜分 100%，非負）
     # "share"＝相對場內最低分差再比例瓜分；"softmax"＝舊場內 z + softmax

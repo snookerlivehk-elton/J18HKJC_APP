@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS prediction_snapshot_batches (
     course VARCHAR(10),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     settled_at TIMESTAMPTZ,
-    note TEXT
+    note TEXT,
+    provisional BOOLEAN DEFAULT FALSE,
+    snapshot_kind VARCHAR(20) DEFAULT 'primary',
+    revision_of VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS prediction_snapshots (
@@ -88,6 +91,9 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     ai_score NUMERIC,
     confidence NUMERIC,
     ai_combo NUMERIC,
+    model_coverage NUMERIC,
+    coverage_json TEXT,
+    provisional BOOLEAN DEFAULT FALSE,
     finish_order_num INT,
     UNIQUE (batch_id, race_id, horse_no)
 );
@@ -102,7 +108,10 @@ CREATE TABLE IF NOT EXISTS prediction_snapshot_batches (
     course TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     settled_at TEXT,
-    note TEXT
+    note TEXT,
+    provisional INTEGER DEFAULT 0,
+    snapshot_kind TEXT DEFAULT 'primary',
+    revision_of TEXT
 );
 
 CREATE TABLE IF NOT EXISTS prediction_snapshots (
@@ -128,6 +137,9 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     ai_score REAL,
     confidence REAL,
     ai_combo REAL,
+    model_coverage REAL,
+    coverage_json TEXT,
+    provisional INTEGER DEFAULT 0,
     finish_order_num INTEGER,
     UNIQUE (batch_id, race_id, horse_no),
     FOREIGN KEY (batch_id) REFERENCES prediction_snapshot_batches(batch_id) ON DELETE CASCADE
@@ -152,6 +164,7 @@ class FactorCalibration:
                 if s:
                     conn.execute(text(s))
             self._ensure_ai_snapshot_columns(conn)
+            self._ensure_coverage_snapshot_columns(conn)
 
     def _ensure_ai_snapshot_columns(self, conn):
         """既有庫補欄：AI 獨立軌道（不影響舊快照結算）。"""
@@ -170,16 +183,62 @@ class FactorCalibration:
             except Exception:
                 pass
 
+    def _ensure_coverage_snapshot_columns(self, conn):
+        """既有庫補欄：coverage／provisional／revision。"""
+        snap_cols = (
+            ("model_coverage", "NUMERIC", "REAL"),
+            ("coverage_json", "TEXT", "TEXT"),
+            ("provisional", "BOOLEAN DEFAULT FALSE", "INTEGER DEFAULT 0"),
+        )
+        for col, pg_t, sq_t in snap_cols:
+            try:
+                if USE_SQLITE:
+                    conn.execute(text(f"ALTER TABLE prediction_snapshots ADD COLUMN {col} {sq_t}"))
+                else:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE prediction_snapshots "
+                            f"ADD COLUMN IF NOT EXISTS {col} {pg_t}"
+                        )
+                    )
+            except Exception:
+                pass
+        batch_cols = (
+            ("provisional", "BOOLEAN DEFAULT FALSE", "INTEGER DEFAULT 0"),
+            ("snapshot_kind", "VARCHAR(20) DEFAULT 'primary'", "TEXT DEFAULT 'primary'"),
+            ("revision_of", "VARCHAR(64)", "TEXT"),
+        )
+        for col, pg_t, sq_t in batch_cols:
+            try:
+                if USE_SQLITE:
+                    conn.execute(
+                        text(f"ALTER TABLE prediction_snapshot_batches ADD COLUMN {col} {sq_t}")
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE prediction_snapshot_batches "
+                            f"ADD COLUMN IF NOT EXISTS {col} {pg_t}"
+                        )
+                    )
+            except Exception:
+                pass
+
     # ---------- 賽前快照 ----------
     def snapshot_meeting(
         self,
         racing_date: Optional[str] = None,
         course: Optional[str] = None,
         note: str = "",
+        *,
+        revision_of: Optional[str] = None,
+        snapshot_kind: str = "primary",
+        force_provisional: Optional[bool] = None,
     ) -> dict:
         """
         對 upcoming 賽日全部場次跑 predict_race，寫入一批快照。
         racing_date: YYYY-MM-DD；省略則取 upcoming 最新一日。
+        revision_of: 若指定，建立 revision 批次（不覆寫原 batch）。
         """
         races = self.infer.get_upcoming_races()
         if races.empty:
@@ -200,7 +259,10 @@ class FactorCalibration:
             return {"ok": False, "error": f"找不到 {racing_date} {course or ''} 排位"}
 
         course = str(races.iloc[0]["course"])
+        kind = "revision" if revision_of else (snapshot_kind or "primary")
         batch_id = f"{racing_date.replace('-', '')}{course}_{uuid4().hex[:8]}"
+        if kind == "revision":
+            batch_id = f"{racing_date.replace('-', '')}{course}_r{uuid4().hex[:6]}"
 
         from form_ai_analyst import FormAIAnalyst
         from form_ai_picks import compute_ai_combo
@@ -225,15 +287,34 @@ class FactorCalibration:
             ai_by_race = {}
 
         rows = []
+        meta_reasons = []
+        any_provisional = False
         for _, race in races.iterrows():
             rid = race["race_id"]
-            pred, _info, _meta = self.infer.predict_race(rid)
+            pred, _info, meta = self.infer.predict_race(rid)
             if pred is None or pred.empty:
                 continue
+            if isinstance(meta, dict):
+                if meta.get("provisional"):
+                    any_provisional = True
+                for r in meta.get("provisional_reasons") or []:
+                    if r not in meta_reasons:
+                        meta_reasons.append(r)
             ai_map = ai_by_race.get(str(rid), {})
             for _, p in pred.iterrows():
                 hno = int(p["馬號"])
                 sc, cf, combo = ai_map.get(hno, (None, None, None))
+                cov = p.get("模型覆蓋")
+                try:
+                    cov_f = float(cov) if cov is not None and pd.notna(cov) else None
+                except (TypeError, ValueError):
+                    cov_f = None
+                reasons = str(p.get("provisional_reasons") or "")
+                row_prov = bool(reasons.strip()) or bool(
+                    force_provisional if force_provisional is not None else False
+                )
+                if row_prov:
+                    any_provisional = True
                 rows.append(
                     {
                         "batch_id": batch_id,
@@ -257,6 +338,9 @@ class FactorCalibration:
                         "ai_score": sc,
                         "confidence": cf,
                         "ai_combo": combo,
+                        "model_coverage": cov_f,
+                        "coverage_json": p.get("coverage_json"),
+                        "provisional": row_prov,
                         "finish_order_num": None,
                     }
                 )
@@ -264,20 +348,34 @@ class FactorCalibration:
         if not rows:
             return {"ok": False, "error": "預測結果為空（請先重算 factor_scores）"}
 
+        allow_prov = bool(getattr(ModelConfig, "SNAPSHOT_ALLOW_PROVISIONAL", True))
+        if force_provisional is not None:
+            batch_provisional = bool(force_provisional)
+        else:
+            batch_provisional = bool(any_provisional) if allow_prov else False
+
+        note_bits = [note or ("revision snapshot" if kind == "revision" else "pre-race snapshot")]
+        if batch_provisional and meta_reasons:
+            note_bits.append("provisional:" + ",".join(meta_reasons))
+        note_final = " | ".join(note_bits)
+
         with self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
                     INSERT INTO prediction_snapshot_batches
-                    (batch_id, racing_date, course, note)
-                    VALUES (:batch_id, :racing_date, :course, :note)
+                    (batch_id, racing_date, course, note, provisional, snapshot_kind, revision_of)
+                    VALUES (:batch_id, :racing_date, :course, :note, :provisional, :snapshot_kind, :revision_of)
                     """
                 ),
                 {
                     "batch_id": batch_id,
                     "racing_date": racing_date,
                     "course": course,
-                    "note": note or "pre-race snapshot",
+                    "note": note_final,
+                    "provisional": batch_provisional,
+                    "snapshot_kind": kind,
+                    "revision_of": revision_of,
                 },
             )
             for r in rows:
@@ -288,12 +386,16 @@ class FactorCalibration:
                             batch_id, race_id, horse_no, horse_name, jockey_name, trainer_name, draw,
                             z_jockey, z_trainer, z_synergy, z_draw, z_horse, z_pace, z_speed,
                             sg_contrib, total_score, model_win_prob, pred_rank,
-                            ai_score, confidence, ai_combo, finish_order_num
+                            ai_score, confidence, ai_combo,
+                            model_coverage, coverage_json, provisional,
+                            finish_order_num
                         ) VALUES (
                             :batch_id, :race_id, :horse_no, :horse_name, :jockey_name, :trainer_name, :draw,
                             :z_jockey, :z_trainer, :z_synergy, :z_draw, :z_horse, :z_pace, :z_speed,
                             :sg_contrib, :total_score, :model_win_prob, :pred_rank,
-                            :ai_score, :confidence, :ai_combo, :finish_order_num
+                            :ai_score, :confidence, :ai_combo,
+                            :model_coverage, :coverage_json, :provisional,
+                            :finish_order_num
                         )
                         """
                     ),
@@ -309,7 +411,54 @@ class FactorCalibration:
             "n_rows": len(rows),
             "n_races": int(races["race_id"].nunique()),
             "n_with_ai": n_ai,
+            "provisional": batch_provisional,
+            "snapshot_kind": kind,
+            "revision_of": revision_of,
+            "provisional_reasons": meta_reasons,
         }
+
+    def revise_snapshot(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        base_batch_id: Optional[str] = None,
+        note: str = "",
+    ) -> dict:
+        """
+        資料到位後追加 revision 快照（不覆寫已結算／原 primary）。
+        未指定 base_batch_id 時取該賽日最新 primary／任一最新 batch。
+        """
+        batches = self.list_batches()
+        if batches.empty:
+            return {"ok": False, "error": "尚無快照可修訂"}
+        d = racing_date.replace("/", "-")[:10]
+        c = str(course).upper()
+        sub = batches[
+            (batches["racing_date"].astype(str).str[:10] == d)
+            & (batches["course"].astype(str).str.upper() == c)
+        ]
+        if sub.empty:
+            return {"ok": False, "error": f"找不到 {d} {c} 的快照"}
+        if base_batch_id:
+            base = base_batch_id
+        else:
+            if "snapshot_kind" in sub.columns:
+                prim = sub[sub["snapshot_kind"].fillna("primary").astype(str) == "primary"]
+            else:
+                prim = sub
+            use = prim if not prim.empty else sub
+            unsettled = use[use["settled_at"].isna()] if "settled_at" in use.columns else use
+            pick = unsettled if not unsettled.empty else use
+            base = str(pick.iloc[0]["batch_id"])
+        return self.snapshot_meeting(
+            racing_date=d,
+            course=c,
+            note=note or f"revision of {base}",
+            revision_of=base,
+            snapshot_kind="revision",
+            force_provisional=False,
+        )
 
     # ---------- 賽後結算 ----------
     def settle_pending(self) -> dict:
@@ -432,20 +581,39 @@ class FactorCalibration:
 
     # ---------- 列表／統計 ----------
     def list_batches(self) -> pd.DataFrame:
-        return pd.read_sql(
-            text(
-                """
-                SELECT b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note,
-                       COUNT(s.id) AS n_rows,
-                       SUM(CASE WHEN s.finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS n_filled
-                FROM prediction_snapshot_batches b
-                LEFT JOIN prediction_snapshots s ON b.batch_id = s.batch_id
-                GROUP BY b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note
-                ORDER BY b.racing_date DESC, b.created_at DESC
-                """
-            ),
-            self.engine,
-        )
+        try:
+            return pd.read_sql(
+                text(
+                    """
+                    SELECT b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note,
+                           b.provisional, b.snapshot_kind, b.revision_of,
+                           COUNT(s.id) AS n_rows,
+                           SUM(CASE WHEN s.finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS n_filled
+                    FROM prediction_snapshot_batches b
+                    LEFT JOIN prediction_snapshots s ON b.batch_id = s.batch_id
+                    GROUP BY b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note,
+                             b.provisional, b.snapshot_kind, b.revision_of
+                    ORDER BY b.racing_date DESC, b.created_at DESC
+                    """
+                ),
+                self.engine,
+            )
+        except Exception:
+            # 舊庫尚無 provisional 欄
+            return pd.read_sql(
+                text(
+                    """
+                    SELECT b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note,
+                           COUNT(s.id) AS n_rows,
+                           SUM(CASE WHEN s.finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS n_filled
+                    FROM prediction_snapshot_batches b
+                    LEFT JOIN prediction_snapshots s ON b.batch_id = s.batch_id
+                    GROUP BY b.batch_id, b.racing_date, b.course, b.created_at, b.settled_at, b.note
+                    ORDER BY b.racing_date DESC, b.created_at DESC
+                    """
+                ),
+                self.engine,
+            )
 
     def evaluate_settled(
         self,
@@ -539,11 +707,60 @@ class FactorCalibration:
         if not stats.empty:
             stats = stats.sort_values("獨贏率%", ascending=False).reset_index(drop=True)
 
+        # coverage 分桶（有 model_coverage 欄時）
+        cov_buckets = []
+        if "model_coverage" in snaps.columns and snaps["model_coverage"].notna().any():
+            def _bucket(c):
+                try:
+                    v = float(c)
+                except (TypeError, ValueError):
+                    return "未知"
+                if v < 0.35:
+                    return "低(<0.35)"
+                if v < 0.70:
+                    return "中(0.35–0.70)"
+                return "高(≥0.70)"
+
+            tmp = snaps.copy()
+            tmp["_cov_b"] = tmp["model_coverage"].map(_bucket)
+            race_cov = (
+                tmp.groupby("race_id")["model_coverage"]
+                .mean()
+                .reset_index()
+                .rename(columns={"model_coverage": "avg_cov"})
+            )
+            race_cov["bucket"] = race_cov["avg_cov"].map(_bucket)
+            # 綜合總分 top 命中按桶
+            for bname, ids in race_cov.groupby("bucket")["race_id"]:
+                sub = snaps[snaps["race_id"].isin(set(ids))]
+                win_hits = place_hits = scored = 0
+                for _, g in sub.groupby("race_id"):
+                    if "total_score" not in g.columns:
+                        continue
+                    scored += 1
+                    vals = pd.to_numeric(g["total_score"], errors="coerce").fillna(-1e18)
+                    top = g.loc[vals == vals.max()]
+                    finishes = top["finish_order_num"].astype(int)
+                    cut = place_cutoff(int(g["n_runners"].iloc[0]))
+                    if (finishes == 1).any():
+                        win_hits += 1
+                    if (finishes <= cut).any():
+                        place_hits += 1
+                cov_buckets.append(
+                    {
+                        "覆蓋桶": bname,
+                        "有效場次": scored,
+                        "獨贏率%": round(100.0 * win_hits / scored, 2) if scored else 0.0,
+                        "入圍率%": round(100.0 * place_hits / scored, 2) if scored else 0.0,
+                    }
+                )
+
         meta = {
             "n_batches": len(ids),
             "batch_ids": ids,
             "n_races": n_races,
             "avg_runners": avg_runners,
             "note": "基於賽前快照 × 賽後 J18 名次（無洩漏）。",
+            "coverage_buckets": cov_buckets,
         }
         return stats, meta

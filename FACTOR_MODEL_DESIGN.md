@@ -1,7 +1,7 @@
 # J18 Quant Model - 因子模型設計白皮書 (Factor Model Design)
 
 > **實作／運維交接**：請先讀 [`DEVELOPMENT_REPORT.md`](DEVELOPMENT_REPORT.md)。  
-> **規劃中**：推論覆蓋度、干擾值獨立持份者、provisional／revision 快照 — [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。落地後本白皮書 Phase 4／推論章需同步修訂。  
+> **覆蓋度／干擾持份者（已落地）**：[`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。Phase 4 NLP 補償在 `INTERFERENCE_MODE=stakeholder` 下為獨立特徵，不再必須烤進近績 raw。  
 > 本檔定義數學與產品原則；交接手冊記載現行 Bucket 政策（騎練／近績＝距離帶粗桶、檔位＝細桶等）、`factor_scores` 類型與部署後重算流程。
 
 ## 1. 核心理念
@@ -201,6 +201,8 @@
 ### 3. NLP 賽後報告補償系統 (AI Excuse & Bonus System)
 **嚴禁使用傳統關鍵字比對**（易受否定句如「未有受困」誤導）。必須使用 LLM (大語言模型) 進行語義理解，並強制輸出結構化 JSON 特徵。
 針對 `running_comment_text` 與 `incident_report_text`，按賽事三階段進行特徵抽取與分數補償：
+
+> **實作現況（2026-09）**：預設 `INTERFERENCE_MODE=stakeholder` — 干擾為獨立持份者 `INTERFERENCE_FORM`／`INTERFERENCE_SPEED`，缺評述時忽略 I 並降低 coverage，不阻塞推論。`legacy` 模式仍可將補償烤進近績／速度 raw。見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。
 
 #### A. 起步階段 (Start)
 - **抽取特徵**：漏閘 (Missed Break)、起步碰撞 (Bumped)。
