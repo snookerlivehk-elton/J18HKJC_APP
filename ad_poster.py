@@ -55,15 +55,15 @@ ROW_H_SCALE = 1.0
 RACE_COL = (200, 670)
 CONTENT_X0 = 720
 CONTENT_X1 = 3380
-PICK_GAP = 32
+PICK_GAP = 24
 DATE_PILL = (100, 500, 1680, 640)
 DATE_PILL_FILL = (165, 210, 229)
 DATE_PILL_RADIUS = 70
 # 字色貼近模版「場次」藍灰，略深方便閱讀
 RACE_FG = (70, 105, 135)
 TEXT_FG = (70, 105, 135)
-# 對齊模版「場次」字高（約 56–62px @3625 寬）
-FONT_BASE_PX = 62
+# 推介字級：大於模版「場次」標題，減少格內留白
+FONT_BASE_PX = 88
 # 表身分隔
 GRID_LINE = (170, 185, 195)
 GRID_LINE_STRONG = (140, 165, 185)
@@ -721,10 +721,10 @@ def render_meeting_poster(
     cols = _pick_column_bounds(4)
     _draw_table_guides(draw, mid_top=mid_top, mid_bot=mid_bot, n=n, row_h=row_h, cols=cols)
 
-    # 字級對齊模版已印「場次」（約 FONT_BASE_PX）；場次號略大一級
+    # 字級加大填滿格高；場次號與推介皆欄內置中
     base = int(FONT_BASE_PX)
-    race_px = int(max(base, min(int(row_h * 0.42), base + 12)))
-    pick_px = int(max(base - 2, min(int(row_h * 0.36), base + 4)))
+    race_px = int(max(base, min(int(row_h * 0.52), base + 16)))
+    pick_px = int(max(base - 4, min(int(row_h * 0.48), base + 8)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
 
@@ -746,8 +746,11 @@ def render_meeting_poster(
             msg = "信心不足略過"
             bb = font_pick.getbbox(msg)
             tw, th = bb[2] - bb[0], bb[3] - bb[1]
+            # 橫跨揀馬區置中
+            span0, span1 = cols[0][0], cols[-1][1]
+            tx = span0 + max(0, (span1 - span0 - tw) // 2)
             draw.text(
-                (cols[0][0] + 18, int(cy - th / 2) - 2),
+                (tx, int(cy - th / 2) - 2),
                 msg,
                 font=font_pick,
                 fill=(140, 120, 100),
@@ -765,8 +768,10 @@ def render_meeting_poster(
                 label_s = label_s[:-1]
                 bb = font_pick.getbbox(label_s)
                 tw, th = bb[2] - bb[0], bb[3] - bb[1]
+            # 欄內水平置中
+            tx = x0 + max(0, (x1 - x0 - tw) // 2)
             draw.text(
-                (x0 + 18, int(cy - th / 2) - 2),
+                (tx, int(cy - th / 2) - 2),
                 label_s,
                 font=font_pick,
                 fill=TEXT_FG,

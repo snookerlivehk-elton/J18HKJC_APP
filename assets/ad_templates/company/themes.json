@@ -9,8 +9,8 @@
     "race_col": [200, 670],
     "content_x": [720, 3380],
     "date_pill": [100, 500, 1680, 640],
-    "font_base_px": 62,
-    "note": "Header includes printed 場次; mid stretch only for race rows; content font matches 場次"
+    "font_base_px": 88,
+    "note": "Header includes printed 場次; mid stretch for race rows; picks centered; larger body font to fill cells"
   },
   "blue": {
     "blank": "blank_blue.jpg"
