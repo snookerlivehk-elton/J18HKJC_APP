@@ -77,7 +77,7 @@ views/home.py            # 系統主頁（載歷史、重算因子）
 views/whitelist.py       # 白名單 CRUD（僅 admin）
 views/data_control.py    # 資料控制中心
 views/meeting_ops.py     # 賽日作戰室
-views/ad_output.py       # 廣告輸出（快照後海報 PNG + 文案）
+views/ad_output.py       # 廣告輸出（公司原圖風格全賽日 PNG）
 views/raceday.py         # 賽日速覽（用戶主畫面）
 views/inference.py       # 融合預測
 views/calibration.py     # 因子命中率
@@ -401,6 +401,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-09 | **廣告輸出公司模版**：跟從藍／米色原圖；動態高度；每場最多 4 匹只顯示馬號＋馬名；PNG≤2MB；隨機色調 |
 | 2026-09-08 | **雙軌部署說明**：阿里雲＝主要運作；Railway 暫時並行；開發須先顧及阿里雲 |
 | 2026-09-08 | **廣告輸出改版**：全賽日模型／AI 各一張（固定 `model.jpg`/`ai.jpg` 覆蓋）；單張 ≤800KB；緊湊排版 |
 | 2026-09-08 | **廣告輸出修復**：內嵌 CJK 字型；輸出改 JPEG＋單場預覽／ZIP，避免一次載入多張大圖導致 502 |

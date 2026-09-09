@@ -73,7 +73,7 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
                         f"⬇️ 下載 {p.name}",
                         data=f.read(),
                         file_name=p.name,
-                        mime="image/jpeg",
+                        mime="image/png",
                         key=f"dl_{key_prefix}_{key}",
                     )
             else:
@@ -89,8 +89,9 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
 
 st.title("廣告輸出")
 st.caption(
-    "每次預測快照成功後，系統把**全賽日**推介寫入兩張海報："
-    "模型 · 勝率份額、AI 馬評 · 份額。下次生成會**覆蓋**同一檔名；單張目標 ≤800KB。"
+    "每次預測快照成功後，系統把**全賽日**推介寫入兩張海報（公司原圖風格）："
+    "模型／AI 馬評。每場最多 **4 匹**（只顯示馬號＋馬名，不含勝率）；"
+    "藍／米色隨機；下次生成會**覆蓋**同一檔名；PNG ≤2MB。"
 )
 
 out_root = default_output_dir()
@@ -101,7 +102,7 @@ try:
 
     fs = font_status()
     if fs.get("ok"):
-        st.caption(f"字型：`{fs.get('path')}` · 上限 {_max_bytes() // 1024} KB／張")
+        st.caption(f"字型：`{fs.get('path')}` · 上限 {_max_bytes() // 1024} KB／張 · 色調藍／米隨機")
     else:
         st.error(f"CJK 字型不可用：{fs.get('error') or '未找到字型檔'}")
 except Exception as e:
@@ -113,7 +114,7 @@ with tab_browse:
     _render_outputs(out_root, key_prefix="browse")
 
 with tab_regen:
-    st.markdown("選擇預測快照批次，依鎖分重產全賽日海報（覆蓋 `model.jpg` / `ai.jpg`）。")
+    st.markdown("選擇預測快照批次，依鎖分重產全賽日海報（覆蓋 `model.png` / `ai.png`）。")
     cal = FactorCalibration()
     try:
         bdf = cal.list_batches()

@@ -131,7 +131,7 @@ class ModelConfig:
     SOFTMAX_TEMPERATURE = 1.5
 
     # 推介隻數（爭勝仍 1～2；入圍／推介列動態 2～5）
-    PICK_MAX = 5
+    PICK_MAX = 4
     PICK_MIN = 2
     PICK_MIN_SHARE = 0.07          # 絕對份額門檻（約 7%）
     PICK_REL_TO_LEADER = 0.45      # 相對頭馬：低於此比例且低於 MIN_SHARE 則截斷
@@ -139,10 +139,11 @@ class ModelConfig:
     PICK_AI_MIN_CONFIDENCE = 0.30  # 場內最高信心低於此 → 不推 AI
     PICK_AI_MIN_SHARE = 0.06       # AI 單匹最低份額
 
-    # 廣告海報：快照後自動產出全賽日 model/ai JPEG（見 ad_poster.py；固定檔名覆蓋）
+    # 廣告海報：公司原海報風格（藍／米色隨機）；全賽日表格式；固定檔名覆蓋
     AD_OUTPUT_ON_SNAPSHOT = True
     AD_OUTPUT_DIR = ""  # 空＝專案 ad_output/；可設絕對路徑
-    AD_OUTPUT_MAX_KB = 800  # 單張上限（降 JPEG 品質／必要時縮圖）
+    AD_OUTPUT_MAX_KB = 2048  # PNG 單張上限（公司原規格 2MB 以下）
+    AD_OUTPUT_PICK_MAX = 4   # 海報欄位固定 4 匹（與公司原圖一致）
 
     # 步速熱度／形勢劇本
     # heat 顯示用：同場 early_speed_z 最高前 N 名加總（僅供參考）

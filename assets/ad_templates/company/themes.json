@@ -1,0 +1,20 @@
+{
+  "blue": {
+    "w": 1280,
+    "h": 1446,
+    "header_h": 430,
+    "footer_y": 1175,
+    "footer_h": 271,
+    "table_h": 745,
+    "n_ref_rows": 11
+  },
+  "beige": {
+    "w": 1280,
+    "h": 1284,
+    "header_h": 363,
+    "footer_y": 947,
+    "footer_h": 337,
+    "table_h": 584,
+    "n_ref_rows": 8
+  }
+}
