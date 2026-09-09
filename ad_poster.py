@@ -732,28 +732,24 @@ def render_meeting_poster(
         cy = mid_top + (i + 0.5) * row_h
         rn = race.race_num if race.race_num is not None else i + 1
         rn_s = str(rn)
-        bb = font_race.getbbox(rn_s)
-        tw, th = bb[2] - bb[0], bb[3] - bb[1]
         draw.text(
-            ((RACE_COL[0] + RACE_COL[1] - tw) // 2, int(cy - th / 2) - 2),
+            ((RACE_COL[0] + RACE_COL[1]) // 2, int(cy)),
             rn_s,
             font=font_race,
             fill=RACE_FG,
+            anchor="mm",
         )
 
         picks = _limit_picks(race.model_picks if track == "model" else race.ai_picks)
         if track == "ai" and race.ai_skipped and not picks:
             msg = "信心不足略過"
-            bb = font_pick.getbbox(msg)
-            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            # 橫跨揀馬區置中
             span0, span1 = cols[0][0], cols[-1][1]
-            tx = span0 + max(0, (span1 - span0 - tw) // 2)
             draw.text(
-                (tx, int(cy - th / 2) - 2),
+                ((span0 + span1) // 2, int(cy)),
                 msg,
                 font=font_pick,
                 fill=(140, 120, 100),
+                anchor="mm",
             )
             continue
 
@@ -762,19 +758,19 @@ def render_meeting_poster(
             label_s = _cell_text(pick)
             if not label_s:
                 continue
+            # 過寬則縮短馬名
             bb = font_pick.getbbox(label_s)
-            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            while tw > (x1 - x0 - 24) and len(label_s) > 4:
+            tw = bb[2] - bb[0]
+            while tw > (x1 - x0 - 20) and len(label_s) > 4:
                 label_s = label_s[:-1]
                 bb = font_pick.getbbox(label_s)
-                tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            # 欄內水平置中
-            tx = x0 + max(0, (x1 - x0 - tw) // 2)
+                tw = bb[2] - bb[0]
             draw.text(
-                (tx, int(cy - th / 2) - 2),
+                ((x0 + x1) // 2, int(cy)),
                 label_s,
                 font=font_pick,
                 fill=TEXT_FG,
+                anchor="mm",
             )
 
     meta = _save_png_under(Path(out_path), canvas)
