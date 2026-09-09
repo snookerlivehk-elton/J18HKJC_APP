@@ -199,7 +199,11 @@ def save_social_copy(output_root: Path, data: Dict[str, Any]) -> Path:
 def count_candidate_races(copy_data: Dict[str, Any]) -> int:
     n = 0
     for race in list((copy_data or {}).get("races") or []):
-        if list(race.get("model_picks") or []) or list(race.get("ai_picks") or []):
+        if (
+            list(race.get("fused_picks") or [])
+            or list(race.get("model_picks") or [])
+            or list(race.get("ai_picks") or [])
+        ):
             n += 1
     return n
 
@@ -291,10 +295,15 @@ class AdSocialCopywriter:
             race_id = str(race.get("race_id") or "")
             model_picks = list(race.get("model_picks") or [])
             ai_picks = list(race.get("ai_picks") or [])
+            fused_picks = list(race.get("fused_picks") or [])
 
             candidates: List[Dict[str, Any]] = []
             seen: set[Tuple[int, str]] = set()
-            for src, picks in (("model", model_picks), ("ai", ai_picks)):
+            for src, picks in (
+                ("fused", fused_picks),
+                ("model", model_picks),
+                ("ai", ai_picks),
+            ):
                 for p in picks[:4]:
                     try:
                         horse_no = int(p.get("horse_no"))
@@ -375,9 +384,14 @@ class AdSocialCopywriter:
                 continue
             model_picks = list(race.get("model_picks") or [])
             ai_picks = list(race.get("ai_picks") or [])
+            fused_picks = list(race.get("fused_picks") or [])
             by_horse: Dict[int, Dict[str, Any]] = {}
             sources_map: Dict[int, set[str]] = {}
-            for src, picks in (("model", model_picks), ("ai", ai_picks)):
+            for src, picks in (
+                ("fused", fused_picks),
+                ("model", model_picks),
+                ("ai", ai_picks),
+            ):
                 for p in picks[:4]:
                     try:
                         horse_no = int(p.get("horse_no"))
