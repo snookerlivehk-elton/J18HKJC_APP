@@ -189,6 +189,39 @@ else:
                 hide_index=True,
             )
 
+# —— 廣告推介宣傳命中 ——
+st.subheader("③ 廣告推介 · 賽後宣傳素材")
+st.caption(
+    "以賽前鎖定的融合推介列（最多 4 匹）為準；"
+    "篩選可作賽後宣傳的場次（獨贏高賠／冠亞高賠／T3／T4）。"
+)
+
+
+@st.cache_data(ttl=90, show_spinner="載入廣告宣傳命中…")
+def _ad_promo(batch_key: tuple | None):
+    ids = list(batch_key) if batch_key else None
+    return FactorCalibration().evaluate_ad_promo_hits(
+        only_settled=True, batch_ids=ids
+    )
+
+
+ad_races, ad_summary, ad_meta = _ad_promo(batch_key)
+if ad_meta.get("error"):
+    st.info(ad_meta["error"])
+elif ad_races.empty:
+    st.info("尚無廣告推介結算資料（請用新快照鎖定 ad_pick_rank 後再結算）。")
+else:
+    a1, a2, a3 = st.columns(3)
+    a1.metric("有效場次", ad_meta.get("n_races_scored", 0))
+    a2.metric("可宣傳場次", ad_meta.get("n_promo_races", 0))
+    a3.metric("推介上限", ad_meta.get("ad_pick_max", 4))
+    st.caption(ad_meta.get("note", ""))
+    if not ad_summary.empty:
+        st.dataframe(ad_summary, use_container_width=True, hide_index=True)
+    only_promo = st.checkbox("只顯示可宣傳場次", value=True, key="ad_promo_only")
+    show_ad = ad_races[ad_races["可宣傳"] == True] if only_promo else ad_races  # noqa: E712
+    st.dataframe(show_ad, use_container_width=True, hide_index=True, height=360)
+
 if is_admin():
     st.divider()
     st.caption("管理端寫入快照／結算請到「因子命中率」校正台；本頁唯讀。")
