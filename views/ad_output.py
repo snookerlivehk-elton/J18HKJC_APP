@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 import streamlit as st
 
 from ad_llm_copy import (
+    COMMENT_MAX_CHARS,
     DEFAULT_TONE,
     TONE_PRESETS,
     AdSocialCopywriter,
@@ -165,8 +166,8 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     default_prompt = (
         "寫成香港人日常 FB／IG 貼文口吻；"
         "標題帶提問或叫人留言；"
-        "優先挑選模型與 AI 都有支持的場次；"
-        "每匹馬評述不超過40字；"
+        "優先挑選融合推介名單內、模型與 AI 都有支持的場次；"
+        f"每匹馬評述不超過{COMMENT_MAX_CHARS}字；"
         "唔好用國語翻譯腔。"
     )
     custom_prompt = st.text_area(

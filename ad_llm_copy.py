@@ -23,6 +23,9 @@ else:
 
 SOCIAL_COPY_FILE = "social_copy.json"
 
+# 精選評述字數上限（繁體字元）
+COMMENT_MAX_CHARS = 60
+
 # UI / API 用的語氣預設鍵值
 TONE_PROFESSIONAL = "professional"
 TONE_PASSIONATE = "passionate"
@@ -79,34 +82,37 @@ HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅貼文，唔好�
 6) 唔好自行加入免責／宣傳結尾；系統會在文末自動附加固定聲明。"""
 
 
-DEFAULT_SOCIAL_SYSTEM_PROMPT = """你是香港賽馬社交媒體文案編輯。你會根據全賽日推介與官方賽績指引近績文字，
-挑選 3 場最值得宣傳的精選場次，每場只揀 1 匹馬作重點評述。
-
-你必須遵守：
-1) 只能引用輸入中出現過的賽事、馬號、馬名、近績文字與事實，不可虛構。
-2) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」。
-3) 每匹馬的 comment 必須是繁體中文，40 字內。
-4) 優先挑選模型與 AI 都有支持、或官方近績文字有明確痕跡／走勢重點的場次。
-5) hashtag 要適合香港賽馬與社交平台搜尋，8 至 15 個，避免重覆。
-6) """ + HK_WRITING_RULES + """
-
-嚴格輸出 JSON（不要 markdown 代碼塊）：
-{
-  "title": "吸引但忠於事實的標題",
-  "subtitle": "可選，1 句補充",
-  "featured": [
-    {
-      "race_no": 1,
-      "race_id": "20260909HV01",
-      "horse_no": 3,
-      "horse_name": "馬名",
-      "comment": "40字內評述",
-      "basis": "簡短說明為何揀這場"
-    }
-  ],
-  "hashtags": ["#J18", "#賽馬", "#賽馬貼士"]
-}
-featured 必須剛好 3 項；若資料不足也要盡量根據已有資料挑 3 項。"""
+DEFAULT_SOCIAL_SYSTEM_PROMPT = (
+    "你是香港賽馬社交媒體文案編輯。你會根據全賽日「融合推介」名單與官方賽績指引近績文字，\n"
+    "挑選 3 場最值得宣傳的精選場次，每場只揀 1 匹馬作重點評述。\n"
+    "\n"
+    "你必須遵守：\n"
+    "1) 精選馬必須來自各場 candidates（以融合推介為主）；不可另選名單外的馬。\n"
+    "2) comment 只能引用該馬的官方近績文字（form_text）事實，不可虛構，亦不要用勝率％湊字數。\n"
+    "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」。\n"
+    f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
+    "5) 優先挑選：融合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
+    "6) hashtag 要適合香港賽馬與社交平台搜尋，8 至 15 個，避免重覆。\n"
+    "7) " + HK_WRITING_RULES + "\n"
+    "\n"
+    "嚴格輸出 JSON（不要 markdown 代碼塊）：\n"
+    "{\n"
+    '  "title": "吸引但忠於事實的標題",\n'
+    '  "subtitle": "可選，1 句補充",\n'
+    '  "featured": [\n'
+    "    {\n"
+    '      "race_no": 1,\n'
+    '      "race_id": "20260909HV01",\n'
+    '      "horse_no": 3,\n'
+    '      "horse_name": "馬名",\n'
+    f'      "comment": "{COMMENT_MAX_CHARS}字內評述（忠於近績）",\n'
+    '      "basis": "簡短說明為何揀這場"\n'
+    "    }\n"
+    "  ],\n"
+    '  "hashtags": ["#J18", "#賽馬", "#賽馬貼士"]\n'
+    "}\n"
+    "featured 必須剛好 3 項；若資料不足也要盡量根據已有資料挑 3 項。"
+)
 
 
 def normalize_tone(tone: Optional[str]) -> str:
@@ -293,41 +299,61 @@ class AdSocialCopywriter:
         packed_races: List[Dict[str, Any]] = []
         for race in races:
             race_id = str(race.get("race_id") or "")
+            fused_picks = list(race.get("fused_picks") or [])
             model_picks = list(race.get("model_picks") or [])
             ai_picks = list(race.get("ai_picks") or [])
-            fused_picks = list(race.get("fused_picks") or [])
+            model_hnos = {
+                int(p.get("horse_no"))
+                for p in model_picks
+                if p.get("horse_no") is not None
+            }
+            ai_hnos = {
+                int(p.get("horse_no"))
+                for p in ai_picks
+                if p.get("horse_no") is not None
+            }
+
+            # 主池：融合；無融合時退回模型 → AI（與海報對齊）
+            primary = fused_picks or model_picks or ai_picks
+            pool_source = (
+                "fused" if fused_picks else ("model" if model_picks else "ai")
+            )
 
             candidates: List[Dict[str, Any]] = []
-            seen: set[Tuple[int, str]] = set()
-            for src, picks in (
-                ("fused", fused_picks),
-                ("model", model_picks),
-                ("ai", ai_picks),
-            ):
-                for p in picks[:4]:
-                    try:
-                        horse_no = int(p.get("horse_no"))
-                    except Exception:
-                        continue
-                    horse_name = str(p.get("horse_name") or "").strip()
-                    key = (horse_no, horse_name)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    # 縮短 form_text，避免 payload 過大令 API 逾時／拒收
-                    form_text = form_map.get(race_id, {}).get(horse_no, "")
-                    if len(form_text) > 180:
-                        form_text = form_text[:180] + "…"
-                    candidates.append(
-                        {
-                            "source": src,
-                            "horse_no": horse_no,
-                            "horse_name": horse_name,
-                            "tag": str(p.get("tag") or ""),
-                            "share_pct": p.get("share_pct"),
-                            "form_text": form_text,
-                        }
-                    )
+            seen: set[int] = set()
+            for p in primary[:4]:
+                try:
+                    horse_no = int(p.get("horse_no"))
+                except Exception:
+                    continue
+                if horse_no in seen:
+                    continue
+                seen.add(horse_no)
+                sources = [pool_source]
+                if pool_source == "fused":
+                    if horse_no in model_hnos:
+                        sources.append("model")
+                    if horse_no in ai_hnos:
+                        sources.append("ai")
+                form_text = form_map.get(race_id, {}).get(horse_no, "")
+                if len(form_text) > 220:
+                    form_text = form_text[:220] + "…"
+                candidates.append(
+                    {
+                        "pool": pool_source,
+                        "sources": sources,
+                        "dual_track": (
+                            pool_source == "fused"
+                            and horse_no in model_hnos
+                            and horse_no in ai_hnos
+                        ),
+                        "horse_no": horse_no,
+                        "horse_name": str(p.get("horse_name") or "").strip(),
+                        "tag": str(p.get("tag") or ""),
+                        "share_pct": p.get("share_pct"),
+                        "form_text": form_text,
+                    }
+                )
 
             packed_races.append(
                 {
@@ -335,6 +361,7 @@ class AdSocialCopywriter:
                     "race_id": race_id,
                     "race_name": race.get("race_name") or "",
                     "distance": race.get("distance"),
+                    "pick_pool": pool_source,
                     "candidates": candidates,
                 }
             )
@@ -349,7 +376,9 @@ class AdSocialCopywriter:
             "rules": {
                 "pick_three_races": True,
                 "one_horse_per_race": True,
-                "comment_max_chars": 40,
+                "candidates_from_fused_primary": True,
+                "comment_source": "form_text_only",
+                "comment_max_chars": COMMENT_MAX_CHARS,
                 "must_be_factual": True,
                 "writing_locale": "hong_kong_social",
                 "avoid_mandarin_translation_tone": True,
@@ -364,56 +393,74 @@ class AdSocialCopywriter:
 
     def _score_candidate(
         self, cand: Dict[str, Any], sources: set[str]
-    ) -> Tuple[int, int, float]:
-        dual = 1 if len(sources) >= 2 else 0
+    ) -> Tuple[int, int, int, float]:
+        """優先：融合池 → 雙軌共識 → 有近績 → 份額。"""
+        in_fused = 1 if "fused" in sources or cand.get("pool") == "fused" else 0
+        dual = 1 if ("model" in sources and "ai" in sources) else 0
         has_form = 1 if str(cand.get("form_text") or "").strip() else 0
         try:
             share = float(cand.get("share_pct") or 0.0)
         except Exception:
             share = 0.0
-        return (dual, has_form, share)
+        return (in_fused, dual, has_form, share)
 
     def build_fallback_featured(
         self, copy_data: Dict[str, Any], *, limit: int = 3
     ) -> List[Dict[str, Any]]:
-        """當 LLM 失敗／不足 3 場時，用 copy.json 推介自動補齊。"""
+        """當 LLM 失敗／不足 3 場時，用融合推介（退回模型／AI）+ 近績自動補齊。"""
         race_rows: List[Dict[str, Any]] = []
         for race in list((copy_data or {}).get("races") or []):
             race_id = str(race.get("race_id") or "").strip()
             if not race_id:
                 continue
+            fused_picks = list(race.get("fused_picks") or [])
             model_picks = list(race.get("model_picks") or [])
             ai_picks = list(race.get("ai_picks") or [])
-            fused_picks = list(race.get("fused_picks") or [])
+            primary = fused_picks or model_picks or ai_picks
+            pool_source = (
+                "fused" if fused_picks else ("model" if model_picks else "ai")
+            )
+            model_hnos = {
+                int(p.get("horse_no"))
+                for p in model_picks
+                if p.get("horse_no") is not None
+            }
+            ai_hnos = {
+                int(p.get("horse_no"))
+                for p in ai_picks
+                if p.get("horse_no") is not None
+            }
+
             by_horse: Dict[int, Dict[str, Any]] = {}
             sources_map: Dict[int, set[str]] = {}
-            for src, picks in (
-                ("fused", fused_picks),
-                ("model", model_picks),
-                ("ai", ai_picks),
-            ):
-                for p in picks[:4]:
-                    try:
-                        horse_no = int(p.get("horse_no"))
-                    except Exception:
-                        continue
-                    sources_map.setdefault(horse_no, set()).add(src)
-                    if horse_no not in by_horse:
-                        by_horse[horse_no] = {
-                            "horse_no": horse_no,
-                            "horse_name": str(p.get("horse_name") or "").strip(),
-                            "tag": str(p.get("tag") or ""),
-                            "share_pct": p.get("share_pct"),
-                            "form_text": "",
-                            "source": src,
-                        }
+            for p in primary[:4]:
+                try:
+                    horse_no = int(p.get("horse_no"))
+                except Exception:
+                    continue
+                sources = {pool_source}
+                if pool_source == "fused":
+                    if horse_no in model_hnos:
+                        sources.add("model")
+                    if horse_no in ai_hnos:
+                        sources.add("ai")
+                sources_map[horse_no] = sources
+                if horse_no not in by_horse:
+                    by_horse[horse_no] = {
+                        "horse_no": horse_no,
+                        "horse_name": str(p.get("horse_name") or "").strip(),
+                        "tag": str(p.get("tag") or ""),
+                        "share_pct": p.get("share_pct"),
+                        "form_text": "",
+                        "pool": pool_source,
+                        "source": pool_source,
+                    }
             if not by_horse:
                 continue
 
-            # 載入近績（可失敗）
             form_map = self.load_formguide_map([race_id]).get(race_id, {})
             best = None
-            best_score = (-1, -1, -1.0)
+            best_score = (-1, -1, -1, -1.0)
             for horse_no, cand in by_horse.items():
                 cand["form_text"] = form_map.get(horse_no, "")
                 score = self._score_candidate(cand, sources_map.get(horse_no, set()))
@@ -425,10 +472,19 @@ class AdSocialCopywriter:
 
             form = str(best.get("form_text") or "").strip()
             if form:
-                comment = form.replace("\n", " ")[:40]
+                comment = form.replace("\n", " ")[:COMMENT_MAX_CHARS]
             else:
                 tag = str(best.get("tag") or "推介").strip() or "推介"
-                comment = f"{tag}走勢值得留意，今晚有得傾"[:40]
+                comment = f"{tag}走勢值得留意，今晚有得傾"[:COMMENT_MAX_CHARS]
+
+            dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
+                int(best["horse_no"]), set()
+            )
+            basis = "自動補齊：融合推介"
+            if pool_source != "fused":
+                basis = f"自動補齊：{pool_source}（無融合名單）"
+            elif dual:
+                basis = "自動補齊：融合推介（雙軌共識）"
 
             race_rows.append(
                 {
@@ -437,12 +493,12 @@ class AdSocialCopywriter:
                     "horse_no": best.get("horse_no"),
                     "horse_name": best.get("horse_name"),
                     "comment": comment,
-                    "basis": "自動補齊：模型／AI 推介",
+                    "basis": basis,
                     "_score": best_score,
                 }
             )
 
-        race_rows.sort(key=lambda x: x.get("_score") or (0, 0, 0), reverse=True)
+        race_rows.sort(key=lambda x: x.get("_score") or (0, 0, 0, 0), reverse=True)
         out = []
         for row in race_rows[:limit]:
             row = dict(row)
@@ -476,7 +532,7 @@ class AdSocialCopywriter:
                     "race_id": race_id,
                     "horse_no": item.get("horse_no"),
                     "horse_name": str(item.get("horse_name") or "").strip(),
-                    "comment": comment[:40],
+                    "comment": comment[:COMMENT_MAX_CHARS],
                     "basis": str(item.get("basis") or "").strip(),
                 }
             )
