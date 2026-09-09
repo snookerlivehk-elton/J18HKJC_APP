@@ -1,6 +1,7 @@
 # 環境變數與機密資訊
 .env
 .env.*
+!.env.example
 
 # 資料庫 (不把本地資料庫上傳，雲端會使用 PostgreSQL)
 *.db
