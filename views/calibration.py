@@ -6,7 +6,7 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 
-from factor_calibration import FactorCalibration, SIGNAL_DEFS
+from factor_calibration import FactorCalibration, SIGNAL_DEFS, PLA_FINISH_MAX
 from config import ModelConfig
 from inference_engine import InferenceEngine
 
@@ -17,13 +17,20 @@ except ImportError:
 
 st.title("📊 因子命中率（賽前快照 → 賽後結算）")
 st.markdown(
-    """
+    f"""
 **正確流程**
 1. **賽前**：建立預測快照（鎖住當日各因子／總分／模型勝率）  
 2. **賽後**：J18 歷史爬蟲入庫名次後，執行「結算快照」  
-3. 本頁用已結算快照統計各訊號**獨贏率／入圍率**，供調 `WEIGHT_*`  
+3. 本頁用已結算快照統計各訊號 **WIN／PLA／WQ／T3／T4**，供調 `WEIGHT_*`  
 
-入圍：結算定義為前 4（場內少於 4 匹則取全場）。
+**命中規則**
+- **WIN**：推介頭兩位任一跑第 1  
+- **PLA**：推介頭兩位任一跑入前 {PLA_FINISH_MAX}  
+- **WQ**：推介頭兩位恰為冠、亞（不論順序）  
+- **T3**：全部推介馬（不論先後）覆蓋冠亞季  
+- **T4**：全部推介馬覆蓋冠亞季殿  
+
+推介隻數與賽日速覽相同（場內份額 + `select_picks_by_share`）。
 """
 )
 
@@ -69,7 +76,7 @@ if do_snap:
 st.subheader("② 賽後：結算快照")
 st.caption(
     "只需 `runners.finish_order_num`（jjjc／J18 賽果）。"
-    "**與 NLP／沿路走勢無關**——無評述也可結算。按馬名匹配名次。"
+    "**與 NLP／沿路走勢無關**——無評述也可結算。優先馬號、再馬名匹配。"
 )
 if st.button("結算所有待處理快照", use_container_width=False):
     with st.spinner("比對賽果中…"):
@@ -140,7 +147,7 @@ if cov_b:
 if px is not None and not stats_df.empty:
     melt = stats_df.melt(
         id_vars=["訊號"],
-        value_vars=["獨贏率%", "入圍率%"],
+        value_vars=["WIN%", "PLA%", "WQ%", "T3%", "T4%"],
         var_name="指標",
         value_name="比率%",
     )
@@ -150,24 +157,24 @@ if px is not None and not stats_df.empty:
         y="比率%",
         color="指標",
         barmode="group",
-        title="各訊號獨贏率 vs 入圍率（賽前快照）",
-        color_discrete_sequence=["#0B6E4F", "#C45C26"],
+        title="各訊號 WIN / PLA / WQ / T3 / T4（賽前快照）",
+        color_discrete_sequence=["#0B6E4F", "#2F9E6F", "#C45C26", "#5B7C99", "#6B4F3A"],
     )
     if meta.get("avg_runners"):
         fig.add_hline(
-            y=100.0 / meta["avg_runners"],
+            y=min(100.0, 200.0 / meta["avg_runners"]),
             line_dash="dash",
             line_color="#888",
-            annotation_text="隨機獨贏基準",
+            annotation_text="隨機 WIN 基準（約 2/n）",
         )
-    fig.update_layout(height=420, xaxis_tickangle=-25)
+    fig.update_layout(height=440, xaxis_tickangle=-25)
     st.plotly_chart(fig, use_container_width=True)
 
 st.markdown(
     """
 **調權重建議**
-- 看「獨贏相對隨機」：明顯較高的訊號可加重 `WEIGHT_*`
+- 看「WIN相對隨機」：明顯較高的訊號可加重 `WEIGHT_*`
+- WQ／T3／T4 樣本較稀，需累積多賽日再解讀
 - SG 覆蓋率低屬正常（部分場次無 Speed Guide）
-- 累積多個賽日 batch 後統計才穩
 """
 )

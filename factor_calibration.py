@@ -5,14 +5,20 @@
   1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
      （含 ai_score／confidence／ai_combo，不混入模型權重）
   2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
-  3. evaluate_settled() — 按快照分數算各訊號獨贏／入圍率（含 AI評價×信心）
+  3. evaluate_settled() — 按各訊號場內份額選推介，統計 WIN／PLA／WQ／T3／T4
 
-入圍：結算定義為前 4（場內少於 4 匹則取全場）。
+命中規則（每場、每訊號）：
+  - 推介列：該訊號分數 → 場內份額 → select_picks_by_share（與賽日推介一致）
+  - WIN：推介頭兩位任一跑第 1
+  - PLA：推介頭兩位任一跑入前 3
+  - WQ：推介頭兩位恰為冠、亞（不論順序）
+  - T3：全部推介馬（不論先後）覆蓋冠亞季
+  - T4：全部推介馬覆蓋冠亞季殿
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 import pandas as pd
@@ -21,6 +27,7 @@ from sqlalchemy import text, create_engine
 from config import ModelConfig
 from factor_calculator import FactorCalculator
 from inference_engine import InferenceEngine, scores_to_win_probs
+from score_share import scores_to_share_probs, select_picks_by_share
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
 import os
 
@@ -47,12 +54,69 @@ SIGNAL_DEFS = [
 ]
 
 
+# 位置命中（PLA）：推介頭兩位命中名次上限
+PLA_FINISH_MAX = 3
+
+
 def place_cutoff(n_runners: int) -> int:
-    """結算入圍：前 4；場內少於 4 匹則取全場。"""
+    """歷史／展示用入圍前 4；場內少於 4 匹則取全場。命中統計 PLA 改用前 3。"""
     n = int(n_runners or 0)
     if n <= 0:
         return 4
     return min(4, n)
+
+
+def evaluate_pool_hits(
+    top2_finishes: Sequence[int],
+    all_pick_finishes: Sequence[int],
+) -> Dict[str, bool]:
+    """
+    依推介頭兩位／全部推介名次判斷五類命中。
+    finishes 為實際名次（1=冠…）；缺名次者不應傳入。
+    """
+    top2 = [int(x) for x in top2_finishes if x is not None]
+    all_f = [int(x) for x in all_pick_finishes if x is not None]
+    top2_set = set(top2)
+    all_set = set(all_f)
+    return {
+        "win": 1 in top2_set,
+        "pla": any(f <= PLA_FINISH_MAX for f in top2),
+        "wq": len(top2) >= 2 and top2_set == {1, 2},
+        "t3": {1, 2, 3}.issubset(all_set),
+        "t4": {1, 2, 3, 4}.issubset(all_set),
+    }
+
+
+def ranked_picks_for_signal(g: pd.DataFrame, col: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    依訊號欄位場內份額排序，回傳 (推介頭兩位, 全部推介列)。
+    推介隻數與賽日速覽相同：select_picks_by_share。
+    """
+    if g.empty or col not in g.columns:
+        empty = g.iloc[0:0].copy()
+        return empty, empty
+    work = g.copy()
+    scores = pd.to_numeric(work[col], errors="coerce").to_numpy(dtype=float)
+    shares = scores_to_share_probs(scores)
+    work["_share"] = shares
+    # 穩定排序：份額高優先；同分以馬號較小為先（可重現）
+    work = work.sort_values(
+        by=["_share", "horse_no"],
+        ascending=[False, True],
+        kind="mergesort",
+    ).reset_index(drop=True)
+    share_list = [float(x) for x in work["_share"].tolist()]
+    if not share_list:
+        empty = work.iloc[0:0]
+        return empty, empty
+    pick_n = int(select_picks_by_share(share_list))
+    pick_n = max(0, min(pick_n, len(work)))
+    if pick_n <= 0:
+        # 保底：至少取頭兩位（或全場）供 WIN／PLA／WQ
+        pick_n = min(2, len(work))
+    all_picks = work.head(pick_n)
+    top2 = all_picks.head(min(2, len(all_picks)))
+    return top2, all_picks
 
 
 DDL_PG = """
@@ -717,7 +781,8 @@ class FactorCalibration:
         only_settled: bool = True,
     ) -> Tuple[pd.DataFrame, dict]:
         """
-        對已結算（或指定）快照：每場每訊號取最高分馬，統計獨贏／入圍。
+        對已結算（或指定）快照：每場每訊號依場內份額選推介，
+        統計 WIN／PLA／WQ／T3／T4 命中率。
         """
         batches = self.list_batches()
         if batches.empty:
@@ -749,61 +814,92 @@ class FactorCalibration:
         if snaps.empty:
             return pd.DataFrame(), {"error": "快照尚未回填名次"}
 
-        n_runners = snaps.groupby("race_id")["horse_no"].transform("count")
+        n_runners = snaps.groupby(["batch_id", "race_id"])["horse_no"].transform("count")
         snaps["n_runners"] = n_runners
-        race_ids = snaps["race_id"].unique()
-        n_races = len(race_ids)
-        avg_runners = float(snaps.groupby("race_id").size().mean())
-        baseline = 1.0 / avg_runners if avg_runners else 0.0
+        race_keys = snaps.groupby(["batch_id", "race_id"]).ngroups
+        n_races = int(race_keys)
+        avg_runners = float(
+            snaps.groupby(["batch_id", "race_id"]).size().mean()
+        )
+        # 隨機基準：頭兩位獨贏 ≈ 2/n；連贏（冠亞恰為該兩匹）≈ 2/(n(n-1))
+        baseline_win = min(1.0, 2.0 / avg_runners) if avg_runners else 0.0
+        baseline_wq = (
+            2.0 / (avg_runners * (avg_runners - 1.0))
+            if avg_runners and avg_runners > 1
+            else 0.0
+        )
 
         rows = []
         for label, col, _w in SIGNAL_DEFS:
-            win_hits = place_hits = scored_races = 0
-            for _, g in snaps.groupby("race_id"):
+            win_hits = pla_hits = wq_hits = t3_hits = t4_hits = 0
+            scored_races = 0
+            sum_pick_n = 0
+            for _, g in snaps.groupby(["batch_id", "race_id"]):
                 if g["finish_order_num"].isna().all():
                     continue
                 if col not in g.columns:
                     continue
                 vals = pd.to_numeric(g[col], errors="coerce")
-                # SG 可能全 0（賽前無 Speed Guide）— 仍計入但覆蓋另計
+                # SG 可能全 0（賽前無 Speed Guide）— 跳過不計有效場次
                 if col == "sg_contrib" and vals.fillna(0).abs().lt(1e-12).all():
                     continue
-                # AI 獨立軌道：該場無人有 AI 則跳過（不計入有效場次）
+                # AI 獨立軌道：該場無人有 AI 則跳過
                 if col == "ai_combo" and vals.isna().all():
                     continue
+                top2, all_picks = ranked_picks_for_signal(g, col)
+                if top2.empty:
+                    continue
                 scored_races += 1
-                vals_filled = vals.fillna(-1e18)
-                top = vals_filled.max()
-                contenders = g.loc[vals_filled == top]
-                finishes = contenders["finish_order_num"].astype(int)
-                cut = place_cutoff(int(g["n_runners"].iloc[0]))
-                if (finishes == 1).any():
+                sum_pick_n += int(len(all_picks))
+                hits = evaluate_pool_hits(
+                    top2["finish_order_num"].astype(int).tolist(),
+                    all_picks["finish_order_num"].astype(int).tolist(),
+                )
+                if hits["win"]:
                     win_hits += 1
-                if (finishes <= cut).any():
-                    place_hits += 1
+                if hits["pla"]:
+                    pla_hits += 1
+                if hits["wq"]:
+                    wq_hits += 1
+                if hits["t3"]:
+                    t3_hits += 1
+                if hits["t4"]:
+                    t4_hits += 1
 
-            win_rate = win_hits / scored_races if scored_races else 0.0
-            place_rate = place_hits / scored_races if scored_races else 0.0
+            def _rate(h: int) -> float:
+                return h / scored_races if scored_races else 0.0
+
+            win_rate = _rate(win_hits)
             rows.append(
                 {
                     "訊號": label,
                     "有效場次": scored_races,
                     "總場次": n_races,
                     "覆蓋率%": round(100.0 * scored_races / n_races, 1) if n_races else 0,
-                    "獨贏命中": win_hits,
-                    "獨贏率%": round(win_rate * 100, 2),
-                    "入圍命中": place_hits,
-                    "入圍率%": round(place_rate * 100, 2),
-                    "隨機獨贏基準%": round(baseline * 100, 2),
-                    "獨贏相對隨機": round(win_rate / baseline, 2) if baseline > 1e-9 else None,
+                    "平均推介數": round(sum_pick_n / scored_races, 2) if scored_races else 0.0,
+                    "WIN命中": win_hits,
+                    "WIN%": round(win_rate * 100, 2),
+                    "PLA命中": pla_hits,
+                    "PLA%": round(_rate(pla_hits) * 100, 2),
+                    "WQ命中": wq_hits,
+                    "WQ%": round(_rate(wq_hits) * 100, 2),
+                    "T3命中": t3_hits,
+                    "T3%": round(_rate(t3_hits) * 100, 2),
+                    "T4命中": t4_hits,
+                    "T4%": round(_rate(t4_hits) * 100, 2),
+                    "隨機WIN基準%": round(baseline_win * 100, 2),
+                    "WIN相對隨機": (
+                        round(win_rate / baseline_win, 2) if baseline_win > 1e-9 else None
+                    ),
+                    "隨機WQ基準%": round(baseline_wq * 100, 2),
                 }
             )
 
         stats = pd.DataFrame(rows)
         if not stats.empty:
-            stats = stats.sort_values("獨贏率%", ascending=False).reset_index(drop=True)
+            stats = stats.sort_values("WIN%", ascending=False).reset_index(drop=True)
 
-        # coverage 分桶（有 model_coverage 欄時）
+        # coverage 分桶（綜合總分）
         cov_buckets = []
         if "model_coverage" in snaps.columns and snaps["model_coverage"].notna().any():
             def _bucket(c):
@@ -818,36 +914,45 @@ class FactorCalibration:
                 return "高(≥0.70)"
 
             tmp = snaps.copy()
-            tmp["_cov_b"] = tmp["model_coverage"].map(_bucket)
             race_cov = (
-                tmp.groupby("race_id")["model_coverage"]
+                tmp.groupby(["batch_id", "race_id"])["model_coverage"]
                 .mean()
                 .reset_index()
                 .rename(columns={"model_coverage": "avg_cov"})
             )
             race_cov["bucket"] = race_cov["avg_cov"].map(_bucket)
-            # 綜合總分 top 命中按桶
-            for bname, ids in race_cov.groupby("bucket")["race_id"]:
-                sub = snaps[snaps["race_id"].isin(set(ids))]
-                win_hits = place_hits = scored = 0
-                for _, g in sub.groupby("race_id"):
+            for bname, sub_keys in race_cov.groupby("bucket"):
+                key_set = set(
+                    zip(sub_keys["batch_id"].tolist(), sub_keys["race_id"].tolist())
+                )
+                win_hits = pla_hits = wq_hits = t3_hits = t4_hits = scored = 0
+                for (bid, rid), g in snaps.groupby(["batch_id", "race_id"]):
+                    if (bid, rid) not in key_set:
+                        continue
                     if "total_score" not in g.columns:
                         continue
+                    top2, all_picks = ranked_picks_for_signal(g, "total_score")
+                    if top2.empty:
+                        continue
                     scored += 1
-                    vals = pd.to_numeric(g["total_score"], errors="coerce").fillna(-1e18)
-                    top = g.loc[vals == vals.max()]
-                    finishes = top["finish_order_num"].astype(int)
-                    cut = place_cutoff(int(g["n_runners"].iloc[0]))
-                    if (finishes == 1).any():
-                        win_hits += 1
-                    if (finishes <= cut).any():
-                        place_hits += 1
+                    hits = evaluate_pool_hits(
+                        top2["finish_order_num"].astype(int).tolist(),
+                        all_picks["finish_order_num"].astype(int).tolist(),
+                    )
+                    win_hits += int(hits["win"])
+                    pla_hits += int(hits["pla"])
+                    wq_hits += int(hits["wq"])
+                    t3_hits += int(hits["t3"])
+                    t4_hits += int(hits["t4"])
                 cov_buckets.append(
                     {
                         "覆蓋桶": bname,
                         "有效場次": scored,
-                        "獨贏率%": round(100.0 * win_hits / scored, 2) if scored else 0.0,
-                        "入圍率%": round(100.0 * place_hits / scored, 2) if scored else 0.0,
+                        "WIN%": round(100.0 * win_hits / scored, 2) if scored else 0.0,
+                        "PLA%": round(100.0 * pla_hits / scored, 2) if scored else 0.0,
+                        "WQ%": round(100.0 * wq_hits / scored, 2) if scored else 0.0,
+                        "T3%": round(100.0 * t3_hits / scored, 2) if scored else 0.0,
+                        "T4%": round(100.0 * t4_hits / scored, 2) if scored else 0.0,
                     }
                 )
 
@@ -856,7 +961,17 @@ class FactorCalibration:
             "batch_ids": ids,
             "n_races": n_races,
             "avg_runners": avg_runners,
-            "note": "基於賽前快照 × 賽後 J18 名次（無洩漏）。",
+            "note": (
+                "基於賽前快照 × 賽後名次。"
+                "WIN/PLA/WQ＝推介頭兩位；T3/T4＝全部推介馬覆蓋名次席位。"
+            ),
+            "rules": {
+                "win": "推介頭兩位任一第 1",
+                "pla": f"推介頭兩位任一前 {PLA_FINISH_MAX}",
+                "wq": "推介頭兩位恰為冠、亞",
+                "t3": "全部推介覆蓋 1–3",
+                "t4": "全部推介覆蓋 1–4",
+            },
             "coverage_buckets": cov_buckets,
         }
         return stats, meta
