@@ -158,6 +158,8 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     confidence NUMERIC,
     ai_combo NUMERIC,
     fused_share NUMERIC,
+    ad_pick_rank INT,
+    settle_win_odds NUMERIC,
     model_coverage NUMERIC,
     coverage_json TEXT,
     provisional BOOLEAN DEFAULT FALSE,
@@ -205,6 +207,8 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     confidence REAL,
     ai_combo REAL,
     fused_share REAL,
+    ad_pick_rank INTEGER,
+    settle_win_odds REAL,
     model_coverage REAL,
     coverage_json TEXT,
     provisional INTEGER DEFAULT 0,
@@ -236,16 +240,18 @@ class FactorCalibration:
 
     def _ensure_ai_snapshot_columns(self, conn):
         """既有庫補欄：AI 獨立軌道（不影響舊快照結算）。"""
-        cols = ("ai_score", "confidence", "ai_combo", "fused_share")
+        cols = ("ai_score", "confidence", "ai_combo", "fused_share", "ad_pick_rank", "settle_win_odds")
         for col in cols:
             try:
                 if USE_SQLITE:
-                    conn.execute(text(f"ALTER TABLE prediction_snapshots ADD COLUMN {col} REAL"))
+                    typ = "INTEGER" if col == "ad_pick_rank" else "REAL"
+                    conn.execute(text(f"ALTER TABLE prediction_snapshots ADD COLUMN {col} {typ}"))
                 else:
+                    pg_t = "INT" if col == "ad_pick_rank" else "NUMERIC"
                     conn.execute(
                         text(
                             f"ALTER TABLE prediction_snapshots "
-                            f"ADD COLUMN IF NOT EXISTS {col} NUMERIC"
+                            f"ADD COLUMN IF NOT EXISTS {col} {pg_t}"
                         )
                     )
             except Exception:
@@ -334,6 +340,7 @@ class FactorCalibration:
 
         from form_ai_analyst import FormAIAnalyst
         from form_ai_picks import attach_fused_shares_to_snapshot_rows, compute_ai_combo
+        from ad_promo_hits import attach_ad_pick_ranks_to_snapshot_rows
 
         ai_by_race: dict = {}
         try:
@@ -416,6 +423,8 @@ class FactorCalibration:
                         "confidence": cf,
                         "ai_combo": combo,
                         "fused_share": None,
+                        "ad_pick_rank": None,
+                        "settle_win_odds": None,
                         "model_coverage": cov_f,
                         "coverage_json": p.get("coverage_json"),
                         "provisional": row_prov,
@@ -427,6 +436,7 @@ class FactorCalibration:
             return {"ok": False, "error": "預測結果為空（請先重算 factor_scores）"}
 
         attach_fused_shares_to_snapshot_rows(rows)
+        attach_ad_pick_ranks_to_snapshot_rows(rows)
 
         allow_prov = bool(getattr(ModelConfig, "SNAPSHOT_ALLOW_PROVISIONAL", True))
         if force_provisional is not None:
@@ -466,14 +476,14 @@ class FactorCalibration:
                             batch_id, race_id, horse_no, horse_name, jockey_name, trainer_name, draw,
                             z_jockey, z_trainer, z_synergy, z_draw, z_horse, z_pace, z_speed,
                             sg_contrib, total_score, model_win_prob, pred_rank,
-                            ai_score, confidence, ai_combo, fused_share,
+                            ai_score, confidence, ai_combo, fused_share, ad_pick_rank,
                             model_coverage, coverage_json, provisional,
                             finish_order_num
                         ) VALUES (
                             :batch_id, :race_id, :horse_no, :horse_name, :jockey_name, :trainer_name, :draw,
                             :z_jockey, :z_trainer, :z_synergy, :z_draw, :z_horse, :z_pace, :z_speed,
                             :sg_contrib, :total_score, :model_win_prob, :pred_rank,
-                            :ai_score, :confidence, :ai_combo, :fused_share,
+                            :ai_score, :confidence, :ai_combo, :fused_share, :ad_pick_rank,
                             :model_coverage, :coverage_json, :provisional,
                             :finish_order_num
                         )
@@ -620,11 +630,16 @@ class FactorCalibration:
             snaps["horse_key_l"] = snaps["horse_key"].str.lower()
 
             finish_by_id: dict = {}
+            odds_by_id: dict = {}
             matched_by_no = matched_by_name = 0
+
+            result_cols = ["race_id", "horse_no", "finish_order_num", "settle_win_odds"]
+            if "settle_win_odds" not in results.columns:
+                results["settle_win_odds"] = None
 
             # 1) race_id + horse_no（主路徑：中英馬名不一致時仍可配）
             by_no = snaps.merge(
-                results[["race_id", "horse_no", "finish_order_num"]].dropna(subset=["horse_no"]),
+                results[result_cols].dropna(subset=["horse_no"]),
                 on=["race_id", "horse_no"],
                 how="left",
                 suffixes=("", "_r"),
@@ -632,16 +647,19 @@ class FactorCalibration:
             for _, row in by_no.iterrows():
                 if pd.isna(row.get("finish_order_num")):
                     continue
-                finish_by_id[int(row["id"])] = int(row["finish_order_num"])
+                sid = int(row["id"])
+                finish_by_id[sid] = int(row["finish_order_num"])
+                if pd.notna(row.get("settle_win_odds")):
+                    odds_by_id[sid] = float(row["settle_win_odds"])
                 matched_by_no += 1
 
             # 2) fallback：race_id + 正規化馬名（大小寫不敏感）
             still = snaps[~snaps["id"].astype(int).isin(finish_by_id)].copy()
             if not still.empty:
                 by_name = still.merge(
-                    results[["race_id", "horse_key_l", "finish_order_num"]].dropna(
-                        subset=["horse_key_l"]
-                    ),
+                    results[
+                        ["race_id", "horse_key_l", "finish_order_num", "settle_win_odds"]
+                    ].dropna(subset=["horse_key_l"]),
                     on=["race_id", "horse_key_l"],
                     how="left",
                     suffixes=("", "_r"),
@@ -653,17 +671,30 @@ class FactorCalibration:
                     if rid in finish_by_id:
                         continue
                     finish_by_id[rid] = int(row["finish_order_num"])
+                    if pd.notna(row.get("settle_win_odds")):
+                        odds_by_id[rid] = float(row["settle_win_odds"])
                     matched_by_name += 1
 
             with self.engine.begin() as conn:
                 for sid, fin in finish_by_id.items():
-                    conn.execute(
-                        text(
-                            "UPDATE prediction_snapshots SET finish_order_num = :f "
-                            "WHERE id = :id"
-                        ),
-                        {"f": int(fin), "id": int(sid)},
-                    )
+                    odds = odds_by_id.get(sid)
+                    if odds is None:
+                        conn.execute(
+                            text(
+                                "UPDATE prediction_snapshots SET finish_order_num = :f "
+                                "WHERE id = :id"
+                            ),
+                            {"f": int(fin), "id": int(sid)},
+                        )
+                    else:
+                        conn.execute(
+                            text(
+                                "UPDATE prediction_snapshots "
+                                "SET finish_order_num = :f, settle_win_odds = :o "
+                                "WHERE id = :id"
+                            ),
+                            {"f": int(fin), "o": float(odds), "id": int(sid)},
+                        )
                     updated += 1
 
             unmatched = int(len(snaps) - len(finish_by_id))
@@ -733,18 +764,239 @@ class FactorCalibration:
     def _fetch_results_for_races(self, race_ids: List[str]) -> pd.DataFrame:
         if not race_ids:
             return pd.DataFrame()
-        # SQLAlchemy 綁定 IN
+        from ad_promo_hits import parse_runner_win_odds
+
         placeholders = ", ".join([f":r{i}" for i in range(len(race_ids))])
         params = {f"r{i}": rid for i, rid in enumerate(race_ids)}
-        q = text(
-            f"""
-            SELECT ru.race_id, ru.horse_no, ru.horse_name, ru.finish_order_num
-            FROM runners ru
-            WHERE ru.race_id IN ({placeholders})
-              AND ru.finish_order_num IS NOT NULL
-            """
+        try:
+            q = text(
+                f"""
+                SELECT ru.race_id, ru.horse_no, ru.horse_name, ru.finish_order_num,
+                       ru.win_probability_raw, ru.raw_json
+                FROM runners ru
+                WHERE ru.race_id IN ({placeholders})
+                  AND ru.finish_order_num IS NOT NULL
+                """
+            )
+            df = pd.read_sql(q, self.engine, params=params)
+        except Exception:
+            q = text(
+                f"""
+                SELECT ru.race_id, ru.horse_no, ru.horse_name, ru.finish_order_num
+                FROM runners ru
+                WHERE ru.race_id IN ({placeholders})
+                  AND ru.finish_order_num IS NOT NULL
+                """
+            )
+            df = pd.read_sql(q, self.engine, params=params)
+            if not df.empty:
+                df = df.copy()
+                df["settle_win_odds"] = None
+            return df
+        if df.empty:
+            return df
+        df = df.copy()
+        df["settle_win_odds"] = [
+            parse_runner_win_odds(w, raw)
+            for w, raw in zip(
+                df.get("win_probability_raw", [None] * len(df)),
+                df.get("raw_json", [None] * len(df)),
+            )
+        ]
+        return df
+
+    def evaluate_ad_promo_hits(
+        self,
+        batch_ids: Optional[List[str]] = None,
+        only_settled: bool = True,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+        """
+        廣告融合推介賽後宣傳命中。
+
+        Returns
+        -------
+        race_df : 每場四項命中標記＋推介摘要
+        summary : 各原則命中場次數／比率
+        meta
+        """
+        from ad_promo_hits import (
+            AD_QIN_ODDS_GT,
+            AD_WIN_ODDS_MIN,
+            ad_pick_max,
+            attach_ad_pick_ranks_to_snapshot_rows,
+            evaluate_ad_race_hits,
         )
-        return pd.read_sql(q, self.engine, params=params)
+
+        batches = self.list_batches()
+        if batches.empty:
+            return pd.DataFrame(), pd.DataFrame(), {"error": "尚無快照。"}
+
+        if batch_ids:
+            use = batches[batches["batch_id"].isin(batch_ids)]
+        elif only_settled:
+            use = batches[batches["settled_at"].notna()]
+        else:
+            use = batches[batches["n_filled"] > 0]
+
+        if use.empty:
+            return pd.DataFrame(), pd.DataFrame(), {
+                "error": "尚無已結算快照。",
+                "n_batches": 0,
+            }
+
+        ids = use["batch_id"].tolist()
+        ph = ", ".join([f":b{i}" for i in range(len(ids))])
+        params = {f"b{i}": bid for i, bid in enumerate(ids)}
+        snaps = pd.read_sql(
+            text(f"SELECT * FROM prediction_snapshots WHERE batch_id IN ({ph})"),
+            self.engine,
+            params=params,
+        )
+        snaps = snaps[snaps["finish_order_num"].notna()].copy()
+        if snaps.empty:
+            return pd.DataFrame(), pd.DataFrame(), {"error": "快照尚未回填名次"}
+
+        # 舊快照無 ad_pick_rank：用 fused_share 即時重建（不寫回）
+        if "ad_pick_rank" not in snaps.columns or snaps["ad_pick_rank"].isna().all():
+            rows = snaps.to_dict(orient="records")
+            if "fused_share" not in snaps.columns or snaps["fused_share"].isna().all():
+                from form_ai_picks import attach_fused_shares_to_snapshot_rows
+
+                attach_fused_shares_to_snapshot_rows(rows)
+            attach_ad_pick_ranks_to_snapshot_rows(rows)
+            snaps = pd.DataFrame(rows)
+
+        # 補賠率（已有名次但缺 settle_win_odds）
+        if "settle_win_odds" not in snaps.columns:
+            snaps["settle_win_odds"] = None
+        need_odds = snaps["settle_win_odds"].isna()
+        if need_odds.any():
+            race_ids = snaps.loc[need_odds, "race_id"].astype(str).unique().tolist()
+            results = self._fetch_results_for_races(race_ids)
+            if not results.empty:
+                odds_map = {
+                    (str(r.race_id), int(r.horse_no)): r.settle_win_odds
+                    for r in results.itertuples()
+                    if pd.notna(r.horse_no) and r.settle_win_odds is not None
+                }
+                for idx in snaps.index[need_odds]:
+                    key = (str(snaps.at[idx, "race_id"]), int(snaps.at[idx, "horse_no"]))
+                    if key in odds_map:
+                        snaps.at[idx, "settle_win_odds"] = odds_map[key]
+
+        batch_dates = {
+            str(r.batch_id): str(r.racing_date)[:10]
+            for r in use.itertuples()
+        }
+        batch_courses = {
+            str(r.batch_id): str(r.course or "")
+            for r in use.itertuples()
+        }
+
+        race_rows = []
+        counts = {
+            "win_odds7": 0,
+            "qin_odds10": 0,
+            "t3_cover": 0,
+            "t4_cover": 0,
+            "any_promo": 0,
+        }
+        scored = 0
+        for (bid, rid), g in snaps.groupby(["batch_id", "race_id"]):
+            picks = g[g["ad_pick_rank"].notna()].copy()
+            if picks.empty:
+                continue
+            picks = picks.sort_values("ad_pick_rank", kind="mergesort")
+            finishes = picks["finish_order_num"].astype(int).tolist()
+            odds = [
+                None if pd.isna(x) else float(x)
+                for x in picks.get("settle_win_odds", pd.Series([None] * len(picks))).tolist()
+            ]
+            top2 = (picks["ad_pick_rank"].astype(int) <= 2).tolist()
+            hits = evaluate_ad_race_hits(
+                pick_finishes=finishes,
+                pick_odds=odds,
+                top2_mask=top2,
+            )
+            scored += 1
+            for k in counts:
+                if hits.get(k):
+                    counts[k] += 1
+            pick_labels = [
+                f"{int(r.ad_pick_rank)}:{int(r.horse_no)} {r.horse_name or ''}".strip()
+                for r in picks.itertuples()
+            ]
+            race_rows.append(
+                {
+                    "賽日": batch_dates.get(str(bid), ""),
+                    "場地": batch_courses.get(str(bid), ""),
+                    "batch_id": bid,
+                    "race_id": rid,
+                    "推介數": int(len(picks)),
+                    "推介": " / ".join(pick_labels),
+                    "WIN≥7": hits["win_odds7"],
+                    "冠亞+賠>10": hits["qin_odds10"],
+                    "T3覆蓋": hits["t3_cover"],
+                    "T4覆蓋": hits["t4_cover"],
+                    "可宣傳": hits["any_promo"],
+                }
+            )
+
+        race_df = pd.DataFrame(race_rows)
+        if not race_df.empty:
+            race_df = race_df.sort_values(
+                by=["可宣傳", "賽日", "race_id"],
+                ascending=[False, False, True],
+            ).reset_index(drop=True)
+
+        summary = pd.DataFrame(
+            [
+                {
+                    "原則": "1. 頭兩位獨贏且賠率≥7",
+                    "代碼": "WIN_ODDS7",
+                    "命中場次": counts["win_odds7"],
+                    "有效場次": scored,
+                    "命中率%": round(100.0 * counts["win_odds7"] / scored, 2) if scored else 0.0,
+                    "門檻": f"獨贏賠率≥{AD_WIN_ODDS_MIN:g}",
+                },
+                {
+                    "原則": "2. 覆蓋冠亞且其中一匹賠率>10",
+                    "代碼": "QIN_ODDS10",
+                    "命中場次": counts["qin_odds10"],
+                    "有效場次": scored,
+                    "命中率%": round(100.0 * counts["qin_odds10"] / scored, 2) if scored else 0.0,
+                    "門檻": f"獨贏賠率>{AD_QIN_ODDS_GT:g}",
+                },
+                {
+                    "原則": "3. 覆蓋冠亞季（不計賠率）",
+                    "代碼": "T3_COVER",
+                    "命中場次": counts["t3_cover"],
+                    "有效場次": scored,
+                    "命中率%": round(100.0 * counts["t3_cover"] / scored, 2) if scored else 0.0,
+                    "門檻": "—",
+                },
+                {
+                    "原則": "4. 覆蓋 Top4 全部（不計賠率）",
+                    "代碼": "T4_COVER",
+                    "命中場次": counts["t4_cover"],
+                    "有效場次": scored,
+                    "命中率%": round(100.0 * counts["t4_cover"] / scored, 2) if scored else 0.0,
+                    "門檻": "—",
+                },
+            ]
+        )
+        meta = {
+            "n_batches": len(ids),
+            "batch_ids": ids,
+            "n_races_scored": scored,
+            "n_promo_races": counts["any_promo"],
+            "ad_pick_max": ad_pick_max(),
+            "note": (
+                "基於賽前鎖定的廣告融合推介（最多 "
+                f"{ad_pick_max()} 匹）× 賽後名次／獨贏賠率。"
+            ),
+        }
+        return race_df, summary, meta
 
     # ---------- 列表／統計 ----------
     def list_batches(self) -> pd.DataFrame:

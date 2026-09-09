@@ -324,6 +324,8 @@ CREATE TABLE prediction_snapshots (
     confidence NUMERIC,
     ai_combo NUMERIC,
     fused_share NUMERIC,
+    ad_pick_rank INT,
+    settle_win_odds NUMERIC,
     model_coverage NUMERIC,
     coverage_json TEXT,
     provisional BOOLEAN DEFAULT FALSE,
