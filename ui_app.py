@@ -1,6 +1,6 @@
 """
 J18AI Plus+ 入口：登入關卡 + 依角色導航。
-用戶僅見賽日速覽；管理員見全部管理頁。
+用戶：賽日速覽 + 命中率榜；管理員見全部管理頁。
 """
 from __future__ import annotations
 
@@ -54,6 +54,7 @@ raceday = st.Page(
 )
 inference = st.Page("views/inference.py", title="融合預測")
 calibration = st.Page("views/calibration.py", title="因子命中率")
+hit_stats = st.Page("views/hit_stats.py", title="命中率榜")
 form_ai = st.Page("views/form_ai.py", title="賽績 AI 評價")
 jockey = st.Page("views/jockey_factor.py", title="騎師因子")
 trainer = st.Page("views/trainer_factor.py", title="練馬師因子")
@@ -71,12 +72,16 @@ if role == ROLE_ADMIN:
     sections = {
         "系統": [home, whitelist],
         "營運": [data_control, meeting_ops, ad_output],
-        "預測": [raceday, inference, calibration, form_ai],
+        "預測": [raceday, inference, calibration, hit_stats, form_ai],
         "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
     }
     nav = st.navigation(sections, position="hidden")
     render_main_nav(sections)
 else:
-    nav = st.navigation([raceday], position="hidden")
+    user_sections = {
+        "瀏覽": [raceday, hit_stats],
+    }
+    nav = st.navigation([raceday, hit_stats], position="hidden")
+    render_main_nav(user_sections)
 
 nav.run()

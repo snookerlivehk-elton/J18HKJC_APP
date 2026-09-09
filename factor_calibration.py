@@ -975,3 +975,91 @@ class FactorCalibration:
             "coverage_buckets": cov_buckets,
         }
         return stats, meta
+
+    def evaluate_raceday_rankings(
+        self,
+        *,
+        only_settled: bool = True,
+        metric: str = "WIN%",
+        top_n: int = 5,
+        batch_ids: Optional[List[str]] = None,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+        """
+        總表 + 各賽日 Top-N 訊號排名（供用戶／管理端瀏覽頁）。
+
+        Returns
+        -------
+        overall : evaluate_settled 彙總表
+        day_top : 每賽日（日期×場地）依 metric 取前 top_n
+        meta : 含 overall meta 與 day 數
+        """
+        overall, meta = self.evaluate_settled(
+            batch_ids=batch_ids, only_settled=only_settled
+        )
+        if meta.get("error"):
+            return pd.DataFrame(), pd.DataFrame(), meta
+
+        batches = self.list_batches()
+        if batches.empty:
+            return overall, pd.DataFrame(), meta
+
+        if batch_ids:
+            use = batches[batches["batch_id"].isin(batch_ids)].copy()
+        elif only_settled:
+            use = batches[batches["settled_at"].notna()].copy()
+        else:
+            use = batches[batches["n_filled"] > 0].copy()
+
+        if use.empty:
+            return overall, pd.DataFrame(), {**meta, "n_days": 0}
+
+        use["_d"] = use["racing_date"].astype(str).str[:10]
+        metric_col = metric if metric in (
+            "WIN%", "PLA%", "WQ%", "T3%", "T4%", "WIN相對隨機"
+        ) else "WIN%"
+        top_n = max(1, int(top_n))
+
+        day_rows: List[dict] = []
+        for (d, course), g in use.groupby(["_d", "course"], sort=True):
+            ids = g["batch_id"].tolist()
+            stats, day_meta = self.evaluate_settled(batch_ids=ids, only_settled=False)
+            if stats.empty or metric_col not in stats.columns:
+                continue
+            ranked = stats.sort_values(
+                by=[metric_col, "有效場次"],
+                ascending=[False, False],
+                kind="mergesort",
+            ).head(top_n)
+            for i, (_, r) in enumerate(ranked.iterrows(), start=1):
+                day_rows.append(
+                    {
+                        "賽日": d,
+                        "場地": course,
+                        "排名": i,
+                        "訊號": r.get("訊號"),
+                        "WIN%": r.get("WIN%"),
+                        "PLA%": r.get("PLA%"),
+                        "WQ%": r.get("WQ%"),
+                        "T3%": r.get("T3%"),
+                        "T4%": r.get("T4%"),
+                        "有效場次": r.get("有效場次"),
+                        "覆蓋率%": r.get("覆蓋率%"),
+                        "WIN相對隨機": r.get("WIN相對隨機"),
+                        "排序指標": metric_col,
+                        "場次數": day_meta.get("n_races"),
+                    }
+                )
+
+        day_top = pd.DataFrame(day_rows)
+        if not day_top.empty:
+            day_top = day_top.sort_values(
+                by=["賽日", "場地", "排名"], ascending=[False, True, True]
+            ).reset_index(drop=True)
+
+        out_meta = {
+            **meta,
+            "n_days": int(use.groupby(["_d", "course"]).ngroups),
+            "rank_metric": metric_col,
+            "top_n": top_n,
+        }
+        return overall, day_top, out_meta
