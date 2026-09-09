@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pandas as pd
 from sqlalchemy import text
 
-from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
+from etl_pipeline import USE_SQLITE
 from meeting_pipeline import (
     STATUS_FAILED,
     STATUS_OK,
