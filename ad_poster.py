@@ -6,8 +6,9 @@
   - ad_output/ai.png      全賽日 · AI 馬評推介（最多 4 匹／場）
   - ad_output/copy.json   宣傳文案
 
-版式：嚴格跟從 assets/ad_templates/company/ 藍／米色原圖（header+動態表身+footer）。
-高度隨場次數拉長；PNG ≤ AD_OUTPUT_MAX_KB（預設 2048）。每次隨機選一種色調。
+版式：公司空白模版（header 固定 + 表身中段垂直拉伸 + footer 固定）。
+只疊加日期條、場次號、揀馬（馬號＋馬名，最多 4 匹）；不含勝率。
+PNG ≤ AD_OUTPUT_MAX_KB（預設 2048）。
 """
 from __future__ import annotations
 
@@ -43,15 +44,34 @@ MODEL_FILE = "model.png"
 AI_FILE = "ai.png"
 COPY_FILE = "copy.json"
 
-# 公司原圖量測（1280 寬）
-POSTER_W = 1280
-TABLE_LEFT = 66
-TABLE_RIGHT = 1214
-COL_RACE = (66, 240)
-COL_PICKS = [(240, 484), (484, 728), (728, 972), (972, 1216)]
-ROW_H = 72
+# 空白模版量測（blank_blue.jpg = 3625×4096；表身中段可垂直拉伸）
+BLANK_W = 3625
+BLANK_H = 4096
+# 上固定／中拉伸／下固定（中段為清空的場次＋揀馬區）
+SLICE_TOP_END = 1105
+SLICE_MID_END = 3290
+REF_N_ROWS = 11  # 模版中段對應參考場數
+RACE_COL = (200, 670)
+CONTENT_X0 = 720
+CONTENT_X1 = 3380
+PICK_GAP = 48
+DATE_PILL = (100, 500, 1680, 640)
+DATE_PILL_FILL = (165, 210, 229)
+DATE_PILL_RADIUS = 70
+RACE_FG = (40, 70, 130)
+TEXT_FG = (40, 55, 100)
+HEADER_LABEL_Y = 1035
 THEMES = ("blue", "beige")
 WEEKDAY_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+# 舊測試／相容常數（不再用於主渲染）
+POSTER_W = BLANK_W
+POSTER_H = BLANK_H
+TABLE_LEFT = RACE_COL[0]
+TABLE_RIGHT = CONTENT_X1
+COL_RACE = RACE_COL
+COL_PICKS = [(720, 1380), (1380, 2040), (2040, 2700), (2700, 3380)]
+ROW_H = max(1, (SLICE_MID_END - SLICE_TOP_END) // REF_N_ROWS)
 
 
 def _max_bytes() -> int:
@@ -495,11 +515,22 @@ def _save_jpeg_under(path: Path, rgb, *, max_bytes: Optional[int] = None) -> Dic
 
 
 def _theme_paths(theme: str) -> Dict[str, Path]:
+    """相容舊切片資產；主渲染改走 blank_*.jpg。"""
     return {
         "header": COMPANY_DIR / f"{theme}_header.jpg",
         "footer": COMPANY_DIR / f"{theme}_footer.jpg",
         "full": COMPANY_DIR / f"{theme}_full.jpg",
+        "blank": _blank_template_path(theme),
     }
+
+
+def _blank_template_path(theme: str) -> Path:
+    """空白模版：優先 blank_{theme}，否則 fallback blank_blue。"""
+    for name in (f"blank_{theme}.jpg", f"blank_{theme}.jpeg", f"blank_{theme}.png", "blank_blue.jpg", "blank_blue.png"):
+        p = COMPANY_DIR / name
+        if p.is_file():
+            return p
+    raise FileNotFoundError(f"缺少空白海報模版 blank_*.jpg：{COMPANY_DIR}")
 
 
 def _venue_label(course: str) -> str:
@@ -527,28 +558,24 @@ def _meeting_date_line(racing_date: str, course: str) -> str:
     return " ".join(parts)
 
 
-def _paint_date_pill(header: "Image.Image", theme: str, date_line: str) -> None:
-    """覆蓋原圖日期條並重寫當期賽事資料。"""
+def _paint_date_pill(canvas: "Image.Image", date_line: str) -> None:
+    """覆蓋空白模版日期膠囊並寫入當期賽事資料。"""
     from PIL import ImageDraw
 
-    draw = ImageDraw.Draw(header)
-    font = _load_font(34)
-    # 量測自原圖：左上日期膠囊區
-    if theme == "blue":
-        box = (48, 188, 620, 258)
-        fill = (150, 195, 220)
-        text_fill = (255, 255, 255)
-    else:
-        box = (48, 188, 620, 258)
-        fill = (232, 210, 170)
-        text_fill = (70, 45, 30)
-    draw.rounded_rectangle(box, radius=22, fill=fill)
-    # 垂直置中
+    draw = ImageDraw.Draw(canvas)
+    box = DATE_PILL
+    draw.rounded_rectangle(box, radius=DATE_PILL_RADIUS, fill=DATE_PILL_FILL)
+    font = _load_font(56)
     bbox = font.getbbox(date_line)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = box[0] + 28
+    # 過長則略縮字
+    if tw > (box[2] - box[0] - 80):
+        font = _load_font(48)
+        bbox = font.getbbox(date_line)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = box[0] + 48
     ty = box[1] + (box[3] - box[1] - th) // 2 - 2
-    draw.text((tx, ty), date_line, font=font, fill=text_fill)
+    draw.text((tx, ty), date_line, font=font, fill=(255, 255, 255))
 
 
 def _cell_text(pick: Optional[PickItem]) -> str:
@@ -565,6 +592,50 @@ def _limit_picks(picks: Sequence[PickItem]) -> List[PickItem]:
     return list(picks)[:n]
 
 
+def _pick_column_bounds(n_cols: int = 4) -> List[Tuple[int, int]]:
+    gap = PICK_GAP
+    usable = CONTENT_X1 - CONTENT_X0 - gap * (n_cols - 1)
+    col_w = max(1, usable // n_cols)
+    out: List[Tuple[int, int]] = []
+    x = CONTENT_X0
+    for _ in range(n_cols):
+        out.append((x, x + col_w))
+        x += col_w + gap
+    return out
+
+
+def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.Image", int, float]:
+    """
+    上固定 + 中段垂直拉伸 + 下固定。
+    回傳 (canvas, mid_top_y, row_h)。
+    """
+    from PIL import Image
+
+    n = max(int(n_races), 1)
+    w, h = blank.size
+    top_end = min(SLICE_TOP_END, h - 2)
+    mid_end = min(SLICE_MID_END, h - 1)
+    if mid_end <= top_end:
+        raise ValueError("空白模版切片參數無效")
+
+    top = blank.crop((0, 0, w, top_end))
+    mid = blank.crop((0, top_end, w, mid_end))
+    bot = blank.crop((0, mid_end, w, h))
+
+    ref_mid_h = mid_end - top_end
+    row_h = ref_mid_h / float(REF_N_ROWS)
+    new_mid_h = max(1, int(round(n * row_h)))
+    if mid.height != new_mid_h:
+        mid = mid.resize((w, new_mid_h), Image.Resampling.LANCZOS)
+
+    canvas_h = top.height + mid.height + bot.height
+    canvas = Image.new("RGB", (w, canvas_h), (200, 220, 235))
+    canvas.paste(top, (0, 0))
+    canvas.paste(mid, (0, top.height))
+    canvas.paste(bot, (0, top.height + mid.height))
+    return canvas, top.height, float(mid.height) / float(n)
+
+
 def render_meeting_poster(
     payloads: Sequence[RaceAdPayload],
     *,
@@ -573,15 +644,14 @@ def render_meeting_poster(
     theme: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    公司原海報風格：header（含賽事資料）+ 動態場次表（每場最多 4 匹）+ footer。
-    高度隨場數拉長；theme=blue|beige，未指定則隨機。
+    空白公司模版疊加：中段按場數垂直拉伸，再只畫日期／場次號／揀馬。
+    theme=blue|beige（無對應 blank 時 fallback blank_blue）。
     """
     from PIL import Image, ImageDraw
 
     theme = theme if theme in THEMES else random.choice(THEMES)
-    paths = _theme_paths(theme)
-    if not paths["header"].is_file() or not paths["footer"].is_file():
-        raise FileNotFoundError(f"缺少公司海報模版：{COMPANY_DIR}")
+    blank_path = _blank_template_path(theme)
+    blank = Image.open(blank_path).convert("RGB")
 
     races = sorted(
         list(payloads),
@@ -591,111 +661,84 @@ def render_meeting_poster(
         ),
     )
     n = max(len(races), 1)
-    header = Image.open(paths["header"]).convert("RGB")
-    footer = Image.open(paths["footer"]).convert("RGB")
-    w = POSTER_W
-    if header.width != w:
-        header = header.resize((w, int(header.height * w / header.width)), Image.Resampling.LANCZOS)
-    if footer.width != w:
-        footer = footer.resize((w, int(footer.height * w / footer.width)), Image.Resampling.LANCZOS)
+    canvas, mid_top, row_h = _assemble_blank_canvas(blank, n)
 
     date_line = _meeting_date_line(
         races[0].racing_date if races else "",
         races[0].course if races else "",
     )
-    _paint_date_pill(header, theme, date_line)
+    _paint_date_pill(canvas, date_line)
 
-    table_h = n * ROW_H + 8
-    canvas_h = header.height + table_h + footer.height
-    if theme == "blue":
-        page_bg = (210, 230, 240)
-        row_a = (255, 255, 255)
-        row_b = (236, 244, 248)
-        grid = (190, 205, 215)
-        race_bg = (210, 225, 235)
-        race_fg = (40, 90, 140)
-        text_fg = (45, 40, 35)
-    else:
-        page_bg = (230, 210, 175)
-        row_a = (255, 255, 255)
-        row_b = (245, 236, 220)
-        grid = (210, 195, 175)
-        race_bg = (235, 220, 195)
-        race_fg = (90, 55, 30)
-        text_fg = (55, 40, 30)
-
-    canvas = Image.new("RGB", (w, canvas_h), page_bg)
-    canvas.paste(header, (0, 0))
-    # 表身白底卡片延續
-    body_top = header.height
     draw = ImageDraw.Draw(canvas)
-    draw.rectangle((TABLE_LEFT - 4, body_top - 2, TABLE_RIGHT + 4, body_top + table_h), fill=row_a)
+    # 場次欄標題（固定上段底部）
+    font_header = _load_font(52)
+    label = "場次"
+    bb = font_header.getbbox(label)
+    tw, th = bb[2] - bb[0], bb[3] - bb[1]
+    draw.text(
+        ((RACE_COL[0] + RACE_COL[1] - tw) // 2, HEADER_LABEL_Y),
+        label,
+        font=font_header,
+        fill=RACE_FG,
+    )
 
-    font_race = _load_font(40)
-    font_pick = _load_font(30)
+    # 字級隨列高略調
+    race_px = int(max(48, min(72, row_h * 0.34)))
+    pick_px = int(max(42, min(68, row_h * 0.30)))
+    font_race = _load_font(race_px)
+    font_pick = _load_font(pick_px)
+    cols = _pick_column_bounds(4)
 
     for i, race in enumerate(races):
-        y0 = body_top + i * ROW_H
-        y1 = y0 + ROW_H
-        fill = row_a if i % 2 == 0 else row_b
-        draw.rectangle((TABLE_LEFT, y0, TABLE_RIGHT, y1), fill=fill)
-        # 場次欄
-        draw.rectangle((COL_RACE[0], y0, COL_RACE[1], y1), fill=race_bg)
+        cy = mid_top + (i + 0.5) * row_h
         rn = race.race_num if race.race_num is not None else i + 1
         rn_s = str(rn)
         bb = font_race.getbbox(rn_s)
         tw, th = bb[2] - bb[0], bb[3] - bb[1]
         draw.text(
-            (
-                (COL_RACE[0] + COL_RACE[1] - tw) // 2,
-                y0 + (ROW_H - th) // 2 - 2,
-            ),
+            ((RACE_COL[0] + RACE_COL[1] - tw) // 2, int(cy - th / 2) - 2),
             rn_s,
             font=font_race,
-            fill=race_fg,
+            fill=RACE_FG,
         )
+
         picks = _limit_picks(race.model_picks if track == "model" else race.ai_picks)
         if track == "ai" and race.ai_skipped and not picks:
-            # 整列提示
             msg = "信心不足略過"
             bb = font_pick.getbbox(msg)
+            tw, th = bb[2] - bb[0], bb[3] - bb[1]
             draw.text(
-                (COL_PICKS[0][0] + 16, y0 + (ROW_H - (bb[3] - bb[1])) // 2),
+                (cols[0][0], int(cy - th / 2) - 2),
                 msg,
                 font=font_pick,
                 fill=(140, 120, 100),
             )
-        else:
-            for ci, (x0, x1) in enumerate(COL_PICKS):
-                pick = picks[ci] if ci < len(picks) else None
-                label = _cell_text(pick)
-                if not label:
-                    continue
-                bb = font_pick.getbbox(label)
+            continue
+
+        for ci, (x0, x1) in enumerate(cols):
+            pick = picks[ci] if ci < len(picks) else None
+            label_s = _cell_text(pick)
+            if not label_s:
+                continue
+            bb = font_pick.getbbox(label_s)
+            tw, th = bb[2] - bb[0], bb[3] - bb[1]
+            while tw > (x1 - x0 - 8) and len(label_s) > 4:
+                label_s = label_s[:-1]
+                bb = font_pick.getbbox(label_s)
                 tw, th = bb[2] - bb[0], bb[3] - bb[1]
-                # 過寬則縮短馬名
-                while tw > (x1 - x0 - 16) and len(label) > 4:
-                    label = label[:-1]
-                    bb = font_pick.getbbox(label)
-                    tw, th = bb[2] - bb[0], bb[3] - bb[1]
-                draw.text(
-                    (x0 + 12, y0 + (ROW_H - th) // 2 - 1),
-                    label,
-                    font=font_pick,
-                    fill=text_fg,
-                )
-        # 橫線
-        draw.line((TABLE_LEFT, y1, TABLE_RIGHT, y1), fill=grid, width=1)
+            draw.text(
+                (x0, int(cy - th / 2) - 2),
+                label_s,
+                font=font_pick,
+                fill=TEXT_FG,
+            )
 
-    # 縱線
-    for x0, x1 in [COL_RACE] + COL_PICKS:
-        draw.line((x0, body_top, x0, body_top + table_h), fill=grid, width=1)
-    draw.line((TABLE_RIGHT, body_top, TABLE_RIGHT, body_top + table_h), fill=grid, width=1)
-
-    canvas.paste(footer, (0, body_top + table_h))
     meta = _save_png_under(Path(out_path), canvas)
     meta["theme"] = theme
+    meta["blank"] = str(blank_path.name)
     meta["n_races"] = n
+    meta["row_h"] = row_h
+    meta["canvas_size"] = list(canvas.size)
     meta["date_line"] = date_line
     return meta
 
@@ -732,7 +775,7 @@ def generate_ads_for_meeting_predictions(
 ) -> Dict[str, Any]:
     """
     全賽日 → 僅 2 張 PNG（model.png / ai.png），寫入 output_root 根目錄並覆蓋舊檔。
-    隨機選藍／米色公司模版；表內只顯示「馬號 馬名」（最多 4 匹），不含勝率。
+    空白模版中段按場數拉伸；表內只顯示「馬號 馬名」（最多 4 匹），不含勝率。
     """
     out_root = Path(output_root) if output_root else default_output_dir()
     out_root.mkdir(parents=True, exist_ok=True)
