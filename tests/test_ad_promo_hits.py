@@ -7,6 +7,8 @@ import unittest
 from ad_promo_hits import (
     attach_ad_pick_ranks_to_snapshot_rows,
     evaluate_ad_race_hits,
+    hit_rule_codes,
+    parse_race_no_from_id,
     parse_runner_win_odds,
 )
 
@@ -22,6 +24,22 @@ class ParseOddsTest(unittest.TestCase):
 
 
 class AdRaceHitsTest(unittest.TestCase):
+    def test_hit_rule_codes_priority(self):
+        codes = hit_rule_codes(
+            {
+                "win_odds7": False,
+                "qin_odds10": True,
+                "t3_cover": True,
+                "t4_cover": False,
+                "any_promo": True,
+            }
+        )
+        self.assertEqual(codes, ["qin_odds10", "t3_cover"])
+
+    def test_parse_race_no_from_id(self):
+        self.assertEqual(parse_race_no_from_id("20260909HV05"), 5)
+        self.assertIsNone(parse_race_no_from_id(""))
+
     def test_win_odds7(self):
         hits = evaluate_ad_race_hits(
             pick_finishes=[1, 5, 3, 8],

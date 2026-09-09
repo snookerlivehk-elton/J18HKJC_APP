@@ -22,9 +22,12 @@ else:
     )
 
 SOCIAL_COPY_FILE = "social_copy.json"
+POST_RACE_SOCIAL_COPY_FILE = "post_race_social_copy.json"
 
 # 精選評述字數上限（繁體字元）
 COMMENT_MAX_CHARS = 60
+# 賽後回顧每場評述可稍長（含名次／賠率事實）
+POST_RACE_COMMENT_MAX_CHARS = 80
 
 # UI / API 用的語氣預設鍵值
 TONE_PROFESSIONAL = "professional"
@@ -66,9 +69,19 @@ POST_FOOTER_LINES: List[str] = [
     "數據僅供參考，投注前請自行判斷。關注 J18.HK 獲取更多賽日速覽。",
 ]
 
+# 賽後回顧結尾（唔用「賽前十分鐘」預告句）
+POST_RACE_FOOTER_LINES: List[str] = [
+    "以上為賽前鎖定融合推介之賽後回顧，數據僅供參考，投注請自行判斷。",
+    "想睇更多賽日速覽同命中統計，即刻上 j18.hk！關注 J18.HK。",
+]
+
 
 def post_footer_text() -> str:
     return "\n\n".join(POST_FOOTER_LINES)
+
+
+def post_race_footer_text() -> str:
+    return "\n\n".join(POST_RACE_FOOTER_LINES)
 
 
 HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅貼文，唔好似國語翻譯腔：
@@ -152,6 +165,54 @@ def build_system_prompt(tone: Optional[str] = None) -> str:
     )
 
 
+DEFAULT_POST_RACE_SYSTEM_PROMPT = (
+    "你是香港賽馬社交媒體文案編輯，專寫「賽後回顧／命中兌現」貼文。\n"
+    "輸入是已結算、且符合宣傳命中規則的場次（賽前鎖定融合推介 × 賽後名次／獨贏賠率）。\n"
+    "\n"
+    "撮寫原則：\n"
+    "1) 定位係「賽後回顧」，唔係再推新貼士；強調「賽前有列、賽後兌現」。\n"
+    "2) 不可寫「穩膽」「必中」「包中」「穩贏」；可寫「賽前融合推介有列出」「賽後兌現」。\n"
+    "3) 每場必須忠於輸入事實：命中規則、推介馬號／馬名、名次、獨贏賠率；不可虛構賽果或賠率。\n"
+    "4) form_text 只可作近績色彩補充，唔可以同賽果矛盾；無近績就唔好硬砌走勢。\n"
+    "5) 優先排序（愈前愈優先入選）：冷門獨贏(win_odds7) > 高賠連贏(qin_odds10) > 三重覆蓋 > 四重覆蓋。\n"
+    "6) 選 3 場最有宣傳力的場次（不足 3 場就全選；超過則只留最有戲嗰 3 場）。\n"
+    f"7) 每場 comment 繁體中文、{POST_RACE_COMMENT_MAX_CHARS} 字內："
+    "先講兌現重點（規則＋名次／賠率），再可加半句近績。\n"
+    "8) headline 用一句講清「邊場、咩規則、咩結果」（例如「第5場冷門獨贏 · #7 奪魁 @12.5」）。\n"
+    "9) hashtag 8–15 個，可含 #賽後回顧 #冷門 #賽果 #J18 #賽馬 等；避免重覆。\n"
+    "10) " + HK_WRITING_RULES + "\n"
+    "\n"
+    "嚴格輸出 JSON（不要 markdown 代碼塊）：\n"
+    "{\n"
+    '  "title": "賽後回顧標題（吸引但忠於事實）",\n'
+    '  "subtitle": "可選，1 句補充",\n'
+    '  "featured": [\n'
+    "    {\n"
+    '      "race_no": 5,\n'
+    '      "race_id": "20260909HV05",\n'
+    '      "rule_labels": ["冷門獨贏"],\n'
+    '      "headline": "第5場冷門獨贏 · #7 奪魁 @12.5",\n'
+    '      "horse_no": 7,\n'
+    '      "horse_name": "馬名",\n'
+    f'      "comment": "{POST_RACE_COMMENT_MAX_CHARS}字內賽後評述",\n'
+    '      "picks_line": "1:#7 馬A（1st@12.5） / 2:#3 馬B（3rd）",\n'
+    '      "basis": "簡短說明點解值得宣傳"\n'
+    "    }\n"
+    "  ],\n"
+    '  "hashtags": ["#J18", "#賽後回顧", "#賽馬", "#冷門"]\n'
+    "}\n"
+)
+
+
+def build_post_race_system_prompt(tone: Optional[str] = None) -> str:
+    return (
+        DEFAULT_POST_RACE_SYSTEM_PROMPT
+        + "\n\n"
+        + tone_style_block(tone)
+        + "\n\n請嚴格依上述語氣同香港文筆要求寫作；記住這是賽後回顧，不是賽前推介。"
+    )
+
+
 def parse_llm_json(content: str) -> Dict[str, Any]:
     """Robust JSON parse for chat model outputs (fences / trailing text)."""
     text = str(content or "").strip()
@@ -185,6 +246,10 @@ def social_copy_path(output_root: Path) -> Path:
     return Path(output_root) / SOCIAL_COPY_FILE
 
 
+def post_race_social_copy_path(output_root: Path) -> Path:
+    return Path(output_root) / POST_RACE_SOCIAL_COPY_FILE
+
+
 def load_social_copy(output_root: Path) -> Dict[str, Any]:
     p = social_copy_path(output_root)
     if not p.is_file():
@@ -195,8 +260,25 @@ def load_social_copy(output_root: Path) -> Dict[str, Any]:
         return {}
 
 
+def load_post_race_social_copy(output_root: Path) -> Dict[str, Any]:
+    p = post_race_social_copy_path(output_root)
+    if not p.is_file():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def save_social_copy(output_root: Path, data: Dict[str, Any]) -> Path:
     p = social_copy_path(output_root)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+
+def save_post_race_social_copy(output_root: Path, data: Dict[str, Any]) -> Path:
+    p = post_race_social_copy_path(output_root)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
@@ -242,6 +324,81 @@ def format_social_post_text(social_data: Dict[str, Any]) -> str:
         lines.append("")
 
     footer = str((social_data or {}).get("footer") or "").strip() or post_footer_text()
+    lines.append(footer)
+    return "\n".join(lines).strip() + "\n"
+
+
+def _finish_label(finish: Any) -> str:
+    try:
+        n = int(finish)
+    except (TypeError, ValueError):
+        return ""
+    mapping = {1: "冠", 2: "亞", 3: "季", 4: "殿"}
+    return mapping.get(n, f"第{n}")
+
+
+def format_pick_line(picks: List[Dict[str, Any]]) -> str:
+    """把推介列格式化成一句：1:#7 馬A（冠@12.5） / …"""
+    parts: List[str] = []
+    for p in picks or []:
+        try:
+            rank = int(p.get("ad_pick_rank") or 0)
+            hno = int(p.get("horse_no"))
+        except (TypeError, ValueError):
+            continue
+        name = str(p.get("horse_name") or "").strip()
+        fin = _finish_label(p.get("finish"))
+        odds = p.get("win_odds")
+        odds_s = ""
+        if odds is not None:
+            try:
+                odds_s = f"@{float(odds):g}"
+            except (TypeError, ValueError):
+                odds_s = ""
+        result = ""
+        if fin or odds_s:
+            result = f"（{fin}{odds_s}）"
+        parts.append(f"{rank}:#{hno} {name}{result}".strip())
+    return " / ".join(parts)
+
+
+def format_post_race_post_text(social_data: Dict[str, Any]) -> str:
+    """賽後回顧可貼文排版（含賽後固定結尾）。"""
+    lines: List[str] = []
+    title = str((social_data or {}).get("title") or "").strip()
+    if title:
+        lines.append(title)
+    subtitle = str((social_data or {}).get("subtitle") or "").strip()
+    if subtitle:
+        lines.append(subtitle)
+    if lines:
+        lines.append("")
+
+    for item in list((social_data or {}).get("featured") or []):
+        headline = str(item.get("headline") or "").strip()
+        if headline:
+            lines.append(headline)
+        else:
+            race_no = item.get("race_no") or "?"
+            rules = "、".join(str(x) for x in (item.get("rule_labels") or []) if x)
+            head = f"第{race_no}場"
+            if rules:
+                head += f" · {rules}"
+            lines.append(head)
+        picks_line = str(item.get("picks_line") or "").strip()
+        if picks_line:
+            lines.append(picks_line)
+        comment = str(item.get("comment") or "").strip()
+        if comment:
+            lines.append(comment)
+        lines.append("")
+
+    hashtags = list((social_data or {}).get("hashtags") or [])
+    if hashtags:
+        lines.append(" ".join(str(t) for t in hashtags))
+        lines.append("")
+
+    footer = str((social_data or {}).get("footer") or "").strip() or post_race_footer_text()
     lines.append(footer)
     return "\n".join(lines).strip() + "\n"
 
@@ -689,3 +846,350 @@ class AdSocialCopywriter:
         if not normalized["featured"]:
             raise ValueError("未能產生精選場次，請確認 copy.json 有模型／AI 推介後重試")
         return normalized
+
+    # ----- 賽後宣傳文案 -----
+
+    def pack_promo_races_for_llm(
+        self, promo_rows: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """把 evaluate_ad_promo_hits 的可宣傳場次整理成 LLM 輸入。"""
+        from ad_promo_hits import PROMO_RULE_SHORT
+
+        race_ids = [str(r.get("race_id") or "") for r in promo_rows]
+        form_map = self.load_formguide_map(race_ids)
+        packed: List[Dict[str, Any]] = []
+        for row in promo_rows:
+            race_id = str(row.get("race_id") or "")
+            codes = list(row.get("hit_codes") or [])
+            if not codes:
+                # 由布林欄位重建
+                for key, flag in (
+                    ("win_odds7", row.get("WIN≥7")),
+                    ("qin_odds10", row.get("冠亞+賠>10")),
+                    ("t3_cover", row.get("T3覆蓋")),
+                    ("t4_cover", row.get("T4覆蓋")),
+                ):
+                    if flag:
+                        codes.append(key)
+            picks = list(row.get("picks_detail") or [])
+            form_by_horse = form_map.get(race_id, {})
+            enriched_picks = []
+            for p in picks:
+                try:
+                    hno = int(p.get("horse_no"))
+                except (TypeError, ValueError):
+                    continue
+                form_text = str(form_by_horse.get(hno) or "").strip()
+                if len(form_text) > 180:
+                    form_text = form_text[:180] + "…"
+                enriched_picks.append({**p, "form_text": form_text})
+            packed.append(
+                {
+                    "racing_date": row.get("賽日") or row.get("racing_date") or "",
+                    "course": row.get("場地") or row.get("course") or "",
+                    "batch_id": row.get("batch_id"),
+                    "race_id": race_id,
+                    "race_no": row.get("race_no"),
+                    "hit_codes": codes,
+                    "rule_labels": [
+                        PROMO_RULE_SHORT[c] for c in codes if c in PROMO_RULE_SHORT
+                    ],
+                    "picks": enriched_picks,
+                    "picks_line": format_pick_line(enriched_picks),
+                    "priority": (
+                        0
+                        if "win_odds7" in codes
+                        else 1
+                        if "qin_odds10" in codes
+                        else 2
+                        if "t3_cover" in codes
+                        else 3
+                    ),
+                }
+            )
+        packed.sort(key=lambda x: (x.get("priority", 9), str(x.get("race_id") or "")))
+        return packed
+
+    def build_post_race_fallback(
+        self, packed_races: List[Dict[str, Any]], *, limit: int = 3
+    ) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for race in packed_races[:limit]:
+            picks = list(race.get("picks") or [])
+            # 重點馬：名次最好的推介（finish 最小）
+            focus = None
+            best_finish = 99
+            for p in picks:
+                try:
+                    fin = int(p.get("finish")) if p.get("finish") is not None else 99
+                except (TypeError, ValueError):
+                    fin = 99
+                if fin < best_finish:
+                    best_finish = fin
+                    focus = p
+            if focus is None and picks:
+                focus = picks[0]
+            focus = focus or {}
+            rules = list(race.get("rule_labels") or [])
+            race_no = race.get("race_no") or "?"
+            hno = focus.get("horse_no")
+            hname = str(focus.get("horse_name") or "").strip()
+            odds = focus.get("win_odds")
+            odds_s = f"@{float(odds):g}" if odds is not None else ""
+            fin_lab = _finish_label(focus.get("finish"))
+            rule_s = "、".join(rules) if rules else "命中"
+            headline = f"第{race_no}場{rule_s}"
+            if hno is not None:
+                headline += f" · #{hno}"
+                if hname:
+                    headline += f" {hname}"
+                if fin_lab:
+                    headline += f" {fin_lab}"
+                if odds_s:
+                    headline += f" {odds_s}"
+            form_snip = str(focus.get("form_text") or "").strip()
+            if form_snip:
+                form_snip = form_snip[:36].rstrip("，。；; ")
+                comment = f"賽前融合推介有列，賽後兌現。近績：{form_snip}"
+            else:
+                comment = f"賽前融合推介有列，賽後以{rule_s}兌現。"
+            comment = comment[:POST_RACE_COMMENT_MAX_CHARS]
+            out.append(
+                {
+                    "race_no": race.get("race_no"),
+                    "race_id": race.get("race_id"),
+                    "rule_labels": rules,
+                    "headline": headline[:80],
+                    "horse_no": hno,
+                    "horse_name": hname,
+                    "comment": comment,
+                    "picks_line": race.get("picks_line") or format_pick_line(picks),
+                    "basis": f"命中：{rule_s}",
+                }
+            )
+        return out
+
+    def _normalize_post_race_result(
+        self,
+        raw: Dict[str, Any],
+        custom_prompt: str,
+        *,
+        tone: Optional[str] = None,
+        packed_races: Optional[List[Dict[str, Any]]] = None,
+        meeting: Optional[Dict[str, Any]] = None,
+        source: str = "llm",
+    ) -> Dict[str, Any]:
+        featured = raw.get("featured") if isinstance(raw.get("featured"), list) else []
+        clean_rows: List[Dict[str, Any]] = []
+        seen_races: set[str] = set()
+        by_id = {
+            str(r.get("race_id") or ""): r for r in (packed_races or []) if r.get("race_id")
+        }
+        for item in featured:
+            if not isinstance(item, dict):
+                continue
+            race_id = str(item.get("race_id") or "").strip()
+            if not race_id or race_id in seen_races:
+                continue
+            seen_races.add(race_id)
+            src = by_id.get(race_id) or {}
+            rules = item.get("rule_labels")
+            if not isinstance(rules, list) or not rules:
+                rules = list(src.get("rule_labels") or [])
+            picks_line = str(item.get("picks_line") or "").strip() or str(
+                src.get("picks_line") or ""
+            )
+            comment = str(item.get("comment") or "").strip()[
+                :POST_RACE_COMMENT_MAX_CHARS
+            ]
+            headline = str(item.get("headline") or "").strip()
+            if not headline:
+                rn = item.get("race_no") if item.get("race_no") is not None else src.get("race_no")
+                rule_s = "、".join(str(x) for x in rules if x)
+                headline = f"第{rn or '?'}場" + (f" · {rule_s}" if rule_s else "")
+            clean_rows.append(
+                {
+                    "race_no": item.get("race_no")
+                    if item.get("race_no") is not None
+                    else src.get("race_no"),
+                    "race_id": race_id,
+                    "rule_labels": [str(x) for x in rules if x],
+                    "headline": headline[:100],
+                    "horse_no": item.get("horse_no"),
+                    "horse_name": str(item.get("horse_name") or "").strip(),
+                    "comment": comment,
+                    "picks_line": picks_line,
+                    "basis": str(item.get("basis") or "").strip(),
+                }
+            )
+
+        target_n = min(3, len(packed_races or [])) or 3
+        if len(clean_rows) < target_n and packed_races:
+            for fb in self.build_post_race_fallback(packed_races, limit=6):
+                rid = str(fb.get("race_id") or "")
+                if not rid or rid in seen_races:
+                    continue
+                seen_races.add(rid)
+                clean_rows.append(fb)
+                if len(clean_rows) >= target_n:
+                    break
+
+        hashtags = raw.get("hashtags") if isinstance(raw.get("hashtags"), list) else []
+        clean_tags: List[str] = []
+        for tag in hashtags:
+            s = str(tag or "").strip()
+            if not s:
+                continue
+            if not s.startswith("#"):
+                s = "#" + s.lstrip("#")
+            if s not in clean_tags:
+                clean_tags.append(s)
+        for default_tag in (
+            "#J18",
+            "#賽後回顧",
+            "#賽馬",
+            "#賽果",
+            "#J18HK",
+            "#香港賽馬",
+        ):
+            if default_tag not in clean_tags:
+                clean_tags.append(default_tag)
+            if len(clean_tags) >= 8:
+                break
+
+        tone_key = normalize_tone(tone)
+        meeting = meeting or {}
+        title = str(raw.get("title") or "").strip()
+        subtitle = str(raw.get("subtitle") or "").strip()
+        if not title:
+            course = meeting.get("course") or ""
+            racing_date = str(meeting.get("racing_date") or "")[:10]
+            title = f"{racing_date} {course} 賽後回顧：融合推介有兌現".strip()
+
+        footer = post_race_footer_text()
+        result = {
+            "kind": "post_race",
+            "title": title,
+            "subtitle": subtitle,
+            "featured": clean_rows[:3],
+            "hashtags": clean_tags[:15],
+            "footer": footer,
+            "footer_lines": list(POST_RACE_FOOTER_LINES),
+            "post_text": "",
+            "tone": tone_key,
+            "tone_label": tone_label(tone_key),
+            "custom_prompt": str(custom_prompt or "").strip(),
+            "meeting": meeting,
+            "source": source,
+            "raw": raw,
+        }
+        result["post_text"] = format_post_race_post_text(result)
+        return result
+
+    def generate_post_race_copy(
+        self,
+        promo_rows: List[Dict[str, Any]],
+        *,
+        meeting: Optional[Dict[str, Any]] = None,
+        custom_prompt: str = "",
+        tone: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if not promo_rows:
+            raise ValueError("沒有可宣傳命中場次，無法生成賽後文案。")
+
+        packed = self.pack_promo_races_for_llm(promo_rows)
+        if not packed:
+            raise ValueError("可宣傳場次資料不完整。")
+
+        meeting = dict(meeting or {})
+        if not meeting.get("racing_date"):
+            meeting["racing_date"] = packed[0].get("racing_date") or ""
+        if not meeting.get("course"):
+            meeting["course"] = packed[0].get("course") or ""
+        meeting.setdefault("n_promo_races", len(packed))
+
+        tone_key = normalize_tone(tone)
+        payload = {
+            "meeting": meeting,
+            "rules": {
+                "post_race_review": True,
+                "pick_up_to_three_races": True,
+                "priority": ["win_odds7", "qin_odds10", "t3_cover", "t4_cover"],
+                "comment_max_chars": POST_RACE_COMMENT_MAX_CHARS,
+                "must_be_factual": True,
+                "no_guaranteed_win_wording": True,
+                "writing_locale": "hong_kong_social",
+                "do_not_include_footer": True,
+            },
+            "tone": tone_key,
+            "tone_label": tone_label(tone_key),
+            "custom_prompt": str(custom_prompt or "").strip(),
+            "promo_races": packed,
+        }
+        user_payload = json.dumps(payload, ensure_ascii=False, indent=2)
+
+        # 無 API key 時直接本地出稿
+        if not self.is_ready():
+            fb = self.build_post_race_fallback(packed, limit=3)
+            return self._normalize_post_race_result(
+                {
+                    "title": "",
+                    "subtitle": "（未設定 OPENAI_API_KEY，已用命中資料自動出稿）",
+                    "featured": fb,
+                    "hashtags": ["#J18", "#賽後回顧", "#賽馬", "#賽果"],
+                },
+                custom_prompt,
+                tone=tone_key,
+                packed_races=packed,
+                meeting=meeting,
+                source="fallback:no_api_key",
+            )
+
+        messages = [{"role": "system", "content": build_post_race_system_prompt(tone_key)}]
+        if str(custom_prompt or "").strip():
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "以下是使用者額外要求，需在不違反事實、不偏離香港文筆、"
+                        "且保持賽後回顧定位前提下盡量遵守：\n"
+                        "注意：文末固定聲明由系統附加，請不要在 title／comment 重複寫免責。\n"
+                        + custom_prompt.strip()
+                    ),
+                }
+            )
+        messages.append({"role": "user", "content": user_payload})
+
+        temperature = {
+            TONE_PROFESSIONAL: 0.3,
+            TONE_PASSIONATE: 0.5,
+            TONE_HIGH_INTERACTION: 0.6,
+        }.get(tone_key, 0.45)
+
+        source = "llm"
+        try:
+            parsed = self._chat_json(messages, temperature=temperature)
+        except Exception as llm_err:
+            fb = self.build_post_race_fallback(packed, limit=3)
+            if not fb:
+                raise ValueError(f"生成失敗：{llm_err}") from llm_err
+            parsed = {
+                "title": "",
+                "subtitle": "（LLM 暫時未能完成，已用命中資料自動補齊）",
+                "featured": fb,
+                "hashtags": ["#J18", "#賽後回顧", "#賽馬", "#賽果", "#J18HK"],
+            }
+            source = f"fallback:{llm_err}"
+
+        normalized = self._normalize_post_race_result(
+            parsed,
+            custom_prompt,
+            tone=tone_key,
+            packed_races=packed,
+            meeting=meeting,
+            source=source,
+        )
+        if not normalized["featured"]:
+            raise ValueError("未能產生賽後精選場次")
+        return normalized
+

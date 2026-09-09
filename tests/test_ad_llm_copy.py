@@ -23,11 +23,15 @@ class DummyWriter(AdSocialCopywriter):
     def __init__(self) -> None:
         pass
 
+    def is_ready(self) -> bool:
+        return False
+
     def load_formguide_map(self, race_ids):
         return {
             "R1": {1: "直路望空後追回，走勢續進。"},
             "R2": {5: "沿欄省位，末段保持走勢。"},
             "R3": {8: "形勢配合，值得留意。"},
+            "20260909HV05": {7: "直路望空後追回，走勢續進。"},
         }
 
 
@@ -221,3 +225,166 @@ def test_social_copy_roundtrip(tmp_path: Path):
     p = save_social_copy(tmp_path, payload)
     assert p.is_file()
     assert load_social_copy(tmp_path)["title"] == "t"
+
+
+def _sample_promo_rows():
+    return [
+        {
+            "賽日": "2026-09-09",
+            "場地": "HV",
+            "batch_id": "b1",
+            "race_id": "20260909HV05",
+            "race_no": 5,
+            "命中規則": "冷門獨贏",
+            "hit_codes": ["win_odds7"],
+            "WIN≥7": True,
+            "冠亞+賠>10": False,
+            "T3覆蓋": False,
+            "T4覆蓋": False,
+            "可宣傳": True,
+            "picks_detail": [
+                {
+                    "ad_pick_rank": 1,
+                    "horse_no": 7,
+                    "horse_name": "冷門飛駒",
+                    "finish": 1,
+                    "win_odds": 12.5,
+                },
+                {
+                    "ad_pick_rank": 2,
+                    "horse_no": 3,
+                    "horse_name": "陪跑星",
+                    "finish": 6,
+                    "win_odds": 8.0,
+                },
+            ],
+        },
+        {
+            "賽日": "2026-09-09",
+            "場地": "HV",
+            "batch_id": "b1",
+            "race_id": "20260909HV08",
+            "race_no": 8,
+            "命中規則": "三重覆蓋",
+            "hit_codes": ["t3_cover"],
+            "WIN≥7": False,
+            "冠亞+賠>10": False,
+            "T3覆蓋": True,
+            "T4覆蓋": False,
+            "可宣傳": True,
+            "picks_detail": [
+                {"ad_pick_rank": 1, "horse_no": 2, "horse_name": "甲", "finish": 1, "win_odds": 3.5},
+                {"ad_pick_rank": 2, "horse_no": 4, "horse_name": "乙", "finish": 2, "win_odds": 6.0},
+                {"ad_pick_rank": 3, "horse_no": 9, "horse_name": "丙", "finish": 3, "win_odds": 15.0},
+            ],
+        },
+        {
+            "賽日": "2026-09-09",
+            "場地": "HV",
+            "batch_id": "b1",
+            "race_id": "20260909HV02",
+            "race_no": 2,
+            "命中規則": "高賠連贏",
+            "hit_codes": ["qin_odds10"],
+            "WIN≥7": False,
+            "冠亞+賠>10": True,
+            "T3覆蓋": False,
+            "T4覆蓋": False,
+            "可宣傳": True,
+            "picks_detail": [
+                {"ad_pick_rank": 1, "horse_no": 1, "horse_name": "熱門", "finish": 1, "win_odds": 2.8},
+                {"ad_pick_rank": 2, "horse_no": 11, "horse_name": "冷亞", "finish": 2, "win_odds": 18.0},
+            ],
+        },
+    ]
+
+
+def test_post_race_prompt_and_format():
+    from ad_llm_copy import (
+        POST_RACE_COMMENT_MAX_CHARS,
+        build_post_race_system_prompt,
+        format_pick_line,
+        format_post_race_post_text,
+        post_race_footer_text,
+    )
+
+    prompt = build_post_race_system_prompt("高互動型")
+    assert "賽後回顧" in prompt
+    assert "必中" in prompt
+    assert str(POST_RACE_COMMENT_MAX_CHARS) in prompt
+    assert "高互動型" in prompt
+
+    line = format_pick_line(
+        [{"ad_pick_rank": 1, "horse_no": 7, "horse_name": "冷門飛駒", "finish": 1, "win_odds": 12.5}]
+    )
+    assert "#7" in line and "冠" in line and "@12.5" in line
+
+    footer = post_race_footer_text()
+    assert "賽後回顧" in footer
+    assert "賽前十分鐘" not in footer
+
+    data = {
+        "title": "今晚有兌現",
+        "subtitle": "融合推介",
+        "featured": [
+            {
+                "race_no": 5,
+                "headline": "第5場冷門獨贏 · #7 奪魁 @12.5",
+                "picks_line": line,
+                "comment": "賽前有列，賽後兌現",
+                "rule_labels": ["冷門獨贏"],
+            }
+        ],
+        "hashtags": ["#J18", "#賽後回顧"],
+        "footer": footer,
+    }
+    text = format_post_race_post_text(data)
+    assert "今晚有兌現" in text
+    assert "第5場冷門獨贏" in text
+    assert "賽前十分鐘" not in text
+    assert "j18.hk" in text
+
+
+def test_post_race_fallback_and_generate_without_api():
+    from ad_llm_copy import (
+        save_post_race_social_copy,
+        load_post_race_social_copy,
+    )
+
+    writer = DummyWriter()
+    packed = writer.pack_promo_races_for_llm(_sample_promo_rows())
+    # 冷門獨贏應排最前
+    assert packed[0]["race_id"].endswith("05")
+    assert packed[0]["priority"] == 0
+
+    fb = writer.build_post_race_fallback(packed, limit=3)
+    assert len(fb) == 3
+    assert fb[0]["horse_no"] == 7
+    assert "兌現" in fb[0]["comment"]
+
+    data = writer.generate_post_race_copy(
+        _sample_promo_rows(),
+        meeting={"racing_date": "2026-09-09", "course": "HV"},
+        tone="專業型",
+        custom_prompt="突出冷門",
+    )
+    assert data["kind"] == "post_race"
+    assert data["featured"]
+    assert "賽前十分鐘" not in data["post_text"]
+    assert "賽後回顧" in data["footer"] or "賽後回顧" in data["post_text"]
+    assert data["source"].startswith("fallback")
+
+
+def test_post_race_copy_roundtrip(tmp_path: Path):
+    from ad_llm_copy import save_post_race_social_copy, load_post_race_social_copy
+
+    payload = {
+        "kind": "post_race",
+        "title": "賽後",
+        "featured": [],
+        "hashtags": ["#J18"],
+    }
+    p = save_post_race_social_copy(tmp_path, payload)
+    assert p.name == "post_race_social_copy.json"
+    assert load_post_race_social_copy(tmp_path)["title"] == "賽後"
+

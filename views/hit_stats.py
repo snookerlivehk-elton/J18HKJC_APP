@@ -220,7 +220,13 @@ else:
         st.dataframe(ad_summary, use_container_width=True, hide_index=True)
     only_promo = st.checkbox("只顯示可宣傳場次", value=True, key="ad_promo_only")
     show_ad = ad_races[ad_races["可宣傳"] == True] if only_promo else ad_races  # noqa: E712
-    st.dataframe(show_ad, use_container_width=True, hide_index=True, height=360)
+    drop_cols = [c for c in ("hit_codes", "picks_detail") if c in show_ad.columns]
+    st.dataframe(
+        show_ad.drop(columns=drop_cols) if drop_cols else show_ad,
+        use_container_width=True,
+        hide_index=True,
+        height=360,
+    )
 
 if is_admin():
     st.divider()
