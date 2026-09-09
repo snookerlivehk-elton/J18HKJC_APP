@@ -6,6 +6,12 @@ from typing import Any, Dict, Optional
 
 import streamlit as st
 
+from ad_llm_copy import (
+    AdSocialCopywriter,
+    load_social_copy,
+    save_social_copy,
+    social_copy_path,
+)
 from ad_poster import (
     default_output_dir,
     generate_ads_from_snapshot_batch,
@@ -87,6 +93,85 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
             st.write(copy.get("ai_copy") or "")
 
 
+def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
+    st.markdown("### AI 社交文案")
+    writer = AdSocialCopywriter()
+    if writer.is_ready():
+        st.caption(f"LLM 模型：`{writer.nlp.model}`")
+    else:
+        st.warning("未偵測到 OPENAI_API_KEY；暫時無法生成 AI 精選評述。")
+
+    default_prompt = (
+        "語氣偏專業、簡潔、適合 Facebook / Instagram；"
+        "優先挑選模型與 AI 都有支持的場次；"
+        "每匹馬評述不超過40字。"
+    )
+    custom_prompt = st.text_area(
+        "LLM 提示詞",
+        value=st.session_state.get("ad_social_prompt") or default_prompt,
+        height=110,
+        key="ad_social_prompt",
+        help="可補充口吻、重點或受眾要求；API Key 仍只從環境變數讀取。",
+    )
+
+    social_data = load_social_copy(output_root)
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        disabled = (not writer.is_ready()) or not copy_data
+        if st.button("生成 AI 精選評述", type="primary", key="ad_social_generate", disabled=disabled):
+            with st.spinner("AI 正在挑選精選場次與撰寫文案…"):
+                try:
+                    social_data = writer.generate_social_copy(copy_data, custom_prompt=custom_prompt)
+                    save_social_copy(output_root, social_data)
+                    st.session_state["ad_social_result"] = social_data
+                    st.success("已生成 AI 精選評述與 hashtag")
+                except Exception as e:
+                    st.session_state["ad_social_result"] = {"error": str(e)}
+                    st.error(f"生成失敗：{e}")
+    with c2:
+        p = social_copy_path(output_root)
+        if p.is_file():
+            st.caption(f"已保存：`{p.name}`")
+
+    social_data = st.session_state.get("ad_social_result") or social_data
+    if not social_data:
+        st.info("輸入提示詞後按「生成 AI 精選評述」，系統會挑選 3 場精選、產生標題與 hashtags。")
+        return
+    if social_data.get("error"):
+        st.error(str(social_data.get("error")))
+        return
+
+    st.markdown(f"#### {social_data.get('title') or '未提供標題'}")
+    if social_data.get("subtitle"):
+        st.caption(social_data["subtitle"])
+
+    featured = list(social_data.get("featured") or [])
+    if featured:
+        cols = st.columns(min(3, len(featured)))
+        for col, item in zip(cols, featured):
+            with col:
+                race_no = item.get("race_no") or "?"
+                st.markdown(
+                    f"**第{race_no}場 · {item.get('horse_no', '?')} {item.get('horse_name', '')}**"
+                )
+                st.write(item.get("comment") or "")
+                if item.get("basis"):
+                    st.caption(item.get("basis"))
+
+    hashtags = list(social_data.get("hashtags") or [])
+    if hashtags:
+        st.markdown("**Hashtags**")
+        st.code(" ".join(hashtags), language=None)
+
+    st.download_button(
+        "⬇️ 下載 social_copy.json",
+        data=__import__("json").dumps(social_data, ensure_ascii=False, indent=2),
+        file_name="social_copy.json",
+        mime="application/json",
+        key="ad_social_download",
+    )
+
+
 st.title("廣告輸出")
 st.caption(
     "每次預測快照成功後，系統把**全賽日**推介寫入兩張海報（公司原圖風格）："
@@ -112,6 +197,9 @@ tab_browse, tab_regen = st.tabs(["瀏覽輸出", "手動重產"])
 
 with tab_browse:
     _render_outputs(out_root, key_prefix="browse")
+    copy_data = load_copy_json(out_root)
+    st.divider()
+    _render_social_copy(out_root, copy_data)
 
 with tab_regen:
     st.markdown("選擇預測快照批次，依鎖分重產全賽日海報（覆蓋 `model.png` / `ai.png`）。")

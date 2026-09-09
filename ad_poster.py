@@ -24,6 +24,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from score_share import select_picks_by_share, win_pick_count_from_shares
+try:
+    from ad_llm_copy import SOCIAL_COPY_FILE
+except Exception:
+    SOCIAL_COPY_FILE = "social_copy.json"
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATE_DIR = ROOT / "assets" / "ad_templates"
@@ -1118,7 +1122,7 @@ def zip_batch_bytes(batch_dir: Path) -> bytes:
         root = root.parent
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for name in (MODEL_FILE, AI_FILE, COPY_FILE):
+        for name in (MODEL_FILE, AI_FILE, COPY_FILE, SOCIAL_COPY_FILE):
             p = root / name
             if p.is_file():
                 zf.write(p, arcname=p.name)
