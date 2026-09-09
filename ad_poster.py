@@ -62,8 +62,8 @@ DATE_PILL_RADIUS = 70
 # 字色貼近模版「場次」藍灰，略深方便閱讀
 RACE_FG = (70, 105, 135)
 TEXT_FG = (70, 105, 135)
-# 推介字級：大於模版「場次」標題，減少格內留白
-FONT_BASE_PX = 88
+# 推介字級加大，減少格內留白（可大於模版「場次」標題）
+FONT_BASE_PX = 100
 # 表身分隔
 GRID_LINE = (170, 185, 195)
 GRID_LINE_STRONG = (140, 165, 185)
@@ -721,10 +721,10 @@ def render_meeting_poster(
     cols = _pick_column_bounds(4)
     _draw_table_guides(draw, mid_top=mid_top, mid_bot=mid_bot, n=n, row_h=row_h, cols=cols)
 
-    # 字級加大填滿格高；場次號與推介皆欄內置中
+    # 字級加大填滿格高；推介／場次號皆欄內水平置中
     base = int(FONT_BASE_PX)
-    race_px = int(max(base, min(int(row_h * 0.52), base + 16)))
-    pick_px = int(max(base - 4, min(int(row_h * 0.48), base + 8)))
+    race_px = int(max(base, min(int(row_h * 0.58), base + 20)))
+    pick_px = int(max(base - 2, min(int(row_h * 0.54), base + 14)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
 
