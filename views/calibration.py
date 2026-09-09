@@ -16,6 +16,7 @@ except ImportError:
     px = None
 
 st.title("📊 因子命中率（賽前快照 → 賽後結算）")
+st.caption("用戶瀏覽榜請到「命中率榜」；本頁為管理端寫入／結算校正台。")
 st.markdown(
     f"""
 **正確流程**
