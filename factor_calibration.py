@@ -1,11 +1,12 @@
 """
-賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率／AI 獨立軌道命中統計。
+賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率／AI／融合命中統計。
 
 流程：
   1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
-     （含 ai_score／confidence／ai_combo／fused_share；AI／融合不混入模型權重）
-  2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
-  3. evaluate_settled() — 按各訊號場內份額選推介，統計 WIN／PLA／WQ／T3／T4
+     （含 ai_*／fused_share／ad_pick_rank；AI／融合不混入模型權重）
+  2. settle_pending() — 用 runners 回填 finish_order_num＋settle_win_odds
+  3. evaluate_settled() — 各訊號 WIN／PLA／WQ／T3／T4
+  4. evaluate_ad_promo_hits() — 廣告融合推介四項宣傳命中（高賠／T3／T4）
 
 命中規則（每場、每訊號）：
   - 推介列：該訊號分數 → 場內份額 → select_picks_by_share（與賽日推介一致）
