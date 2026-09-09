@@ -3,7 +3,7 @@
 
 流程：
   1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
-     （含 ai_score／confidence／ai_combo，不混入模型權重）
+     （含 ai_score／confidence／ai_combo／fused_share；AI／融合不混入模型權重）
   2. settle_pending() — 用 runners.finish_order_num 回填，標記 batch settled
   3. evaluate_settled() — 按各訊號場內份額選推介，統計 WIN／PLA／WQ／T3／T4
 
@@ -51,6 +51,8 @@ SIGNAL_DEFS = [
     ("模型勝率", "model_win_prob", None),
     # 獨立軌道：Form AI 馬評（評價×信心），不混入模型權重
     ("AI評價×信心", "ai_combo", None),
+    # 第三軌：模型×AI 融合推介（社交／廣告用；不寫入因子總分）
+    ("融合推介", "fused_share", None),
 ]
 
 
@@ -155,6 +157,7 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     ai_score NUMERIC,
     confidence NUMERIC,
     ai_combo NUMERIC,
+    fused_share NUMERIC,
     model_coverage NUMERIC,
     coverage_json TEXT,
     provisional BOOLEAN DEFAULT FALSE,
@@ -201,6 +204,7 @@ CREATE TABLE IF NOT EXISTS prediction_snapshots (
     ai_score REAL,
     confidence REAL,
     ai_combo REAL,
+    fused_share REAL,
     model_coverage REAL,
     coverage_json TEXT,
     provisional INTEGER DEFAULT 0,
@@ -232,7 +236,7 @@ class FactorCalibration:
 
     def _ensure_ai_snapshot_columns(self, conn):
         """既有庫補欄：AI 獨立軌道（不影響舊快照結算）。"""
-        cols = ("ai_score", "confidence", "ai_combo")
+        cols = ("ai_score", "confidence", "ai_combo", "fused_share")
         for col in cols:
             try:
                 if USE_SQLITE:
@@ -329,7 +333,7 @@ class FactorCalibration:
             batch_id = f"{racing_date.replace('-', '')}{course}_r{uuid4().hex[:6]}"
 
         from form_ai_analyst import FormAIAnalyst
-        from form_ai_picks import compute_ai_combo
+        from form_ai_picks import attach_fused_shares_to_snapshot_rows, compute_ai_combo
 
         ai_by_race: dict = {}
         try:
@@ -411,6 +415,7 @@ class FactorCalibration:
                         "ai_score": sc,
                         "confidence": cf,
                         "ai_combo": combo,
+                        "fused_share": None,
                         "model_coverage": cov_f,
                         "coverage_json": p.get("coverage_json"),
                         "provisional": row_prov,
@@ -420,6 +425,8 @@ class FactorCalibration:
 
         if not rows:
             return {"ok": False, "error": "預測結果為空（請先重算 factor_scores）"}
+
+        attach_fused_shares_to_snapshot_rows(rows)
 
         allow_prov = bool(getattr(ModelConfig, "SNAPSHOT_ALLOW_PROVISIONAL", True))
         if force_provisional is not None:
@@ -459,14 +466,14 @@ class FactorCalibration:
                             batch_id, race_id, horse_no, horse_name, jockey_name, trainer_name, draw,
                             z_jockey, z_trainer, z_synergy, z_draw, z_horse, z_pace, z_speed,
                             sg_contrib, total_score, model_win_prob, pred_rank,
-                            ai_score, confidence, ai_combo,
+                            ai_score, confidence, ai_combo, fused_share,
                             model_coverage, coverage_json, provisional,
                             finish_order_num
                         ) VALUES (
                             :batch_id, :race_id, :horse_no, :horse_name, :jockey_name, :trainer_name, :draw,
                             :z_jockey, :z_trainer, :z_synergy, :z_draw, :z_horse, :z_pace, :z_speed,
                             :sg_contrib, :total_score, :model_win_prob, :pred_rank,
-                            :ai_score, :confidence, :ai_combo,
+                            :ai_score, :confidence, :ai_combo, :fused_share,
                             :model_coverage, :coverage_json, :provisional,
                             :finish_order_num
                         )
@@ -845,6 +852,9 @@ class FactorCalibration:
                     continue
                 # AI 獨立軌道：該場無人有 AI 則跳過
                 if col == "ai_combo" and vals.isna().all():
+                    continue
+                # 融合軌：該場全無 fused_share 則跳過（舊快照）
+                if col == "fused_share" and vals.isna().all():
                     continue
                 top2, all_picks = ranked_picks_for_signal(g, col)
                 if top2.empty:

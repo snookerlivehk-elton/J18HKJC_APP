@@ -1,4 +1,4 @@
-"""廣告輸出 — 全賽日模型／AI 各一張海報（固定檔名覆蓋）。"""
+"""廣告輸出 — 全賽日融合主海報 + 模型／AI 對照（固定檔名覆蓋）。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,7 +33,9 @@ from factor_calibration import FactorCalibration
 def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
     """預覽＋下載（ZIP／單張）。可在瀏覽頁或重產成功後同頁使用。"""
     paths = latest_paths(out_root)
-    has_any = paths["model"].is_file() or paths["ai"].is_file()
+    has_any = (
+        paths["fused"].is_file() or paths["model"].is_file() or paths["ai"].is_file()
+    )
     if not has_any:
         st.warning("尚無海報。請先完成預測快照，或使用「手動重產」。")
         return
@@ -45,16 +47,18 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
             f"**{meeting.get('racing_date', '')} {meeting.get('course', '')}** · "
             f"{meeting.get('n_races', '?')} 場 · batch `{meeting.get('batch_id', '')}`"
         )
+        fb = meeting.get("fused_bytes")
         mb = meeting.get("model_bytes")
         ab = meeting.get("ai_bytes")
-        if mb or ab:
+        if fb or mb or ab:
             st.caption(
-                f"檔案大小：模型 {int(mb or 0) // 1024} KB · AI {int(ab or 0) // 1024} KB"
+                f"檔案大小：融合 {int(fb or 0) // 1024} KB · "
+                f"模型 {int(mb or 0) // 1024} KB · AI {int(ab or 0) // 1024} KB"
             )
 
     try:
         st.download_button(
-            "⬇️ 下載 ZIP（model + ai + copy）",
+            "⬇️ 下載 ZIP（fused + model + ai + copy）",
             data=zip_batch_bytes(out_root),
             file_name="ad_output_latest.zip",
             mime="application/zip",
@@ -64,10 +68,33 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
     except Exception as e:
         st.caption(f"ZIP 失敗：{e}")
 
+    # 主視覺：融合
+    st.markdown("**融合推介 · 全賽日（社交主視覺）**")
+    p_fused = paths["fused"]
+    if p_fused.is_file():
+        try:
+            st.image(
+                make_preview_jpeg(p_fused),
+                caption=f"{p_fused.name} · {p_fused.stat().st_size // 1024} KB",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.warning(f"預覽失敗：{e}")
+        with open(p_fused, "rb") as f:
+            st.download_button(
+                f"⬇️ 下載 {p_fused.name}",
+                data=f.read(),
+                file_name=p_fused.name,
+                mime="image/png",
+                key=f"dl_{key_prefix}_fused",
+            )
+    else:
+        st.warning("尚無融合海報（請重新產生快照／廣告）")
+
     cols = st.columns(2)
     for col, label, key in (
-        (cols[0], "模型 · 全賽日", "model"),
-        (cols[1], "AI 馬評 · 全賽日", "ai"),
+        (cols[0], "模型 · 對照", "model"),
+        (cols[1], "AI 馬評 · 對照", "ai"),
     ):
         with col:
             st.markdown(f"**{label}**")
@@ -94,6 +121,8 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
 
     if copy:
         with st.expander("宣傳文案", expanded=False):
+            st.markdown("**融合**")
+            st.write(copy.get("fused_copy") or "")
             st.markdown("**模型**")
             st.write(copy.get("model_copy") or "")
             st.markdown("**AI 馬評**")
@@ -230,14 +259,17 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
 
 st.title("廣告輸出")
 st.caption(
-    "每次預測快照成功後，系統把**全賽日**推介寫入兩張海報（公司原圖風格）："
-    "模型／AI 馬評。每場最多 **4 匹**（只顯示馬號＋馬名，不含勝率）；"
+    "每次預測快照成功後，系統把**全賽日**推介寫入海報（公司原圖風格）："
+    "**融合推介**（社交主視覺）＋模型／AI 對照。"
+    "每場最多 **4 匹**（只顯示馬號＋馬名，不含勝率）；"
     "藍／米色隨機；下次生成會**覆蓋**同一檔名；PNG ≤2MB。"
 )
 
 out_root = default_output_dir()
 paths = latest_paths(out_root)
-st.info(f"輸出：`{paths['model'].name}` / `{paths['ai'].name}` @ `{out_root}`")
+st.info(
+    f"輸出：`{paths['fused'].name}` / `{paths['model'].name}` / `{paths['ai'].name}` @ `{out_root}`"
+)
 try:
     from ad_poster import font_status, _max_bytes
 

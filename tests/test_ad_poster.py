@@ -143,13 +143,17 @@ def test_company_meeting_poster(tmp_path: Path):
     assert r["ok"]
     assert r["theme"] in ("blue", "beige")
     paths = latest_paths(tmp_path)
+    assert paths["fused"].name == "fused.png"
     assert paths["model"].name == MODEL_FILE
     assert paths["ai"].name == AI_FILE
-    assert paths["model"].is_file() and paths["ai"].is_file()
+    assert paths["fused"].is_file() and paths["model"].is_file() and paths["ai"].is_file()
+    assert paths["fused"].stat().st_size <= 2048 * 1024
     assert paths["model"].stat().st_size <= 2048 * 1024
     assert paths["model"].stat().st_size > 20_000
 
     assert all(len(x["model_picks"]) <= 4 for x in __import__("json").loads(paths["copy"].read_text())["races"])
+    races_json = __import__("json").loads(paths["copy"].read_text())["races"]
+    assert all("fused_picks" in x for x in races_json)
 
     copy = generate_meeting_copy(
         [
@@ -173,7 +177,7 @@ def test_company_meeting_poster(tmp_path: Path):
         course="HV",
     )
     assert r2["ok"]
-    assert {p.name for p in tmp_path.glob("*.png")} == {"model.png", "ai.png"}
+    assert {p.name for p in tmp_path.glob("*.png")} == {"fused.png", "model.png", "ai.png"}
 
     # blue／beige 皆可渲染（beige 無 blank 時 fallback blank_blue）
     for theme in ("blue", "beige"):
