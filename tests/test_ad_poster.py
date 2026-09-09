@@ -84,8 +84,10 @@ def test_cell_text_no_share_pct():
 
 def test_mid_stretch_scales_with_race_count(tmp_path: Path):
     """場數變多／變少時，畫布高度應隨中段拉伸改變，列高近似固定。"""
+    from ad_poster import FONT_BASE_PX, ROW_H_SCALE
+
     ref_mid = SLICE_MID_END - SLICE_TOP_END
-    row_ref = ref_mid / float(REF_N_ROWS)
+    row_ref = (ref_mid / float(REF_N_ROWS)) * float(ROW_H_SCALE)
     heights = {}
     for n in (8, 11, 12):
         out = tmp_path / f"n{n}.png"
@@ -98,6 +100,9 @@ def test_mid_stretch_scales_with_race_count(tmp_path: Path):
         assert out.is_file()
         assert meta["n_races"] == n
         assert abs(meta["row_h"] - row_ref) < 1.0
+        # 字級對齊模版「場次」
+        assert meta["race_px"] >= FONT_BASE_PX
+        assert meta["pick_px"] >= FONT_BASE_PX - 4
         with Image.open(out) as im:
             heights[n] = im.size[1]
         assert meta["bytes"] <= 2048 * 1024

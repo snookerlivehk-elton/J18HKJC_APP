@@ -47,20 +47,27 @@ COPY_FILE = "copy.json"
 # 空白模版量測（blank_blue.jpg = 3625×4096；表身中段可垂直拉伸）
 BLANK_W = 3625
 BLANK_H = 4096
-# 上固定／中拉伸／下固定（中段為清空的場次＋揀馬區）
-SLICE_TOP_END = 1105
+# 上固定（含已印「場次」標題列）／中拉伸（場次號＋揀馬）／下固定
+SLICE_TOP_END = 1035  # 「場次」標題列底部分隔線以下
 SLICE_MID_END = 3290
 REF_N_ROWS = 11  # 模版中段對應參考場數
+ROW_H_SCALE = 1.0
 RACE_COL = (200, 670)
 CONTENT_X0 = 720
 CONTENT_X1 = 3380
-PICK_GAP = 48
+PICK_GAP = 32
 DATE_PILL = (100, 500, 1680, 640)
 DATE_PILL_FILL = (165, 210, 229)
 DATE_PILL_RADIUS = 70
-RACE_FG = (40, 70, 130)
-TEXT_FG = (40, 55, 100)
-HEADER_LABEL_Y = 1035
+# 字色貼近模版「場次」藍灰，略深方便閱讀
+RACE_FG = (70, 105, 135)
+TEXT_FG = (70, 105, 135)
+# 對齊模版「場次」字高（約 56–62px @3625 寬）
+FONT_BASE_PX = 62
+# 表身分隔
+GRID_LINE = (170, 185, 195)
+GRID_LINE_STRONG = (140, 165, 185)
+ROW_TINT = (236, 244, 250)
 THEMES = ("blue", "beige")
 WEEKDAY_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
@@ -565,12 +572,12 @@ def _paint_date_pill(canvas: "Image.Image", date_line: str) -> None:
     draw = ImageDraw.Draw(canvas)
     box = DATE_PILL
     draw.rounded_rectangle(box, radius=DATE_PILL_RADIUS, fill=DATE_PILL_FILL)
-    font = _load_font(56)
+    font = _load_font(64)
     bbox = font.getbbox(date_line)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     # 過長則略縮字
     if tw > (box[2] - box[0] - 80):
-        font = _load_font(48)
+        font = _load_font(54)
         bbox = font.getbbox(date_line)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     tx = box[0] + 48
@@ -604,6 +611,46 @@ def _pick_column_bounds(n_cols: int = 4) -> List[Tuple[int, int]]:
     return out
 
 
+def _draw_table_guides(
+    draw,
+    *,
+    mid_top: float,
+    mid_bot: float,
+    n: int,
+    row_h: float,
+    cols: Sequence[Tuple[int, int]],
+) -> None:
+    """畫行底、橫線與欄分隔，區分每一場／每一揀馬欄。"""
+    x_left = RACE_COL[0]
+    x_right = CONTENT_X1
+    # 偶數行淺底（只蓋揀馬白區，保留場次米色欄）
+    for i in range(n):
+        if i % 2 == 0:
+            continue
+        y0 = int(mid_top + i * row_h)
+        y1 = int(mid_top + (i + 1) * row_h)
+        draw.rectangle((CONTENT_X0 - 8, y0, x_right, y1), fill=ROW_TINT)
+
+    # 場次／內容分界（矩形條，縮圖不易消失）
+    vx = CONTENT_X0 - 16
+    draw.rectangle((vx - 2, int(mid_top), vx + 3, int(mid_bot)), fill=GRID_LINE_STRONG)
+
+    # 列分隔橫線
+    for i in range(n + 1):
+        y = int(mid_top + i * row_h)
+        strong = i in (0, n)
+        half = 3 if strong else 2
+        draw.rectangle(
+            (x_left, y - half, x_right, y + half),
+            fill=GRID_LINE_STRONG if strong else GRID_LINE,
+        )
+
+    # 揀馬欄分隔
+    for ci in range(1, len(cols)):
+        x = (cols[ci - 1][1] + cols[ci][0]) // 2
+        draw.rectangle((x - 1, int(mid_top), x + 2, int(mid_bot)), fill=GRID_LINE)
+
+
 def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.Image", int, float]:
     """
     上固定 + 中段垂直拉伸 + 下固定。
@@ -623,7 +670,7 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
     bot = blank.crop((0, mid_end, w, h))
 
     ref_mid_h = mid_end - top_end
-    row_h = ref_mid_h / float(REF_N_ROWS)
+    row_h = (ref_mid_h / float(REF_N_ROWS)) * float(ROW_H_SCALE)
     new_mid_h = max(1, int(round(n * row_h)))
     if mid.height != new_mid_h:
         mid = mid.resize((w, new_mid_h), Image.Resampling.LANCZOS)
@@ -662,6 +709,7 @@ def render_meeting_poster(
     )
     n = max(len(races), 1)
     canvas, mid_top, row_h = _assemble_blank_canvas(blank, n)
+    mid_bot = mid_top + n * row_h
 
     date_line = _meeting_date_line(
         races[0].racing_date if races else "",
@@ -670,24 +718,15 @@ def render_meeting_poster(
     _paint_date_pill(canvas, date_line)
 
     draw = ImageDraw.Draw(canvas)
-    # 場次欄標題（固定上段底部）
-    font_header = _load_font(52)
-    label = "場次"
-    bb = font_header.getbbox(label)
-    tw, th = bb[2] - bb[0], bb[3] - bb[1]
-    draw.text(
-        ((RACE_COL[0] + RACE_COL[1] - tw) // 2, HEADER_LABEL_Y),
-        label,
-        font=font_header,
-        fill=RACE_FG,
-    )
+    cols = _pick_column_bounds(4)
+    _draw_table_guides(draw, mid_top=mid_top, mid_bot=mid_bot, n=n, row_h=row_h, cols=cols)
 
-    # 字級隨列高略調
-    race_px = int(max(48, min(72, row_h * 0.34)))
-    pick_px = int(max(42, min(68, row_h * 0.30)))
+    # 字級對齊模版已印「場次」（約 FONT_BASE_PX）；場次號略大一級
+    base = int(FONT_BASE_PX)
+    race_px = int(max(base, min(int(row_h * 0.42), base + 12)))
+    pick_px = int(max(base - 2, min(int(row_h * 0.36), base + 4)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
-    cols = _pick_column_bounds(4)
 
     for i, race in enumerate(races):
         cy = mid_top + (i + 0.5) * row_h
@@ -708,7 +747,7 @@ def render_meeting_poster(
             bb = font_pick.getbbox(msg)
             tw, th = bb[2] - bb[0], bb[3] - bb[1]
             draw.text(
-                (cols[0][0], int(cy - th / 2) - 2),
+                (cols[0][0] + 18, int(cy - th / 2) - 2),
                 msg,
                 font=font_pick,
                 fill=(140, 120, 100),
@@ -722,12 +761,12 @@ def render_meeting_poster(
                 continue
             bb = font_pick.getbbox(label_s)
             tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            while tw > (x1 - x0 - 8) and len(label_s) > 4:
+            while tw > (x1 - x0 - 24) and len(label_s) > 4:
                 label_s = label_s[:-1]
                 bb = font_pick.getbbox(label_s)
                 tw, th = bb[2] - bb[0], bb[3] - bb[1]
             draw.text(
-                (x0, int(cy - th / 2) - 2),
+                (x0 + 18, int(cy - th / 2) - 2),
                 label_s,
                 font=font_pick,
                 fill=TEXT_FG,
@@ -738,6 +777,8 @@ def render_meeting_poster(
     meta["blank"] = str(blank_path.name)
     meta["n_races"] = n
     meta["row_h"] = row_h
+    meta["race_px"] = race_px
+    meta["pick_px"] = pick_px
     meta["canvas_size"] = list(canvas.size)
     meta["date_line"] = date_line
     return meta

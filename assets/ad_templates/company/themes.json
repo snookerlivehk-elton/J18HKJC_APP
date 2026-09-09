@@ -3,21 +3,17 @@
     "file": "blank_blue.jpg",
     "w": 3625,
     "h": 4096,
-    "slice_top_end": 1105,
+    "slice_top_end": 1035,
     "slice_mid_end": 3290,
     "ref_n_rows": 11,
     "race_col": [200, 670],
     "content_x": [720, 3380],
     "date_pill": [100, 500, 1680, 640],
-    "note": "Header fixed + mid stretch + footer fixed; race count drives mid height"
+    "font_base_px": 62,
+    "note": "Header includes printed 場次; mid stretch only for race rows; content font matches 場次"
   },
   "blue": {
-    "blank": "blank_blue.jpg",
-    "fallback_slices": {
-      "w": 1280,
-      "header_h": 430,
-      "footer_h": 271
-    }
+    "blank": "blank_blue.jpg"
   },
   "beige": {
     "blank": "blank_beige.jpg",
