@@ -24,9 +24,15 @@ except ImportError:
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
-    DATABASE_URL_SYNC = os.getenv(
-        "DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db"
+    # Railway 常只設 DATABASE_URL；阿里雲／本機可用 DATABASE_URL_SYNC
+    _raw = (
+        os.getenv("DATABASE_URL_SYNC")
+        or os.getenv("DATABASE_URL")
+        or "postgresql://user:password@localhost:5432/j18db"
     )
+    if _raw.startswith("postgres://"):
+        _raw = _raw.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL_SYNC = _raw
 
 # 階段定義（順序）
 STAGES = [
