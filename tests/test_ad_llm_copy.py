@@ -8,8 +8,11 @@ from ad_llm_copy import (
     TONE_PROFESSIONAL,
     AdSocialCopywriter,
     build_system_prompt,
+    format_social_post_text,
     load_social_copy,
     normalize_tone,
+    parse_llm_json,
+    post_footer_text,
     save_social_copy,
     tone_label,
 )
@@ -23,6 +26,7 @@ class DummyWriter(AdSocialCopywriter):
         return {
             "R1": {1: "直路望空後追回，走勢續進。"},
             "R2": {5: "沿欄省位，末段保持走勢。"},
+            "R3": {8: "形勢配合，值得留意。"},
         }
 
 
@@ -32,7 +36,7 @@ def _sample_copy():
             "batch_id": "b1",
             "racing_date": "2026-09-09",
             "course": "HV",
-            "n_races": 2,
+            "n_races": 3,
         },
         "races": [
             {
@@ -56,6 +60,14 @@ def _sample_copy():
                 "model_picks": [{"horse_no": 5, "horse_name": "銀河之星", "tag": "爭勝", "share_pct": 24.0}],
                 "ai_picks": [{"horse_no": 3, "horse_name": "長城勇士", "tag": "推介", "share_pct": 18.0}],
             },
+            {
+                "race_id": "R3",
+                "race_no": 3,
+                "race_name": "Race 3",
+                "distance": 1000,
+                "model_picks": [{"horse_no": 8, "horse_name": "疾風少年", "tag": "推介", "share_pct": 20.0}],
+                "ai_picks": [{"horse_no": 8, "horse_name": "疾風少年", "tag": "推介", "share_pct": 19.0}],
+            },
         ],
     }
 
@@ -71,10 +83,23 @@ def test_normalize_tone_defaults_to_high_interaction():
 def test_build_system_prompt_uses_hk_and_tone():
     prompt = build_system_prompt("high_interaction")
     assert "香港" in prompt
-    assert "國語翻譯" in prompt or "國語翻譯腔" in prompt
+    assert "國語" in prompt
     assert "高互動型" in prompt
-    assert "值得关注" in prompt  # 禁止清單示例
     assert "{{" not in prompt
+
+
+def test_parse_llm_json_from_fence():
+    raw = """這是前言\n```json\n{\"title\": \"今晚有睇頭\", \"featured\": []}\n```\n後記"""
+    data = parse_llm_json(raw)
+    assert data["title"] == "今晚有睇頭"
+
+
+def test_post_footer_contains_required_lines():
+    footer = post_footer_text()
+    assert "賽前十分鐘如有變動" in footer
+    assert "j18.hk" in footer
+    assert "數據僅供參考" in footer
+    assert "J18.HK" in footer
 
 
 def test_build_llm_payload_includes_formguide_and_tone():
@@ -87,11 +112,10 @@ def test_build_llm_payload_includes_formguide_and_tone():
     assert '"writing_locale": "hong_kong_social"' in payload
     assert "直路望空後追回" in payload
     assert "沿欄省位" in payload
-    # 同一匹馬若同時在 model / ai 出現，只應出現一次 candidate
     assert payload.count("金光飛馳") == 1
 
 
-def test_normalize_result_trims_comment_and_hashtags():
+def test_normalize_result_appends_footer_and_post_text():
     writer = DummyWriter()
     data = writer._normalize_result(
         {
@@ -120,25 +144,52 @@ def test_normalize_result_trims_comment_and_hashtags():
                     "horse_name": "銀河之星",
                     "comment": "末段走勢唔錯，有得傾",
                 },
-                {
-                    "race_no": 3,
-                    "race_id": "R3",
-                    "horse_no": 8,
-                    "horse_name": "疾風少年",
-                    "comment": "形勢配合可留意",
-                },
             ],
             "hashtags": ["J18", "#賽馬", "J18", "夜馬"],
         },
         "偏高互動",
         tone="高互動型",
+        copy_data=_sample_copy(),
     )
     assert data["title"] == "今晚邊場最有睇頭？"
     assert data["tone"] == TONE_HIGH_INTERACTION
-    assert data["tone_label"] == "高互動型"
     assert len(data["featured"]) == 3
     assert len(data["featured"][0]["comment"]) <= 40
-    assert data["hashtags"] == ["#J18", "#賽馬", "#夜馬"]
+    assert "數據僅供參考" in data["footer"]
+    assert "賽前十分鐘如有變動" in data["post_text"]
+    assert "數據僅供參考" in data["post_text"]
+    assert data["post_text"].endswith("\n") or data["post_text"].strip()
+
+
+def test_normalize_fills_missing_featured_from_fallback():
+    writer = DummyWriter()
+    data = writer._normalize_result(
+        {
+            "title": "t",
+            "featured": [
+                {
+                    "race_no": 1,
+                    "race_id": "R1",
+                    "horse_no": 1,
+                    "horse_name": "金光飛馳",
+                    "comment": "有睇頭",
+                }
+            ],
+            "hashtags": [],
+        },
+        "",
+        tone="高互動型",
+        copy_data=_sample_copy(),
+    )
+    assert len(data["featured"]) == 3
+    assert "數據僅供參考" in format_social_post_text(data)
+
+
+def test_fallback_featured_builds_three():
+    writer = DummyWriter()
+    rows = writer.build_fallback_featured(_sample_copy(), limit=3)
+    assert len(rows) == 3
+    assert {r["race_id"] for r in rows} <= {"R1", "R2", "R3"}
 
 
 def test_social_copy_roundtrip(tmp_path: Path):

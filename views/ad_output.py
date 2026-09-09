@@ -10,8 +10,11 @@ from ad_llm_copy import (
     DEFAULT_TONE,
     TONE_PRESETS,
     AdSocialCopywriter,
+    count_candidate_races,
+    format_social_post_text,
     load_social_copy,
     normalize_tone,
+    post_footer_text,
     save_social_copy,
     social_copy_path,
     tone_label,
@@ -105,6 +108,17 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     else:
         st.warning("未偵測到 OPENAI_API_KEY；暫時無法生成 AI 精選評述。")
 
+    n_cand = count_candidate_races(copy_data)
+    if not copy_data:
+        st.warning("尚未找到 copy.json。請先完成預測快照或「手動重產」。")
+    elif n_cand <= 0:
+        st.warning(
+            "copy.json 未有推介場次資料，無法生成精選文案。"
+            "請先重新生成廣告輸出（需含模型／AI 推介）。"
+        )
+    else:
+        st.caption(f"可用推介場次：{n_cand} 場")
+
     tone_options = list(TONE_PRESETS.keys())
     tone_labels = {k: TONE_PRESETS[k]["label"] for k in tone_options}
     current_tone = normalize_tone(st.session_state.get("ad_social_tone") or DEFAULT_TONE)
@@ -131,13 +145,15 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         value=st.session_state.get("ad_social_prompt") or default_prompt,
         height=110,
         key="ad_social_prompt",
-        help="可補充重點或受眾要求；語氣以上方選項為主。API Key 只從環境變數讀取。",
+        help="可補充重點或受眾要求；文末固定聲明由系統自動附加。",
     )
+    with st.expander("文末固定聲明（系統自動附加）", expanded=False):
+        st.code(post_footer_text(), language=None)
 
     social_data = load_social_copy(output_root)
     c1, c2 = st.columns([1, 1])
     with c1:
-        disabled = (not writer.is_ready()) or not copy_data
+        disabled = (not writer.is_ready()) or n_cand <= 0
         if st.button("生成 AI 精選評述", type="primary", key="ad_social_generate", disabled=disabled):
             with st.spinner("AI 正在挑選精選場次與撰寫文案…"):
                 try:
@@ -148,7 +164,11 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                     )
                     save_social_copy(output_root, social_data)
                     st.session_state["ad_social_result"] = social_data
-                    st.success(f"已生成 AI 精選評述（{tone_label(tone)}）與 hashtag")
+                    src_note = social_data.get("source") or "llm"
+                    if str(src_note).startswith("fallback"):
+                        st.warning("LLM 暫時未能完成，已用推介自動補齊精選，並附上固定結尾。")
+                    else:
+                        st.success(f"已生成 AI 精選評述（{tone_label(tone)}）與 hashtag")
                 except Exception as e:
                     st.session_state["ad_social_result"] = {"error": str(e)}
                     st.error(f"生成失敗：{e}")
@@ -159,7 +179,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
 
     social_data = st.session_state.get("ad_social_result") or social_data
     if not social_data:
-        st.info("揀好語氣後按「生成 AI 精選評述」，系統會以香港貼文文筆挑選 3 場精選、產生標題與 hashtags。")
+        st.info("揀好語氣後按「生成 AI 精選評述」，系統會以香港貼文文筆挑選精選場次、產生標題、hashtags，並自動加上文末聲明。")
         return
     if social_data.get("error"):
         st.error(str(social_data.get("error")))
@@ -189,28 +209,15 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         st.markdown("**Hashtags**")
         st.code(" ".join(hashtags), language=None)
 
-        # 一鍵複製 FB / IG 貼文排版
-        lines = [str(social_data.get("title") or "").strip()]
-        if social_data.get("subtitle"):
-            lines.append(str(social_data.get("subtitle")).strip())
-        lines.append("")
-        for item in featured:
-            race_no = item.get("race_no") or "?"
-            horse_no = item.get("horse_no") or "?"
-            horse_name = item.get("horse_name") or ""
-            comment = item.get("comment") or ""
-            lines.append(f"第{race_no}場｜{horse_no} {horse_name}")
-            if comment:
-                lines.append(comment)
-            lines.append("")
-        lines.append(" ".join(hashtags))
-        post_text = "\n".join(lines).strip() + "\n"
-        st.text_area(
-            "Facebook / IG 貼文（可直接複製）",
-            value=post_text,
-            height=220,
-            key="ad_social_post_layout",
-        )
+    post_text = str(social_data.get("post_text") or "").strip()
+    if not post_text:
+        post_text = format_social_post_text(social_data)
+    st.text_area(
+        "Facebook / IG 貼文（可直接複製）",
+        value=post_text,
+        height=280,
+        key="ad_social_post_layout",
+    )
 
     st.download_button(
         "⬇️ 下載 social_copy.json",
