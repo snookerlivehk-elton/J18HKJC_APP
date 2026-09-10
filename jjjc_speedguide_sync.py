@@ -22,17 +22,16 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import create_engine, text
 
-from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
 from jjjc_export_common import (
     classify_payload_status,
     content_meta,
-    database_url_sync,
     fetch_export_get,
     load_payload_file,
     normalize_date,
     safe_float,
     safe_int,
 )
+from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE, resolve_database_url
 
 try:
     from dotenv import load_dotenv
@@ -41,7 +40,7 @@ try:
 except ImportError:
     pass
 
-DATABASE_URL_SYNC = database_url_sync(USE_SQLITE, SQLITE_DB_PATH)
+DATABASE_URL_SYNC = resolve_database_url()
 
 SCHEMA_NAME = "jjjc.speedguide.v1"
 EXPORT_PATH = "/api/export/speedguide"

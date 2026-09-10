@@ -29,15 +29,13 @@ from config import ModelConfig
 from factor_calculator import FactorCalculator
 from inference_engine import InferenceEngine, scores_to_win_probs
 from score_share import scores_to_share_probs, select_picks_by_share
-from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 import os
 
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
-    DATABASE_URL_SYNC = os.getenv(
-        "DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db"
-    )
+    DATABASE_URL_SYNC = resolve_database_url()
 
 SIGNAL_DEFS = [
     ("騎師分", "z_jockey", "WEIGHT_JOCKEY"),

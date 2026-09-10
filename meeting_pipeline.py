@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 
 try:
     from dotenv import load_dotenv
@@ -24,15 +24,10 @@ except ImportError:
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
-    # Railway 常只設 DATABASE_URL；阿里雲／本機可用 DATABASE_URL_SYNC
-    _raw = (
-        os.getenv("DATABASE_URL_SYNC")
-        or os.getenv("DATABASE_URL")
-        or "postgresql://user:password@localhost:5432/j18db"
-    )
-    if _raw.startswith("postgres://"):
-        _raw = _raw.replace("postgres://", "postgresql://", 1)
-    DATABASE_URL_SYNC = _raw
+    # Railway 常只設 DATABASE_URL；勿只讀 DATABASE_URL_SYNC 否則會落到 localhost
+    DATABASE_URL_SYNC = resolve_database_url()
+    if DATABASE_URL_SYNC.startswith("postgres://"):
+        DATABASE_URL_SYNC = DATABASE_URL_SYNC.replace("postgres://", "postgresql://", 1)
 
 # 階段定義（順序）
 STAGES = [
