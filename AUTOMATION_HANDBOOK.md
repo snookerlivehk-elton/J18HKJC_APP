@@ -132,6 +132,7 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 | **FORM_AI** | 馬匹覆蓋 ≥80% | 未達 → pending；**未達標禁止任何快照** |
 | **SNAPSHOT** | 僅當 SG＋FormGuide＋Form AI 皆 ≥80% | 否則不建；無快照 ⇒ 無廣告／命中主路徑 |
 | **RESULTS** | historical `runners` 該日有 `finish_order_num` | 空 → waiting（對齊 JJJC +12h） |
+| **TEXT／遺留覆蓋** | `DISTINCT(race_id,horse_no)`；優先只計 `jjjc_results_sync` 場次 | 勿用裸 `COUNT(*)`（舊爬蟲幽靈場會把 8×14 算成 10×14=140）；results sync 會 prune 同 prefix 不在 export 的 race |
 | **SETTLED** | 對應 batch 有 `settled_at`（每場名次覆蓋達現有 ≥50% 規則） | 有名次未滿 → 重跑 settle；無快照 → 不能結 |
 
 ---

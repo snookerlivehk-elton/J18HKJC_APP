@@ -384,12 +384,12 @@ try:
     bc1.metric(
         "沿途評述覆蓋（corunning）",
         f"{cov_rc.get('covered_n', 0)}/{cov_rc.get('expected_n', 0)}",
-        f"{float(cov_rc.get('coverage') or 0):.0%}",
+        f"{int(cov_rc.get('race_n') or 0)}場 · {float(cov_rc.get('coverage') or 0):.0%}",
     )
     bc2.metric(
         "競賽報告覆蓋（racereport）",
         f"{cov_inc.get('covered_n', 0)}/{cov_inc.get('expected_n', 0)}",
-        f"{float(cov_inc.get('coverage') or 0):.0%}",
+        f"{int(cov_inc.get('race_n') or 0)}場 · {float(cov_inc.get('coverage') or 0):.0%}",
     )
     with bc3:
         if st.button("入列／刷新本賽日遺留", use_container_width=True):

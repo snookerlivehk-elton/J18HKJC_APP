@@ -126,6 +126,91 @@ def load_payload_file(path: str) -> Dict[str, Any]:
     return payload
 
 
+def _meeting_race_prefix(race_date: str, venue_code: str) -> Optional[str]:
+    d = _normalize_date(race_date).replace("-", "")[:8]
+    v = str(venue_code or "").strip().upper()
+    if len(d) != 8 or v not in ("ST", "HV"):
+        return None
+    return f"{d}{v}"
+
+
+def _prune_orphan_meeting_races(
+    conn,
+    *,
+    race_date: str,
+    venue_code: str,
+    keep_race_ids: List[str],
+) -> Dict[str, Any]:
+    """
+    刪除同日同場地、但不在本次 export 的 race／runners／payouts。
+    只在 keep 非空時執行，避免空 export 誤刪整日。
+    """
+    prefix = _meeting_race_prefix(race_date, venue_code)
+    keep = sorted({str(x).strip() for x in keep_race_ids if str(x).strip()})
+    if not prefix or not keep:
+        return {"race_ids": [], "runners": 0, "races": 0, "payouts": 0}
+
+    existing = [
+        str(r[0])
+        for r in conn.execute(
+            text(
+                """
+                SELECT DISTINCT race_id FROM runners
+                WHERE race_id LIKE :p || '%'
+                UNION
+                SELECT DISTINCT race_id FROM races
+                WHERE race_id LIKE :p || '%'
+                """
+            ),
+            {"p": prefix},
+        ).fetchall()
+        if r and r[0]
+    ]
+    orphans = [rid for rid in existing if rid not in set(keep)]
+    if not orphans:
+        return {"race_ids": [], "runners": 0, "races": 0, "payouts": 0}
+
+    runners_n = 0
+    races_n = 0
+    payouts_n = 0
+    for rid in orphans:
+        runners_n += int(
+            conn.execute(
+                text("DELETE FROM runners WHERE race_id = :rid"),
+                {"rid": rid},
+            ).rowcount
+            or 0
+        )
+        try:
+            payouts_n += int(
+                conn.execute(
+                    text("DELETE FROM payouts WHERE race_id = :rid"),
+                    {"rid": rid},
+                ).rowcount
+                or 0
+            )
+        except Exception:
+            pass
+        try:
+            races_n += int(
+                conn.execute(
+                    text("DELETE FROM races WHERE race_id = :rid"),
+                    {"rid": rid},
+                ).rowcount
+                or 0
+            )
+        except Exception:
+            pass
+
+    return {
+        "race_ids": orphans,
+        "runners": runners_n,
+        "races": races_n,
+        "payouts": payouts_n,
+        "prefix": prefix,
+    }
+
+
 def _ensure_sqlite_schema() -> None:
     """本地測試：沿用 etl schema 初始化。"""
     if not USE_SQLITE:
@@ -348,6 +433,15 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         },
                     )
                     payout_n += 1
+
+            # 清掉同日同場地、但不在本次 export 的幽靈場次
+            # （例如 batch_crawler 誤寫 HV09–10 → 覆蓋分母變成 10×14=140）
+            pruned = _prune_orphan_meeting_races(
+                conn,
+                race_date=str(payload.get("race_date") or ""),
+                venue_code=str(payload.get("venue_code") or ""),
+                keep_race_ids=race_ids,
+            )
     finally:
         engine.dispose()
 
@@ -360,6 +454,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "race_ids": race_ids,
         "runner_upserted": runner_n,
         "payout_upserted": payout_n,
+        "pruned_orphan_races": pruned.get("race_ids") if isinstance(pruned, dict) else [],
+        "pruned_runners": int((pruned or {}).get("runners") or 0),
         "source_preference": payload.get("source_preference"),
     }
 

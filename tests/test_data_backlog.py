@@ -1,6 +1,7 @@
 """Tests for data_backlog enroll / coverage / process."""
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import date
@@ -22,7 +23,8 @@ class DataBacklogTest(unittest.TestCase):
                         runner_id TEXT PRIMARY KEY,
                         race_id TEXT,
                         horse_no INTEGER,
-                        finish_order_num INTEGER
+                        finish_order_num INTEGER,
+                        raw_json TEXT
                     )
                     """
                 )
@@ -45,18 +47,38 @@ class DataBacklogTest(unittest.TestCase):
 
         self.svc = DataBacklogService(engine=self.engine)
 
-    def _seed_runners(self, n=10, date_s="20260906", course="ST"):
+    def _seed_runners(self, n=10, date_s="20260906", course="ST", *, jjjc=True, race_no=1):
         with self.engine.begin() as conn:
             for i in range(1, n + 1):
-                rid = f"{date_s}{course}01"
+                rid = f"{date_s}{course}{int(race_no):02d}"
                 runner_id = f"{rid}_{i}"
+                raw = (
+                    json.dumps(
+                        {"synced_via": "jjjc_results_sync", "source": "official_hkjc"}
+                    )
+                    if jjjc
+                    else json.dumps({"source": "j18_history"})
+                )
                 conn.execute(
                     text(
-                        "INSERT INTO runners (runner_id, race_id, horse_no, finish_order_num) "
-                        "VALUES (:id, :race, :hn, :fo)"
+                        "INSERT INTO runners (runner_id, race_id, horse_no, finish_order_num, raw_json) "
+                        "VALUES (:id, :race, :hn, :fo, :raw)"
                     ),
-                    {"id": runner_id, "race": rid, "hn": i, "fo": i},
+                    {"id": runner_id, "race": rid, "hn": i, "fo": i, "raw": raw},
                 )
+
+    def test_coverage_ignores_phantom_races_when_jjjc_present(self):
+        """8 場 jjjc + 2 場幽靈（舊爬蟲）→ 分母應為 8×14=112，不是 140。"""
+        for rn in range(1, 9):
+            self._seed_runners(14, date_s="20260909", course="HV", race_no=rn, jjjc=True)
+        for rn in range(9, 11):
+            self._seed_runners(14, date_s="20260909", course="HV", race_no=rn, jjjc=False)
+        cov = self.svc.measure_comment_coverage(
+            "2026-09-09", "HV", "incident_report"
+        )
+        self.assertEqual(cov["race_n"], 8)
+        self.assertEqual(cov["expected_n"], 112)
+        self.assertEqual(cov["canonical_races"], 8)
 
     def _seed_comments(self, horse_nos, date_s="20260906", course="ST"):
         rid = f"{date_s}{course}01"

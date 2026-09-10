@@ -62,6 +62,15 @@ def _meeting_prefix(racing_date: str, course: str) -> str:
     return f"{d}{str(course).upper()}"
 
 
+def _coverage_label(cov: Dict[str, Any]) -> str:
+    """例如：`8場 91/112`（有 race_n 時帶場次數）。"""
+    race_n = int(cov.get("race_n") or 0)
+    pair = f"{int(cov.get('covered_n') or 0)}/{int(cov.get('expected_n') or 0)}"
+    if race_n:
+        return f"{race_n}場 {pair}"
+    return pair
+
+
 def backoff_seconds(attempt_count: int, age_days: float) -> int:
     """
     無固定節奏評述：首日 6h → 其後每日 → 7 日後每 2～3 日。
@@ -154,6 +163,34 @@ class DataBacklogService:
             conn.execute(text(idx))
 
     # ----- 覆蓋檢查 -----
+    def _canonical_race_ids(self, prefix: str) -> List[str]:
+        """
+        若該會議已有 jjjc results sync 的 runners，只認那些 race_id，
+        避免 batch_crawler／舊 J18 歷史殘留的幽靈場次（例如 8 場日卻出現 HV09–10 → 140）。
+        尚無 jjjc 標記時回傳 []，呼叫端改用全量 prefix。
+        """
+        q = text(
+            """
+            SELECT DISTINCT race_id
+            FROM runners
+            WHERE race_id LIKE :p || '%'
+              AND finish_order_num IS NOT NULL
+              AND (
+                CAST(raw_json AS TEXT) LIKE '%jjjc_results_sync%'
+                OR CAST(raw_json AS TEXT) LIKE '%"source": "official_hkjc"%'
+                OR CAST(raw_json AS TEXT) LIKE '%"source":"official_hkjc"%'
+              )
+            ORDER BY race_id
+            """
+        )
+        try:
+            df = pd.read_sql(q, self.engine, params={"p": prefix})
+        except Exception:
+            return []
+        if df is None or df.empty:
+            return []
+        return [str(x) for x in df["race_id"].tolist() if x]
+
     def measure_comment_coverage(
         self,
         racing_date: str,
@@ -162,16 +199,22 @@ class DataBacklogService:
     ) -> Dict[str, Any]:
         """
         以歷史 runners（有名次）為期望母體；text_reports 有正文則計入覆蓋。
+
+        分母用 DISTINCT(race_id, horse_no)，並優先只計 jjjc results 場次，
+        避免幽靈場次把 8 場×14 誤算成 10×14=140。
         """
         prefix = _meeting_prefix(racing_date, course)
         rtype = str(data_kind)
+        canon = self._canonical_race_ids(prefix)
+        use_canon = 1 if canon else 0
         # SQLite／PG 皆可用 ||；entity_id 可能是 runner_id 或 race_id_horse_no
         q = text(
             """
             SELECT
-              COUNT(*) AS expected_n,
-              SUM(
-                CASE WHEN EXISTS (
+              COUNT(DISTINCT ru.race_id) AS race_n,
+              COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS expected_n,
+              COUNT(
+                DISTINCT CASE WHEN EXISTS (
                   SELECT 1 FROM text_reports tr
                   WHERE tr.entity_type = 'runner'
                     AND tr.report_type = :rtype
@@ -180,16 +223,24 @@ class DataBacklogService:
                       tr.entity_id = ru.runner_id
                       OR tr.entity_id = (ru.race_id || '_' || CAST(ru.horse_no AS TEXT))
                     )
-                ) THEN 1 ELSE 0 END
+                ) THEN ru.race_id || ':' || CAST(ru.horse_no AS TEXT) END
               ) AS covered_n
             FROM runners ru
             WHERE ru.race_id LIKE :p || '%'
               AND ru.finish_order_num IS NOT NULL
+              AND (
+                :use_canon = 0
+                OR CAST(ru.raw_json AS TEXT) LIKE '%jjjc_results_sync%'
+                OR CAST(ru.raw_json AS TEXT) LIKE '%"source": "official_hkjc"%'
+                OR CAST(ru.raw_json AS TEXT) LIKE '%"source":"official_hkjc"%'
+              )
             """
         )
         try:
             row = pd.read_sql(
-                q, self.engine, params={"p": prefix, "rtype": rtype}
+                q,
+                self.engine,
+                params={"p": prefix, "rtype": rtype, "use_canon": use_canon},
             ).iloc[0]
         except Exception as e:
             return {
@@ -197,22 +248,26 @@ class DataBacklogService:
                 "error": str(e),
                 "expected_n": 0,
                 "covered_n": 0,
+                "race_n": 0,
                 "coverage": 0.0,
                 "prefix": prefix,
                 "data_kind": rtype,
             }
         expected = int(row["expected_n"] or 0)
         covered = int(row["covered_n"] or 0)
+        race_n = int(row["race_n"] or 0)
         cov = (covered / expected) if expected else 0.0
         return {
             "ok": True,
             "expected_n": expected,
             "covered_n": covered,
+            "race_n": race_n,
             "coverage": round(cov, 4),
             "prefix": prefix,
             "data_kind": rtype,
             "racing_date": str(racing_date)[:10],
             "course": str(course).upper(),
+            "canonical_races": len(canon),
         }
 
     def coverage_ok(
@@ -293,7 +348,7 @@ class DataBacklogService:
                     kind,
                     status=STATUS_DONE,
                     cov=cov,
-                    detail=f"覆蓋達標 {cov['covered_n']}/{cov['expected_n']}",
+                    detail=f"覆蓋達標 {_coverage_label(cov)}",
                     done=True,
                 )
                 out.append(
@@ -318,7 +373,7 @@ class DataBacklogService:
                     kind,
                     status=status,
                     cov=cov,
-                    detail=f"覆蓋不足 {cov['covered_n']}/{cov['expected_n']} ({cov['coverage']:.0%})",
+                    detail=f"覆蓋不足 {_coverage_label(cov)} ({cov['coverage']:.0%})",
                     next_attempt_at=next_at if not existing else None,
                     keep_next_if_set=True,
                 )
@@ -768,7 +823,7 @@ class DataBacklogService:
                 kind,
                 status=STATUS_DONE,
                 cov=cov,
-                detail=f"覆蓋達標 {cov['covered_n']}/{cov['expected_n']}",
+                detail=f"覆蓋達標 {_coverage_label(cov)}",
                 done=True,
                 bump_attempt=True,
                 last_error=None,
@@ -800,7 +855,7 @@ class DataBacklogService:
             kind,
             status=STATUS_RETRYING,
             cov=cov,
-            detail=f"覆蓋不足 {cov['covered_n']}/{cov['expected_n']}；下次 {delay // 3600}h 後",
+            detail=f"覆蓋不足 {_coverage_label(cov)}；下次 {delay // 3600}h 後",
             next_attempt_at=next_at,
             bump_attempt=True,
             last_error=err,

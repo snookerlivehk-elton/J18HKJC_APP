@@ -503,7 +503,7 @@ class MeetingPipeline:
         q = text(
             """
             SELECT COUNT(DISTINCT ru.race_id) AS races,
-                   COUNT(*) AS runners
+                   COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS runners
             FROM runners ru
             WHERE ru.race_id LIKE :p || '%'
               AND ru.finish_order_num IS NOT NULL
