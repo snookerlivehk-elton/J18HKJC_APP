@@ -558,7 +558,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 | NLP 結構化 | `nlp_batch_job` → `nlp_result` | — | 有正文後才跑 |
 
 > **架構（2026-09-10）：** 文字三件以 JJJC 為主；J18 歷史 API **只作備援**。  
-> **程式現況：** J18 的 `jjjc_*_sync` 尚未映射文字欄；公開 export 探針亦未見長文欄位 → 待 JJJC 契約露出後實作 sync；此前 backlog 可暫走備援。
+> **程式現況（2026-09-10）：** ✅ `data_backlog` 表＋tick 入列／退避重試＋操作員頁「數據遺留清單」；覆蓋以歷史有名次 runners 為母體，`running_comment`／`incident_report` 正文達 80% 作出列。
 
 此類資料：
 
@@ -662,12 +662,12 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 | 步 | 內容 |
 |----|------|
-| B1 | `data_backlog` 表 + 缺文字／名次入列 |
-| B2 | tick 順路：**JJJC 文字主路徑** → 失敗才 J18 history 備援 |
+| B1 | `data_backlog` 表 + 缺文字／名次入列 | ✅ `data_backlog.py` |
+| B2 | tick 順路：**JJJC 文字主路徑**＋退避；UI 遺留清單 | ✅ post_race／all 掛載；`views/data_backlog.py`＋作戰室③ |
 | B3 | ✅ 與 JJJC 對齊三支 export：`jjjc_speedguide_sync`／`jjjc_formguide_sync`／`jjjc_text_reports_sync`（見 §1.3） |
-| B4 | 新評述 → NLP batch（limit） |
-| B5 | NLP 完成 → 因子重算（每輪一次） |
-| B6 | 可選：未來賽日 auto-revise |
+| B4 | 新評述 → NLP batch（limit） | ✅ `MEETING_TICK_BACKLOG_AUTO_NLP`（預設 true） |
+| B5 | NLP 完成 → 因子重算（每輪一次） | ✅ `MEETING_TICK_BACKLOG_AUTO_FACTORS`（預設 **false**，可開） |
+| B6 | 可選：未來賽日 auto-revise | 未做 |
 
 ---
 

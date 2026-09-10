@@ -12,6 +12,7 @@
   1) sync_jjjc_results
   2) sync_jjjc_text_reports
   3) settle_pending
+  4) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -58,6 +59,15 @@ except ImportError:
 # ----- 預設護欄（可用 CLI／環境覆寫）-----
 DEFAULT_LOOKBACK_DAYS = int(os.getenv("MEETING_TICK_LOOKBACK_DAYS", "3") or 3)
 DEFAULT_LOOKAHEAD_DAYS = int(os.getenv("MEETING_TICK_LOOKAHEAD_DAYS", "3") or 3)
+DEFAULT_BACKLOG_RETENTION_DAYS = int(
+    os.getenv("MEETING_TICK_BACKLOG_RETENTION_DAYS", "14") or 14
+)
+DEFAULT_BACKLOG_LIMIT = int(os.getenv("MEETING_TICK_BACKLOG_LIMIT", "10") or 10)
+AUTO_BACKLOG = (os.getenv("MEETING_TICK_AUTO_BACKLOG", "true") or "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 DEFAULT_COOLDOWN_WAITING_SEC = int(
     os.getenv("MEETING_TICK_COOLDOWN_WAITING_SEC", str(30 * 60)) or 30 * 60
 )
@@ -1285,8 +1295,41 @@ class MeetingTickRunner:
             report["settle"] = settle_rec
             report["n_actions"] += 1
 
+        # 數據遺留：保留窗掃評述缺口（可超出 lookback）
+        if AUTO_BACKLOG:
+            report["backlog"] = self.run_backlog_pass(
+                as_of=today,
+                dry_run=dry_run,
+            )
+            report["n_actions"] += int(
+                (report.get("backlog") or {}).get("n_processed") or 0
+            )
+
         report["n_meetings"] = len(report["meetings"])
         return report
+
+    def run_backlog_pass(
+        self,
+        *,
+        as_of: Optional[date] = None,
+        dry_run: bool = False,
+        retention_days: int = DEFAULT_BACKLOG_RETENTION_DAYS,
+        limit: int = DEFAULT_BACKLOG_LIMIT,
+    ) -> Dict[str, Any]:
+        """延遲資料遺留清單：入列＋到期重試（沿途／事故評述）。"""
+        try:
+            from data_backlog import DataBacklogService
+
+            svc = DataBacklogService(engine=self.pipe.engine)
+            return svc.run_tick_pass(
+                as_of=as_of or date.today(),
+                retention_days=retention_days,
+                limit=limit,
+                dry_run=dry_run,
+                force=bool(self.guards.force),
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
