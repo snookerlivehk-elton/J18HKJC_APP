@@ -7,11 +7,13 @@
   3) run_factors（每輪最多一次）
   4) start_form_ai_background
   5) snapshot（僅當 SG＋FormGuide＋Form AI 皆 ok）
+  6) social_copy（快照／海報後；MEETING_TICK_AUTO_SOCIAL_COPY）
 
 賽後（lookback）：
   1) sync_jjjc_results
   2) sync_jjjc_text_reports
   3) settle_pending
+  4) promo_hits → post_race_copy（SETTLED 後；可開關）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -73,6 +75,27 @@ AUTO_FACTORS = (os.getenv("MEETING_TICK_AUTO_FACTORS", "true") or "true").lower(
     "yes",
 )
 AUTO_FORM_AI = (os.getenv("MEETING_TICK_AUTO_FORM_AI", "true") or "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_SOCIAL_COPY = (
+    os.getenv("MEETING_TICK_AUTO_SOCIAL_COPY", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_PROMO_HITS = (
+    os.getenv("MEETING_TICK_AUTO_PROMO_HITS", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_POST_RACE_COPY = (
+    os.getenv("MEETING_TICK_AUTO_POST_RACE_COPY", "true") or "true"
+).lower() in (
     "1",
     "true",
     "yes",
@@ -161,6 +184,8 @@ class MeetingActionPlan:
     sync_results: bool = False
     sync_text_reports: bool = False
     settle: bool = False
+    promo_hits: bool = False
+    post_race_copy: bool = False
     skip_reasons: List[str] = field(default_factory=list)
     readiness: Dict[str, Any] = field(default_factory=dict)
 
@@ -175,6 +200,7 @@ class PreRaceActionPlan:
     run_factors: bool = False
     start_form_ai: bool = False
     snapshot: bool = False
+    social_copy: bool = False
     skip_reasons: List[str] = field(default_factory=list)
     readiness: Dict[str, Any] = field(default_factory=dict)
 
@@ -468,6 +494,7 @@ class MeetingTickRunner:
         auto_factors: bool = AUTO_FACTORS,
         auto_form_ai: bool = AUTO_FORM_AI,
         auto_snapshot: bool = AUTO_SNAPSHOT,
+        auto_social_copy: bool = AUTO_SOCIAL_COPY,
     ) -> PreRaceActionPlan:
         """純決策：賽前要不要拉排位／SG／FG／因子／Form AI／快照。"""
         d, c = racing_date[:10], course.upper()
@@ -577,6 +604,39 @@ class MeetingTickRunner:
             else:
                 plan.snapshot = True
 
+        # --- SOCIAL_COPY（快照後附屬；不擋主鏈）---
+        snapshot_ready_soon = snap == STATUS_OK or plan.snapshot
+        if not auto_social_copy:
+            plan.skip_reasons.append("SOCIAL_COPY disabled by env")
+        elif not snapshot_ready_soon:
+            plan.skip_reasons.append("SOCIAL_COPY wait: SNAPSHOT not ready")
+        else:
+            already = False
+            try:
+                from ad_copy_jobs import job_done_for_batch, resolve_meeting_batch_id
+                from ad_poster import default_output_dir
+
+                bid = resolve_meeting_batch_id(d, c) or ""
+                if (
+                    bid
+                    and not self.guards.force
+                    and job_done_for_batch(default_output_dir(), d, c, "social", bid)
+                ):
+                    already = True
+            except Exception:
+                already = False
+            if already:
+                plan.skip_reasons.append("SOCIAL_COPY already archived")
+            else:
+                # 用 tick_state 冷卻（waiting／failed）
+                st_row = self.get_tick_state(d, c, "SOCIAL_COPY")
+                last_st = str((st_row or {}).get("last_status") or STATUS_PENDING)
+                allowed, why = self._attempt_allowed(d, c, "SOCIAL_COPY", last_st, now=now)
+                if not allowed:
+                    plan.skip_reasons.append(f"SOCIAL_COPY skip: {why}")
+                else:
+                    plan.social_copy = True
+
         return plan
 
     def _record_pull_attempt(
@@ -631,6 +691,7 @@ class MeetingTickRunner:
                 "run_factors": plan.run_factors,
                 "start_form_ai": plan.start_form_ai,
                 "snapshot": plan.snapshot,
+                "social_copy": plan.social_copy,
                 "skip_reasons": list(plan.skip_reasons),
             },
             "actions": [],
@@ -814,6 +875,71 @@ class MeetingTickRunner:
         elif plan.snapshot:
             _act("snapshot")
 
+        # --- SOCIAL_COPY：本輪快照成功，或快照已 ok 且計劃要跑 ---
+        want_social = plan.social_copy
+        if not dry_run and AUTO_SOCIAL_COPY and not want_social:
+            # opportunistic：剛建完快照
+            snap_actions = [
+                a
+                for a in out["actions"]
+                if a.get("action") == "snapshot" and a.get("ok") and not a.get("skipped")
+            ]
+            if snap_actions:
+                want_social = True
+        if want_social:
+            action_rec: Dict[str, Any] = {"action": "social_copy"}
+            if dry_run:
+                action_rec["ok"] = True
+                action_rec["dry_run"] = True
+                out["actions"].append(action_rec)
+            else:
+                try:
+                    from ad_copy_jobs import run_auto_social_copy
+
+                    batch_id = None
+                    for a in reversed(out["actions"]):
+                        if a.get("action") == "snapshot":
+                            res = a.get("result") or {}
+                            batch_id = res.get("batch_id")
+                            break
+                    result = run_auto_social_copy(
+                        racing_date=d,
+                        course=c,
+                        batch_id=batch_id,
+                        force=self.guards.force,
+                    )
+                    action_rec["ok"] = bool(result.get("ok"))
+                    action_rec["result"] = {
+                        k: result.get(k)
+                        for k in (
+                            "ok",
+                            "skipped",
+                            "waiting",
+                            "error",
+                            "reason",
+                            "batch_id",
+                            "source",
+                            "n_featured",
+                            "social_copy",
+                            "archive",
+                        )
+                        if k in result
+                    } or result
+                    self._record_pull_attempt(
+                        d,
+                        c,
+                        "SOCIAL_COPY",
+                        result,
+                        waiting_hints=("copy.json", "尚未", "waiting", "≠"),
+                    )
+                except Exception as e:
+                    action_rec["ok"] = False
+                    action_rec["result"] = {"ok": False, "error": str(e)}
+                    self.record_tick_attempt(
+                        d, c, "SOCIAL_COPY", ok=False, status=STATUS_FAILED, detail=str(e)
+                    )
+                out["actions"].append(action_rec)
+
         if not out["actions"]:
             out["noop"] = True
         return out
@@ -969,6 +1095,74 @@ class MeetingTickRunner:
             else:
                 plan.settle = True
 
+        # --- PROMO_HITS / POST_RACE_COPY（SETTLED 後附屬）---
+        settled_ready_soon = settled_st == STATUS_OK or plan.settle
+        if not AUTO_PROMO_HITS and not AUTO_POST_RACE_COPY:
+            plan.skip_reasons.append("PROMO/POST_COPY disabled by env")
+        elif not settled_ready_soon:
+            plan.skip_reasons.append("PROMO wait: SETTLED not ready")
+        else:
+            already_promo = False
+            try:
+                from ad_copy_jobs import job_done_for_batch, resolve_meeting_batch_id
+                from ad_poster import default_output_dir
+
+                bid = resolve_meeting_batch_id(d, c, prefer_settled=True) or ""
+                out_root = default_output_dir()
+                if (
+                    bid
+                    and not self.guards.force
+                    and job_done_for_batch(out_root, d, c, "promo_hits", bid)
+                ):
+                    already_promo = True
+            except Exception:
+                bid = ""
+                already_promo = False
+
+            if AUTO_PROMO_HITS:
+                if already_promo:
+                    plan.skip_reasons.append("PROMO_HITS already archived")
+                else:
+                    st_row = self.get_tick_state(d, c, "PROMO_HITS")
+                    last_st = str((st_row or {}).get("last_status") or STATUS_PENDING)
+                    allowed, why = self._attempt_allowed(
+                        d, c, "PROMO_HITS", last_st, now=now
+                    )
+                    if not allowed:
+                        plan.skip_reasons.append(f"PROMO_HITS skip: {why}")
+                    else:
+                        plan.promo_hits = True
+
+            if AUTO_POST_RACE_COPY:
+                already_copy = False
+                try:
+                    from ad_copy_jobs import job_done_for_batch
+                    from ad_poster import default_output_dir
+
+                    if (
+                        bid
+                        and not self.guards.force
+                        and job_done_for_batch(
+                            default_output_dir(), d, c, "post_race", bid
+                        )
+                    ):
+                        already_copy = True
+                except Exception:
+                    already_copy = False
+                if already_copy:
+                    plan.skip_reasons.append("POST_RACE_COPY already archived")
+                else:
+                    st_row = self.get_tick_state(d, c, "POST_RACE_COPY")
+                    last_st = str((st_row or {}).get("last_status") or STATUS_PENDING)
+                    allowed, why = self._attempt_allowed(
+                        d, c, "POST_RACE_COPY", last_st, now=now
+                    )
+                    if not allowed:
+                        plan.skip_reasons.append(f"POST_RACE_COPY skip: {why}")
+                    else:
+                        # 即使 promo=0 也會跑（job 內 skip）；確保評估後有機會產文
+                        plan.post_race_copy = True
+
         return plan
 
     def execute_post_race_meeting(
@@ -983,6 +1177,8 @@ class MeetingTickRunner:
                 "sync_results": plan.sync_results,
                 "sync_text_reports": plan.sync_text_reports,
                 "settle": plan.settle,
+                "promo_hits": plan.promo_hits,
+                "post_race_copy": plan.post_race_copy,
                 "skip_reasons": list(plan.skip_reasons),
             },
             "actions": [],
@@ -1147,9 +1343,131 @@ class MeetingTickRunner:
                     out["readiness_after_settle"] = self.pipe.refresh_readiness(d, c)
             out["actions"].append(action_rec)
 
-        if not plan.sync_results and not plan.sync_text_reports and not plan.settle:
+        # 附屬：本 meeting 已 SETTLED（或本輪 settle 成功）→ promo／文案
+        # 注意：run_post_race 會把 settle 延後；此處只處理 plan.settle=False 且已 settled 的補跑
+        if (plan.promo_hits or plan.post_race_copy) and not plan.settle:
+            ready = (
+                out.get("readiness_after_settle")
+                or out.get("readiness_after_sync")
+                or self.pipe.refresh_readiness(d, c)
+            )
+            settled_ok = (
+                str((ready.get("SETTLED") or {}).get("status") or "") == STATUS_OK
+            )
+            if settled_ok or dry_run:
+                ad_rec = self._run_post_race_ad_actions(
+                    d, c, plan, dry_run=dry_run
+                )
+                out["actions"].extend(ad_rec)
+
+        if (
+            not plan.sync_results
+            and not plan.sync_text_reports
+            and not plan.settle
+            and not plan.promo_hits
+            and not plan.post_race_copy
+        ):
             out["noop"] = True
         return out
+
+    def _run_post_race_ad_actions(
+        self,
+        d: str,
+        c: str,
+        plan: MeetingActionPlan,
+        *,
+        dry_run: bool = False,
+        settled_batch_ids: Optional[Sequence[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """執行 promo_hits／post_race_copy 並寫 tick_state。"""
+        actions: List[Dict[str, Any]] = []
+        if not (plan.promo_hits or plan.post_race_copy):
+            return actions
+        if dry_run:
+            if plan.promo_hits:
+                actions.append(
+                    {"action": "promo_hits", "ok": True, "dry_run": True}
+                )
+            if plan.post_race_copy:
+                actions.append(
+                    {"action": "post_race_copy", "ok": True, "dry_run": True}
+                )
+            return actions
+        try:
+            from ad_copy_jobs import run_post_race_ad_cascade
+
+            cascade = run_post_race_ad_cascade(
+                racing_date=d,
+                course=c,
+                batch_ids=list(settled_batch_ids or []) or None,
+                force=self.guards.force,
+                dry_run=False,
+                auto_promo=bool(plan.promo_hits),
+                auto_copy=bool(plan.post_race_copy),
+            )
+            for step in cascade.get("actions") or []:
+                name = str(step.get("action") or "")
+                stage = (
+                    "PROMO_HITS"
+                    if name == "promo_hits"
+                    else "POST_RACE_COPY"
+                    if name == "post_race_copy"
+                    else name.upper()
+                )
+                rec = {
+                    "action": name,
+                    "ok": bool(step.get("ok")),
+                    "result": {
+                        k: step.get(k)
+                        for k in (
+                            "ok",
+                            "skipped",
+                            "waiting",
+                            "error",
+                            "reason",
+                            "batch_id",
+                            "n_promo_races",
+                            "n_featured",
+                            "source",
+                            "archive",
+                            "promo_hits",
+                            "post_race_copy",
+                        )
+                        if k in step
+                    }
+                    or step,
+                }
+                actions.append(rec)
+                # skipped＋ok 算成功；waiting 不累加 fail
+                self._record_pull_attempt(
+                    d,
+                    c,
+                    stage,
+                    step,
+                    waiting_hints=("尚無", "尚未", "waiting"),
+                )
+        except Exception as e:
+            actions.append(
+                {
+                    "action": "post_race_ad_cascade",
+                    "ok": False,
+                    "result": {"ok": False, "error": str(e)},
+                }
+            )
+            if plan.promo_hits:
+                self.record_tick_attempt(
+                    d, c, "PROMO_HITS", ok=False, status=STATUS_FAILED, detail=str(e)
+                )
+            if plan.post_race_copy:
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "POST_RACE_COPY",
+                    ok=False,
+                    status=STATUS_FAILED,
+                    detail=str(e),
+                )
+        return actions
 
     def run_post_race(
         self,
@@ -1193,16 +1511,20 @@ class MeetingTickRunner:
         # settle 全域一次即可；先收集需要 settle 的 meeting，最後跑一次
         settle_requested = False
         deferred_settle_meetings: List[MeetingActionPlan] = []
+        deferred_ad_meetings: List[MeetingActionPlan] = []
 
         for d, c in meetings:
             plan = self.plan_post_race_meeting(d, c)
-            # 拆開：先執行 sync；settle 延後合併
+            # 拆開：先執行 sync；settle 延後合併；附屬廣告亦跟 settle 後跑
             local = MeetingActionPlan(
                 racing_date=plan.racing_date,
                 course=plan.course,
                 sync_results=plan.sync_results,
                 sync_text_reports=plan.sync_text_reports,
                 settle=False,
+                # 僅當本輪不需 settle（已結算）才即時跑廣告附屬
+                promo_hits=bool(plan.promo_hits and not plan.settle),
+                post_race_copy=bool(plan.post_race_copy and not plan.settle),
                 skip_reasons=list(plan.skip_reasons),
                 readiness=plan.readiness,
             )
@@ -1211,6 +1533,9 @@ class MeetingTickRunner:
                 settle_requested = True
                 deferred_settle_meetings.append(plan)
                 meeting_out["plan"]["settle_deferred"] = True
+                if plan.promo_hits or plan.post_race_copy:
+                    deferred_ad_meetings.append(plan)
+                    meeting_out["plan"]["ad_deferred"] = True
             report["meetings"].append(meeting_out)
             report["n_actions"] += len(meeting_out.get("actions") or [])
 
@@ -1284,6 +1609,49 @@ class MeetingTickRunner:
                         )
             report["settle"] = settle_rec
             report["n_actions"] += 1
+
+            # settle 後：對已 SETTLED 的 deferred ad meetings 跑宣傳／文案
+            ad_report: List[Dict[str, Any]] = []
+            for p in deferred_ad_meetings:
+                if dry_run:
+                    ad_actions = self._run_post_race_ad_actions(
+                        p.racing_date, p.course, p, dry_run=True
+                    )
+                else:
+                    ready = self.pipe.refresh_readiness(p.racing_date, p.course)
+                    if str((ready.get("SETTLED") or {}).get("status")) != STATUS_OK:
+                        ad_report.append(
+                            {
+                                "racing_date": p.racing_date,
+                                "course": p.course,
+                                "skipped": True,
+                                "reason": "SETTLED not ok after settle",
+                            }
+                        )
+                        continue
+                    settled_batches = list(
+                        ((report.get("settle") or {}).get("result") or {}).get(
+                            "settled_batches"
+                        )
+                        or []
+                    )
+                    ad_actions = self._run_post_race_ad_actions(
+                        p.racing_date,
+                        p.course,
+                        p,
+                        dry_run=False,
+                        settled_batch_ids=settled_batches or None,
+                    )
+                ad_report.append(
+                    {
+                        "racing_date": p.racing_date,
+                        "course": p.course,
+                        "actions": ad_actions,
+                    }
+                )
+                report["n_actions"] += len(ad_actions)
+            if ad_report:
+                report["post_race_ads"] = ad_report
 
         report["n_meetings"] = len(report["meetings"])
         return report

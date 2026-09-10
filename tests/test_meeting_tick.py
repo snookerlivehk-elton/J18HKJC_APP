@@ -95,6 +95,26 @@ class PlanPreRaceTest(unittest.TestCase):
         self.assertFalse(plan.sync_racecard)
         self.assertFalse(plan.pull_speedguide)
         self.assertTrue(plan.snapshot)
+        self.assertTrue(plan.social_copy)
+
+    def test_social_copy_waits_without_snapshot(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "ok"},
+            "SPEEDGUIDE": {"status": "pending"},
+            "FORMGUIDE": {"status": "pending"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [{"stage": s, "status": "pending", "manual_override": 0} for s in ("SNAPSHOT",)]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.social_copy)
+        self.assertTrue(any("SOCIAL_COPY wait" in s for s in plan.skip_reasons))
 
     def test_manual_skip_blocks_racecard(self):
         runner = self._runner()
@@ -140,11 +160,13 @@ class PlanPreRaceTest(unittest.TestCase):
             run_factors=True,
             start_form_ai=True,
             snapshot=False,
+            social_copy=True,
         )
         out = runner.execute_pre_race_meeting(plan, dry_run=True)
         pipe.run_action.assert_not_called()
-        self.assertEqual(len(out["actions"]), 5)
+        self.assertEqual(len(out["actions"]), 6)
         self.assertTrue(all(a.get("dry_run") for a in out["actions"]))
+        self.assertTrue(any(a.get("action") == "social_copy" for a in out["actions"]))
 
 
 class PlanPostRaceTest(unittest.TestCase):
@@ -209,6 +231,9 @@ class PlanPostRaceTest(unittest.TestCase):
         self.assertFalse(plan.settle)
         # 賽後評述仍可週期補拉（RESULTS 已 ok）
         self.assertTrue(plan.sync_text_reports)
+        # 已結算 → 可跑宣傳評估／賽後文案
+        self.assertTrue(plan.promo_hits)
+        self.assertTrue(plan.post_race_copy)
 
     def test_manual_skip_blocks_actions(self):
         runner = self._runner()

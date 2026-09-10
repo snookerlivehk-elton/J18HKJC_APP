@@ -102,8 +102,8 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 附屬（建議納入自動，但可先不進 STAGES 硬閘）：
 
 - 快照成功 → 廣告海報（已可 `AD_OUTPUT_ON_SNAPSHOT`）  
-- 賽前社交文案 `social_copy.json`（現手動）  
-- 結算後 → 命中率可讀；可宣傳場次 → 賽後文案 `post_race_social_copy.json`（現手動／半自動）
+- 賽前社交文案 `social_copy.json`（✅ `MEETING_TICK_AUTO_SOCIAL_COPY`，預設 true）  
+- 結算後 → 命中率可讀；可宣傳場次 → 賽後文案 `post_race_social_copy.json`（✅ `AUTO_PROMO_HITS`＋`AUTO_POST_RACE_COPY`）
 
 ### 2.2 狀態碼
 
@@ -251,7 +251,7 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 | `meeting_tick.py` 賽後 RESULTS→SETTLED＋text-reports | ✅ 已有（含 cooldown／max fails／dry-run） | 加輕探、`content_updated_at` 去重、+12h 窗 |
 | 賽前 racecard→SG→FG→factors→Form AI→snapshot | ✅ `mode=pre_race`／`all`（硬閘：SG+FG+Form AI 齊才 snapshot） | 輕探 fingerprint；Webhook |
 | Railway／阿里雲 Cron | `start-tick.sh` 預設 `mode=all`；GHA 每小時 | 雙邊常駐確認掛載 |
-| 廣告賽前／賽後文案自動 | 海報可跟快照；文案多手動 | 附屬 job（Phase D） |
+| 廣告賽前／賽後文案自動 | ✅ 海報跟快照；賽前 social＋賽後 promo／copy 經 tick（`ad_copy_jobs.py`） | 通知／儀表板歸檔瀏覽 |
 | Webhook 由 JJJC 推送 | ❌ | 優化項（可替代部分輪詢） |
 | 作戰室「標準流程」可視化 | 有 stage 狀態；缺一頁式 SOP 引導 | 手冊＋UI 對齊本文件 |
 
@@ -260,7 +260,10 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 開關（環境變數）：
 - `MEETING_TICK_MODE=all|pre_race|post_race`
 - `MEETING_TICK_AUTO_FACTORS`／`AUTO_FORM_AI`／`AUTO_SNAPSHOT`（預設 true）
+- `MEETING_TICK_AUTO_SOCIAL_COPY`／`AUTO_PROMO_HITS`／`AUTO_POST_RACE_COPY`（預設 true；Phase D）
+- `AD_SOCIAL_TONE`（賽前／賽後文案語氣；預設跟 `ad_llm_copy.DEFAULT_TONE`）
 - 正式快照**不會**在閘門未齊時自動出 provisional
+- 文案冪等：`ad_output/archive/{date}_{course}/{social|promo_hits|post_race}_latest.json` 以 `batch_id` 去重
 ---
 
 ## 7. 開發切片（跟隨本手冊開工順序）
@@ -286,10 +289,10 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 5. [ ] 確認兩邊 Cron／GHA 已用 `mode=all`
 ### Phase D — 附屬自動化
 
-1. 快照後確保海報  
-2. 賽前 social copy（可開關）  
-3. SETTLED 後 promo hits → 賽後 copy（可開關）  
-4. 通知（可選：Telegram／email 僅 failed／需人工）  
+1. [x] 快照後確保海報（既有 `AD_OUTPUT_ON_SNAPSHOT`）  
+2. [x] 賽前 social copy（`MEETING_TICK_AUTO_SOCIAL_COPY` → `ad_copy_jobs.run_auto_social_copy`）  
+3. [x] SETTLED 後 promo hits → 賽後 copy（`AUTO_PROMO_HITS`／`AUTO_POST_RACE_COPY`）  
+4. [ ] 通知（可選：Telegram／email 僅 failed／需人工）  
 
 ### Phase E — 優化
 
@@ -473,18 +476,20 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 目標檔案（現有）：
 
-- 賽前：`ad_output/social_copy.json`（現會被覆蓋）  
-- 賽後：`ad_output/post_race_social_copy.json`（現會被覆蓋）  
+- 賽前：`ad_output/social_copy.json`（最新覆蓋）＋ `archive/{date}_{course}/social_*.json`  
+- 賽後：`ad_output/post_race_social_copy.json`／`promo_hits.json` ＋對應 archive  
+- 觸發：`meeting_tick`（`ad_copy_jobs.py`）；冪等看 `*_latest.json` 的 `meeting.batch_id`
 
-**回測要求（待實作）：** 每次產檔另存版本，例如：
+**回測要求（已實作 latest＋timestamped）：**
 
 ```
 ad_output/archive/{racing_date}_{course}/social_{timestamp}.json
 ad_output/archive/{racing_date}_{course}/post_race_{timestamp}.json
+ad_output/archive/{racing_date}_{course}/promo_hits_{timestamp}.json
 ```
 
 JSON 內保留：`meeting`、`tone`、`source`（llm／fallback）、`featured`、完整 `post_text`、觸發的 `batch_id`／命中規則。  
-儀表板可列出歷史版本並對照當日命中（回測）。
+儀表板可列出歷史版本並對照當日命中（回測）（UI 瀏覽仍待 Phase E）。
 
 ### 10.5 失敗通知＋是否人工介入（儀表板）
 
