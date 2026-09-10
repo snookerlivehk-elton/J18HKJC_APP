@@ -648,10 +648,11 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 ## 15. 仍待你補一句的決策
 
-1. **SG／FormGuide 覆蓋門檻**：維持約 80% 可否？（懂板塊後）  
-2. **Primary 之後是否自動 revision**：開賽前資料再齊時自動追加修訂卷，還是只保留一份 primary？  
-3. **雙跑還是分工**：測試期建議雙跑分庫；你是否確認？  
-4. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**（見 §11）  
+1. **SG（速勢能量）覆蓋門檻**：維持約 80% 可否？  
+2. **Primary 之後是否自動 revision**  
+3. **雙跑還是分工**（測試期建議雙跑分庫）  
+4. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**  
+5. **JJJC 文字 export**：請 JJJC 提供欄位名／endpoint／schema 版本（目前公開 racecard／results 尚未見長文）→ 我方才能寫 sync  
 
 ---
 

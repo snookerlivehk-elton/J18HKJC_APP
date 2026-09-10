@@ -29,6 +29,7 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | J18 歷史 API | `race_meetings`, `races`, `runners`, `text_reports` | `batch_crawler` / `etl_pipeline` |
 | **api_jjjc 排位** | `upcoming_races`, `upcoming_runners` | `jjjc_racecard_sync.py` ← `GET /api/export/racecard`（`jjjc.racecard.v1`）；join=`race_id`+`horse_no` |
 | **api_jjjc 賽果** | `runners.finish_order_num`（+ `payouts`） | `jjjc_results_sync.py` ← `GET /api/export/results`（`jjjc.results.v1`） |
+| **api_jjjc 文字（目標）** | `upcoming_formguide`、`text_reports` | 賽事指引／沿路走勢／競賽報告：**JJJC 主路徑**；J18 歷史 API 僅備援（見 `AUTOMATION_HANDBOOK` §1.3） |
 | HKJC 排位（備援） | 同上 upcoming_* | `racecard_crawler` HTML；作戰室保留「備援重抓」 |
 | HKJC Speed Guide | `upcoming_speedguide` | CMS JSON：`consvc.hkjc.com/.../SpeedPro/current/sg_*`；賽前約 1 日中午上架 |
 | 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |
