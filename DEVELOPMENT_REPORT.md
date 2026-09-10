@@ -1,12 +1,12 @@
 # J18 賽馬量化預測系統 — AI 開發交接手冊
 
-> **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**、**§5.3／§6 階段閘門**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
+> **給下一位 AI / 開發者**：先讀本文件與 [`AUTOMATION_HANDBOOK.md`](AUTOMATION_HANDBOOK.md)（賽日全自動 SOP），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > **覆蓋度持份者（已落地）**：見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。預設 `COVERAGE_MODE=on`、`INTERFERENCE_MODE=stakeholder`；缺評述／SG 可建 provisional 快照，資料到位後 `revise_snapshot`。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
 > **部署（2026-09 起暫時雙軌）**：**阿里雲為主要運作系統**（例：`http://47.83.164.64`）；**Railway**（`j18hkjc-app.up.railway.app`）暫時並行。所有開發／驗證須**先顧及阿里雲環境**（路徑、字型、Nginx／反向代理、本機碟、記憶體限制），再兼顾 Railway。  
 > 程式碼仍經 **GitHub `snookerlivehk-elton/J18HKJC_APP` `main`** 發布；本機 `.env` 連同一套（或對應環境的）Postgres（勿提交密碼）。  
 > **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**  
-> **現階段**：手動作戰至「賽日結算跑通」前，**勿開工全系統 Cron／自動代運作**。
+> **自動化**：賽後 `meeting_tick` 已落地；賽前全鏈見 `AUTOMATION_HANDBOOK.md` Phase C（尚未實作）。
 
 ---
 
@@ -321,10 +321,11 @@ fixtures → 輕探 racecard → sync → SG／FormGuide → factors → Form AI
 - [ ] Peak vs EMA 雙特徵進總分／ML  
 - [ ] 用已結算快照校準 `SOFTMAX_TEMPERATURE`  
 
-### P2 — 自動化與產品（**閘門後再做**）
+### P2 — 自動化與產品
 
-- [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）— **等本賽日結算跑通**  
-- [ ] **賽前**：fixtures／排位／SG／快照 tick — 同上  
+- [x] **賽後**：`meeting_tick.py` post_race（見 `AUTOMATION_HANDBOOK.md`）  
+- [ ] **賽後增強**：輕探／generated_at／+12h 窗  
+- [ ] **賽前**：`mode=pre_race` 全鏈（手冊 Phase C）  
 - [x] Form AI：獨立馬評軌道（推介＋快照命中；不併入 `WEIGHT_*`）  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
 

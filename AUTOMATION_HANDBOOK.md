@@ -332,24 +332,154 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 4. **賽後文案／賽前文案：全自動產檔即可，還是要審批？**  
 5. **失敗通知渠道？**（先只寫 log／stage detail 是否夠）  
 6. **阿里雲 vs Railway：誰跑 pre_race、誰跑 post_race，或兩邊都跑？**（建議兩邊都跑但錯開分鐘，DB 各管各的）  
+7. **沿路走勢遺留：最長保留天數？**（建議 21～30 日後標 `expired` 停撈）  
+8. **評述到位後：是否自動觸發 NLP＋因子重算，還是只入遺留清單等人按？**（建議自動，但限批次大小）  
 
 ---
 
-## 11. 變更紀錄
+## 11. 數據遺留清單（延遲資料／沿路走勢）
+
+### 11.1 為什麼需要
+
+部分**賽後**資料不會跟「完場 +12h」一起到，常見要 **5～7 日**（甚至更耐）才齊。  
+其中最難排程的是 **沿路走勢評述**（`running_comment_text` → 表 `text_reports`，`report_type=running_comment`）。
+
+| 資料 | 典型來源（現況） | 節奏 |
+|------|------------------|------|
+| 名次／獨贏賠率 | api_jjjc `/api/export/results` | 完場約 +12h＋JJJC 重試 |
+| 沿路走勢／事故評述 | **J18 歷史 API** → `etl_pipeline`／`batch_crawler` → `text_reports` | **無固定節奏**，常滯後數日 |
+| NLP 結構化結果 | `nlp_batch_job` → `text_reports.nlp_result` | 有評述正文後才可跑 |
+
+> **注意（2026-09）：** `jjjc_results_sync` **尚未**寫入 `running_comment`。遺留清單的「創新拉取」主路徑目前是 **重跑該日 J18 歷史增量**（`batch_crawler`／ETL），不是再打一次 jjjc results。若日後 JJJC export 也帶評述，再加一條 sync。
+
+此類資料：
+
+- **不阻擋** 當日 RESULTS／SETTLED（作戰室 NLP 節點已標可選）  
+- **會影響** 之後賽日的近績／干擾持份者 coverage（查表推論）  
+- 故要用 **遺留清單（backlog）** 長期補洞，而不是只靠單次賽後 tick
+
+### 11.2 清單應記什麼（建議表 `data_backlog`）
+
+建議欄位（實作時可 SQLite／PG 一張表）：
+
+| 欄位 | 說明 |
+|------|------|
+| `id` | PK |
+| `racing_date` / `course` / `race_id` | 粒度：建議先 **race 或 meeting**，評述可再細到 runner |
+| `data_kind` | 如 `running_comment`、`incident_report`、`finish_order`、`win_odds`、`formguide`… |
+| `status` | `open` / `retrying` / `done` / `expired` / `skipped_manual` |
+| `first_seen_at` / `last_attempt_at` / `done_at` | |
+| `attempt_count` | |
+| `next_attempt_at` | 退避用 |
+| `last_error` / `detail` | |
+| `source_hint` | `j18_history` / `jjjc_results` / … |
+
+**入列時機（每次 tick／更新順路做）：**
+
+1. 賽後 RESULTS 已有名次，但該日 `text_reports` 缺 `running_comment`（相對 runners 覆蓋不足）→ 入列  
+2. 輕探／sync 後發現仍缺賠率、部分場無名次 → 入列（可與 JJJC 重試疊加）  
+3. 賽前發現 FormGuide／SG 過期仍空且已過預期上架窗 → 可入列（可選）  
+
+**出列時機：**
+
+- 覆蓋達標（例如該 meeting runners 有評述比例 ≥ 閾值，或「預期有評述的馬」齊）→ `done`  
+- 超過保留窗（如 21～30 日）→ `expired`（停撈，可人工再開）  
+
+### 11.3 每次更新「順路」掃清單（配合 JJJC／既有 Cron）
+
+在 `meeting_tick`（或獨立 `backlog_tick`）每輪：
+
+```
+1. 跑當日主流程（pre/post）
+2. SELECT backlog WHERE status IN (open, retrying)
+     AND next_attempt_at <= now()
+     LIMIT K          -- 每輪上限，避免拖垮
+3. 按 data_kind 分流拉取：
+     running_comment / incident → 重跑該日 J18 history（batch_crawler 單日）
+     finish/odds → sync_jjjc_results（或等 JJJC）
+4. 刷新覆蓋檢查 → 達標則 done，否則加大退避寫回 next_attempt_at
+5. 若本輪有「新評述寫入」→ 觸發 §11.4 管道（可异步／下輪）
+```
+
+**退避建議（無固定節奏的評述）：**  
+首日每 6～12h → 其後每日 1 次 → 7 日後每 2～3 日 → 至保留窗結束。  
+勿與「完場 +12h 名次窗」綁死。
+
+### 11.4 沿路走勢到位後：要不要立刻重算因子？正確流程
+
+**不要**一拿到評述就只喊 `run_all_factors` 完事。正確順序：
+
+```
+① 評述正文入庫（text_reports.report_text，nlp_result 仍空）
+    ↓
+② NLP 解析（nlp_batch_job／只處理 nlp_result IS NULL）
+    ↓
+③ 重算因子（干擾通道／近績相關）
+    ↓
+④ 視情況：未來賽日 revision 快照（已結算舊 batch 不覆寫）
+```
+
+#### 為什麼要先 NLP？
+
+- 沿路走勢的**機器可用訊號**在 `nlp_result`（受阻／腳軟等），不是原文本身。  
+- stakeholder 模式：基礎 HORSE／SPEED 可不烤 NLP；**干擾持份者 I** 與 coverage 要靠 NLP。  
+- 無 NLP 就重算：多數情況 I 仍缺，白跑。
+
+#### ③ 因子重算範圍（建議）
+
+| 做法 | 說明 |
+|------|------|
+| **預設** | `run_all_factors(persist=True)`（或至少 HORSE／SPEED／INTERFERENCE_*）寫入 `factor_scores` |
+| **目的** | 更新**歷史查表**，令之後賽日匹配用到新評述／干擾 |
+| **已結算賽日** | **不要**改寫該日 `prediction_snapshots` 的鎖分（結算真相不動） |
+| **未開跑／未結算的未來賽日** | 若已有 provisional／primary 快照，可 `revise_snapshot` 吃新因子 |
+
+#### 要不要「立刻」？
+
+| 選項 | 建議 |
+|------|------|
+| 每寫入 1 場評述就全庫重算 | ❌ 太貴 |
+| 本輪 backlog 結束後，若 `new_comments > 0`，排隊 **一次** NLP batch + **一次** 因子重算 | ✅ 推薦 |
+| 僅標記 `needs_recompute=true`，交下一班維護窗（如每日凌晨） | ✅ 若白天負載高 |
+
+**推薦預設：**  
+`評述入庫 →（同輪或短延遲）NLP only_missing → 因子重算一次 → 對「未來未結算 meeting」可選 revise`。  
+**不要**為補歷史評述而重結已 `settled_at` 的 batch。
+
+#### 與覆蓋度手冊對齊
+
+見 `COVERAGE_STAKEHOLDER_HANDBOOK.md`：缺評述 → I=0 + coverage↓；補丁後重算 I／相關因子；snapshot 用 revision 語意。
+
+### 11.5 開發切片（接 Phase B/C）
+
+| 步 | 內容 |
+|----|------|
+| B1 | `data_backlog` 表 + 賽後 tick 入列（缺 running_comment） |
+| B2 | tick 順路重試 J18 單日 history |
+| B3 | 新評述 → 觸發 NLP batch（limit） |
+| B4 | NLP 完成 → 因子重算（防抖：合併為每輪一次） |
+| B5 | 可選：未來賽日 auto-revise |
+
+---
+
+## 12. 變更紀錄
 
 | 日期 | 說明 |
 |------|------|
 | 2026-09-10 | 初版：配合 JJJC 全自動；賽前／賽後 SOP；現況 vs 目標；開發切片 A–E |
+| 2026-09-10 | §11：數據遺留清單；沿路走勢延遲；評述到位後 NLP→因子→revision 流程 |
 
 ---
 
-## 12. 快速對照（給值班）
+## 13. 快速對照（給值班）
 
 | 問題 | 答案 |
 |------|------|
 | JJJC 有 9/13 排位，J18 會自動入庫嗎？ | **現在不會**；要手動 sync 或等賽前 tick |
 | `JJJC_API_BASE` 填什麼？ | Public：`https://apicc.up.railway.app` |
-| 賽後何時積極拉？ | 對齊完場約 +12h |
+| 賽後何時積極拉名次？ | 對齊完場約 +12h |
+| 沿路走勢為何常缺？ | 多經 J18 歷史 API，滯後 5～7 日；用遺留清單補 |
+| 評述到了要立刻重算因子？ | **先 NLP，再重算因子**；合併批次；已結算快照不覆寫 |
 | 空 export 怎辦？ | `waiting`，交給 JJJC 重試 |
 | 主狀態在哪？ | `meeting_pipeline` + 作戰室 |
 | Cron 跑什麼？ | `bash start-tick.sh`（獨立服務） |
