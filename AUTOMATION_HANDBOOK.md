@@ -362,8 +362,8 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 ```
 排位齊
-  → SG 馬匹覆蓋 ≥80%          ← 決策 1b（主要評分參考，缺則完全不建快照）
-  → 賽事指引建議就緒（FormGuide ≥80% 為 stage ok；見下）
+  → SG 馬匹覆蓋 ≥80%          ← 缺則完全不建快照
+  → FormGuide ≥80%             ← 同樣硬閘
   → Form AI ≥80%
   → 才建立正式 primary 快照
   → 才允許海報／文案／其後命中與賽後廣告
@@ -705,15 +705,58 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 ---
 
-## 15. 仍待你補一句的決策
+## 15. 決策狀態
 
-1. **SG／FormGuide／Form AI 覆蓋門檻**：維持 **馬匹覆蓋 ≥80%** 可否？（定義見 §10.2b）  
-2. **Primary 之後是否自動 revision**（開賽前再齊時自動追加修訂卷？）  
-3. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**  
-4. **JJJC 文字 export** 欄位／endpoint（公開 API 尚未見長文）  
+| 題 | 狀態 |
+|----|------|
+| 覆蓋 ≥80% | ✅ |
+| 缺 SG／FormGuide／Form AI → 不出任何快照；無快照不廣告 | ✅ |
+| 遺留 10～14 日；到齊自動 NLP→因子重算 | ✅ |
+| 兩邊都跑 | ✅ |
+| 自動 revision | ✅ 預設：閘門齊建一次 primary；仍達標且有更新才可 revision |
+| JJJC export 契約 | ⏳ 請用 §16 提示詞問對方 |
 
-~~兩邊都跑~~ → **已確認方案 A**。  
-~~無 Form AI 出正式快照／無齊備就廣告~~ → **已禁止**。
+---
+
+## 16. 給 JJJC 專案 AI 的提示詞（可直接複製）
+
+```text
+你是 api_jjjc／JJJC 爬蟲專案的助手。我們下游系統是 J18HKJC_APP，目前已用：
+
+- GET {BASE}/api/export/racecard?date=YYYY-MM-DD&venue=ST|HV
+- GET {BASE}/api/export/results?date=YYYY-MM-DD&venue=ST|HV
+
+schema 分別為 jjjc.racecard.v1、jjjc.results.v1。
+公開 racecard／results 裡目前主要是排位與名次／賠率，尚未穩定見到以下欄位。
+
+我們需要把「JJJC 當主資料源、HKJC CMS／J18 歷史 API 只作備援」。請清楚回答：
+
+1) 下列資料現在是否已由你們爬取並入庫？若有，對應的 DB 表／欄位名是什麼？
+   - 速勢能量 Speed Guide（energy／form／delta 或等價）
+   - 賽事指引／Form Guide 短評文字
+   - 沿路走勢評述（running comment）
+   - 競賽報告／事故報告（incident／race report）
+
+2) 下游應如何取得？請給「唯一建議」的 HTTP 契約：
+   - 是擴充現有 /api/export/racecard 與 /api/export/results？
+   - 還是新 endpoint（請寫完整 path）？
+   - 查詢參數（date、venue、raceNo…）？
+   - 回應 JSON 的 schema 名稱與版本（例如 jjjc.racecard.v2）？
+   - 請貼一份「含上述欄位」的最小樣本 JSON（可打碼馬名），標出欄位路徑。
+
+3) 時間語意：
+   - SG／賽事指引：最早大約賽前多久會有非空資料？
+   - 沿路走勢／競賽報告：完場後多久開始有？會否分批補齊？如何用 generated_at／fetched_at 判斷「有更新」？
+
+4) 空資料語意：races=[] 或某馬文字為 null／"" 時，下游應視為 waiting 還是 failed？
+
+5) 若同一日資料稍後補齊，export 是否保證幂等 upsert？下游能否只靠 generated_at 變更決定是否重拉？
+
+請用條列回答，並給「J18 應實作的 sync 對照表」：
+JJJC 欄位路徑 → 建議寫入 J18 的表.欄位
+（J18 目標表：upcoming_speedguide、upcoming_formguide.form_text、
+ text_reports report_type=running_comment|incident_report）
+```
 
 ---
 
@@ -721,9 +764,8 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 | 日期 | 說明 |
 |------|------|
-| 2026-09-10 | 初版：配合 JJJC 全自動；賽前／賽後 SOP；現況 vs 目標；開發切片 A–E |
-| 2026-09-10 | §11：數據遺留清單；沿路走勢延遲；評述到位後 NLP→因子→revision 流程 |
-| 2026-09-10 | §1.3：速勢能量 SG 亦改 **JJJC 主路徑**，HKJC CMS 備援 |
+| 2026-09-10 | 多輪：JJJC 主路徑、雙跑、Form AI／SG／廣告閘門等 |
+| 2026-09-10 | 覆蓋 80%；缺 SG 不出快照；遺留 10–14 日；§16 JJJC 提示詞 |
 
 ---
 
@@ -731,15 +773,9 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 | 問題 | 答案 |
 |------|------|
-| JJJC 有 9/13 排位，J18 會自動入庫嗎？ | **現在不會**；要手動 sync 或等賽前 tick |
-| `JJJC_API_BASE` 填什麼？ | Public：`https://apicc.up.railway.app` |
-| SG／FormGuide？ | 速勢能量／賽事指引；**主路徑 JJJC**，CMS／J18 API 備援 |
-| Primary vs Revision？ | 正式第一份鎖分 vs 追加修訂卷（舊卷保留） |
-| 無 Form AI 可否正式快照？ | **否**；Form AI 必須在快照**之前**達標 |
-| 覆蓋率指什麼？ | **馬匹覆蓋**：有該資料的馬數 ÷ 排位馬數（≥80%） |
-| 無正式快照／未結算？ | **不出命中主統計、不觸發廣告產檔** |
-| 兩邊都跑？ | **已確認**：各跑 tick、分庫、錯開 Cron |
-| 賽後何時積極拉名次？ | 對齊完場約 +12h |
-| 沿路走勢／賽事指引／競賽報告？ | **JJJC 主路徑**；J18 歷史 API 備援 |
-| 評述到了要立刻重算因子？ | **先 NLP，再重算因子**；合併批次；已結算快照不覆寫 |
-| Cron 跑什麼？ | `bash start-tick.sh`（獨立服務） |
+| 無 SG／FormGuide／Form AI（&lt;80%）？ | **不生成任何快照**；無快照則無廣告／命中主路徑 |
+| 舊 provisional 可缺什麼？ | 常有 `sg_missing`／`nlp_pending`／`low_match`——生產已禁止缺 SG／AI |
+| 遺留評述？ | 留 10～14 日；到齊 → NLP→因子重算 |
+| JJJC 契約？ | 用 §16 提示詞問對方 AI |
+| 兩邊都跑？ | 已確認，分庫錯開 Cron |
+| `JJJC_API_BASE` | `https://apicc.up.railway.app` |
