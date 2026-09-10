@@ -366,7 +366,7 @@ for stage, label in STAGES:
 
 st.divider()
 st.subheader(f"③ 數據遺留 — {racing_date} {course}")
-st.caption("沿途走勢／事故報告若未齊，會入遺留清單並在保留窗內自動重試（完整列表見「數據遺留清單」頁）。")
+st.caption("沿途走勢（JJJC `corunning`／J18 `running_comment`）或競賽報告（JJJC `racereport`／J18 `incident_report`）未齊時會入遺留清單，並在保留窗內自動重試。完整列表見「數據遺留清單」頁。")
 try:
     from data_backlog import (
         KIND_INCIDENT,
@@ -382,12 +382,12 @@ try:
     cov_inc = bl.measure_comment_coverage(racing_date, course, KIND_INCIDENT)
     bc1, bc2, bc3 = st.columns(3)
     bc1.metric(
-        "沿途評述覆蓋",
+        "沿途評述覆蓋（corunning）",
         f"{cov_rc.get('covered_n', 0)}/{cov_rc.get('expected_n', 0)}",
         f"{float(cov_rc.get('coverage') or 0):.0%}",
     )
     bc2.metric(
-        "事故報告覆蓋",
+        "競賽報告覆蓋（racereport）",
         f"{cov_inc.get('covered_n', 0)}/{cov_inc.get('expected_n', 0)}",
         f"{float(cov_inc.get('coverage') or 0):.0%}",
     )

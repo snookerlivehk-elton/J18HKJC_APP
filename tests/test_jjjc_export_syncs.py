@@ -191,6 +191,77 @@ class JjjcTextReportsSyncTest(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertEqual(out["phase"], "failed")
 
+    def test_normalize_jjjc_internal_aliases(self):
+        import jjjc_text_reports_sync as sync
+
+        self.assertEqual(sync.normalize_report_type("corunning"), "running_comment")
+        self.assertEqual(sync.normalize_report_type("racereport"), "incident_report")
+        self.assertEqual(sync.normalize_report_type("race_report"), "incident_report")
+        self.assertEqual(sync.normalize_report_type("running_comment"), "running_comment")
+        self.assertIsNone(sync.normalize_report_type("unknown_xyz"))
+
+    def test_upsert_accepts_racereport_corunning_aliases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "alias.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+            import jjjc_text_reports_sync as sync
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            payload = {
+                "schema": "jjjc.text_reports.v1",
+                "status": "obtained",
+                "content_updated_at": "2026-09-06T12:00:00Z",
+                "reports": [
+                    {
+                        "report_type": "corunning",
+                        "race_id": "20260906ST01",
+                        "runners": [
+                            {
+                                "horse_no": 1,
+                                "text": "沿欄上前",
+                                "is_placeholder": False,
+                            }
+                        ],
+                    },
+                    {
+                        "report_type": "racereport",
+                        "race_id": "20260906ST01",
+                        "runners": [
+                            {
+                                "horse_no": 1,
+                                "text": "直路受阻",
+                                "is_placeholder": False,
+                            }
+                        ],
+                    },
+                ],
+            }
+            out = sync.upsert_payload(payload)
+            self.assertTrue(out["ok"])
+            self.assertEqual(out["runner_upserted"], 2)
+
+            from sqlalchemy import create_engine, text
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            try:
+                with eng.connect() as conn:
+                    types = {
+                        r[0]
+                        for r in conn.execute(
+                            text("SELECT DISTINCT report_type FROM text_reports")
+                        )
+                    }
+            finally:
+                eng.dispose()
+            self.assertEqual(types, {"running_comment", "incident_report"})
+
 
 if __name__ == "__main__":
     unittest.main()
