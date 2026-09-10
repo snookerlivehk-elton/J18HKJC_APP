@@ -46,16 +46,15 @@ with c3:
 
 if do_enroll:
     with st.spinner("掃描保留窗內賽日…"):
-        report = svc.run_tick_pass(limit=0, dry_run=False, force=False)
-        # limit=0 still enrolls; process none if due empty with limit 0
-        # Actually limit=0 means process nothing — but run_tick_pass still enrolls. Good.
-        # Wait - list_due LIMIT 0 returns empty. Fine.
+        meetings = svc.candidate_meetings()
+        enroll_report = []
+        for d, c in meetings:
+            enroll_report.extend(svc.enroll_meeting(d, c))
+        counts2 = svc.summary_counts()
     st.success(
-        f"掃描 {report.get('n_meetings_scanned')} 個 meeting；"
-        f"入列動作 {report.get('n_enroll_actions')}；"
-        f"目前 open={report.get('counts', {}).get('open', 0)}"
+        f"掃描 {len(meetings)} 個 meeting；入列動作 {len(enroll_report)}；"
+        f"目前 open={counts2.get('open', 0)}"
     )
-    st.session_state.pop("backlog_df", None)
 
 if do_process:
     with st.spinner("同步 JJJC text-reports 並更新覆蓋…"):
