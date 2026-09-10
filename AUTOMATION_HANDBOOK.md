@@ -46,8 +46,8 @@
 |------|----------|----------|--------|------|
 | 速勢能量 **SG** | 能量／狀態評級 | `upcoming_speedguide` | **JJJC** `GET /api/export/speedguide`（`jjjc.speedguide.v1`） | HKJC SpeedPro CMS（`speedguide_crawler`） |
 | 賽事指引 | 近績／形勢短評 | `upcoming_formguide.form_text` | **JJJC** `GET /api/export/formguide`（`jjjc.formguide.v1`） | HKJC FormGuide CMS；再退 J18 API |
-| 沿路走勢 | 沿路評述 | `text_reports` `running_comment` | **JJJC** `GET /api/export/text-reports`（`jjjc.text_reports.v1`） | J18 歷史 API |
-| 競賽報告 | 事故／競賽報告 | `text_reports` `incident_report` | 同上（`report_type=incident_report`） | J18 歷史 API |
+| 沿路走勢 | 沿路評述／走位 | `text_reports` `running_comment`（別名 `corunning`） | **JJJC** `GET /api/export/text-reports`（`jjjc.text_reports.v1`） | J18 歷史 API |
+| 競賽報告 | 競賽／事故報告 | `text_reports` `incident_report`（別名 `racereport`） | 同上（`report_type=incident_report` 或 `racereport`） | J18 歷史 API |
 
 **HTTP 契約（J18 已實作 sync）：**
 

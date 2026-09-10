@@ -117,7 +117,13 @@ def fetch_export_get(
     url = f"{base}{path}"
     with httpx.Client(timeout=timeout, follow_redirects=True) as client:
         r = client.get(url, params=params)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            detail = (r.text or "")[:300]
+            raise httpx.HTTPStatusError(
+                f"HTTP {r.status_code} for {url}: {detail}",
+                request=r.request,
+                response=r,
+            )
         payload = r.json()
     if not isinstance(payload, dict):
         raise ValueError("export 回應非 JSON object")

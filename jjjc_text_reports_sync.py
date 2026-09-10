@@ -50,6 +50,30 @@ SCHEMA_NAME = "jjjc.text_reports.v1"
 EXPORT_PATH = "/api/export/text-reports"
 ALLOWED_TYPES = frozenset({"running_comment", "incident_report"})
 
+# JJJC 作戰室內部代號 → J18 text_reports.report_type
+# racereport (R3)＝競賽報告；corunning (R4)＝沿途走位評述
+REPORT_TYPE_ALIASES = {
+    "running_comment": "running_comment",
+    "corunning": "running_comment",
+    "co_running": "running_comment",
+    "running": "running_comment",
+    "incident_report": "incident_report",
+    "racereport": "incident_report",
+    "race_report": "incident_report",
+    "race-report": "incident_report",
+    "incident": "incident_report",
+}
+
+
+def normalize_report_type(raw: Optional[str]) -> Optional[str]:
+    """把 JJJC 內部名／別名正規成 J18 的 running_comment｜incident_report。"""
+    key = str(raw or "").strip().lower().replace(" ", "_")
+    if not key:
+        return None
+    return REPORT_TYPE_ALIASES.get(key) or (
+        key if key in ALLOWED_TYPES else None
+    )
+
 
 def fetch_export(
     race_date: str,
@@ -242,8 +266,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         with engine.begin() as conn:
             for rep in reports:
-                rtype = str(rep.get("report_type") or "").strip()
-                if rtype not in ALLOWED_TYPES:
+                rtype = normalize_report_type(rep.get("report_type"))
+                if not rtype:
                     continue
                 race_id = str(rep.get("race_id") or "").strip()
                 if not race_id:
@@ -283,6 +307,7 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         "race_id": race_id,
                         "horse_no": horse_no,
                         "report_type": rtype,
+                        "report_type_raw": rep.get("report_type"),
                         "is_placeholder": False,
                         "runner": ru,
                     }
@@ -409,44 +434,99 @@ def sync_meeting(
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    try:
-        if from_file:
-            payload = load_payload_file(from_file)
-        else:
-            payload = fetch_export(
-                race_date=racing_date,
-                venue=course,
-                race_no=race_no,
-                report_type=report_type,
-                base_url=base_url,
+    """
+    同步文字報告。report_type 接受 J18 名或 JJJC 別名（racereport／corunning）。
+    若上游尚未開放 /api/export/text-reports，回 waiting（不累加硬失敗語意由 tick 處理）。
+    """
+    want = normalize_report_type(report_type) if report_type else None
+    # 先打正規名，再試 JJJC 內部代號（若 filter 被拒則退回不帶 filter）
+    query_types: List[Optional[str]]
+    if from_file:
+        query_types = [want]
+    elif want == "running_comment":
+        query_types = ["running_comment", "corunning", None]
+    elif want == "incident_report":
+        query_types = ["incident_report", "racereport", None]
+    else:
+        query_types = [None]
+
+    last: Dict[str, Any] = {}
+    for qt in query_types:
+        try:
+            if from_file:
+                payload = load_payload_file(from_file)
+            else:
+                payload = fetch_export(
+                    race_date=racing_date,
+                    venue=course,
+                    race_no=race_no,
+                    report_type=qt,
+                    base_url=base_url,
+                )
+        except Exception as e:
+            err = str(e)
+            route_missing = (
+                "No route" in err
+                or "404" in err
+                or "Not Found" in err
+                or "text-reports" in err.lower()
             )
-    except Exception as e:
-        return {
-            "ok": False,
-            "waiting": False,
-            "phase": "failed",
-            "error": str(e),
-            "racing_date": normalize_date(racing_date),
-            "course": course.upper(),
-        }
+            last = {
+                "ok": False,
+                "waiting": bool(route_missing),
+                "phase": "waiting" if route_missing else "failed",
+                "error": err,
+                "racing_date": normalize_date(racing_date),
+                "course": str(course).upper(),
+                "report_type_filter": qt or want,
+            }
+            # 整條路由不存在：無需再試別名
+            if route_missing and "No route" in err:
+                return last
+            continue
 
-    if str(payload.get("status") or "").strip().lower() == "unavailable":
-        return {
-            "ok": False,
-            "waiting": False,
-            "phase": "failed",
-            "error": "status=unavailable",
-            "status": payload.get("status"),
-            "racing_date": normalize_date(racing_date),
-            "course": course.upper(),
-        }
+        if str(payload.get("status") or "").strip().lower() == "unavailable":
+            last = {
+                "ok": False,
+                "waiting": False,
+                "phase": "failed",
+                "error": "status=unavailable",
+                "status": payload.get("status"),
+                "racing_date": normalize_date(racing_date),
+                "course": str(course).upper(),
+            }
+            if from_file:
+                return last
+            continue
 
-    out = upsert_payload(payload)
-    out["racing_date"] = normalize_date(racing_date)
-    out["course"] = course.upper()
-    if report_type:
-        out["report_type_filter"] = report_type
-    return out
+        out = upsert_payload(payload)
+        out["racing_date"] = normalize_date(racing_date)
+        out["course"] = str(course).upper()
+        if qt or want:
+            out["report_type_filter"] = qt or want
+        # 有寫入或 from_file 一次即回
+        if from_file or int(out.get("runner_upserted") or 0) > 0 or not out.get("waiting"):
+            # 若指定 kind 但本輪 0 寫入且仍 waiting，可試下一別名
+            if (
+                want
+                and not from_file
+                and int(out.get("runner_upserted") or 0) == 0
+                and out.get("waiting")
+            ):
+                last = out
+                continue
+            return out
+        last = out
+        if from_file:
+            break
+    return last or {
+        "ok": False,
+        "waiting": True,
+        "phase": "waiting",
+        "error": "text-reports export 無可用資料或路由不存在",
+        "racing_date": normalize_date(racing_date),
+        "course": str(course).upper(),
+    }
 
 
 def main(argv: Optional[List[str]] = None) -> int:
