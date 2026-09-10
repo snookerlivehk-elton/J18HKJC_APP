@@ -142,13 +142,15 @@ def is_placeholder(runner: Dict[str, Any]) -> bool:
 
 
 def effective_text(runner: Dict[str, Any], *keys: str) -> Optional[str]:
-    """取第一個非空文字；placeholder 視為無內容。"""
+    """取第一個非空文字；placeholder 視為無內容；解碼常見 HTML 實體。"""
+    import html
+
     if is_placeholder(runner):
         return None
     for k in keys:
         t = runner.get(k)
         if text_nonempty(t):
-            return str(t).strip()
+            return html.unescape(str(t)).strip()
     return None
 
 
