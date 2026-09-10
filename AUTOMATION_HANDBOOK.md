@@ -322,22 +322,126 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 ---
 
-## 10. 待產品確認的決策（討論用）
+## 10. 產品決策紀錄（已確認／待解釋）
 
-請在開工 Phase C 前勾選／答覆：
+### 10.1 已拍板（2026-09-10）
 
-1. **正式快照是否允許無 Form AI？**（現可降級 provisional）  
-2. **SG／FormGuide 最低覆蓋 %？**（現約 80%）  
-3. **賽前 tick 是否自動 revision，還是只建一次 primary？**  
-4. **賽後文案／賽前文案：全自動產檔即可，還是要審批？**  
-5. **失敗通知渠道？**（先只寫 log／stage detail 是否夠）  
-6. **阿里雲 vs Railway：誰跑 pre_race、誰跑 post_race，或兩邊都跑？**（建議兩邊都跑但錯開分鐘，DB 各管各的）  
-7. **沿路走勢遺留：最長保留天數？**（建議 21～30 日後標 `expired` 停撈）  
-8. **評述到位後：是否自動觸發 NLP＋因子重算，還是只入遺留清單等人按？**（建議自動，但限批次大小）  
+| # | 決策 | 實作含義 |
+|---|------|----------|
+| 1 | **無 Form AI → 不能出正式快照** | `snapshot` 前 FORM_AI 必須 ok（覆蓋達標）；不可用「略過 Form AI」出 `primary` 正式版。缺 AI 時最多只允許明確標示的非生產用途（預設：**直接擋**）。 |
+| 4 | **文案全自動產檔** | 賽前 `social_copy`、賽後 `post_race_social_copy` 可由 tick 觸發；**每期產檔必須歸檔可回測**（見 §10.4）。 |
+| 5 | **失敗必須通知＋判斷是否要人工** | 管理介面儀表板（§14）；不只 log。 |
+| 6 | **兩邊部署策略** | 見 §10.6 詳解後由你選「雙跑」或「分工」；手冊兩種都支援。 |
+
+### 10.2 Speed Guide（SG）／Form Guide 是什麼？
+
+兩者都是 **馬會官方「賽前輔助資訊」**，不是排位表本身，也不是賽後沿路走勢。
+
+| 名稱 | 板塊／來源 | 本系統表 | 大概內容 | 典型上架 |
+|------|------------|----------|----------|----------|
+| **Speed Guide（速勢能量）** | HKJC SpeedPro／速勢能量頁（CMS JSON） | `upcoming_speedguide` | 每匹馬的速勢／狀態類評級能量，給步速／狀態參考 | 常於**賽日前一日中午左右** |
+| **Form Guide（賽績指引）** | 同族 CMS（`fg_race_*`） | `upcoming_formguide`（`form_text`） | 近績短評彙整，賽前社交文案也會引用 | 賽前陸續上架 |
+
+和別的資料區分：
+
+- **排位（RACECARD）**：馬號、騎練、檔位、班次距離 → `upcoming_races/runners`（主來自 JJJC）  
+- **SG／FormGuide**：排位之後的「官方加料」  
+- **沿路走勢評述**：賽**後**才有，入 `text_reports`（常滯後數日）  
+- **Form AI**：我們用 LLM 對 FormGuide／近績做的**自有評分**，不是馬會 SG  
+
+作戰室階段：`SPEEDGUIDE`、`FORMGUIDE` 兩格就是盯這兩包有沒有齊。
+
+### 10.3 Primary 快照 vs Revision 是什麼？
+
+一次「預測快照」= 把某賽日當下的模型分、AI 分、融合推介、`ad_pick_rank` 等 **鎖進資料庫**（`prediction_snapshot_batches` + `prediction_snapshots`），之後結算、命中率、廣告推介都以這批為準。
+
+| 種類 | `snapshot_kind` | 意思 | 何時用 |
+|------|-----------------|------|--------|
+| **Primary（主快照）** | `primary` | 該賽日**第一份正式鎖分** | Form AI 齊備後首次建立；**正式出賽／對外表**以它為錨 |
+| **Revision（修訂快照）** | `revision` | **追加**一份新 batch，`revision_of` 指向舊 batch；**不刪、不覆寫**舊資料 | 主快照之後，SG／Form／因子／AI 又更新了，想用新分數再鎖一版（例如開賽前最終版） |
+| **Provisional（臨時）** | 常搭 `provisional=true` | 資料未齊仍鎖一版（可降級） | **依你的決策 #1：正式流程禁止用「無 Form AI」當正式 primary**；provisional 僅內部實驗／人工明確允許時 |
+
+生活化比喻：
+
+- **Primary**＝交卷的第一份正式答案紙  
+- **Revision**＝老師允許「再交一版修訂卷」，舊卷仍留底（方便對照／回測）  
+- 賽後結算：對**選定的 batch**（通常最新未結算或指定 primary）回填名次；已 `settled_at` 的 batch **不再改分數**
+
+### 10.4 文案全自動＋每期歸檔回測
+
+目標檔案（現有）：
+
+- 賽前：`ad_output/social_copy.json`（現會被覆蓋）  
+- 賽後：`ad_output/post_race_social_copy.json`（現會被覆蓋）  
+
+**回測要求（待實作）：** 每次產檔另存版本，例如：
+
+```
+ad_output/archive/{racing_date}_{course}/social_{timestamp}.json
+ad_output/archive/{racing_date}_{course}/post_race_{timestamp}.json
+```
+
+JSON 內保留：`meeting`、`tone`、`source`（llm／fallback）、`featured`、完整 `post_text`、觸發的 `batch_id`／命中規則。  
+儀表板可列出歷史版本並對照當日命中（回測）。
+
+### 10.5 失敗通知＋是否人工介入（儀表板）
+
+原則：
+
+1. Tick／sync 失敗寫 stage + `meeting_tick_state`  
+2. 系統依規則標 **`needs_human: true/false`**（例如：fail_count≥上限、排位錯位、FORM_AI 擋正式快照逾時、backlog 將 expired）  
+3. 管理介面「自動化儀表板」一眼看出：哪日卡住、卡在哪、要不要人  
+
+詳細線框見 **§14**。
+
+### 10.6 「兩邊都跑」vs「分工」——詳細分別
+
+兩邊＝**阿里雲（主驗收）**＋**Railway（並行）**，通常是**兩套 Postgres**（或偶發共庫，不建議共庫雙寫）。
+
+#### 方案 A：兩邊都跑（對稱）
+
+```
+阿里雲 Cron ──► meeting_tick ──► 阿里雲 DB ──► 阿里雲作戰室
+Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網頁
+         ▲                              ▲
+         └──── 都 pull 同一 JJJC API ────┘
+```
+
+| 優點 | 缺點 |
+|------|------|
+| 一邊掛了另一邊仍有完整自動鏈 | **雙倍** API／LLM／算力 |
+| 方便對照「同一天兩邊結果一不一樣」 | 若共庫會搶寫；分庫則資料可能漂移 |
+| 設定簡單（兩邊 env 同款） | 告警會雙份，要過濾 |
+
+適合：現在這種**雙軌測試期**，要驗證阿里雲／Railway 行為一致。
+
+#### 方案 B：分工（不對稱）
+
+例：
+
+| 邊 | 負責 | 不負責 |
+|----|------|--------|
+| **阿里雲** | 全部 tick（賽前＋賽後＋backlog＋文案）、主 DB、儀表板 | — |
+| **Railway** | 只跑 Streamlit／預測 API 展示；或只跑 dry-run／唯讀 | 不寫正式 snapshot |
+
+或：Railway 只跑 `post_race`，阿里雲跑 `pre_race`（較少見，除非 DB 共用且要分散負載）。
+
+| 優點 | 缺點 |
+|------|------|
+| 省錢、單一真相在主庫 | 備援邊沒有完整自動；主邊掛則全停 |
+| 告警集中 | 兩邊功能不一致，要文件寫清 |
+
+適合：雙軌結束、**阿里雲定為唯一生產**之後。
+
+#### 怎麼選（建議）
+
+- **現在（雙邊測試）**：選 **方案 A 兩邊都跑**，但 Cron **錯開分鐘**（如阿里雲 `:05/:35`，Railway `:20/:50`），且 **分庫**，用儀表板／命中率對照。  
+- **之後定主**：改 **方案 B**，只留阿里雲寫庫；Railway 變唯讀或下線自動 tick。
 
 ---
 
 ## 11. 數據遺留清單（延遲資料／沿路走勢）
+
 
 ### 11.1 為什麼需要
 
