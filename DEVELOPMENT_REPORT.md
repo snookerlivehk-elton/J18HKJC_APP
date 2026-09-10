@@ -282,34 +282,25 @@ OpenAPI：部署後 `/docs`。
 3. **賽前**建立預測快照（鎖總分＋當版模型勝率）  
 4. 改了勝率公式／權重後：**必須重建快照**再賽  
 
-### 5.3 賽後自動化 — 開發流程（下一階段，**尚未開工**）
+### 5.3 賽後自動化
 
-> **階段閘門（2026-09 起）**  
-> 本階段產品能力（雙軌推介、AI 獨立馬評、預測 API、手動作戰室）**先凍結大範圍自動化開發**。  
-> **待至少一場完整賽日跑通**：賽前快照（含 AI）→ 賽後 J18 名次入庫 → 結算快照 → 命中率可讀。  
-> **驗收通過後**再開發全系統自動代運作（Cron／`meeting_tick`）。在此之前只做手動作戰室與必要 bugfix。
-
-> **原則**（開工後）：狀態機 + 短 Cron tick（約 30–60 分），依 readiness 重試；禁止無限狂爬。  
-> **上線時機**：上述閘門通過後再掛 Cron。
+> **詳情與標準 SOP**：見 [`AUTOMATION_HANDBOOK.md`](AUTOMATION_HANDBOOK.md)。  
+> **已落地**：`meeting_tick.py`（`mode=post_race`）+ `start-tick.sh` + GHA `meeting_tick.yml`。  
+> **原則**：狀態機 + 短 Cron；依 readiness 重試；空 export → waiting；禁止無限狂爬。  
+> **下一步**：輕探／generated_at 去重、對齊 JJJC 完場 +12h；再做賽前 `mode=pre_race`。
 
 | 步驟 | 觸發 | 動作 | 成功準則 |
 |------|------|------|----------|
-| A | 賽後數小時～隔日 | 歷史增量爬蟲（既有 Actions／`batch_crawler`） | 該日 `finish_order_num` 入庫 |
-| B | 名次覆蓋達標 | readiness → RESULTS=ok | 作戰室 RESULTS 變 ok |
-| C | 有未結算 snapshot | `FactorCalibration.settle_pending()` | batch 有 `settled_at` |
-| D | 結算後（可選） | `run_all_factors` 納入新賽果 | `factor_scores` 刷新 |
-| E | 結算後（可選） | `nlp_batch_job` → 再算 HORSE／SPEED | NLP 節點可 skip |
+| A | 完場約 +10～14h（或 export 有貨） | `sync_jjjc_results` | RESULTS=ok |
+| B | 有未結算 snapshot | `settle_pending` | batch 有 `settled_at` |
+| C | 結算後（可選） | 命中評估／賽後文案 | 可宣傳場次有稿 |
 
-**開發切片順序**
+**掛載**：Railway／阿里雲獨立 Cron → `bash start-tick.sh`（勿塞進 Streamlit）。
 
-1. CLI `meeting_tick.py`：讀 fixtures → `refresh_readiness` → 只跑該做的 `run_action`（先實作賽後 settle）  
-2. Railway **獨立 Cron service**（勿塞進 Streamlit request）：`python meeting_tick.py`  
-3. 護欄：同 stage 連續失敗 N 次改 `failed`；官方未上架保持 `waiting`  
-4. 驗收：對照手動結算結果與 tick dry-run；UI 與 `meeting_pipeline` 表一致  
+### 5.4 賽前 Cron（見手冊 Phase C）
 
-### 5.4 賽前 Cron（較後再做）
-
-每周 fixtures → 賽前 2 日排位 → 24–36h SG／FormGuide → Form AI → snapshot。
+fixtures → 輕探 racecard → sync → SG／FormGuide → factors → Form AI → snapshot（可 provisional／revision）。  
+**現況：尚未自動；JJJC 有排位 ≠ J18 已入庫。**
 
 ---
 
