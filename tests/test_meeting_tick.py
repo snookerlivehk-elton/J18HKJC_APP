@@ -49,6 +49,7 @@ class PlanPostRaceTest(unittest.TestCase):
             "2026-09-09", "HV", readiness=readiness, stages_df=stages
         )
         self.assertTrue(plan.sync_results)
+        self.assertTrue(plan.sync_text_reports)
         self.assertTrue(plan.settle)
 
     def test_skips_when_already_settled(self):
@@ -69,6 +70,8 @@ class PlanPostRaceTest(unittest.TestCase):
         )
         self.assertFalse(plan.sync_results)
         self.assertFalse(plan.settle)
+        # 賽後評述仍可週期補拉（RESULTS 已 ok）
+        self.assertTrue(plan.sync_text_reports)
 
     def test_manual_skip_blocks_actions(self):
         runner = self._runner()
@@ -118,6 +121,7 @@ class PlanPostRaceTest(unittest.TestCase):
         self.assertFalse(plan.sync_results)
         self.assertFalse(plan.settle)
         self.assertTrue(any("SNAPSHOT" in s for s in plan.skip_reasons))
+        self.assertTrue(plan.sync_text_reports)
 
     def test_cooldown_blocks_retry(self):
         runner = self._runner(cooldown_waiting_sec=1800)
@@ -173,6 +177,7 @@ class PlanPostRaceTest(unittest.TestCase):
             "2026-09-09", "HV", readiness=readiness, stages_df=stages
         )
         self.assertTrue(plan.sync_results)
+        self.assertTrue(plan.sync_text_reports)
         self.assertTrue(plan.settle)
 
 

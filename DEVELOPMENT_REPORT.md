@@ -1,12 +1,12 @@
 # J18 賽馬量化預測系統 — AI 開發交接手冊
 
-> **給下一位 AI / 開發者**：先讀本文件（尤其 **§4.1 UI 與 GitHub 協作**、**§5.3／§6 階段閘門**），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
+> **給下一位 AI / 開發者**：先讀本文件與 [`AUTOMATION_HANDBOOK.md`](AUTOMATION_HANDBOOK.md)（賽日全自動 SOP），再讀 [`FACTOR_MODEL_DESIGN.md`](FACTOR_MODEL_DESIGN.md)（數學白皮書）。  
 > **覆蓋度持份者（已落地）**：見 [`COVERAGE_STAKEHOLDER_HANDBOOK.md`](COVERAGE_STAKEHOLDER_HANDBOOK.md)。預設 `COVERAGE_MODE=on`、`INTERFERENCE_MODE=stakeholder`；缺評述／SG 可建 provisional 快照，資料到位後 `revise_snapshot`。  
 > 實作以**查表推論**為主：歷史 → `factor_scores` → 排位條件匹配 → 加權總分。  
 > **部署（2026-09 起暫時雙軌）**：**阿里雲為主要運作系統**（例：`http://47.83.164.64`）；**Railway**（`j18hkjc-app.up.railway.app`）暫時並行。所有開發／驗證須**先顧及阿里雲環境**（路徑、字型、Nginx／反向代理、本機碟、記憶體限制），再兼顾 Railway。  
 > 程式碼仍經 **GitHub `snookerlivehk-elton/J18HKJC_APP` `main`** 發布；本機 `.env` 連同一套（或對應環境的）Postgres（勿提交密碼）。  
 > **計算邏輯／結構可改；UI 以 GitHub `main` 最新為準，勿用本地舊版覆蓋。**  
-> **現階段**：手動作戰至「賽日結算跑通」前，**勿開工全系統 Cron／自動代運作**。
+> **自動化**：賽後 `meeting_tick` 已落地；賽前全鏈見 `AUTOMATION_HANDBOOK.md` Phase C（尚未實作）。
 
 ---
 
@@ -29,8 +29,11 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | J18 歷史 API | `race_meetings`, `races`, `runners`, `text_reports` | `batch_crawler` / `etl_pipeline` |
 | **api_jjjc 排位** | `upcoming_races`, `upcoming_runners` | `jjjc_racecard_sync.py` ← `GET /api/export/racecard`（`jjjc.racecard.v1`）；join=`race_id`+`horse_no` |
 | **api_jjjc 賽果** | `runners.finish_order_num`（+ `payouts`） | `jjjc_results_sync.py` ← `GET /api/export/results`（`jjjc.results.v1`） |
+| **api_jjjc 速勢能量** | `upcoming_speedguide` | `jjjc_speedguide_sync.py` ← `GET /api/export/speedguide`（`jjjc.speedguide.v1`）；CMS 備援 |
+| **api_jjjc 賽事指引** | `upcoming_formguide.form_text` | `jjjc_formguide_sync.py` ← `GET /api/export/formguide`（`jjjc.formguide.v1`）；CMS 備援 |
+| **api_jjjc 沿途／事故** | `text_reports` | `jjjc_text_reports_sync.py` ← `GET /api/export/text-reports`（`jjjc.text_reports.v1`） |
 | HKJC 排位（備援） | 同上 upcoming_* | `racecard_crawler` HTML；作戰室保留「備援重抓」 |
-| HKJC Speed Guide | `upcoming_speedguide` | CMS JSON：`consvc.hkjc.com/.../SpeedPro/current/sg_*`；賽前約 1 日中午上架 |
+| HKJC Speed Guide（備援） | `upcoming_speedguide` | CMS JSON：`sg_*`；JJJC 無貨時用 |
 | 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |
 
 - 雲端：`USE_SQLITE=false` + `DATABASE_URL` / `DATABASE_URL_SYNC`  
@@ -282,34 +285,25 @@ OpenAPI：部署後 `/docs`。
 3. **賽前**建立預測快照（鎖總分＋當版模型勝率）  
 4. 改了勝率公式／權重後：**必須重建快照**再賽  
 
-### 5.3 賽後自動化 — 開發流程（下一階段，**尚未開工**）
+### 5.3 賽後自動化
 
-> **階段閘門（2026-09 起）**  
-> 本階段產品能力（雙軌推介、AI 獨立馬評、預測 API、手動作戰室）**先凍結大範圍自動化開發**。  
-> **待至少一場完整賽日跑通**：賽前快照（含 AI）→ 賽後 J18 名次入庫 → 結算快照 → 命中率可讀。  
-> **驗收通過後**再開發全系統自動代運作（Cron／`meeting_tick`）。在此之前只做手動作戰室與必要 bugfix。
-
-> **原則**（開工後）：狀態機 + 短 Cron tick（約 30–60 分），依 readiness 重試；禁止無限狂爬。  
-> **上線時機**：上述閘門通過後再掛 Cron。
+> **詳情與標準 SOP**：見 [`AUTOMATION_HANDBOOK.md`](AUTOMATION_HANDBOOK.md)。  
+> **已落地**：`meeting_tick.py`（`mode=post_race`）+ `start-tick.sh` + GHA `meeting_tick.yml`。  
+> **原則**：狀態機 + 短 Cron；依 readiness 重試；空 export → waiting；禁止無限狂爬。  
+> **下一步**：輕探／generated_at 去重、對齊 JJJC 完場 +12h；再做賽前 `mode=pre_race`。
 
 | 步驟 | 觸發 | 動作 | 成功準則 |
 |------|------|------|----------|
-| A | 賽後數小時～隔日 | 歷史增量爬蟲（既有 Actions／`batch_crawler`） | 該日 `finish_order_num` 入庫 |
-| B | 名次覆蓋達標 | readiness → RESULTS=ok | 作戰室 RESULTS 變 ok |
-| C | 有未結算 snapshot | `FactorCalibration.settle_pending()` | batch 有 `settled_at` |
-| D | 結算後（可選） | `run_all_factors` 納入新賽果 | `factor_scores` 刷新 |
-| E | 結算後（可選） | `nlp_batch_job` → 再算 HORSE／SPEED | NLP 節點可 skip |
+| A | 完場約 +10～14h（或 export 有貨） | `sync_jjjc_results` | RESULTS=ok |
+| B | 有未結算 snapshot | `settle_pending` | batch 有 `settled_at` |
+| C | 結算後（可選） | 命中評估／賽後文案 | 可宣傳場次有稿 |
 
-**開發切片順序**
+**掛載**：Railway／阿里雲獨立 Cron → `bash start-tick.sh`（勿塞進 Streamlit）。
 
-1. CLI `meeting_tick.py`：讀 fixtures → `refresh_readiness` → 只跑該做的 `run_action`（先實作賽後 settle）  
-2. Railway **獨立 Cron service**（勿塞進 Streamlit request）：`python meeting_tick.py`  
-3. 護欄：同 stage 連續失敗 N 次改 `failed`；官方未上架保持 `waiting`  
-4. 驗收：對照手動結算結果與 tick dry-run；UI 與 `meeting_pipeline` 表一致  
+### 5.4 賽前 Cron（見手冊 Phase C）
 
-### 5.4 賽前 Cron（較後再做）
-
-每周 fixtures → 賽前 2 日排位 → 24–36h SG／FormGuide → Form AI → snapshot。
+fixtures → 輕探 racecard → sync → SG／FormGuide → factors → Form AI → snapshot（可 provisional／revision）。  
+**現況：尚未自動；JJJC 有排位 ≠ J18 已入庫。**
 
 ---
 
@@ -330,10 +324,11 @@ OpenAPI：部署後 `/docs`。
 - [ ] Peak vs EMA 雙特徵進總分／ML  
 - [ ] 用已結算快照校準 `SOFTMAX_TEMPERATURE`  
 
-### P2 — 自動化與產品（**閘門後再做**）
+### P2 — 自動化與產品
 
-- [ ] **賽後**：`meeting_tick.py` + Railway Cron（見 §5.3）— **等本賽日結算跑通**  
-- [ ] **賽前**：fixtures／排位／SG／快照 tick — 同上  
+- [x] **賽後**：`meeting_tick.py` post_race（見 `AUTOMATION_HANDBOOK.md`）  
+- [ ] **賽後增強**：輕探／generated_at／+12h 窗  
+- [ ] **賽前**：`mode=pre_race` 全鏈（手冊 Phase C）  
 - [x] Form AI：獨立馬評軌道（推介＋快照命中；不併入 `WEIGHT_*`）  
 - [ ] 實驗追蹤（匯出 `ModelConfig.get_params_dict()`）  
 

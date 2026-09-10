@@ -1,0 +1,26 @@
+{
+  "schema": "jjjc.formguide.v1",
+  "race_date": "2026-09-09",
+  "venue_code": "HV",
+  "content_updated_at": "2026-09-08T05:00:00.000Z",
+  "generated_at": "2026-09-10T01:00:00.000Z",
+  "status": "obtained",
+  "races": [
+    {
+      "race_id": "20260909HV01",
+      "race_no": 1,
+      "runners": [
+        {
+          "horse_no": 1,
+          "horse_name": "閃電星福",
+          "form_text": "中等步速; 自第十三檔出閘…"
+        },
+        {
+          "horse_no": 2,
+          "horse_name": "測試馬二",
+          "form_text": "近績穩定，適合草地短途。"
+        }
+      ]
+    }
+  ]
+}
