@@ -21,18 +21,41 @@
 | **J18HKJC_APP**（本 repo） | `GET /api/export/*` → 入庫；因子／Form AI／快照／結算／廣告；狀態機＋tick | **不應**再爬馬會官網作主路徑（HTML 僅備援） |
 | **作戰室** `views/meeting_ops.py` | 人工監看、放行、略過、備援重抓 | 不取代 Cron 長跑 |
 
-### 1.1 資料契約（取貨唯一主路徑）
+### 1.1 資料契約（取貨主路徑）
 
-| 用途 | HTTP | Schema |
-|------|------|--------|
-| 賽前排位 | `GET {JJJC_API_BASE}/api/export/racecard?date=YYYY-MM-DD&venue=ST\|HV` | `jjjc.racecard.v1` |
-| 賽後賽果 | `GET {JJJC_API_BASE}/api/export/results?date=YYYY-MM-DD&venue=ST\|HV` | `jjjc.results.v1` |
+| 用途 | HTTP | Schema／去向 |
+|------|------|----------------|
+| 賽前排位 | `GET {JJJC_API_BASE}/api/export/racecard?date=&venue=` | `jjjc.racecard.v1` → `upcoming_*` |
+| 賽後賽果（名次／賠率） | `GET …/api/export/results?date=&venue=` | `jjjc.results.v1` → `runners` |
+| **賽事指引／沿路走勢／競賽報告（文字）** | **主路徑：JJJC 賽前（或延伸 export）** → 見 §1.3 | → `upcoming_formguide`／`text_reports` |
+| 同上文字（備援） | J18 歷史 API → `batch_crawler`／`etl_pipeline` | 僅當 JJJC 無貨或失敗 |
 
 環境變量：`JJJC_API_BASE`（無尾斜線）。  
 - 外網／阿里雲：`https://apicc.up.railway.app`  
 - 同 Railway 內可選：`http://apijjjc.railway.internal:8787`
 
 **空 `races: []`** = 上游尚未備好（或非賽日），J18 應 `waiting`，不要當硬失敗狂打。
+
+### 1.3 文字數據來源決策（2026-09-10 更新）
+
+產品確認：**賽前賽事指引、沿路走勢、競賽報告** 現可由 **JJJC 賽前資料**取得；**J18 歷史 API 降為完整備援**，不再當主路徑。
+
+| 文字種類 | 業務含義 | J18 落庫 | 主路徑 | 備援 |
+|----------|----------|----------|--------|------|
+| 賽事指引 | 近績／形勢短評（Form Guide 類） | `upcoming_formguide.form_text` | **JJJC** | HKJC FormGuide CMS 爬蟲；再退 J18 API |
+| 沿路走勢 | 賽後沿路評述 | `text_reports` `running_comment` | **JJJC**（隨賽前／賽後資料更新補齊） | J18 歷史 API |
+| 競賽報告 | 事故／競賽相關報告 | `text_reports` `incident_report`（或等價） | **JJJC** | J18 歷史 API |
+
+**整合現況（探針 2026-09-10）：**  
+公開 ` /api/export/racecard` 與 `/api/export/results` **尚未**見到上述長文欄位（runner 仍以排位欄為主）。  
+→ 開發依賴 JJJC 在 export（或新 endpoint）**露出欄位／schema 版本**；J18 側新增 sync 映射。在契約未上線前，自動鏈可暫用 CMS FormGuide + 備援 J18 API，但手冊目標架構以 JJJC 為準。
+
+**遺留清單拉取順序（評述類）：**  
+1. 再打 JJJC 文字／賽前 export（主）  
+2. 失敗或仍缺 → J18 歷史單日重抓（備援）  
+3. 兩者皆無 → waiting／拉長退避  
+
+Speed Guide（**速勢能量數字／評級**）仍以 HKJC SpeedPro CMS 為主，除非 JJJC 日後一併 export（與「文字三件」分開）。
 
 ### 1.2 效率原則（配合 JJJC 已全自動）
 
@@ -86,8 +109,8 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 | **FORMGUIDE** | 覆蓋 ≥ 約 80% | 空 → waiting |
 | **FACTORS** | `factor_scores` 有近期資料 | 空 → 重算 |
 | **NLP** | **可選**；現 check 常放行 | 不擋快照（可降級路徑） |
-| **FORM_AI** | 覆蓋達標（建議 ≥80% 或業務定義） | 未跑 → pending；可背景 job |
-| **SNAPSHOT** | 有未過期／當日 primary 或可用 batch；含 `ad_pick_rank`（新快照） | 無 → 建快照；可 provisional 後再 revision |
+| **FORM_AI** | 覆蓋達標（建議 ≥80%） | 未跑 → pending；**未達標不得建正式 primary 快照**（2026-09-10 決策） |
+| **SNAPSHOT** | 有 formal primary（Form AI 已 ok）；可另有 revision | 無 Form AI → **阻擋正式快照** |
 | **RESULTS** | historical `runners` 該日有 `finish_order_num` | 空 → waiting（對齊 JJJC +12h） |
 | **SETTLED** | 對應 batch 有 `settled_at`（每場名次覆蓋達現有 ≥50% 規則） | 有名次未滿 → 重跑 settle；無快照 → 不能結 |
 
@@ -333,23 +356,17 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 | 5 | **失敗必須通知＋判斷是否要人工** | 管理介面儀表板（§14）；不只 log。 |
 | 6 | **兩邊部署策略** | 見 §10.6 詳解後由你選「雙跑」或「分工」；手冊兩種都支援。 |
 
-### 10.2 Speed Guide（SG）／Form Guide 是什麼？
+### 10.2 Speed Guide（SG）／Form Guide／文字三件是什麼？
 
-兩者都是 **馬會官方「賽前輔助資訊」**，不是排位表本身，也不是賽後沿路走勢。
+| 名稱 | 板塊 | 本系統 | 主來源（新決策） |
+|------|------|--------|------------------|
+| **Speed Guide（速勢能量）** | 馬會 SpeedPro 能量／狀態評級 | `upcoming_speedguide` | HKJC CMS（暫）；非「文字三件」 |
+| **賽事指引（Form Guide 類）** | 近績短評彙整 | `upcoming_formguide` | **JJJC 賽前**；CMS／J18 API 備援 |
+| **沿路走勢** | 賽後沿路評述 | `text_reports.running_comment` | **JJJC**；J18 API 備援 |
+| **競賽報告** | 事故／競賽報告 | `text_reports.incident_report` 等 | **JJJC**；J18 API 備援 |
+| **Form AI** | 我方 LLM 評分 | `upcoming_form_ai` | 依賴賽事指引等文字就緒後再跑 |
 
-| 名稱 | 板塊／來源 | 本系統表 | 大概內容 | 典型上架 |
-|------|------------|----------|----------|----------|
-| **Speed Guide（速勢能量）** | HKJC SpeedPro／速勢能量頁（CMS JSON） | `upcoming_speedguide` | 每匹馬的速勢／狀態類評級能量，給步速／狀態參考 | 常於**賽日前一日中午左右** |
-| **Form Guide（賽績指引）** | 同族 CMS（`fg_race_*`） | `upcoming_formguide`（`form_text`） | 近績短評彙整，賽前社交文案也會引用 | 賽前陸續上架 |
-
-和別的資料區分：
-
-- **排位（RACECARD）**：馬號、騎練、檔位、班次距離 → `upcoming_races/runners`（主來自 JJJC）  
-- **SG／FormGuide**：排位之後的「官方加料」  
-- **沿路走勢評述**：賽**後**才有，入 `text_reports`（常滯後數日）  
-- **Form AI**：我們用 LLM 對 FormGuide／近績做的**自有評分**，不是馬會 SG  
-
-作戰室階段：`SPEEDGUIDE`、`FORMGUIDE` 兩格就是盯這兩包有沒有齊。
+和 **排位** 區分：排位＝誰出賽；SG＝速勢能量；文字三件＝敘述類；Form AI＝自有分數。
 
 ### 10.3 Primary 快照 vs Revision 是什麼？
 
@@ -445,22 +462,23 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 ### 11.1 為什麼需要
 
-部分**賽後**資料不會跟「完場 +12h」一起到，常見要 **5～7 日**（甚至更耐）才齊。  
-其中最難排程的是 **沿路走勢評述**（`running_comment_text` → 表 `text_reports`，`report_type=running_comment`）。
+部分資料不會跟「完場 +12h 名次」一起到，或賽前文字會遲到；其中 **沿路走勢／競賽報告** 常要多日才齊。
 
-| 資料 | 典型來源（現況） | 節奏 |
-|------|------------------|------|
-| 名次／獨贏賠率 | api_jjjc `/api/export/results` | 完場約 +12h＋JJJC 重試 |
-| 沿路走勢／事故評述 | **J18 歷史 API** → `etl_pipeline`／`batch_crawler` → `text_reports` | **無固定節奏**，常滯後數日 |
-| NLP 結構化結果 | `nlp_batch_job` → `text_reports.nlp_result` | 有評述正文後才可跑 |
+| 資料 | 主來源（目標） | 備援 | 節奏 |
+|------|----------------|------|------|
+| 名次／獨贏賠率 | api_jjjc `/api/export/results` | J18 歷史／batch_crawler | 完場約 +12h＋重試 |
+| 賽事指引 | **JJJC 賽前文字** | HKJC FG CMS → J18 API | 賽前陸續 |
+| 沿路走勢／競賽報告 | **JJJC**（賽前資料鏈補齊） | **J18 歷史 API** | 可能滯後數日；用 backlog |
+| NLP 結構化 | `nlp_batch_job` → `nlp_result` | — | 有正文後才跑 |
 
-> **注意（2026-09）：** `jjjc_results_sync` **尚未**寫入 `running_comment`。遺留清單的「創新拉取」主路徑目前是 **重跑該日 J18 歷史增量**（`batch_crawler`／ETL），不是再打一次 jjjc results。若日後 JJJC export 也帶評述，再加一條 sync。
+> **架構（2026-09-10）：** 文字三件以 JJJC 為主；J18 歷史 API **只作備援**。  
+> **程式現況：** J18 的 `jjjc_*_sync` 尚未映射文字欄；公開 export 探針亦未見長文欄位 → 待 JJJC 契約露出後實作 sync；此前 backlog 可暫走備援。
 
 此類資料：
 
-- **不阻擋** 當日 RESULTS／SETTLED（作戰室 NLP 節點已標可選）  
-- **會影響** 之後賽日的近績／干擾持份者 coverage（查表推論）  
-- 故要用 **遺留清單（backlog）** 長期補洞，而不是只靠單次賽後 tick
+- **不阻擋** 當日 RESULTS／SETTLED（名次鏈獨立）  
+- **會影響** Form AI／干擾 coverage／之後查表  
+- 用 **遺留清單** 長期補洞
 
 ### 11.2 清單應記什麼（建議表 `data_backlog`）
 
@@ -476,7 +494,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 | `attempt_count` | |
 | `next_attempt_at` | 退避用 |
 | `last_error` / `detail` | |
-| `source_hint` | `j18_history` / `jjjc_results` / … |
+| `source_hint` | `jjjc` / `j18_history_fallback` / … |
 
 **入列時機（每次 tick／更新順路做）：**
 
@@ -499,8 +517,8 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
      AND next_attempt_at <= now()
      LIMIT K          -- 每輪上限，避免拖垮
 3. 按 data_kind 分流拉取：
-     running_comment / incident → 重跑該日 J18 history（batch_crawler 單日）
-     finish/odds → sync_jjjc_results（或等 JJJC）
+     formguide / running_comment / incident → **先 JJJC 文字／賽前 export**；仍缺 → J18 history 備援
+     finish/odds → sync_jjjc_results
 4. 刷新覆蓋檢查 → 達標則 done，否則加大退避寫回 next_attempt_at
 5. 若本輪有「新評述寫入」→ 觸發 §11.4 管道（可异步／下輪）
 ```
@@ -558,11 +576,82 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 | 步 | 內容 |
 |----|------|
-| B1 | `data_backlog` 表 + 賽後 tick 入列（缺 running_comment） |
-| B2 | tick 順路重試 J18 單日 history |
-| B3 | 新評述 → 觸發 NLP batch（limit） |
-| B4 | NLP 完成 → 因子重算（防抖：合併為每輪一次） |
-| B5 | 可選：未來賽日 auto-revise |
+| B1 | `data_backlog` 表 + 缺文字／名次入列 |
+| B2 | tick 順路：**JJJC 文字主路徑** → 失敗才 J18 history 備援 |
+| B3 | 與 JJJC 對齊 export 欄位／新 schema；擴充 `jjjc_*_sync` 寫入 formguide／text_reports |
+| B4 | 新評述 → NLP batch（limit） |
+| B5 | NLP 完成 → 因子重算（每輪一次） |
+| B6 | 可選：未來賽日 auto-revise |
+
+---
+
+## 14. 自動化儀表板（管理介面設計）
+
+> 取代「只靠作戰室逐日點」：一頁看清全自動健康、遺留、要不要人。  
+> 入口建議：管理員選單 **「自動化中控」**（與作戰室並列；作戰室保留手動按鈕）。
+
+### 14.1 一屏資訊架構（由上而下）
+
+**A. 總覽條（今日／未來 3 日／賽後 7 日）**
+
+| 指標 | 含義 |
+|------|------|
+| 健康 meeting 數 | 無 `needs_human`、無 failed |
+| 等待中 | `waiting`（上游未到） |
+| 需人工 | 規則判定要介入 |
+| 遺留評述 open | backlog `running_comment` |
+| 最近 tick | 上次成功／失敗時間（阿里雲／Railway 可分頁籤） |
+
+用色：綠=順、琥珀=waiting、紅=需人工／failed。**不要**做成雜亂多卡 dashboard；一條總覽 + 下列兩表即可。
+
+**B. 賽日流水表（主表，一目了然）**
+
+每列一個 `racing_date + course`：
+
+| 欄 | 內容 |
+|----|------|
+| 賽日／場地 | |
+| 鏈路 | 賽前｜賽後｜遺留（小點：灰未開始／藍進行／綠 ok／琥珀 wait／紅 block） |
+| 目前卡點 | 如 `FORM_AI`、`RESULTS`、`backlog:running_comment` |
+| 正式快照 | 有 primary？provisional？Form AI 是否達標（決策 #1） |
+| 結算 | settled_at 有無 |
+| 人工 | `需要／不需要` + 原因一句 |
+| 動作 | 「去作戰室」「略過」「重試 tick」「清失敗計數」 |
+
+**C. 需人工佇列（只列 needs_human=true）**
+
+原因標籤例如：`排位錯位`、`Form AI 逾時不能出正式快照`、`tick 連敗達上限`、`評述遺留將過期`。
+
+**D. 產檔／回測抽屜**
+
+按賽日列出 archived social／post_race 版本；可預覽 `post_text`、下載 JSON。
+
+### 14.2 `needs_human` 判定（系統自動）
+
+| 條件 | needs_human |
+|------|-------------|
+| status=waiting 且未過預期窗 | 否（繼續等 JJJC／官方） |
+| fail_count ≥ max_fails | **是** |
+| RACECARD 錯位／corrupt | **是** |
+| 距開賽 &lt; Xh 且 FORM_AI 未 ok（擋正式快照） | **是** |
+| backlog 將 expired | **是**（或警告） |
+| LLM fallback 出稿 | 否（可記 info） |
+
+### 14.3 與作戰室關係
+
+| 頁 | 職責 |
+|----|------|
+| **自動化中控（新）** | 多日總覽、告警、遺留、產檔回測、一鍵重試 |
+| **作戰室（現有）** | 單日深挖、手動 sync／放行／略過 |
+
+---
+
+## 15. 仍待你補一句的決策
+
+1. **SG／FormGuide 覆蓋門檻**：維持約 80% 可否？（懂板塊後）  
+2. **Primary 之後是否自動 revision**：開賽前資料再齊時自動追加修訂卷，還是只保留一份 primary？  
+3. **雙跑還是分工**：測試期建議雙跑分庫；你是否確認？  
+4. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**（見 §11）  
 
 ---
 
@@ -572,6 +661,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |------|------|
 | 2026-09-10 | 初版：配合 JJJC 全自動；賽前／賽後 SOP；現況 vs 目標；開發切片 A–E |
 | 2026-09-10 | §11：數據遺留清單；沿路走勢延遲；評述到位後 NLP→因子→revision 流程 |
+| 2026-09-10 | §1.3／§11：文字三件改 **JJJC 主路徑**，J18 歷史 API 僅備援；記 export 契約待對齊 |
 
 ---
 
@@ -581,9 +671,11 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |------|------|
 | JJJC 有 9/13 排位，J18 會自動入庫嗎？ | **現在不會**；要手動 sync 或等賽前 tick |
 | `JJJC_API_BASE` 填什麼？ | Public：`https://apicc.up.railway.app` |
+| SG／FormGuide？ | 馬會賽前速勢能量／賽績指引，不是排位、不是賽後評述 |
+| Primary vs Revision？ | 正式第一份鎖分 vs 追加修訂卷（舊卷保留） |
+| 無 Form AI 可否正式快照？ | **否**（2026-09-10 拍板） |
+| 兩邊都跑？ | 兩套 Cron 各寫各庫、對照測試；分工＝只主邊寫庫 |
 | 賽後何時積極拉名次？ | 對齊完場約 +12h |
-| 沿路走勢為何常缺？ | 多經 J18 歷史 API，滯後 5～7 日；用遺留清單補 |
+| 沿路走勢／賽事指引／競賽報告？ | **JJJC 主路徑**；J18 歷史 API 備援 |
 | 評述到了要立刻重算因子？ | **先 NLP，再重算因子**；合併批次；已結算快照不覆寫 |
-| 空 export 怎辦？ | `waiting`，交給 JJJC 重試 |
-| 主狀態在哪？ | `meeting_pipeline` + 作戰室 |
 | Cron 跑什麼？ | `bash start-tick.sh`（獨立服務） |
