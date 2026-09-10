@@ -66,13 +66,15 @@
 
 **語意：**
 - **waiting**（繼續輪詢）：HTTP 200 且 `races=[]`／`reports=[]`；文字 null／""；`is_placeholder`；`status`∈ unpublished／suspicious／date_mismatch／partial／empty  
-- **failed**（可切備援）：5xx／連線失敗／`status=unavailable`／路由 404  
+- **failed**（可切備援）：5xx／連線失敗／`status=unavailable`  
 - **更新指紋**：用 `content_updated_at`（勿用每次 GET 都刷新的 `generated_at`）  
-- **Join**：`race_id`（`YYYYMMDD`+`ST|HV`+兩位場次）+ `horse_no`
+- **Join**：`race_id`（`YYYYMMDD`+`ST|HV`+兩位場次）+ `horse_no`  
+- **report_type 契約（api_jjjc 2026-09-10 確認）**：response **只出** `incident_report`／`running_comment`；查詢可用別名 `racereport`／`corunning`。對照：`incident_report`←R3 競賽報告；`running_comment`←R4 沿途走位。
 
 **建議同步順序：** 賽前 racecard → speedguide → formguide；賽後 results → text-reports。
 
-**探針備註：** 公開 host 若尚未掛上三支新路由（404），J18 會標 failed 並在 `crawl_speedguide`／`crawl_formguide` 走 CMS 備援；契約以本節為準。
+**探針備註（2026-09-10 复测 apicc）：**  
+`/api/export/text-reports`、`/speedguide`、`/formguide` **已上線**（200）。text-reports 實測 9/6 ST、9/9 HV 可入庫；沿途評述常仍 placeholder／suspicious，競賽報告可先入庫，之後重拉冪等 upsert。
 
 **遺留／重試拉取順序：**  
 1. JJJC（主）→ 2. 對應備援 → 3. 仍無則 waiting／退避。
