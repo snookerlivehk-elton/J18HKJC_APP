@@ -163,6 +163,48 @@ class DataBacklogService:
             conn.execute(text(idx))
 
     # ----- 覆蓋檢查 -----
+    def _fetch_results_race_ids(
+        self, racing_date: str, course: str
+    ) -> List[str]:
+        """輕拉 JJJC results export 的 race_id 清單（權威場次；失敗則 []）。"""
+        try:
+            from jjjc_results_sync import fetch_export
+
+            payload = fetch_export(
+                race_date=str(racing_date)[:10],
+                venue=str(course).upper(),
+                timeout=45.0,
+            )
+            ids: List[str] = []
+            for race in payload.get("races") or []:
+                rid = str((race or {}).get("race_id") or "").strip()
+                if rid:
+                    ids.append(rid)
+            return sorted(set(ids))
+        except Exception:
+            return []
+
+    def reconcile_meeting_results(
+        self, racing_date: str, course: str
+    ) -> Dict[str, Any]:
+        """
+        重拉 JJJC results 並 prune 同 prefix 幽靈場（如 HV09–10 → 140）。
+        覆蓋分母依賴此步；只跑 text-reports 不夠。
+        """
+        try:
+            from jjjc_results_sync import sync_meeting
+
+            out = sync_meeting(str(racing_date)[:10], str(course).upper())
+            return {
+                "ok": bool(out.get("ok")),
+                "race_count": out.get("race_count"),
+                "pruned_orphan_races": out.get("pruned_orphan_races") or [],
+                "pruned_runners": out.get("pruned_runners") or 0,
+                "error": out.get("error"),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def _canonical_race_ids(self, prefix: str) -> List[str]:
         """
         若該會議已有 jjjc results sync 的 runners，只認那些 race_id，
@@ -196,20 +238,54 @@ class DataBacklogService:
         racing_date: str,
         course: str,
         data_kind: str = KIND_RUNNING,
+        *,
+        keep_race_ids: Optional[Sequence[str]] = None,
     ) -> Dict[str, Any]:
         """
         以歷史 runners（有名次）為期望母體；text_reports 有正文則計入覆蓋。
 
-        分母用 DISTINCT(race_id, horse_no)，並優先只計 jjjc results 場次，
-        避免幽靈場次把 8 場×14 誤算成 10×14=140。
+        分母優先序：
+          1) 呼叫端傳入的 keep_race_ids（通常來自 JJJC results export）
+          2) 即時拉 results export 的 race_id
+          3) DB 內 jjjc_results_sync 標記場次
+          4) 全量 prefix（最後手段）
+        一律 DISTINCT(race_id, horse_no)，避免幽靈場把 8×14 算成 10×14=140。
         """
         prefix = _meeting_prefix(racing_date, course)
         rtype = str(data_kind)
-        canon = self._canonical_race_ids(prefix)
-        use_canon = 1 if canon else 0
-        # SQLite／PG 皆可用 ||；entity_id 可能是 runner_id 或 race_id_horse_no
+        keep = [
+            str(x).strip()
+            for x in (keep_race_ids or [])
+            if str(x).strip()
+        ]
+        source = "arg"
+        if not keep:
+            keep = self._fetch_results_race_ids(racing_date, course)
+            source = "export" if keep else "none"
+        if not keep:
+            keep = self._canonical_race_ids(prefix)
+            source = "db_canon" if keep else "prefix_all"
+
+        use_keep = 1 if keep else 0
+        # race_id 僅允許 YYYYMMDD+(ST|HV)+兩位，可安全拼 IN 清單（SQLite／PG 通用）
+        safe_ids = [
+            rid
+            for rid in keep
+            if len(rid) == 12
+            and rid[:8].isdigit()
+            and rid[8:10] in ("ST", "HV")
+            and rid[10:12].isdigit()
+        ]
+        if keep and not safe_ids:
+            safe_ids = []
+            use_keep = 0
+        in_sql = (
+            "(" + ",".join(f"'{rid}'" for rid in safe_ids) + ")"
+            if safe_ids
+            else "('__none__')"
+        )
         q = text(
-            """
+            f"""
             SELECT
               COUNT(DISTINCT ru.race_id) AS race_n,
               COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS expected_n,
@@ -229,10 +305,8 @@ class DataBacklogService:
             WHERE ru.race_id LIKE :p || '%'
               AND ru.finish_order_num IS NOT NULL
               AND (
-                :use_canon = 0
-                OR CAST(ru.raw_json AS TEXT) LIKE '%jjjc_results_sync%'
-                OR CAST(ru.raw_json AS TEXT) LIKE '%"source": "official_hkjc"%'
-                OR CAST(ru.raw_json AS TEXT) LIKE '%"source":"official_hkjc"%'
+                :use_keep = 0
+                OR ru.race_id IN {in_sql}
               )
             """
         )
@@ -240,7 +314,11 @@ class DataBacklogService:
             row = pd.read_sql(
                 q,
                 self.engine,
-                params={"p": prefix, "rtype": rtype, "use_canon": use_canon},
+                params={
+                    "p": prefix,
+                    "rtype": rtype,
+                    "use_keep": use_keep,
+                },
             ).iloc[0]
         except Exception as e:
             return {
@@ -267,7 +345,8 @@ class DataBacklogService:
             "data_kind": rtype,
             "racing_date": str(racing_date)[:10],
             "course": str(course).upper(),
-            "canonical_races": len(canon),
+            "keep_source": source,
+            "keep_race_n": len(keep),
         }
 
     def coverage_ok(
@@ -300,9 +379,15 @@ class DataBacklogService:
         except ValueError:
             age_days = 0
 
+        # 入列前對齊 results（prune 幽靈場），分母才會正確
+        self.reconcile_meeting_results(d, c)
+        keep_ids = self._fetch_results_race_ids(d, c) or None
+
         out: List[Dict[str, Any]] = []
         for kind in kinds:
-            cov = self.measure_comment_coverage(d, c, kind)
+            cov = self.measure_comment_coverage(
+                d, c, kind, keep_race_ids=keep_ids
+            )
             if not cov.get("ok"):
                 out.append({"racing_date": d, "course": c, "data_kind": kind, **cov})
                 continue
@@ -755,6 +840,73 @@ class DataBacklogService:
 
         return sorted(meetings.keys(), reverse=True)
 
+    def refresh_open_coverage(
+        self,
+        *,
+        statuses: Optional[Sequence[str]] = None,
+        threshold: float = DEFAULT_COVERAGE_OK,
+        reconcile: bool = True,
+        limit: int = 300,
+    ) -> Dict[str, Any]:
+        """
+        重算 open／retrying 列的覆蓋分母（拉 JJJC results 場次＋必要時 prune），
+        不重拉 text-reports。給 UI「重新整理」用，避免畫面上仍顯示舊的 140。
+        """
+        want = list(statuses or (STATUS_OPEN, STATUS_RETRYING))
+        df = self.list_items(statuses=want, limit=limit)
+        if df is None or df.empty:
+            return {"ok": True, "n_updated": 0, "meetings": 0}
+
+        meetings = sorted(
+            {
+                (str(r.racing_date)[:10], str(r.course).upper())
+                for r in df.itertuples()
+            }
+        )
+        keep_by_meeting: Dict[Tuple[str, str], Optional[List[str]]] = {}
+        recon_report = []
+        for d, c in meetings:
+            if reconcile:
+                recon_report.append(
+                    {"racing_date": d, "course": c, **self.reconcile_meeting_results(d, c)}
+                )
+            keep_by_meeting[(d, c)] = self._fetch_results_race_ids(d, c) or None
+
+        updated = 0
+        for r in df.itertuples():
+            d = str(r.racing_date)[:10]
+            c = str(r.course).upper()
+            kind = str(r.data_kind)
+            cov = self.measure_comment_coverage(
+                d, c, kind, keep_race_ids=keep_by_meeting.get((d, c))
+            )
+            if not cov.get("ok"):
+                continue
+            status = str(r.status)
+            if self.coverage_ok(cov, threshold=threshold):
+                status = STATUS_DONE
+            self._upsert_row(
+                d,
+                c,
+                kind,
+                status=status,
+                cov=cov,
+                detail=(
+                    f"覆蓋達標 {_coverage_label(cov)}"
+                    if status == STATUS_DONE
+                    else f"覆蓋不足 {_coverage_label(cov)} ({float(cov.get('coverage') or 0):.0%})"
+                ),
+                done=(status == STATUS_DONE),
+                keep_next_if_set=True,
+            )
+            updated += 1
+        return {
+            "ok": True,
+            "n_updated": updated,
+            "meetings": len(meetings),
+            "reconcile": recon_report,
+        }
+
     # ----- 處理 -----
     def process_item(
         self,
@@ -801,6 +953,23 @@ class DataBacklogService:
             result.update({"ok": True, "action": "would_sync"})
             return result
 
+        # 先對齊 results 並 prune 幽靈場，再量覆蓋／拉 text-reports
+        reconcile = self.reconcile_meeting_results(d, c)
+        result["results_reconcile"] = {
+            k: reconcile.get(k)
+            for k in (
+                "ok",
+                "race_count",
+                "pruned_orphan_races",
+                "pruned_runners",
+                "error",
+            )
+        }
+        keep_ids = None
+        if reconcile.get("ok") and reconcile.get("race_count"):
+            # sync 成功後再拉一次 export id（或用 DB canon）；measure 內會自行 export
+            keep_ids = self._fetch_results_race_ids(d, c) or None
+
         # 拉取 text-reports（指定 report_type）
         sync_out: Dict[str, Any] = {}
         try:
@@ -810,7 +979,9 @@ class DataBacklogService:
         except Exception as e:
             sync_out = {"ok": False, "error": str(e)}
 
-        cov = self.measure_comment_coverage(d, c, kind)
+        cov = self.measure_comment_coverage(
+            d, c, kind, keep_race_ids=keep_ids
+        )
         upserted = int(sync_out.get("runner_upserted") or 0)
         attempt = int(row.get("attempt_count") or 0) + 1
         delay = backoff_seconds(attempt, age_days)

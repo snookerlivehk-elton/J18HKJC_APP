@@ -44,6 +44,15 @@ with c2:
 with c3:
     do_process = st.button("立即處理到期項", type="primary", use_container_width=True)
 
+if do_refresh:
+    with st.spinner("對齊 JJJC results 場次並重算覆蓋分母…"):
+        refreshed = svc.refresh_open_coverage(reconcile=True)
+    st.success(
+        f"已重算 {refreshed.get('n_updated', 0)} 項覆蓋"
+        f"（{refreshed.get('meetings', 0)} 個賽日場地）"
+    )
+    st.session_state.pop("backlog_df", None)
+
 if do_enroll:
     with st.spinner("掃描保留窗內賽日…"):
         meetings = svc.candidate_meetings()
@@ -57,7 +66,7 @@ if do_enroll:
     )
 
 if do_process:
-    with st.spinner("同步 JJJC text-reports 並更新覆蓋…"):
+    with st.spinner("對齊賽果 → 同步 text-reports → 更新覆蓋…"):
         report = svc.run_tick_pass(force=True)
     st.write(report.get("counts"))
     nlp = report.get("nlp_pipeline") or {}

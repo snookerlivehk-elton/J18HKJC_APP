@@ -46,6 +46,24 @@ class DataBacklogTest(unittest.TestCase):
         from data_backlog import DataBacklogService
 
         self.svc = DataBacklogService(engine=self.engine)
+        # 單測不打外網；覆蓋分母改走 DB canon／呼叫端 keep_race_ids
+        self._patch_fetch = patch.object(
+            self.svc, "_fetch_results_race_ids", return_value=[]
+        )
+        self._patch_fetch.start()
+        self.addCleanup(self._patch_fetch.stop)
+        self._patch_recon = patch.object(
+            self.svc,
+            "reconcile_meeting_results",
+            return_value={
+                "ok": True,
+                "race_count": 0,
+                "pruned_orphan_races": [],
+                "pruned_runners": 0,
+            },
+        )
+        self._patch_recon.start()
+        self.addCleanup(self._patch_recon.stop)
 
     def _seed_runners(self, n=10, date_s="20260906", course="ST", *, jjjc=True, race_no=1):
         with self.engine.begin() as conn:
@@ -78,7 +96,25 @@ class DataBacklogTest(unittest.TestCase):
         )
         self.assertEqual(cov["race_n"], 8)
         self.assertEqual(cov["expected_n"], 112)
-        self.assertEqual(cov["canonical_races"], 8)
+        self.assertEqual(cov["keep_source"], "db_canon")
+        self.assertEqual(cov["keep_race_n"], 8)
+
+    def test_coverage_uses_export_keep_ids(self):
+        """即使 DB 有幽靈場，傳入 export race_id 亦只計 8 場。"""
+        for rn in range(1, 11):
+            self._seed_runners(
+                14, date_s="20260909", course="HV", race_no=rn, jjjc=False
+            )
+        keep = [f"20260909HV{n:02d}" for n in range(1, 9)]
+        cov = self.svc.measure_comment_coverage(
+            "2026-09-09",
+            "HV",
+            "incident_report",
+            keep_race_ids=keep,
+        )
+        self.assertEqual(cov["race_n"], 8)
+        self.assertEqual(cov["expected_n"], 112)
+        self.assertEqual(cov["keep_source"], "arg")
 
     def _seed_comments(self, horse_nos, date_s="20260906", course="ST"):
         rid = f"{date_s}{course}01"
@@ -150,6 +186,30 @@ class DataBacklogTest(unittest.TestCase):
         self.assertEqual(out["action"], "done")
         item2 = self.svc.get_item("2026-09-06", "ST", "running_comment")
         self.assertEqual(item2["status"], "done")
+
+    def test_refresh_open_coverage_fixes_stale_denominator(self):
+        for rn in range(1, 11):
+            self._seed_runners(
+                14, date_s="20260909", course="HV", race_no=rn, jjjc=False
+            )
+        self.svc.ensure_table()
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO data_backlog "
+                    "(racing_date, course, data_kind, race_id, status, "
+                    " expected_n, covered_n, coverage, attempt_count) "
+                    "VALUES ('2026-09-09','HV','incident_report','*',"
+                    " 'retrying', 140, 91, 0.65, 1)"
+                )
+            )
+        keep = [f"20260909HV{n:02d}" for n in range(1, 9)]
+        with patch.object(self.svc, "_fetch_results_race_ids", return_value=keep):
+            out = self.svc.refresh_open_coverage(reconcile=True)
+        self.assertEqual(out["n_updated"], 1)
+        item = self.svc.get_item("2026-09-09", "HV", "incident_report")
+        self.assertEqual(int(item["expected_n"]), 112)
+        self.assertIn("8場", str(item.get("detail") or ""))
 
     def test_backoff_seconds(self):
         from data_backlog import backoff_seconds
