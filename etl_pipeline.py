@@ -16,6 +16,26 @@ SQLITE_DB_PATH = "j18_local.db"
 # 公司內 J18 歷史 API（費用敏感）：只從環境變數讀取，勿把正式網址寫死在 repo
 _DEFAULT_J18_ORIGIN = "https://api.j18.hk"
 _J18_HISTORY_PATH = "/calculate/v1/historyResult"
+_DEFAULT_PG = "postgresql://user:password@localhost:5432/j18db"
+
+
+def resolve_database_url(*, sqlite_fallback: bool = True) -> str:
+    """
+    解析 DB URL（Railway 通常只設 DATABASE_URL；本機／阿里雲可用 DATABASE_URL_SYNC）。
+    優先：DATABASE_URL_SYNC → DATABASE_URL →（可選）localhost 預設。
+    """
+    if USE_SQLITE and sqlite_fallback:
+        return f"sqlite:///{SQLITE_DB_PATH}"
+    raw = (
+        os.getenv("DATABASE_URL_SYNC")
+        or os.getenv("DATABASE_URL")
+        or ""
+    ).strip()
+    if not raw:
+        raw = _DEFAULT_PG
+    if raw.startswith("postgres://"):
+        raw = "postgresql://" + raw[len("postgres://") :]
+    return raw
 
 
 def get_j18_history_result_url() -> str:

@@ -13,7 +13,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 
 try:
     from dotenv import load_dotenv
@@ -24,9 +24,7 @@ except ImportError:
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
-    DATABASE_URL_SYNC = os.getenv(
-        "DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db"
-    )
+    DATABASE_URL_SYNC = resolve_database_url()
 
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"

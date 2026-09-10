@@ -26,11 +26,11 @@ from bucket_utils import (
 )
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
-from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH
+from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 if USE_SQLITE:
     DATABASE_URL_SYNC = f"sqlite:///{SQLITE_DB_PATH}"
 else:
-    DATABASE_URL_SYNC = os.getenv("DATABASE_URL_SYNC", "postgresql://user:password@localhost:5432/j18db")
+    DATABASE_URL_SYNC = resolve_database_url()
 
 class FactorCalculator:
     def __init__(self, target_date=None):

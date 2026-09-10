@@ -25,11 +25,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
+from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE, resolve_database_url
 from jjjc_export_common import (
     classify_payload_status,
     content_meta,
-    database_url_sync,
     effective_text,
     fetch_export_get,
     is_placeholder,
@@ -45,7 +44,7 @@ try:
 except ImportError:
     pass
 
-DATABASE_URL_SYNC = database_url_sync(USE_SQLITE, SQLITE_DB_PATH)
+DATABASE_URL_SYNC = resolve_database_url()
 
 SCHEMA_NAME = "jjjc.text_reports.v1"
 EXPORT_PATH = "/api/export/text-reports"
