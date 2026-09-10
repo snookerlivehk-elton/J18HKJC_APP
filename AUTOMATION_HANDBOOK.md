@@ -27,8 +27,9 @@
 |------|------|----------------|
 | 賽前排位 | `GET {JJJC_API_BASE}/api/export/racecard?date=&venue=` | `jjjc.racecard.v1` → `upcoming_*` |
 | 賽後賽果（名次／賠率） | `GET …/api/export/results?date=&venue=` | `jjjc.results.v1` → `runners` |
-| **賽事指引／沿路走勢／競賽報告（文字）** | **主路徑：JJJC 賽前（或延伸 export）** → 見 §1.3 | → `upcoming_formguide`／`text_reports` |
-| 同上文字（備援） | J18 歷史 API → `batch_crawler`／`etl_pipeline` | 僅當 JJJC 無貨或失敗 |
+| **賽事指引／沿路走勢／競賽報告（文字）** | **主路徑：JJJC** → 見 §1.3 | → `upcoming_formguide`／`text_reports` |
+| **速勢能量 SG** | **主路徑：JJJC** → 見 §1.3 | → `upcoming_speedguide` |
+| 同上（備援） | HKJC CMS 爬蟲／J18 歷史 API | 僅當 JJJC 無貨或失敗 |
 
 環境變量：`JJJC_API_BASE`（無尾斜線）。  
 - 外網／阿里雲：`https://apicc.up.railway.app`  
@@ -36,26 +37,23 @@
 
 **空 `races: []`** = 上游尚未備好（或非賽日），J18 應 `waiting`，不要當硬失敗狂打。
 
-### 1.3 文字數據來源決策（2026-09-10 更新）
+### 1.3 賽前加料來源決策（2026-09-10 更新）
 
-產品確認：**賽前賽事指引、沿路走勢、競賽報告** 現可由 **JJJC 賽前資料**取得；**J18 歷史 API 降為完整備援**，不再當主路徑。
+產品確認：下列均可由 **JJJC** 取得；**HKJC CMS／J18 歷史 API 僅備援**。
 
-| 文字種類 | 業務含義 | J18 落庫 | 主路徑 | 備援 |
-|----------|----------|----------|--------|------|
-| 賽事指引 | 近績／形勢短評（Form Guide 類） | `upcoming_formguide.form_text` | **JJJC** | HKJC FormGuide CMS 爬蟲；再退 J18 API |
-| 沿路走勢 | 賽後沿路評述 | `text_reports` `running_comment` | **JJJC**（隨賽前／賽後資料更新補齊） | J18 歷史 API |
-| 競賽報告 | 事故／競賽相關報告 | `text_reports` `incident_report`（或等價） | **JJJC** | J18 歷史 API |
+| 種類 | 業務含義 | J18 落庫 | 主路徑 | 備援 |
+|------|----------|----------|--------|------|
+| 速勢能量 **SG** | 能量／狀態評級 | `upcoming_speedguide` | **JJJC** | HKJC SpeedPro CMS（`speedguide_crawler`） |
+| 賽事指引 | 近績／形勢短評 | `upcoming_formguide.form_text` | **JJJC** | HKJC FormGuide CMS；再退 J18 API |
+| 沿路走勢 | 沿路評述 | `text_reports` `running_comment` | **JJJC** | J18 歷史 API |
+| 競賽報告 | 事故／競賽報告 | `text_reports` `incident_report` 等 | **JJJC** | J18 歷史 API |
 
 **整合現況（探針 2026-09-10）：**  
-公開 ` /api/export/racecard` 與 `/api/export/results` **尚未**見到上述長文欄位（runner 仍以排位欄為主）。  
-→ 開發依賴 JJJC 在 export（或新 endpoint）**露出欄位／schema 版本**；J18 側新增 sync 映射。在契約未上線前，自動鏈可暫用 CMS FormGuide + 備援 J18 API，但手冊目標架構以 JJJC 為準。
+公開 `/api/export/racecard`／`results` **尚未**穩定露出 SG／長文欄位。  
+→ 待 JJJC export／新 endpoint 契約；J18 擴充 sync。契約未上線前可暫用 CMS／J18 API 備援，**目標架構以 JJJC 為準**。
 
-**遺留清單拉取順序（評述類）：**  
-1. 再打 JJJC 文字／賽前 export（主）  
-2. 失敗或仍缺 → J18 歷史單日重抓（備援）  
-3. 兩者皆無 → waiting／拉長退避  
-
-Speed Guide（**速勢能量數字／評級**）仍以 HKJC SpeedPro CMS 為主，除非 JJJC 日後一併 export（與「文字三件」分開）。
+**遺留／重試拉取順序：**  
+1. JJJC（主）→ 2. 對應備援 → 3. 仍無則 waiting／退避。
 
 ### 1.2 效率原則（配合 JJJC 已全自動）
 
@@ -142,8 +140,8 @@ fixtures 有賽日
 | F0 賽期 | `crawl_fixtures`（低頻，如每日） | FIXTURE ok | 人工補賽日 |
 | F1 探排位 | HTTP 輕探 export | race_count>0 且 generated_at 新 | waiting |
 | F2 同步排位 | `sync_jjjc_racecard` | RACECARD ok | 空→waiting；錯位→備援 `crawl_racecard` 或人工 |
-| F3 速勢 | `crawl_speedguide` | SPEEDGUIDE ok／可接受 waiting | 未到時間→waiting；到期不足→failed 或人工放行 |
-| F4 賽績指引 | `crawl_formguide` | FORMGUIDE ok | 同 SG |
+| F3 速勢 SG | **JJJC sync**（目標）；備援 `crawl_speedguide` | SPEEDGUIDE ok | 空→waiting；不足→failed／人工 |
+| F4 賽事指引 | **JJJC sync**（目標）；備援 `crawl_formguide` | FORMGUIDE ok | 同 SG |
 | F5 因子 | `run_factors`（預設無 NLP） | FACTORS ok | 無歷史→failed（查 J18 API／batch） |
 | F6 Form AI | `start_form_ai_background` | FORM_AI ok | API key／配額→failed；可略過後 provisional |
 | F7 快照 | `snapshot`（**僅當 FORM_AI ok**） | SNAPSHOT ok；鎖 fused／ad_pick_rank；可出海報 | Form AI 未達標 → **禁止正式快照／廣告** |
@@ -403,11 +401,11 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 | 名稱 | 板塊 | 本系統 | 主來源（新決策） |
 |------|------|--------|------------------|
-| **Speed Guide（速勢能量）** | 馬會 SpeedPro 能量／狀態評級 | `upcoming_speedguide` | HKJC CMS（暫）；非「文字三件」 |
-| **賽事指引（Form Guide 類）** | 近績短評彙整 | `upcoming_formguide` | **JJJC 賽前**；CMS／J18 API 備援 |
-| **沿路走勢** | 賽後沿路評述 | `text_reports.running_comment` | **JJJC**；J18 API 備援 |
+| **Speed Guide（速勢能量）** | 能量／狀態評級 | `upcoming_speedguide` | **JJJC**；HKJC CMS 備援 |
+| **賽事指引（Form Guide 類）** | 近績短評彙整 | `upcoming_formguide` | **JJJC**；CMS／J18 API 備援 |
+| **沿路走勢** | 沿路評述 | `text_reports.running_comment` | **JJJC**；J18 API 備援 |
 | **競賽報告** | 事故／競賽報告 | `text_reports.incident_report` 等 | **JJJC**；J18 API 備援 |
-| **Form AI** | 我方 LLM 評分 | `upcoming_form_ai` | 依賴賽事指引等文字就緒後再跑 |
+| **Form AI** | 我方 LLM 評分 | `upcoming_form_ai` | 依賴賽事指引等就緒後再跑 |
 
 和 **排位** 區分：排位＝誰出賽；SG＝速勢能量；文字三件＝敘述類；Form AI＝自有分數。
 
@@ -510,8 +508,9 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 | 資料 | 主來源（目標） | 備援 | 節奏 |
 |------|----------------|------|------|
 | 名次／獨贏賠率 | api_jjjc `/api/export/results` | J18 歷史／batch_crawler | 完場約 +12h＋重試 |
-| 賽事指引 | **JJJC 賽前文字** | HKJC FG CMS → J18 API | 賽前陸續 |
-| 沿路走勢／競賽報告 | **JJJC**（賽前資料鏈補齊） | **J18 歷史 API** | 可能滯後數日；用 backlog |
+| 速勢能量 SG | **JJJC** | HKJC SpeedPro CMS | 賽前陸續 |
+| 賽事指引 | **JJJC** | HKJC FG CMS → J18 API | 賽前陸續 |
+| 沿路走勢／競賽報告 | **JJJC** | J18 歷史 API | 可能滯後；用 backlog |
 | NLP 結構化 | `nlp_batch_job` → `nlp_result` | — | 有正文後才跑 |
 
 > **架構（2026-09-10）：** 文字三件以 JJJC 為主；J18 歷史 API **只作備援**。  
@@ -621,7 +620,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |----|------|
 | B1 | `data_backlog` 表 + 缺文字／名次入列 |
 | B2 | tick 順路：**JJJC 文字主路徑** → 失敗才 J18 history 備援 |
-| B3 | 與 JJJC 對齊 export 欄位／新 schema；擴充 `jjjc_*_sync` 寫入 formguide／text_reports |
+| B3 | 與 JJJC 對齊 export：**SG＋文字**欄位／schema；擴充 sync → `upcoming_speedguide`／formguide／text_reports |
 | B4 | 新評述 → NLP batch（limit） |
 | B5 | NLP 完成 → 因子重算（每輪一次） |
 | B6 | 可選：未來賽日 auto-revise |
@@ -707,7 +706,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |------|------|
 | 2026-09-10 | 初版：配合 JJJC 全自動；賽前／賽後 SOP；現況 vs 目標；開發切片 A–E |
 | 2026-09-10 | §11：數據遺留清單；沿路走勢延遲；評述到位後 NLP→因子→revision 流程 |
-| 2026-09-10 | §10.1b／10.2b：Form AI→快照順序；覆蓋＝馬匹覆蓋；無齊備快照不廣告；確認雙跑 |
+| 2026-09-10 | §1.3：速勢能量 SG 亦改 **JJJC 主路徑**，HKJC CMS 備援 |
 
 ---
 
@@ -717,7 +716,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |------|------|
 | JJJC 有 9/13 排位，J18 會自動入庫嗎？ | **現在不會**；要手動 sync 或等賽前 tick |
 | `JJJC_API_BASE` 填什麼？ | Public：`https://apicc.up.railway.app` |
-| SG／FormGuide？ | 馬會賽前速勢能量／賽績指引，不是排位、不是賽後評述 |
+| SG／FormGuide？ | 速勢能量／賽事指引；**主路徑 JJJC**，CMS／J18 API 備援 |
 | Primary vs Revision？ | 正式第一份鎖分 vs 追加修訂卷（舊卷保留） |
 | 無 Form AI 可否正式快照？ | **否**；Form AI 必須在快照**之前**達標 |
 | 覆蓋率指什麼？ | **馬匹覆蓋**：有該資料的馬數 ÷ 排位馬數（≥80%） |
