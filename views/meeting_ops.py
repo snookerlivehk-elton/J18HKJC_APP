@@ -365,6 +365,64 @@ for stage, label in STAGES:
             st.rerun()
 
 st.divider()
+st.subheader(f"③ 數據遺留 — {racing_date} {course}")
+st.caption("沿途走勢／事故報告若未齊，會入遺留清單並在保留窗內自動重試（完整列表見「數據遺留清單」頁）。")
+try:
+    from data_backlog import (
+        KIND_INCIDENT,
+        KIND_RUNNING,
+        DataBacklogService,
+    )
+
+    bl = DataBacklogService(engine=pipe.engine)
+    bl_rows = bl.list_items(
+        racing_date=racing_date, course=course, limit=20
+    )
+    cov_rc = bl.measure_comment_coverage(racing_date, course, KIND_RUNNING)
+    cov_inc = bl.measure_comment_coverage(racing_date, course, KIND_INCIDENT)
+    bc1, bc2, bc3 = st.columns(3)
+    bc1.metric(
+        "沿途評述覆蓋",
+        f"{cov_rc.get('covered_n', 0)}/{cov_rc.get('expected_n', 0)}",
+        f"{float(cov_rc.get('coverage') or 0):.0%}",
+    )
+    bc2.metric(
+        "事故報告覆蓋",
+        f"{cov_inc.get('covered_n', 0)}/{cov_inc.get('expected_n', 0)}",
+        f"{float(cov_inc.get('coverage') or 0):.0%}",
+    )
+    with bc3:
+        if st.button("入列／刷新本賽日遺留", use_container_width=True):
+            out = bl.enroll_meeting(racing_date, course)
+            st.success(out)
+            st.rerun()
+    if bl_rows is not None and not bl_rows.empty:
+        st.dataframe(
+            bl_rows[
+                [
+                    c
+                    for c in (
+                        "data_kind",
+                        "status",
+                        "covered_n",
+                        "expected_n",
+                        "coverage",
+                        "attempt_count",
+                        "next_attempt_at",
+                        "detail",
+                    )
+                    if c in bl_rows.columns
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.caption("本賽日暫無遺留列（無名次母體或已達標／未入列）。")
+except Exception as e:
+    st.warning(f"遺留清單暫不可用：{e}")
+
+st.divider()
 st.caption(
     "RACECARD／RESULTS 優先同步 jjjc（需設 JJJC_API_BASE）；HTML 重抓僅備援。"
     "【重要】NLP／沿路走勢＝可選強化，**不必人工放行**，也不阻擋「建立快照」或「結算快照」。"
