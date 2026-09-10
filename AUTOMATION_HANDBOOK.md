@@ -103,12 +103,10 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 |------|----------------|-----------------------------------|
 | **FIXTURE** | 賽日在 `fixtures` | 無賽期 → 跑 fixtures 爬蟲 |
 | **RACECARD** | upcoming 該日場次數達標（建議 ≥ 當日預期場數或 ≥8）；每場有馬；無錯位 | export 空 → waiting；有場無馬／錯位 → failed（可備援 HTML） |
-| **SPEEDGUIDE** | 覆蓋 ≥ 約 80% runners | 距賽日 >36h 且空 → waiting；到期仍低 → failed／waiting |
-| **FORMGUIDE** | 覆蓋 ≥ 約 80% | 空 → waiting |
-| **FACTORS** | `factor_scores` 有近期資料 | 空 → 重算 |
-| **NLP** | **可選**；現 check 常放行 | 不擋快照（可降級路徑） |
-| **FORM_AI** | 覆蓋達標（建議 ≥80%） | 未跑 → pending；**未達標不得建正式 primary 快照**（2026-09-10 決策） |
-| **SNAPSHOT** | 有 formal primary（Form AI 已 ok）；可另有 revision | 無 Form AI → **阻擋正式快照** |
+| **SPEEDGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照** |
+| **FORMGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照**（與 SG／AI 一致） |
+| **FORM_AI** | 馬匹覆蓋 ≥80% | 未達 → pending；**未達標禁止任何快照** |
+| **SNAPSHOT** | 僅當 SG＋FormGuide＋Form AI 皆 ≥80% | 否則不建；無快照 ⇒ 無廣告／命中主路徑 |
 | **RESULTS** | historical `runners` 該日有 `finish_order_num` | 空 → waiting（對齊 JJJC +12h） |
 | **SETTLED** | 對應 batch 有 `settled_at`（每場名次覆蓋達現有 ≥50% 規則） | 有名次未滿 → 重跑 settle；無快照 → 不能結 |
 
@@ -349,32 +347,51 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 | # | 決策 | 實作含義 |
 |---|------|----------|
-| 1 | **無 Form AI → 不能出正式快照** | 見 §10.1b 前後關係；FORM_AI 覆蓋達標前禁止 `primary` |
-| 3b | **資料未齊 → 不出命中快照／統計，也不觸發廣告** | 無正式快照（及賽後未結算）⇒ 不產海報定稿、不產賽前／賽後社交文案、不進可宣傳命中統計主路徑 |
-| 4 | **文案全自動產檔** | 僅在 §10.1b 閘門通過後；每期歸檔可回測（§10.4） |
-| 5 | **失敗必須通知＋判斷是否要人工** | 管理介面儀表板（§14） |
-| 6 | **兩邊都跑（對稱）** | 阿里雲＋Railway 各跑 tick、**分庫**、Cron 錯開；測試期定案（§10.6 方案 A） |
+| 1 | **無 Form AI → 不能出任何正式快照** | FORM_AI 馬匹覆蓋 ≥80% 前禁止 snapshot |
+| 1b | **無速勢能量 SG → 不能出任何快照** | SPEEDGUIDE 馬匹覆蓋 ≥80% 前禁止 snapshot（SG 為主要評分參考；見 §10.1c） |
+| 1c | **覆蓋門檻** | SG／FormGuide／Form AI 一律 **馬匹覆蓋 ≥80%** |
+| 3b | **資料未齊 → 不出命中快照／統計，也不觸發廣告** | 無正式快照（及賽後未結算）⇒ 不產海報定稿、不產賽前／賽後社交文案、不進可宣傳命中統計 |
+| 3c | **沿路走勢等遺留** | 最長保留 **10～14 日**；取得後 **自動 NLP（若為文字）→ 因子重算** |
+| 4 | **文案全自動產檔** | 僅在閘門通過後；每期歸檔可回測 |
+| 5 | **失敗必須通知＋判斷是否要人工** | 自動化中控儀表板 |
+| 6 | **兩邊都跑（對稱）** | 分庫、Cron 錯開 |
 
-### 10.1b Form AI 與快照的前後關係（再確認）
+### 10.1b Form AI／SG 與快照的前後關係
 
-**順序（硬閘門）：**
+**正式快照硬閘門（生產）：**
 
 ```
 排位齊
-  →（建議）賽事指引文字就緒，供 Form AI 閱讀
-  → Form AI 跑完且覆蓋達標（§10.2b）
-  → 才建立正式 primary 快照（鎖模型分／AI 分／融合／ad_pick_rank）
-  → 才允許：定稿海報、賽前社交文案、之後結算命中統計、賽後可宣傳文案
+  → SG 馬匹覆蓋 ≥80%          ← 決策 1b（主要評分參考，缺則完全不建快照）
+  → 賽事指引建議就緒（FormGuide ≥80% 為 stage ok；見下）
+  → Form AI ≥80%
+  → 才建立正式 primary 快照
+  → 才允許海報／文案／其後命中與賽後廣告
 ```
 
 | 問 | 答 |
 |----|----|
-| Form AI 在快照前還是後？ | **一定在前**。快照要鎖住 AI 分與融合推介，沒跑 AI 就鎖＝空殼／不可正式用。 |
-| 可否先 snapshot 再補 AI？ | **正式流程不可以**。補 AI 後應走 **revision**（新 batch），且只有「Form AI 已達標」的 batch 才當正式／廣告／命中主批次。 |
-| 與「可降級 provisional」？ | 內部實驗可另議；**生產／廣告／命中統計只認 Form AI 達標後的正式快照**。 |
-| 賽後結算？ | 結算的是**已存在的正式快照**；無正式快照 ⇒ 無命中統計 ⇒ **不觸發廣告產出**（你的決策 3b）。 |
+| Form AI 在快照前還是後？ | **之前** |
+| SG 可以缺嗎？ | **不可以**——你定案：缺 SG **不生成任何快照** |
+| 賽後結算／廣告？ | 只認正式快照；無快照 ⇒ 無命中主統計 ⇒ 不廣告 |
 
-生活化：Form AI＝評卷老師打完分；快照＝把分數封箱；廣告／命中＝開箱後才能宣傳。沒打分就不封箱、不宣傳。
+### 10.1c 舊制「可缺料仍出快照」缺什麼？vs 新定案
+
+**舊／現行程式（可降級 provisional）** 在資料未齊時仍可能建快照，並在列上記 `provisional_reasons`，常見包括：
+
+| 代碼 | 意思 |
+|------|------|
+| `sg_missing` | 該場／該馬缺少 Speed Guide（速勢能量） |
+| `nlp_pending` | 沿路走勢 NLP 尚未解析（干擾通道降覆蓋） |
+| `low_match` | 因子查表匹配偏弱 |
+
+另外業務上還可能「未齊仍鎖」的有：Form Guide 不足、Form AI 未跑完（舊可降級；**你已禁止無 Form AI 出正式快照**）。
+
+權重上 SG 相關（`WEIGHT_SG_FORM`／`WEIGHT_SG_ENERGY`／`WEIGHT_SG_DELTA`）是總分重要來源之一，缺 SG 時分數會偏離「有 SG 的正賽版本」——因此你要求 **缺 SG 就不要生成快照** 合理，手冊改為：
+
+- **禁止** 帶 `sg_missing` 的生產快照（含 primary／revision）  
+- **禁止** 無 Form AI 達標的快照  
+- Form Guide：**同樣硬閘**——未達 80% **不出快照**（Form AI 依賴指引；與 SG／AI 一致）。
 
 ### 10.2b 「覆蓋率」是什麼？（馬匹覆蓋，不是「某一列表頭齊不齊」）
 
@@ -547,7 +564,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 **出列時機：**
 
 - 覆蓋達標（例如該 meeting runners 有評述比例 ≥ 閾值，或「預期有評述的馬」齊）→ `done`  
-- 超過保留窗（如 21～30 日）→ `expired`（停撈，可人工再開）  
+- 超過保留窗（**10～14 日**）→ `expired`（停撈，可人工再開）  
 
 ### 11.3 每次更新「順路」掃清單（配合 JJJC／既有 Cron）
 
@@ -607,7 +624,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 | 僅標記 `needs_recompute=true`，交下一班維護窗（如每日凌晨） | ✅ 若白天負載高 |
 
 **推薦預設：**  
-`評述入庫 →（同輪或短延遲）NLP only_missing → 因子重算一次 → 對「未來未結算 meeting」可選 revise`。  
+遺留保留 **10～14 日**；正文入庫後 **自動 NLP（文字類）→ 因子重算一次**；未來未結算 meeting 可選 revise。  
 **不要**為補歷史評述而重結已 `settled_at` 的 batch。
 
 #### 與覆蓋度手冊對齊
