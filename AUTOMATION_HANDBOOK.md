@@ -146,9 +146,9 @@ fixtures 有賽日
 | F4 賽績指引 | `crawl_formguide` | FORMGUIDE ok | 同 SG |
 | F5 因子 | `run_factors`（預設無 NLP） | FACTORS ok | 無歷史→failed（查 J18 API／batch） |
 | F6 Form AI | `start_form_ai_background` | FORM_AI ok | API key／配額→failed；可略過後 provisional |
-| F7 快照 | `snapshot` | SNAPSHOT ok；鎖 fused／ad_pick_rank；可出海報 | 無排位→不做；provisional 標記 |
-| F8 修訂 | `revise_snapshot`（資料補齊後） | 新 revision batch | 已結算不覆寫 |
-| F9 文案 | （待做）自動 social copy | 檔案落地 | LLM 失敗→fallback／跳過不擋主鏈 |
+| F7 快照 | `snapshot`（**僅當 FORM_AI ok**） | SNAPSHOT ok；鎖 fused／ad_pick_rank；可出海報 | Form AI 未達標 → **禁止正式快照／廣告** |
+| F8 修訂 | `revise_snapshot`（資料再齊後） | 新 revision batch | 已結算不覆寫；revision 亦須 Form AI 仍達標 |
+| F9 文案／海報 | 自動 social＋歸檔 | 檔案落地 | **無正式快照 → 不觸發** |
 
 ### 3.3 賽前時間建議（可調）
 
@@ -195,8 +195,8 @@ fixtures 有賽日
 | R1 探賽果 | 輕探 export results | race_count>0、generated_at 新 | 空→waiting（尤其未到 +12h） |
 | R2 同步 | `sync_jjjc_results` | runners 有 finish_order_num | 空 export→waiting；HTTP 錯→failed |
 | R3 結算 | `settle`（`settle_pending`） | batch `settled_at` | 無名次／未達 50%→waiting；無快照→跳過並記 detail |
-| R4 宣傳評估 | `evaluate_ad_promo_hits`（唯讀） | 可宣傳列表 | 無命中→不做文案 |
-| R5 賽後文案 | （待做自動）`generate_post_race_copy` | JSON＋可貼文 | LLM 失敗→fallback |
+| R4 宣傳評估 | `evaluate_ad_promo_hits` | 可宣傳列表 | **無正式已結算快照 → 不跑／不廣告** |
+| R5 賽後文案 | 自動 `generate_post_race_copy`＋歸檔 | JSON＋可貼文 | 無命中或不滿足 R4 → 不觸發 |
 | R6 可選 | 重算因子／NLP batch | 模型資料更新 | 不擋 SETTLED |
 
 ### 4.3 與 JJJC +12h 對齊
@@ -351,10 +351,53 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 | # | 決策 | 實作含義 |
 |---|------|----------|
-| 1 | **無 Form AI → 不能出正式快照** | `snapshot` 前 FORM_AI 必須 ok（覆蓋達標）；不可用「略過 Form AI」出 `primary` 正式版。缺 AI 時最多只允許明確標示的非生產用途（預設：**直接擋**）。 |
-| 4 | **文案全自動產檔** | 賽前 `social_copy`、賽後 `post_race_social_copy` 可由 tick 觸發；**每期產檔必須歸檔可回測**（見 §10.4）。 |
-| 5 | **失敗必須通知＋判斷是否要人工** | 管理介面儀表板（§14）；不只 log。 |
-| 6 | **兩邊部署策略** | 見 §10.6 詳解後由你選「雙跑」或「分工」；手冊兩種都支援。 |
+| 1 | **無 Form AI → 不能出正式快照** | 見 §10.1b 前後關係；FORM_AI 覆蓋達標前禁止 `primary` |
+| 3b | **資料未齊 → 不出命中快照／統計，也不觸發廣告** | 無正式快照（及賽後未結算）⇒ 不產海報定稿、不產賽前／賽後社交文案、不進可宣傳命中統計主路徑 |
+| 4 | **文案全自動產檔** | 僅在 §10.1b 閘門通過後；每期歸檔可回測（§10.4） |
+| 5 | **失敗必須通知＋判斷是否要人工** | 管理介面儀表板（§14） |
+| 6 | **兩邊都跑（對稱）** | 阿里雲＋Railway 各跑 tick、**分庫**、Cron 錯開；測試期定案（§10.6 方案 A） |
+
+### 10.1b Form AI 與快照的前後關係（再確認）
+
+**順序（硬閘門）：**
+
+```
+排位齊
+  →（建議）賽事指引文字就緒，供 Form AI 閱讀
+  → Form AI 跑完且覆蓋達標（§10.2b）
+  → 才建立正式 primary 快照（鎖模型分／AI 分／融合／ad_pick_rank）
+  → 才允許：定稿海報、賽前社交文案、之後結算命中統計、賽後可宣傳文案
+```
+
+| 問 | 答 |
+|----|----|
+| Form AI 在快照前還是後？ | **一定在前**。快照要鎖住 AI 分與融合推介，沒跑 AI 就鎖＝空殼／不可正式用。 |
+| 可否先 snapshot 再補 AI？ | **正式流程不可以**。補 AI 後應走 **revision**（新 batch），且只有「Form AI 已達標」的 batch 才當正式／廣告／命中主批次。 |
+| 與「可降級 provisional」？ | 內部實驗可另議；**生產／廣告／命中統計只認 Form AI 達標後的正式快照**。 |
+| 賽後結算？ | 結算的是**已存在的正式快照**；無正式快照 ⇒ 無命中統計 ⇒ **不觸發廣告產出**（你的決策 3b）。 |
+
+生活化：Form AI＝評卷老師打完分；快照＝把分數封箱；廣告／命中＝開箱後才能宣傳。沒打分就不封箱、不宣傳。
+
+### 10.2b 「覆蓋率」是什麼？（馬匹覆蓋，不是「某一列表頭齊不齊」）
+
+程式現況（`meeting_pipeline.check_*`）定義：
+
+\[
+\text{覆蓋率} = \frac{\text{該賽日該場地「已有該資料的馬匹數」}}{\text{排位表馬匹總數（upcoming_runners）}}
+\]
+
+達標線現為 **≥ 80%**。
+
+| 階段 | 分子（有資料的馬） | 分母 |
+|------|-------------------|------|
+| SPEEDGUIDE | `upcoming_speedguide` 且 `speed_energy IS NOT NULL` | 同日同場地 runners |
+| FORMGUIDE | `upcoming_formguide` 且 `form_text` 非空 | 同上 |
+| FORM_AI | `upcoming_form_ai` 且 `summary IS NOT NULL` | 同上 |
+
+所以是 **「多少匹馬已齊這包資料」**，不是「meeting 那一列有沒有填完所有欄位」。  
+例：100 匹排位馬，80 匹有 SG 能量 → 80% → ok；只有 50 匹有 → 不足。
+
+（若將來要「關鍵欄位齊備」第二層檢查，另加規則；與現覆蓋率分開。）
 
 ### 10.2 Speed Guide（SG）／Form Guide／文字三件是什麼？
 
@@ -450,10 +493,10 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 適合：雙軌結束、**阿里雲定為唯一生產**之後。
 
-#### 怎麼選（建議）
+#### 怎麼選（已拍板）
 
-- **現在（雙邊測試）**：選 **方案 A 兩邊都跑**，但 Cron **錯開分鐘**（如阿里雲 `:05/:35`，Railway `:20/:50`），且 **分庫**，用儀表板／命中率對照。  
-- **之後定主**：改 **方案 B**，只留阿里雲寫庫；Railway 變唯讀或下線自動 tick。
+- **測試期（現在）：方案 A 兩邊都跑** — 分庫、Cron 錯開分鐘、儀表板可對照。  
+- 之後若定阿里雲為唯一生產，再改方案 B（手冊保留）。
 
 ---
 
@@ -648,11 +691,13 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 ## 15. 仍待你補一句的決策
 
-1. **SG（速勢能量）覆蓋門檻**：維持約 80% 可否？  
-2. **Primary 之後是否自動 revision**  
-3. **雙跑還是分工**（測試期建議雙跑分庫）  
-4. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**  
-5. **JJJC 文字 export**：請 JJJC 提供欄位名／endpoint／schema 版本（目前公開 racecard／results 尚未見長文）→ 我方才能寫 sync  
+1. **SG／FormGuide／Form AI 覆蓋門檻**：維持 **馬匹覆蓋 ≥80%** 可否？（定義見 §10.2b）  
+2. **Primary 之後是否自動 revision**（開賽前再齊時自動追加修訂卷？）  
+3. **評述遺留天數** 與 **到齊後是否自動 NLP＋重算**  
+4. **JJJC 文字 export** 欄位／endpoint（公開 API 尚未見長文）  
+
+~~兩邊都跑~~ → **已確認方案 A**。  
+~~無 Form AI 出正式快照／無齊備就廣告~~ → **已禁止**。
 
 ---
 
@@ -662,7 +707,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |------|------|
 | 2026-09-10 | 初版：配合 JJJC 全自動；賽前／賽後 SOP；現況 vs 目標；開發切片 A–E |
 | 2026-09-10 | §11：數據遺留清單；沿路走勢延遲；評述到位後 NLP→因子→revision 流程 |
-| 2026-09-10 | §1.3／§11：文字三件改 **JJJC 主路徑**，J18 歷史 API 僅備援；記 export 契約待對齊 |
+| 2026-09-10 | §10.1b／10.2b：Form AI→快照順序；覆蓋＝馬匹覆蓋；無齊備快照不廣告；確認雙跑 |
 
 ---
 
