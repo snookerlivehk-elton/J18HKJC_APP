@@ -10,6 +10,143 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 
+class PlanPreRaceTest(unittest.TestCase):
+    def _runner(self, **guard_kw):
+        from meeting_tick import MeetingTickRunner, TickGuards
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(**guard_kw)
+        runner._factors_ran = False
+        runner.get_tick_state = MagicMock(
+            return_value={
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": None,
+                "last_detail": None,
+            }
+        )
+        runner.record_tick_attempt = MagicMock()
+        return runner
+
+    def test_plans_full_chain_when_empty(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "pending"},
+            "SPEEDGUIDE": {"status": "pending"},
+            "FORMGUIDE": {"status": "pending"},
+            "FACTORS": {"status": "pending"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [
+                {"stage": s, "status": "pending", "manual_override": 0}
+                for s in (
+                    "RACECARD",
+                    "SPEEDGUIDE",
+                    "FORMGUIDE",
+                    "FACTORS",
+                    "FORM_AI",
+                    "SNAPSHOT",
+                )
+            ]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertTrue(plan.sync_racecard)
+        self.assertTrue(plan.pull_speedguide)
+        self.assertTrue(plan.pull_formguide)
+        self.assertTrue(plan.run_factors)
+        self.assertTrue(plan.start_form_ai)
+        self.assertFalse(plan.snapshot)  # 閘門未齊
+        self.assertTrue(any("gates" in s for s in plan.skip_reasons))
+
+    def test_snapshot_when_gates_ok(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "ok"},
+            "SPEEDGUIDE": {"status": "ok"},
+            "FORMGUIDE": {"status": "ok"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "ok"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [
+                {"stage": s, "status": "ok" if s != "SNAPSHOT" else "pending", "manual_override": 0}
+                for s in (
+                    "RACECARD",
+                    "SPEEDGUIDE",
+                    "FORMGUIDE",
+                    "FACTORS",
+                    "FORM_AI",
+                    "SNAPSHOT",
+                )
+            ]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.sync_racecard)
+        self.assertFalse(plan.pull_speedguide)
+        self.assertTrue(plan.snapshot)
+
+    def test_manual_skip_blocks_racecard(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "pending"},
+            "SPEEDGUIDE": {"status": "pending"},
+            "FORMGUIDE": {"status": "pending"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [
+                {
+                    "stage": "RACECARD",
+                    "status": "skipped_manual",
+                    "manual_override": 1,
+                },
+            ]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.sync_racecard)
+        self.assertFalse(plan.pull_speedguide)
+        self.assertTrue(any("RACECARD manual" in s for s in plan.skip_reasons))
+
+    def test_dry_run_pre_race_execute(self):
+        from meeting_tick import PreRaceActionPlan, MeetingTickRunner, TickGuards
+
+        pipe = MagicMock()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards()
+        runner._factors_ran = False
+        runner.record_tick_attempt = MagicMock()
+        plan = PreRaceActionPlan(
+            racing_date="2026-09-13",
+            course="ST",
+            sync_racecard=True,
+            pull_speedguide=True,
+            pull_formguide=True,
+            run_factors=True,
+            start_form_ai=True,
+            snapshot=False,
+        )
+        out = runner.execute_pre_race_meeting(plan, dry_run=True)
+        pipe.run_action.assert_not_called()
+        self.assertEqual(len(out["actions"]), 5)
+        self.assertTrue(all(a.get("dry_run") for a in out["actions"]))
+
+
 class PlanPostRaceTest(unittest.TestCase):
     def _runner(self, **guard_kw):
         from meeting_tick import MeetingTickRunner, TickGuards

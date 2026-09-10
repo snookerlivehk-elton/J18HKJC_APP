@@ -1,21 +1,29 @@
 """
-賽日自動 tick（階段 1：賽後 RESULTS → SETTLED）。
+賽日自動 tick（賽前 pre_race + 賽後 post_race）。
 
-依 fixtures／未結算快照選賽日，refresh readiness 後只跑該做的動作：
-  1) sync_jjjc_results（官方未上架 → waiting，冷卻後再試）
-  2) sync_jjjc_text_reports（沿途／事故；空＝waiting；JJJC 主路徑）
-  3) settle_pending（有快照且尚未結算）
+賽前（fixtures 今日～未來 N 日）：
+  1) sync_jjjc_racecard
+  2) crawl_speedguide／crawl_formguide（JJJC 主路徑，CMS 備援）
+  3) run_factors（每輪最多一次）
+  4) start_form_ai_background
+  5) snapshot（僅當 SG＋FormGuide＋Form AI 皆 ok）
 
-原則（對齊 DEVELOPMENT_REPORT §5.3）：
+賽後（lookback）：
+  1) sync_jjjc_results
+  2) sync_jjjc_text_reports
+  3) settle_pending
+
+原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
   - 依 readiness 重試；禁止無限狂爬（cooldown + max fails）
   - 人工略過／放行（manual_override）不覆蓋、不強跑
 
 用法：
-  python meeting_tick.py --dry-run
+  python meeting_tick.py --mode all --dry-run --json
+  python meeting_tick.py --mode pre_race --lookahead-days 3
   python meeting_tick.py --mode post_race --lookback-days 3
-  python meeting_tick.py --date 2026-09-09 --course HV
-  python meeting_tick.py --force   # 忽略 cooldown／失敗上限（仍尊重 manual skip）
+  python meeting_tick.py --date 2026-09-13 --course ST --mode pre_race
+  python meeting_tick.py --force
 """
 from __future__ import annotations
 
@@ -49,6 +57,7 @@ except ImportError:
 
 # ----- 預設護欄（可用 CLI／環境覆寫）-----
 DEFAULT_LOOKBACK_DAYS = int(os.getenv("MEETING_TICK_LOOKBACK_DAYS", "3") or 3)
+DEFAULT_LOOKAHEAD_DAYS = int(os.getenv("MEETING_TICK_LOOKAHEAD_DAYS", "3") or 3)
 DEFAULT_COOLDOWN_WAITING_SEC = int(
     os.getenv("MEETING_TICK_COOLDOWN_WAITING_SEC", str(30 * 60)) or 30 * 60
 )
@@ -56,8 +65,27 @@ DEFAULT_COOLDOWN_FAILED_SEC = int(
     os.getenv("MEETING_TICK_COOLDOWN_FAILED_SEC", str(60 * 60)) or 60 * 60
 )
 DEFAULT_MAX_FAILS = int(os.getenv("MEETING_TICK_MAX_FAILS", "5") or 5)
+DEFAULT_TICK_MODE = (os.getenv("MEETING_TICK_MODE") or "all").strip().lower()
+
+AUTO_FACTORS = (os.getenv("MEETING_TICK_AUTO_FACTORS", "true") or "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_FORM_AI = (os.getenv("MEETING_TICK_AUTO_FORM_AI", "true") or "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_SNAPSHOT = (os.getenv("MEETING_TICK_AUTO_SNAPSHOT", "true") or "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 POST_RACE_MODE = "post_race"
+PRE_RACE_MODE = "pre_race"
+ALL_MODE = "all"
 
 
 def _utcnow() -> datetime:
@@ -137,6 +165,20 @@ class MeetingActionPlan:
     readiness: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class PreRaceActionPlan:
+    racing_date: str
+    course: str
+    sync_racecard: bool = False
+    pull_speedguide: bool = False
+    pull_formguide: bool = False
+    run_factors: bool = False
+    start_form_ai: bool = False
+    snapshot: bool = False
+    skip_reasons: List[str] = field(default_factory=list)
+    readiness: Dict[str, Any] = field(default_factory=dict)
+
+
 class MeetingTickRunner:
     """可單測的 tick 邏輯；真正 I/O 經 MeetingPipeline.run_action。"""
 
@@ -149,6 +191,7 @@ class MeetingTickRunner:
         self.pipe = pipeline or MeetingPipeline()
         self.guards = guards or TickGuards()
         self.ensure_tick_state_table()
+        self._factors_ran = False
 
     def ensure_tick_state_table(self) -> None:
         if USE_SQLITE:
@@ -333,6 +376,38 @@ class MeetingTickRunner:
 
         return sorted(found.keys())
 
+    def list_upcoming_meetings(
+        self, start: date, end: date
+    ) -> List[Tuple[str, str]]:
+        """fixtures 賽日前瞻區間（含當日）。"""
+        start_s, end_s = start.isoformat(), end.isoformat()
+        found: Dict[Tuple[str, str], None] = {}
+        try:
+            fx = pd.read_sql(
+                text(
+                    """
+                    SELECT DISTINCT racing_date, course
+                    FROM fixtures
+                    WHERE CAST(racing_date AS TEXT) >= :a
+                      AND CAST(racing_date AS TEXT) <= :b
+                    """
+                    if USE_SQLITE
+                    else """
+                    SELECT DISTINCT racing_date, course
+                    FROM fixtures
+                    WHERE racing_date >= CAST(:a AS DATE)
+                      AND racing_date <= CAST(:b AS DATE)
+                    """
+                ),
+                self.pipe.engine,
+                params={"a": start_s, "b": end_s},
+            )
+            for r in fx.itertuples():
+                found[(str(r.racing_date)[:10], str(r.course).upper())] = None
+        except Exception:
+            pass
+        return sorted(found.keys())
+
     def _attempt_allowed(
         self,
         racing_date: str,
@@ -368,6 +443,467 @@ class MeetingTickRunner:
         if elapsed < cd:
             return False, f"cooldown {int(cd - elapsed)}s left (status={stage_status})"
         return True, "cooldown_ok"
+
+    @staticmethod
+    def _stage_status(readiness: Dict[str, Any], stage: str) -> str:
+        return str((readiness.get(stage) or {}).get("status") or STATUS_PENDING)
+
+    @staticmethod
+    def _gates_for_formal_snapshot(readiness: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """正式快照硬閘：SG + FormGuide + Form AI 皆 ok。"""
+        missing: List[str] = []
+        for st in ("SPEEDGUIDE", "FORMGUIDE", "FORM_AI"):
+            if MeetingTickRunner._stage_status(readiness, st) != STATUS_OK:
+                missing.append(st)
+        return (len(missing) == 0, missing)
+
+    def plan_pre_race_meeting(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        readiness: Optional[Dict[str, Any]] = None,
+        stages_df: Optional[pd.DataFrame] = None,
+        now: Optional[datetime] = None,
+        auto_factors: bool = AUTO_FACTORS,
+        auto_form_ai: bool = AUTO_FORM_AI,
+        auto_snapshot: bool = AUTO_SNAPSHOT,
+    ) -> PreRaceActionPlan:
+        """純決策：賽前要不要拉排位／SG／FG／因子／Form AI／快照。"""
+        d, c = racing_date[:10], course.upper()
+        plan = PreRaceActionPlan(racing_date=d, course=c)
+        readiness = readiness or self.pipe.refresh_readiness(d, c)
+        plan.readiness = readiness
+        stages = stage_row_map(
+            stages_df if stages_df is not None else self.pipe.get_stages(d, c)
+        )
+        now = now or _utcnow()
+
+        rc = self._stage_status(readiness, "RACECARD")
+        sg = self._stage_status(readiness, "SPEEDGUIDE")
+        fg = self._stage_status(readiness, "FORMGUIDE")
+        fac = self._stage_status(readiness, "FACTORS")
+        ai = self._stage_status(readiness, "FORM_AI")
+        snap = self._stage_status(readiness, "SNAPSHOT")
+
+        # --- RACECARD ---
+        if is_manual_blocked(stages.get("RACECARD")):
+            plan.skip_reasons.append("RACECARD manual block")
+        elif rc == STATUS_OK:
+            plan.skip_reasons.append("RACECARD already ok")
+        else:
+            allowed, why = self._attempt_allowed(d, c, "RACECARD", rc, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"RACECARD skip: {why}")
+            else:
+                plan.sync_racecard = True
+
+        racecard_ready_soon = rc == STATUS_OK or plan.sync_racecard
+
+        # --- SPEEDGUIDE ---
+        if is_manual_blocked(stages.get("SPEEDGUIDE")):
+            plan.skip_reasons.append("SPEEDGUIDE manual block")
+        elif not racecard_ready_soon:
+            plan.skip_reasons.append("SPEEDGUIDE wait: RACECARD not ready")
+        elif sg == STATUS_OK:
+            plan.skip_reasons.append("SPEEDGUIDE already ok")
+        else:
+            allowed, why = self._attempt_allowed(d, c, "SPEEDGUIDE", sg, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"SPEEDGUIDE skip: {why}")
+            else:
+                plan.pull_speedguide = True
+
+        # --- FORMGUIDE ---
+        if is_manual_blocked(stages.get("FORMGUIDE")):
+            plan.skip_reasons.append("FORMGUIDE manual block")
+        elif not racecard_ready_soon:
+            plan.skip_reasons.append("FORMGUIDE wait: RACECARD not ready")
+        elif fg == STATUS_OK:
+            plan.skip_reasons.append("FORMGUIDE already ok")
+        else:
+            allowed, why = self._attempt_allowed(d, c, "FORMGUIDE", fg, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"FORMGUIDE skip: {why}")
+            else:
+                plan.pull_formguide = True
+
+        # --- FACTORS ---
+        if not auto_factors:
+            plan.skip_reasons.append("FACTORS disabled by env")
+        elif is_manual_blocked(stages.get("FACTORS")):
+            plan.skip_reasons.append("FACTORS manual block")
+        elif fac == STATUS_OK:
+            plan.skip_reasons.append("FACTORS already ok")
+        else:
+            allowed, why = self._attempt_allowed(d, c, "FACTORS", fac, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"FACTORS skip: {why}")
+            else:
+                plan.run_factors = True
+
+        # --- FORM_AI ---
+        if not auto_form_ai:
+            plan.skip_reasons.append("FORM_AI disabled by env")
+        elif is_manual_blocked(stages.get("FORM_AI")):
+            plan.skip_reasons.append("FORM_AI manual block")
+        elif not racecard_ready_soon:
+            plan.skip_reasons.append("FORM_AI wait: RACECARD not ready")
+        elif ai == STATUS_OK:
+            plan.skip_reasons.append("FORM_AI already ok")
+        else:
+            allowed, why = self._attempt_allowed(d, c, "FORM_AI", ai, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"FORM_AI skip: {why}")
+            else:
+                plan.start_form_ai = True
+
+        # --- SNAPSHOT（硬閘：SG+FG+FORM_AI）---
+        gates_ok, missing = self._gates_for_formal_snapshot(readiness)
+        if not auto_snapshot:
+            plan.skip_reasons.append("SNAPSHOT disabled by env")
+        elif is_manual_blocked(stages.get("SNAPSHOT")):
+            plan.skip_reasons.append("SNAPSHOT manual block")
+        elif snap == STATUS_OK:
+            plan.skip_reasons.append("SNAPSHOT already ok")
+        elif not gates_ok:
+            plan.skip_reasons.append(
+                "SNAPSHOT wait: gates " + ",".join(missing)
+            )
+        else:
+            allowed, why = self._attempt_allowed(d, c, "SNAPSHOT", snap, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"SNAPSHOT skip: {why}")
+            else:
+                plan.snapshot = True
+
+        return plan
+
+    def _record_pull_attempt(
+        self,
+        d: str,
+        c: str,
+        stage: str,
+        result: Dict[str, Any],
+        *,
+        waiting_hints: Sequence[str] = (),
+    ) -> Tuple[bool, str]:
+        """依 run_action 結果寫 tick_state；回傳 (ok_for_cron, status)。"""
+        ok = bool(result.get("ok"))
+        waiting = bool(result.get("waiting"))
+        err = str(result.get("error") or "")
+        detail = str(
+            result.get("detail")
+            or result.get("msg")
+            or result.get("message")
+            or err
+            or ""
+        )
+        if ok and waiting:
+            status = STATUS_WAITING
+            count_as_success = True
+        elif ok:
+            status = STATUS_OK
+            count_as_success = True
+        elif any(h in err for h in waiting_hints) or "empty" in err.lower():
+            status = STATUS_WAITING
+            count_as_success = True
+        else:
+            status = STATUS_FAILED
+            count_as_success = False
+        self.record_tick_attempt(
+            d, c, stage, ok=count_as_success, status=status, detail=detail or err
+        )
+        return ok, status
+
+    def execute_pre_race_meeting(
+        self, plan: PreRaceActionPlan, *, dry_run: bool = False
+    ) -> Dict[str, Any]:
+        d, c = plan.racing_date, plan.course
+        out: Dict[str, Any] = {
+            "racing_date": d,
+            "course": c,
+            "dry_run": dry_run,
+            "plan": {
+                "sync_racecard": plan.sync_racecard,
+                "pull_speedguide": plan.pull_speedguide,
+                "pull_formguide": plan.pull_formguide,
+                "run_factors": plan.run_factors,
+                "start_form_ai": plan.start_form_ai,
+                "snapshot": plan.snapshot,
+                "skip_reasons": list(plan.skip_reasons),
+            },
+            "actions": [],
+        }
+
+        def _act(name: str, **kwargs: Any) -> Dict[str, Any]:
+            rec: Dict[str, Any] = {"action": name}
+            if dry_run:
+                rec["ok"] = True
+                rec["dry_run"] = True
+                out["actions"].append(rec)
+                return rec
+            result = self.pipe.run_action(d, c, name, **kwargs)
+            rec["ok"] = bool(result.get("ok"))
+            rec["result"] = result
+            out["actions"].append(rec)
+            return rec
+
+        if plan.sync_racecard:
+            rec = _act("sync_jjjc_racecard")
+            if not dry_run:
+                self._record_pull_attempt(
+                    d,
+                    c,
+                    "RACECARD",
+                    rec.get("result") or {},
+                    waiting_hints=("無排位", "尚未", "empty", "404"),
+                )
+                out["readiness_after_racecard"] = self.pipe.refresh_readiness(d, c)
+
+        # 本輪拉完排位後才有意義；若計劃拉但失敗，下游仍可能 skip
+        ready_now = (
+            out.get("readiness_after_racecard")
+            or plan.readiness
+            or self.pipe.refresh_readiness(d, c)
+        )
+        racecard_ok = self._stage_status(ready_now, "RACECARD") == STATUS_OK
+
+        if plan.pull_speedguide:
+            if not racecard_ok and not dry_run:
+                out["actions"].append(
+                    {
+                        "action": "crawl_speedguide",
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "RACECARD not ok",
+                    }
+                )
+            else:
+                rec = _act("crawl_speedguide")
+                if not dry_run:
+                    res = rec.get("result") or {}
+                    # CMS 備援成功亦算 ok
+                    if res.get("source") == "hkjc_cms_fallback" and res.get("ok"):
+                        res = {**res, "waiting": False}
+                    self._record_pull_attempt(
+                        d,
+                        c,
+                        "SPEEDGUIDE",
+                        res,
+                        waiting_hints=("尚未", "waiting", "404", "No route"),
+                    )
+                    out["readiness_after_speedguide"] = self.pipe.refresh_readiness(d, c)
+
+        if plan.pull_formguide:
+            if not racecard_ok and not dry_run:
+                out["actions"].append(
+                    {
+                        "action": "crawl_formguide",
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "RACECARD not ok",
+                    }
+                )
+            else:
+                rec = _act("crawl_formguide")
+                if not dry_run:
+                    res = rec.get("result") or {}
+                    if res.get("source") == "hkjc_cms_fallback" and res.get("ok"):
+                        res = {**res, "waiting": False}
+                    self._record_pull_attempt(
+                        d,
+                        c,
+                        "FORMGUIDE",
+                        res,
+                        waiting_hints=("尚未", "waiting", "404", "No route"),
+                    )
+                    out["readiness_after_formguide"] = self.pipe.refresh_readiness(d, c)
+
+        if plan.run_factors:
+            if self._factors_ran and not dry_run:
+                out["actions"].append(
+                    {
+                        "action": "run_factors",
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "already ran this tick",
+                    }
+                )
+            else:
+                rec = _act("run_factors")
+                if not dry_run:
+                    res = rec.get("result") or {}
+                    self._record_pull_attempt(d, c, "FACTORS", res)
+                    if rec.get("ok"):
+                        self._factors_ran = True
+                    out["readiness_after_factors"] = self.pipe.refresh_readiness(d, c)
+
+        if plan.start_form_ai:
+            if not racecard_ok and not dry_run:
+                out["actions"].append(
+                    {
+                        "action": "start_form_ai_background",
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "RACECARD not ok",
+                    }
+                )
+            else:
+                rec = _act("start_form_ai_background")
+                if not dry_run:
+                    res = dict(rec.get("result") or {})
+                    err = str(res.get("error") or "")
+                    if "進行中" in err:
+                        res["ok"] = True
+                        res["waiting"] = True
+                        res["detail"] = err
+                    elif not res.get("ok") and "OPENAI" in err.upper():
+                        res["waiting"] = False
+                    self._record_pull_attempt(
+                        d,
+                        c,
+                        "FORM_AI",
+                        res,
+                        waiting_hints=("進行中", "尚未"),
+                    )
+                    out["readiness_after_form_ai"] = self.pipe.refresh_readiness(d, c)
+
+        # 正式快照：計劃已開，或本輪補齊閘門後 opportunistically
+        if not dry_run:
+            ready_final = self.pipe.refresh_readiness(d, c)
+            out["readiness_final"] = ready_final
+            gates_ok, missing = self._gates_for_formal_snapshot(ready_final)
+            snap_st = self._stage_status(ready_final, "SNAPSHOT")
+            want_snap = plan.snapshot or (
+                AUTO_SNAPSHOT
+                and gates_ok
+                and snap_st != STATUS_OK
+                and not is_manual_blocked(
+                    stage_row_map(self.pipe.get_stages(d, c)).get("SNAPSHOT")
+                )
+            )
+            if want_snap and gates_ok and snap_st != STATUS_OK:
+                allowed, why = self._attempt_allowed(d, c, "SNAPSHOT", snap_st)
+                if allowed:
+                    rec = _act("snapshot")
+                    res = rec.get("result") or {}
+                    # FactorCalibration 可能回 batch_id 而無 ok
+                    if res.get("batch_id") and res.get("ok") is None:
+                        res = {**res, "ok": True}
+                    self._record_pull_attempt(d, c, "SNAPSHOT", res)
+                    out["readiness_after_snapshot"] = self.pipe.refresh_readiness(d, c)
+                else:
+                    out["actions"].append(
+                        {
+                            "action": "snapshot",
+                            "ok": False,
+                            "skipped": True,
+                            "reason": why,
+                        }
+                    )
+            elif want_snap and not gates_ok:
+                out["actions"].append(
+                    {
+                        "action": "snapshot",
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "gates " + ",".join(missing),
+                    }
+                )
+        elif plan.snapshot:
+            _act("snapshot")
+
+        if not out["actions"]:
+            out["noop"] = True
+        return out
+
+    def run_pre_race(
+        self,
+        *,
+        lookahead_days: int = DEFAULT_LOOKAHEAD_DAYS,
+        racing_date: Optional[str] = None,
+        course: Optional[str] = None,
+        dry_run: bool = False,
+        as_of: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        today = as_of or date.today()
+        if racing_date:
+            meetings = [(racing_date[:10], (course or "ST").upper())]
+            if course is None:
+                start = date.fromisoformat(racing_date[:10])
+                meetings = [
+                    m for m in self.list_upcoming_meetings(start, start)
+                ] or meetings
+        else:
+            end = today + timedelta(days=max(0, int(lookahead_days)))
+            meetings = self.list_upcoming_meetings(today, end)
+
+        report: Dict[str, Any] = {
+            "mode": PRE_RACE_MODE,
+            "dry_run": dry_run,
+            "as_of": today.isoformat(),
+            "lookahead_days": lookahead_days,
+            "guards": {
+                "cooldown_waiting_sec": self.guards.cooldown_waiting_sec,
+                "cooldown_failed_sec": self.guards.cooldown_failed_sec,
+                "max_fails": self.guards.max_fails,
+                "force": self.guards.force,
+            },
+            "flags": {
+                "auto_factors": AUTO_FACTORS,
+                "auto_form_ai": AUTO_FORM_AI,
+                "auto_snapshot": AUTO_SNAPSHOT,
+            },
+            "meetings": [],
+            "n_meetings": 0,
+            "n_actions": 0,
+        }
+
+        for d, c in meetings:
+            plan = self.plan_pre_race_meeting(d, c)
+            meeting_out = self.execute_pre_race_meeting(plan, dry_run=dry_run)
+            report["meetings"].append(meeting_out)
+            report["n_actions"] += len(meeting_out.get("actions") or [])
+
+        report["n_meetings"] = len(report["meetings"])
+        return report
+
+    def run_all(
+        self,
+        *,
+        lookahead_days: int = DEFAULT_LOOKAHEAD_DAYS,
+        lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+        racing_date: Optional[str] = None,
+        course: Optional[str] = None,
+        dry_run: bool = False,
+        as_of: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        pre = self.run_pre_race(
+            lookahead_days=lookahead_days,
+            racing_date=racing_date,
+            course=course,
+            dry_run=dry_run,
+            as_of=as_of,
+        )
+        post = self.run_post_race(
+            lookback_days=lookback_days,
+            racing_date=racing_date,
+            course=course,
+            dry_run=dry_run,
+            as_of=as_of,
+        )
+        return {
+            "mode": ALL_MODE,
+            "dry_run": dry_run,
+            "pre_race": pre,
+            "post_race": post,
+            "n_meetings": int(pre.get("n_meetings") or 0)
+            + int(post.get("n_meetings") or 0),
+            "n_actions": int(pre.get("n_actions") or 0)
+            + int(post.get("n_actions") or 0)
+            + (1 if post.get("settle") else 0),
+        }
 
     def plan_post_race_meeting(
         self,
@@ -754,15 +1290,23 @@ class MeetingTickRunner:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Meeting pipeline auto tick (post-race phase 1)")
+    p = argparse.ArgumentParser(
+        description="Meeting pipeline auto tick (pre_race / post_race / all)"
+    )
     p.add_argument(
         "--mode",
-        default=POST_RACE_MODE,
-        choices=[POST_RACE_MODE],
-        help="目前只支援 post_race（賽前 tick 較後階段）",
+        default=DEFAULT_TICK_MODE if DEFAULT_TICK_MODE in (
+            PRE_RACE_MODE,
+            POST_RACE_MODE,
+            ALL_MODE,
+        )
+        else ALL_MODE,
+        choices=[PRE_RACE_MODE, POST_RACE_MODE, ALL_MODE],
+        help="pre_race｜post_race｜all（預設 env MEETING_TICK_MODE 或 all）",
     )
     p.add_argument("--dry-run", action="store_true", help="只規劃／列印，不呼叫 sync／settle")
     p.add_argument("--lookback-days", type=int, default=DEFAULT_LOOKBACK_DAYS)
+    p.add_argument("--lookahead-days", type=int, default=DEFAULT_LOOKAHEAD_DAYS)
     p.add_argument("--date", dest="racing_date", help="YYYY-MM-DD（可選，限定單日）")
     p.add_argument("--course", help="ST / HV（配合 --date）")
     p.add_argument("--force", action="store_true", help="忽略 cooldown 與 max fails")
@@ -781,6 +1325,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _report_has_hard_error(report: Dict[str, Any]) -> bool:
+    """waiting／noop／skipped 不當 cron 失敗；明確 failed 才非零。"""
+    if report.get("mode") == ALL_MODE:
+        return _report_has_hard_error(report.get("pre_race") or {}) or _report_has_hard_error(
+            report.get("post_race") or {}
+        )
+    hard = False
+    for m in report.get("meetings") or []:
+        for a in m.get("actions") or []:
+            if a.get("ok") is False and not a.get("skipped") and not a.get("dry_run"):
+                res = a.get("result") or {}
+                err = str(res.get("error") or a.get("reason") or "")
+                if any(
+                    x in err
+                    for x in ("無賽果", "尚未", "waiting", "無排位", "empty", "進行中", "404", "No route")
+                ):
+                    continue
+                if res.get("waiting"):
+                    continue
+                hard = True
+    settle = report.get("settle") or {}
+    if settle.get("ok") is False and not settle.get("skipped") and not settle.get("dry_run"):
+        hard = True
+    return hard
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
     guards = TickGuards(
@@ -790,8 +1360,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         force=bool(args.force),
     )
     runner = MeetingTickRunner(guards=guards)
-    if args.mode == POST_RACE_MODE:
+    if args.mode == PRE_RACE_MODE:
+        report = runner.run_pre_race(
+            lookahead_days=args.lookahead_days,
+            racing_date=args.racing_date,
+            course=args.course,
+            dry_run=bool(args.dry_run),
+        )
+    elif args.mode == POST_RACE_MODE:
         report = runner.run_post_race(
+            lookback_days=args.lookback_days,
+            racing_date=args.racing_date,
+            course=args.course,
+            dry_run=bool(args.dry_run),
+        )
+    elif args.mode == ALL_MODE:
+        report = runner.run_all(
+            lookahead_days=args.lookahead_days,
             lookback_days=args.lookback_days,
             racing_date=args.racing_date,
             course=args.course,
@@ -810,21 +1395,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"meetings={report.get('n_meetings')} actions={report.get('n_actions')}"
         )
         print(text_out)
-    # 有硬錯誤才非零；waiting／noop 仍 0 方便 Cron
-    hard = False
-    for m in report.get("meetings") or []:
-        for a in m.get("actions") or []:
-            if a.get("ok") is False and not a.get("skipped") and not a.get("dry_run"):
-                # RESULTS empty export → waiting，唔當 cron 失敗
-                res = a.get("result") or {}
-                err = str(res.get("error") or "")
-                if "無賽果" in err or "尚未" in err:
-                    continue
-                hard = True
-    settle = report.get("settle") or {}
-    if settle.get("ok") is False and not settle.get("skipped") and not settle.get("dry_run"):
-        hard = True
-    return 1 if hard else 0
+    return 1 if _report_has_hard_error(report) else 0
 
 
 if __name__ == "__main__":
