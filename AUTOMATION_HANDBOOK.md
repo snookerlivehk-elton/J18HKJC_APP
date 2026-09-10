@@ -248,15 +248,19 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 
 | 能力 | 現況（2026-09-10） | 目標 |
 |------|-------------------|------|
-| `meeting_tick.py` 賽後 RESULTS→SETTLED | ✅ 已有（含 cooldown／max fails／dry-run） | 加輕探、generated_at 去重、+12h 窗 |
-| 賽前 racecard→…→snapshot | ❌ 未做（排位**不會**因 JJJC 有貨而自動入 J18） | `mode=pre_race` 全鏈 |
-| Railway／阿里雲 Cron | 手冊已教；需各邊掛 `start-tick.sh` | 雙邊常駐 |
-| 廣告賽前／賽後文案自動 | 海報可跟快照；文案多手動 | 附屬 job |
+| `meeting_tick.py` 賽後 RESULTS→SETTLED＋text-reports | ✅ 已有（含 cooldown／max fails／dry-run） | 加輕探、`content_updated_at` 去重、+12h 窗 |
+| 賽前 racecard→SG→FG→factors→Form AI→snapshot | ✅ `mode=pre_race`／`all`（硬閘：SG+FG+Form AI 齊才 snapshot） | 輕探 fingerprint；Webhook |
+| Railway／阿里雲 Cron | `start-tick.sh` 預設 `mode=all`；GHA 每小時 | 雙邊常駐確認掛載 |
+| 廣告賽前／賽後文案自動 | 海報可跟快照；文案多手動 | 附屬 job（Phase D） |
 | Webhook 由 JJJC 推送 | ❌ | 優化項（可替代部分輪詢） |
 | 作戰室「標準流程」可視化 | 有 stage 狀態；缺一頁式 SOP 引導 | 手冊＋UI 對齊本文件 |
 
-**重要：** 即使 JJJC 已有 9/13 排位，**現階段 J18 不會自動爬取**；需手動 `jjjc_racecard_sync` 或作戰室同步，或待賽前 tick 上線。
+**Cron 一鍵：** `bash start-tick.sh` ≡ `python meeting_tick.py --mode all --json`（賽前前瞻 `MEETING_TICK_LOOKAHEAD_DAYS`＋賽後回看 `MEETING_TICK_LOOKBACK_DAYS`）。
 
+開關（環境變數）：
+- `MEETING_TICK_MODE=all|pre_race|post_race`
+- `MEETING_TICK_AUTO_FACTORS`／`AUTO_FORM_AI`／`AUTO_SNAPSHOT`（預設 true）
+- 正式快照**不會**在閘門未齊時自動出 provisional
 ---
 
 ## 7. 開發切片（跟隨本手冊開工順序）
@@ -275,11 +279,11 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 
 ### Phase C — 賽前 tick（`mode=pre_race`）
 
-1. 選 fixtures：今日～未來 N 日  
-2. 動作序：探＋`sync_jjjc_racecard` →（可選）SG／FG → factors → form_ai 背景 → snapshot  
-3. 每步只在上游 stage ok 或可降級規則允許時推進  
-4. dry-run 與作戰室 readiness 對照驗收  
-
+1. [x] 選 fixtures：今日～未來 N 日  
+2. [x] 動作序：`sync_jjjc_racecard` → SG／FG（JJJC→CMS）→ factors → form_ai 背景 → snapshot（硬閘）  
+3. [x] 每步 cooldown／manual_override；dry-run  
+4. [ ] 作戰室 readiness 對照驗收（阿里雲）  
+5. [ ] 確認兩邊 Cron／GHA 已用 `mode=all`
 ### Phase D — 附屬自動化
 
 1. 快照後確保海報  
@@ -303,13 +307,14 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 
 ```bash
 bash start-tick.sh
-# 等價：python meeting_tick.py --mode post_race --lookback-days 3 --json
+# 等價：python meeting_tick.py --mode all --lookback-days 3 --lookahead-days 3 --json
 ```
 
-未來：
+亦可單獨：
 
 ```bash
 python meeting_tick.py --mode pre_race --lookahead-days 3 --json
+python meeting_tick.py --mode post_race --lookback-days 3 --json
 python meeting_tick.py --mode all --json
 ```
 
@@ -789,6 +794,7 @@ JJJC 欄位路徑 → 建議寫入 J18 的表.欄位
 | 2026-09-10 | 多輪：JJJC 主路徑、雙跑、Form AI／SG／廣告閘門等 |
 | 2026-09-10 | 覆蓋 80%；缺 SG 不出快照；遺留 10–14 日；§16 JJJC 提示詞 |
 | 2026-09-10 | §1.3 寫入 api_jjjc 正式三支 export 契約；J18 sync 模組落地 |
+| 2026-09-10 | Phase C：`meeting_tick` 支援 `pre_race`／`all`；`start-tick.sh` 預設全鏈 |
 
 ---
 

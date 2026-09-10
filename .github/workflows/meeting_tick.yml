@@ -1,17 +1,26 @@
-name: Meeting Tick (post-race)
+name: Meeting Tick (pre + post race)
 
 # 阿里雲／Railway 雙邊並行：
 #   Secrets: RAILWAY_DATABASE_URL（或沿用 DATABASE_URL）、ALIYUN_DATABASE_URL、JJJC_API_BASE
 #   未設定該邊 DB secret → 該 job 自動 skip（exit 0）
 #   Vars（可選）: ENABLE_MEETING_TICK_RAILWAY / ENABLE_MEETING_TICK_ALIYUN = false 可關閉
+#   預設 mode=all（賽前＋賽後）；可用 workflow_dispatch mode 覆寫
 
 on:
   schedule:
     - cron: "15 * * * *"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Tick mode (all|pre_race|post_race)"
+        required: false
+        default: "all"
       lookback_days:
-        description: "Lookback days"
+        description: "Lookback days (post_race)"
+        required: false
+        default: "3"
+      lookahead_days:
+        description: "Lookahead days (pre_race)"
         required: false
         default: "3"
       dry_run:
@@ -43,6 +52,8 @@ jobs:
           JJJC_API_BASE: ${{ secrets.JJJC_API_BASE }}
           JJJC_RESULTS_API_BASE: ${{ secrets.JJJC_RESULTS_API_BASE }}
           MEETING_TICK_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
+          MEETING_TICK_LOOKAHEAD_DAYS: ${{ github.event.inputs.lookahead_days || '3' }}
+          MEETING_TICK_MODE: ${{ github.event.inputs.mode || 'all' }}
         run: |
           export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
@@ -54,7 +65,10 @@ jobs:
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
             EXTRA="--dry-run"
           fi
-          python meeting_tick.py --mode post_race --lookback-days "${MEETING_TICK_LOOKBACK_DAYS}" --json $EXTRA
+          python meeting_tick.py --mode "${MEETING_TICK_MODE}" \
+            --lookback-days "${MEETING_TICK_LOOKBACK_DAYS}" \
+            --lookahead-days "${MEETING_TICK_LOOKAHEAD_DAYS}" \
+            --json $EXTRA
 
   tick-aliyun:
     name: Tick → Aliyun DB
@@ -77,6 +91,8 @@ jobs:
           JJJC_API_BASE: ${{ secrets.JJJC_API_BASE }}
           JJJC_RESULTS_API_BASE: ${{ secrets.JJJC_RESULTS_API_BASE }}
           MEETING_TICK_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
+          MEETING_TICK_LOOKAHEAD_DAYS: ${{ github.event.inputs.lookahead_days || '3' }}
+          MEETING_TICK_MODE: ${{ github.event.inputs.mode || 'all' }}
         run: |
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-$DATABASE_URL}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
@@ -87,4 +103,7 @@ jobs:
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
             EXTRA="--dry-run"
           fi
-          python meeting_tick.py --mode post_race --lookback-days "${MEETING_TICK_LOOKBACK_DAYS}" --json $EXTRA
+          python meeting_tick.py --mode "${MEETING_TICK_MODE}" \
+            --lookback-days "${MEETING_TICK_LOOKBACK_DAYS}" \
+            --lookahead-days "${MEETING_TICK_LOOKAHEAD_DAYS}" \
+            --json $EXTRA

@@ -298,7 +298,7 @@ OpenAPI：部署後 `/docs`。
 | B | 有未結算 snapshot | `settle_pending` | batch 有 `settled_at` |
 | C | 結算後（可選） | 命中評估／賽後文案 | 可宣傳場次有稿 |
 
-**掛載**：Railway／阿里雲獨立 Cron → `bash start-tick.sh`（勿塞進 Streamlit）。
+**掛載**：Railway／阿里雲獨立 Cron → `bash start-tick.sh`（預設 `mode=all` 賽前＋賽後；勿塞進 Streamlit）。
 
 ### 5.4 賽前 Cron（見手冊 Phase C）
 
