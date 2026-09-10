@@ -37,20 +37,42 @@
 
 **空 `races: []`** = 上游尚未備好（或非賽日），J18 應 `waiting`，不要當硬失敗狂打。
 
-### 1.3 賽前加料來源決策（2026-09-10 更新）
+### 1.3 賽前加料來源決策（2026-09-10 更新｜api_jjjc 正式契約）
 
-產品確認：下列均可由 **JJJC** 取得；**HKJC CMS／J18 歷史 API 僅備援**。
+產品確認：下列均可由 **JJJC** 取得；**HKJC CMS／J18 歷史 API 僅備援**。  
+**勿指望** `jjjc.racecard.v1`／`jjjc.results.v1` 內出現 SG／短評／沿途／事故欄位。
 
 | 種類 | 業務含義 | J18 落庫 | 主路徑 | 備援 |
 |------|----------|----------|--------|------|
-| 速勢能量 **SG** | 能量／狀態評級 | `upcoming_speedguide` | **JJJC** | HKJC SpeedPro CMS（`speedguide_crawler`） |
-| 賽事指引 | 近績／形勢短評 | `upcoming_formguide.form_text` | **JJJC** | HKJC FormGuide CMS；再退 J18 API |
-| 沿路走勢 | 沿路評述 | `text_reports` `running_comment` | **JJJC** | J18 歷史 API |
-| 競賽報告 | 事故／競賽報告 | `text_reports` `incident_report` 等 | **JJJC** | J18 歷史 API |
+| 速勢能量 **SG** | 能量／狀態評級 | `upcoming_speedguide` | **JJJC** `GET /api/export/speedguide`（`jjjc.speedguide.v1`） | HKJC SpeedPro CMS（`speedguide_crawler`） |
+| 賽事指引 | 近績／形勢短評 | `upcoming_formguide.form_text` | **JJJC** `GET /api/export/formguide`（`jjjc.formguide.v1`） | HKJC FormGuide CMS；再退 J18 API |
+| 沿路走勢 | 沿路評述 | `text_reports` `running_comment` | **JJJC** `GET /api/export/text-reports`（`jjjc.text_reports.v1`） | J18 歷史 API |
+| 競賽報告 | 事故／競賽報告 | `text_reports` `incident_report` | 同上（`report_type=incident_report`） | J18 歷史 API |
 
-**整合現況（探針 2026-09-10）：**  
-公開 `/api/export/racecard`／`results` **尚未**穩定露出 SG／長文欄位。  
-→ 待 JJJC export／新 endpoint 契約；J18 擴充 sync。契約未上線前可暫用 CMS／J18 API 備援，**目標架構以 JJJC 為準**。
+**HTTP 契約（J18 已實作 sync）：**
+
+| Export | schema | J18 模組 | `run_action` |
+|--------|--------|----------|--------------|
+| `/api/export/speedguide?date=&venue=`（可選 `raceNo`） | `jjjc.speedguide.v1` | `jjjc_speedguide_sync.py` | `sync_jjjc_speedguide`；`crawl_speedguide`＝JJJC→CMS 備援 |
+| `/api/export/formguide?date=&venue=` | `jjjc.formguide.v1` | `jjjc_formguide_sync.py` | `sync_jjjc_formguide`；`crawl_formguide`＝JJJC→CMS 備援 |
+| `/api/export/text-reports?date=&venue=`（可選 `raceNo`／`report_type`） | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py` | `sync_jjjc_text_reports`（賽後 tick 會順路打） |
+
+欄位對照：
+- `races[].runners[].energy` → `upcoming_speedguide.speed_energy`
+- `energy_delta` → `speed_energy_delta`；`fitness_rating` → `form_rating`
+- `races[].runners[].form_text` → `upcoming_formguide.form_text`
+- `reports[report_type=running_comment|incident_report].runners[].text` → `text_reports.report_text`  
+  （`is_placeholder=true`／空字＝略過，視為 waiting）
+
+**語意：**
+- **waiting**（繼續輪詢）：HTTP 200 且 `races=[]`／`reports=[]`；文字 null／""；`is_placeholder`；`status`∈ unpublished／suspicious／date_mismatch／partial／empty  
+- **failed**（可切備援）：5xx／連線失敗／`status=unavailable`／路由 404  
+- **更新指紋**：用 `content_updated_at`（勿用每次 GET 都刷新的 `generated_at`）  
+- **Join**：`race_id`（`YYYYMMDD`+`ST|HV`+兩位場次）+ `horse_no`
+
+**建議同步順序：** 賽前 racecard → speedguide → formguide；賽後 results → text-reports。
+
+**探針備註：** 公開 host 若尚未掛上三支新路由（404），J18 會標 failed 並在 `crawl_speedguide`／`crawl_formguide` 走 CMS 備援；契約以本節為準。
 
 **遺留／重試拉取順序：**  
 1. JJJC（主）→ 2. 對應備援 → 3. 仍無則 waiting／退避。
@@ -637,7 +659,7 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 |----|------|
 | B1 | `data_backlog` 表 + 缺文字／名次入列 |
 | B2 | tick 順路：**JJJC 文字主路徑** → 失敗才 J18 history 備援 |
-| B3 | 與 JJJC 對齊 export：**SG＋文字**欄位／schema；擴充 sync → `upcoming_speedguide`／formguide／text_reports |
+| B3 | ✅ 與 JJJC 對齊三支 export：`jjjc_speedguide_sync`／`jjjc_formguide_sync`／`jjjc_text_reports_sync`（見 §1.3） |
 | B4 | 新評述 → NLP batch（limit） |
 | B5 | NLP 完成 → 因子重算（每輪一次） |
 | B6 | 可選：未來賽日 auto-revise |
@@ -766,6 +788,7 @@ JJJC 欄位路徑 → 建議寫入 J18 的表.欄位
 |------|------|
 | 2026-09-10 | 多輪：JJJC 主路徑、雙跑、Form AI／SG／廣告閘門等 |
 | 2026-09-10 | 覆蓋 80%；缺 SG 不出快照；遺留 10–14 日；§16 JJJC 提示詞 |
+| 2026-09-10 | §1.3 寫入 api_jjjc 正式三支 export 契約；J18 sync 模組落地 |
 
 ---
 
@@ -776,6 +799,6 @@ JJJC 欄位路徑 → 建議寫入 J18 的表.欄位
 | 無 SG／FormGuide／Form AI（&lt;80%）？ | **不生成任何快照**；無快照則無廣告／命中主路徑 |
 | 舊 provisional 可缺什麼？ | 常有 `sg_missing`／`nlp_pending`／`low_match`——生產已禁止缺 SG／AI |
 | 遺留評述？ | 留 10～14 日；到齊 → NLP→因子重算 |
-| JJJC 契約？ | 用 §16 提示詞問對方 AI |
+| JJJC 契約？ | §1.3 三支 export（speedguide／formguide／text-reports）；§16 為當初問句存檔 |
 | 兩邊都跑？ | 已確認，分庫錯開 Cron |
 | `JJJC_API_BASE` | `https://apicc.up.railway.app` |

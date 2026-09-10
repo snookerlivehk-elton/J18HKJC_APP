@@ -1,0 +1,37 @@
+{
+  "schema": "jjjc.text_reports.v1",
+  "race_date": "2026-09-06",
+  "venue_code": "ST",
+  "content_updated_at": "2026-09-06T12:30:00.000Z",
+  "generated_at": "2026-09-10T01:00:00.000Z",
+  "status": "obtained",
+  "reports": [
+    {
+      "report_type": "running_comment",
+      "race_id": "20260906ST01",
+      "runners": [
+        {
+          "horse_no": 13,
+          "text": "出閘後居前…",
+          "is_placeholder": false
+        },
+        {
+          "horse_no": 1,
+          "text": "無特別報告",
+          "is_placeholder": true
+        }
+      ]
+    },
+    {
+      "report_type": "incident_report",
+      "race_id": "20260906ST01",
+      "runners": [
+        {
+          "horse_no": 13,
+          "text": "接近四百米處受阻。",
+          "is_placeholder": false
+        }
+      ]
+    }
+  ]
+}

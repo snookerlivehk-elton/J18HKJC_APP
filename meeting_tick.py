@@ -3,7 +3,8 @@
 
 依 fixtures／未結算快照選賽日，refresh readiness 後只跑該做的動作：
   1) sync_jjjc_results（官方未上架 → waiting，冷卻後再試）
-  2) settle_pending（有快照且尚未結算）
+  2) sync_jjjc_text_reports（沿途／事故；空＝waiting；JJJC 主路徑）
+  3) settle_pending（有快照且尚未結算）
 
 原則（對齊 DEVELOPMENT_REPORT §5.3）：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -130,6 +131,7 @@ class MeetingActionPlan:
     racing_date: str
     course: str
     sync_results: bool = False
+    sync_text_reports: bool = False
     settle: bool = False
     skip_reasons: List[str] = field(default_factory=list)
     readiness: Dict[str, Any] = field(default_factory=dict)
@@ -376,7 +378,7 @@ class MeetingTickRunner:
         stages_df: Optional[pd.DataFrame] = None,
         now: Optional[datetime] = None,
     ) -> MeetingActionPlan:
-        """純決策：要不要 sync results／settle（不執行）。"""
+        """純決策：要不要 sync results／text-reports／settle（不執行）。"""
         d, c = racing_date[:10], course.upper()
         plan = MeetingActionPlan(racing_date=d, course=c)
         readiness = readiness or self.pipe.refresh_readiness(d, c)
@@ -386,6 +388,7 @@ class MeetingTickRunner:
         results_st = str((readiness.get("RESULTS") or {}).get("status") or STATUS_PENDING)
         settled_st = str((readiness.get("SETTLED") or {}).get("status") or STATUS_PENDING)
         snapshot_st = str((readiness.get("SNAPSHOT") or {}).get("status") or STATUS_PENDING)
+        nlp_st = str((readiness.get("NLP") or {}).get("status") or STATUS_PENDING)
 
         # --- RESULTS ---
         if is_manual_blocked(stages.get("RESULTS")):
@@ -398,6 +401,20 @@ class MeetingTickRunner:
                 plan.skip_reasons.append(f"RESULTS skip: {why}")
             else:
                 plan.sync_results = True
+
+        # --- TEXT REPORTS（沿途／事故；賽後分批補齊，RESULTS 有貨或本輪會 sync 才探）---
+        if is_manual_blocked(stages.get("NLP")):
+            plan.skip_reasons.append("TEXT_REPORTS manual block (NLP)")
+        elif results_st != STATUS_OK and not plan.sync_results:
+            plan.skip_reasons.append("TEXT_REPORTS wait: RESULTS not ready")
+        else:
+            # 用 waiting 冷卻：評述常分場補齊，允許週期重探
+            probe_st = STATUS_WAITING if nlp_st == STATUS_OK else nlp_st or STATUS_WAITING
+            allowed, why = self._attempt_allowed(d, c, "TEXT_REPORTS", probe_st, now=now)
+            if not allowed:
+                plan.skip_reasons.append(f"TEXT_REPORTS skip: {why}")
+            else:
+                plan.sync_text_reports = True
 
         # --- SETTLED ---
         if is_manual_blocked(stages.get("SETTLED")):
@@ -428,6 +445,7 @@ class MeetingTickRunner:
             "dry_run": dry_run,
             "plan": {
                 "sync_results": plan.sync_results,
+                "sync_text_reports": plan.sync_text_reports,
                 "settle": plan.settle,
                 "skip_reasons": list(plan.skip_reasons),
             },
@@ -474,6 +492,58 @@ class MeetingTickRunner:
                 } or result
                 # 刷新 readiness
                 out["readiness_after_sync"] = self.pipe.refresh_readiness(d, c)
+            out["actions"].append(action_rec)
+
+        if plan.sync_text_reports:
+            action_rec = {"action": "sync_jjjc_text_reports"}
+            if dry_run:
+                action_rec["ok"] = True
+                action_rec["dry_run"] = True
+            else:
+                result = self.pipe.run_action(d, c, "sync_jjjc_text_reports")
+                ok = bool(result.get("ok"))
+                waiting = bool(result.get("waiting"))
+                detail = str(
+                    result.get("error")
+                    or result.get("detail")
+                    or result.get("msg")
+                    or ""
+                )
+                err = str(result.get("error") or "")
+                if ok and waiting:
+                    status = STATUS_WAITING
+                    count_as_success = True
+                elif ok:
+                    status = STATUS_OK
+                    count_as_success = True
+                else:
+                    # 404／unavailable：failed（可改打 J18 history 備援；本階段先記 failed）
+                    status = STATUS_FAILED
+                    count_as_success = False
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "TEXT_REPORTS",
+                    ok=count_as_success,
+                    status=status,
+                    detail=detail or err,
+                )
+                action_rec["ok"] = ok
+                action_rec["waiting"] = waiting
+                action_rec["result"] = {
+                    k: result.get(k)
+                    for k in (
+                        "ok",
+                        "waiting",
+                        "phase",
+                        "error",
+                        "runner_upserted",
+                        "content_updated_at",
+                        "detail",
+                    )
+                    if k in result
+                } or result
+                out["readiness_after_text_reports"] = self.pipe.refresh_readiness(d, c)
             out["actions"].append(action_rec)
 
         if plan.settle:
@@ -541,7 +611,7 @@ class MeetingTickRunner:
                     out["readiness_after_settle"] = self.pipe.refresh_readiness(d, c)
             out["actions"].append(action_rec)
 
-        if not plan.sync_results and not plan.settle:
+        if not plan.sync_results and not plan.sync_text_reports and not plan.settle:
             out["noop"] = True
         return out
 
@@ -595,6 +665,7 @@ class MeetingTickRunner:
                 racing_date=plan.racing_date,
                 course=plan.course,
                 sync_results=plan.sync_results,
+                sync_text_reports=plan.sync_text_reports,
                 settle=False,
                 skip_reasons=list(plan.skip_reasons),
                 readiness=plan.readiness,

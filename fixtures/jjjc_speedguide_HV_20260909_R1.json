@@ -1,0 +1,32 @@
+{
+  "schema": "jjjc.speedguide.v1",
+  "race_date": "2026-09-09",
+  "venue_code": "HV",
+  "content_updated_at": "2026-09-08T04:10:00.000Z",
+  "generated_at": "2026-09-10T01:00:00.000Z",
+  "status": "obtained",
+  "races": [
+    {
+      "race_id": "20260909HV01",
+      "race_no": 1,
+      "runners": [
+        {
+          "horse_no": 1,
+          "horse_name": "閃電星福",
+          "energy": 88,
+          "energy_delta": -2,
+          "energy_required": 91,
+          "fitness_rating": "A"
+        },
+        {
+          "horse_no": 2,
+          "horse_name": "測試馬二",
+          "energy": 95,
+          "energy_delta": 3,
+          "energy_required": 90,
+          "fitness_rating": "B"
+        }
+      ]
+    }
+  ]
+}

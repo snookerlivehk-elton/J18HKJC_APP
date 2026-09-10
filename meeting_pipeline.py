@@ -726,21 +726,115 @@ class MeetingPipeline:
                 self.refresh_readiness(racing_date, course)
                 return out
 
+            if action == "sync_jjjc_speedguide":
+                from jjjc_speedguide_sync import sync_meeting as sync_sg
+
+                out = sync_sg(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
+            if action == "sync_jjjc_formguide":
+                from jjjc_formguide_sync import sync_meeting as sync_fg
+
+                out = sync_fg(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
+            if action == "sync_jjjc_text_reports":
+                from jjjc_text_reports_sync import sync_meeting as sync_tr
+
+                out = sync_tr(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    report_type=kwargs.get("report_type"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
             if action == "crawl_speedguide":
+                # 主路徑：JJJC export；失敗／unavailable 才 CMS 備援
+                from jjjc_speedguide_sync import sync_meeting as sync_sg
+
+                jjjc = sync_sg(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                if jjjc.get("ok") and not jjjc.get("waiting") and int(jjjc.get("runner_upserted") or 0) > 0:
+                    self.refresh_readiness(racing_date, course)
+                    return {**jjjc, "source": "jjjc"}
+                if jjjc.get("ok") and jjjc.get("waiting") and not kwargs.get("force_fallback"):
+                    # 空殼／未上架：視為 waiting，不立刻打 CMS（賽前中午前常見）
+                    self.refresh_readiness(racing_date, course)
+                    return {**jjjc, "source": "jjjc", "fallback_skipped": "waiting"}
+                py = env.get("PYTHON", "python3")
                 r = subprocess.run(
-                    ["python", "speedguide_crawler.py", "--date", d_slash, "--course", course],
+                    [py, "speedguide_crawler.py", "--date", d_slash, "--course", course],
                     capture_output=True, text=True, env=env, timeout=600, cwd=root,
                 )
                 self.refresh_readiness(racing_date, course)
-                return {"ok": r.returncode == 0, "stdout": r.stdout[-2000:], "stderr": r.stderr[-1000:]}
+                return {
+                    "ok": r.returncode == 0,
+                    "source": "hkjc_cms_fallback",
+                    "jjjc": {
+                        k: jjjc.get(k)
+                        for k in ("ok", "waiting", "phase", "error", "runner_upserted", "detail")
+                        if k in jjjc
+                    },
+                    "stdout": r.stdout[-2000:],
+                    "stderr": r.stderr[-1000:],
+                }
 
             if action == "crawl_formguide":
+                from jjjc_formguide_sync import sync_meeting as sync_fg
+
+                jjjc = sync_fg(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                if jjjc.get("ok") and not jjjc.get("waiting") and int(jjjc.get("runners_with_text") or jjjc.get("runner_upserted") or 0) > 0:
+                    self.refresh_readiness(racing_date, course)
+                    return {**jjjc, "source": "jjjc"}
+                if jjjc.get("ok") and jjjc.get("waiting") and not kwargs.get("force_fallback"):
+                    self.refresh_readiness(racing_date, course)
+                    return {**jjjc, "source": "jjjc", "fallback_skipped": "waiting"}
+                py = env.get("PYTHON", "python3")
                 r = subprocess.run(
-                    ["python", "formguide_crawler.py", "--date", d_slash, "--course", course],
+                    [py, "formguide_crawler.py", "--date", d_slash, "--course", course],
                     capture_output=True, text=True, env=env, timeout=600, cwd=root,
                 )
                 self.refresh_readiness(racing_date, course)
-                return {"ok": r.returncode == 0, "stdout": r.stdout[-2000:], "stderr": r.stderr[-1000:]}
+                return {
+                    "ok": r.returncode == 0,
+                    "source": "hkjc_cms_fallback",
+                    "jjjc": {
+                        k: jjjc.get(k)
+                        for k in ("ok", "waiting", "phase", "error", "runner_upserted", "detail")
+                        if k in jjjc
+                    },
+                    "stdout": r.stdout[-2000:],
+                    "stderr": r.stderr[-1000:],
+                }
 
             if action == "run_factors":
                 from factor_calculator import FactorCalculator
