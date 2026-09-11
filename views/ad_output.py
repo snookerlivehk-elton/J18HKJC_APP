@@ -225,7 +225,7 @@ st.caption(
     "每次預測快照成功後，系統把**全賽日**推介寫入海報（公司原圖風格）："
     f"**{PRIMARY_TRACK_LABEL}推介**（社交主視覺）。"
     "每場最多 **4 匹**（只顯示馬號＋馬名，不含勝率）；"
-    "藍／米色隨機；下次生成會**覆蓋**同一檔名；PNG ≤2MB。"
+    "日馬啡色／夜馬藍色；下次生成會**覆蓋**同一檔名；PNG ≤2MB。"
 )
 
 out_root = default_output_dir()
@@ -236,7 +236,7 @@ try:
 
     fs = font_status()
     if fs.get("ok"):
-        st.caption(f"字型：`{fs.get('path')}` · 上限 {_max_bytes() // 1024} KB／張 · 色調藍／米隨機")
+        st.caption(f"字型：`{fs.get('path')}` · 上限 {_max_bytes() // 1024} KB／張 · 日馬啡色／夜馬藍色（依賽日 session）")
     else:
         st.error(f"CJK 字型不可用：{fs.get('error') or '未找到字型檔'}")
 except Exception as e:

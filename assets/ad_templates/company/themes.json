@@ -1,23 +1,39 @@
 {
-  "blank_blue": {
-    "file": "blank_blue.jpg",
-    "w": 3625,
-    "h": 4096,
-    "slice_top_end": 1035,
-    "slice_mid_end": 3290,
-    "ref_n_rows": 11,
-    "race_col": [200, 670],
-    "content_x": [720, 3380],
-    "date_pill": [100, 500, 1680, 640],
-    "font_base_px": 108,
-    "note": "Header includes printed 場次; mid stretch for race rows; picks centered; larger body font to fill cells"
+  "blank_day": {
+    "file": "blank_day.png",
+    "w": 1280,
+    "h": 1299,
+    "slice_top_end": 400,
+    "slice_mid_end": 980,
+    "ref_n_rows": 10,
+    "race_col": [48, 175],
+    "content_x": [185, 1220],
+    "date_pill": [40, 206, 460, 257],
+    "font_base_px": 34,
+    "note": "日馬啡色底圖；header+J18精選固定，白底中段垂直拉伸，footer 固定"
   },
-  "blue": {
-    "blank": "blank_blue.jpg"
+  "blank_night": {
+    "file": "blank_night.png",
+    "w": 1280,
+    "h": 1299,
+    "slice_top_end": 400,
+    "slice_mid_end": 980,
+    "ref_n_rows": 10,
+    "race_col": [48, 175],
+    "content_x": [185, 1220],
+    "date_pill": [40, 206, 460, 257],
+    "font_base_px": 34,
+    "note": "夜馬藍色底圖；座標與 day 對齊"
   },
-  "beige": {
-    "blank": "blank_beige.jpg",
+  "day": {
+    "blank": "blank_day.png",
+    "session": "day",
+    "note": "日馬／黄昏 → 啡色"
+  },
+  "night": {
+    "blank": "blank_night.png",
     "fallback_blank": "blank_blue.jpg",
-    "note": "No beige blank yet; renderer falls back to blank_blue.jpg"
+    "session": "night",
+    "note": "夜馬 → 藍色"
   }
 }

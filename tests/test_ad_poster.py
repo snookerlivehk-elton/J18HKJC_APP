@@ -1,4 +1,4 @@
-"""廣告海報：空白模版中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
+"""廣告海報：日馬啡／夜馬藍底圖、中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,24 +7,28 @@ import pandas as pd
 from PIL import Image
 
 from ad_poster import (
+    AI_FILE,
     BUNDLED_FONT,
     COMPANY_DIR,
+    FONT_BASE_PX,
     MODEL_FILE,
-    AI_FILE,
     REF_N_ROWS,
+    ROW_H_SCALE,
     SLICE_MID_END,
     SLICE_TOP_END,
+    PickItem,
+    RaceAdPayload,
+    _cell_text,
+    _find_font,
+    _pick_max,
     build_payload_from_prediction,
+    font_status,
     generate_ads_for_meeting_predictions,
     generate_meeting_copy,
     latest_paths,
     render_meeting_poster,
-    _cell_text,
-    _find_font,
-    _pick_max,
-    font_status,
+    resolve_poster_theme,
 )
-from ad_poster import PickItem, RaceAdPayload
 
 
 def _sample_pred_df(seed: int = 0) -> pd.DataFrame:
@@ -51,11 +55,11 @@ def _sample_pred_df(seed: int = 0) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _payload(rn: int) -> RaceAdPayload:
+def _payload(rn: int, course: str = "HV") -> RaceAdPayload:
     return RaceAdPayload(
         race_id=f"R{rn}",
         racing_date="2026-09-09",
-        course="HV",
+        course=course,
         race_num=rn,
         model_picks=[
             PickItem(1, "金光飛馳", 30, "爭勝"),
@@ -71,8 +75,20 @@ def test_bundled_font_and_company_assets():
     assert BUNDLED_FONT.is_file()
     assert font_status()["ok"]
     assert _find_font()
-    assert (COMPANY_DIR / "blank_blue.jpg").is_file()
+    assert (COMPANY_DIR / "blank_day.png").is_file()
+    assert (COMPANY_DIR / "blank_night.png").is_file()
     assert _pick_max() == 4
+
+
+def test_resolve_poster_theme_day_night():
+    assert resolve_poster_theme(course="ST") == "day"
+    assert resolve_poster_theme(course="HV") == "night"
+    assert resolve_poster_theme(course="HV", session="day") == "day"
+    assert resolve_poster_theme(course="ST", session="night") == "night"
+    assert resolve_poster_theme(is_day_meeting=True) == "day"
+    assert resolve_poster_theme(is_day_meeting=False) == "night"
+    assert resolve_poster_theme(theme="blue") == "night"
+    assert resolve_poster_theme(theme="beige") == "day"
 
 
 def test_cell_text_no_share_pct():
@@ -84,8 +100,6 @@ def test_cell_text_no_share_pct():
 
 def test_mid_stretch_scales_with_race_count(tmp_path: Path):
     """場數變多／變少時，畫布高度應隨中段拉伸改變，列高近似固定。"""
-    from ad_poster import FONT_BASE_PX, ROW_H_SCALE
-
     ref_mid = SLICE_MID_END - SLICE_TOP_END
     row_ref = (ref_mid / float(REF_N_ROWS)) * float(ROW_H_SCALE)
     heights = {}
@@ -95,14 +109,15 @@ def test_mid_stretch_scales_with_race_count(tmp_path: Path):
             [_payload(i) for i in range(1, n + 1)],
             track="model",
             out_path=out,
-            theme="blue",
+            theme="night",
         )
         assert out.is_file()
         assert meta["n_races"] == n
         assert abs(meta["row_h"] - row_ref) < 1.0
-        # 字級對齊模版「場次」
-        assert meta["race_px"] >= FONT_BASE_PX
-        assert meta["pick_px"] >= FONT_BASE_PX - 4
+        assert meta["race_px"] >= FONT_BASE_PX - 12
+        assert meta["pick_px"] >= FONT_BASE_PX - 10
+        assert meta["theme"] == "night"
+        assert meta["blank"].startswith("blank_night")
         with Image.open(out) as im:
             heights[n] = im.size[1]
         assert meta["bytes"] <= 2048 * 1024
@@ -141,7 +156,8 @@ def test_company_meeting_poster(tmp_path: Path):
         course="HV",
     )
     assert r["ok"]
-    assert r["theme"] in ("blue", "beige")
+    # HV 預設夜馬 → night 藍底
+    assert r["theme"] == "night"
     paths = latest_paths(tmp_path)
     assert paths["fused"].name == "fused.png"
     assert paths["model"].name == MODEL_FILE
@@ -153,7 +169,10 @@ def test_company_meeting_poster(tmp_path: Path):
     assert r.get("files_written") == 2
     assert r.get("primary_track_label") == "綜合"
 
-    assert all(len(x["model_picks"]) <= 4 for x in __import__("json").loads(paths["copy"].read_text())["races"])
+    assert all(
+        len(x["model_picks"]) <= 4
+        for x in __import__("json").loads(paths["copy"].read_text())["races"]
+    )
     races_json = __import__("json").loads(paths["copy"].read_text())["races"]
     assert all("fused_picks" in x for x in races_json)
     copy_json = __import__("json").loads(paths["copy"].read_text())
@@ -181,16 +200,17 @@ def test_company_meeting_poster(tmp_path: Path):
         race_items=items[:6],
         output_root=tmp_path,
         racing_date="2026-09-09",
-        course="HV",
+        course="ST",
+        session="day",
     )
     assert r2["ok"]
+    assert r2["theme"] == "day"
     assert {p.name for p in tmp_path.glob("*.png")} == {"fused.png"}
 
-    # blue／beige 皆可渲染（beige 無 blank 時 fallback blank_blue）
-    for theme in ("blue", "beige"):
+    for theme in ("day", "night"):
         out = tmp_path / f"{theme}.png"
         meta = render_meeting_poster([_payload(1)], track="model", out_path=out, theme=theme)
         assert out.is_file()
         assert meta["theme"] == theme
-        assert meta["blank"].startswith("blank_")
+        assert meta["blank"].startswith(f"blank_{theme}")
         assert meta["bytes"] <= 2048 * 1024

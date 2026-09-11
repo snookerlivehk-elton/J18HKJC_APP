@@ -48,7 +48,6 @@ FONT_CANDIDATES = [
 FUSED_FILE = "fused.png"
 MODEL_FILE = "model.png"
 AI_FILE = "ai.png"
-# 對外顯示名稱（內部 track key 仍為 fused）
 TRACK_DISPLAY = {
     "fused": "綜合",
     "model": "模型",
@@ -57,32 +56,52 @@ TRACK_DISPLAY = {
 PRIMARY_TRACK = "fused"
 PRIMARY_TRACK_LABEL = TRACK_DISPLAY[PRIMARY_TRACK]  # 綜合
 COPY_FILE = "copy.json"
-
-# 空白模版量測（blank_blue.jpg = 3625×4096；表身中段可垂直拉伸）
-BLANK_W = 3625
-BLANK_H = 4096
-# 上固定（含已印「場次」標題列）／中拉伸（場次號＋揀馬）／下固定
-SLICE_TOP_END = 1035  # 「場次」標題列底部分隔線以下
-SLICE_MID_END = 3290
-REF_N_ROWS = 11  # 模版中段對應參考場數
+# 空白模版量測（blank_day/night = 1280×1299；白底內容區中段可垂直拉伸）
+BLANK_W = 1280
+BLANK_H = 1299
+# 上固定（標題＋J18精選列＋白框上緣）／中拉伸（直線白底）／下固定（白框下圓角＋footer）
+SLICE_TOP_END = 400
+SLICE_MID_END = 980
+REF_N_ROWS = 10  # 模版中段對應參考場數
 ROW_H_SCALE = 1.0
-RACE_COL = (200, 670)
-CONTENT_X0 = 720
-CONTENT_X1 = 3380
-PICK_GAP = 24
-DATE_PILL = (100, 500, 1680, 640)
-DATE_PILL_FILL = (165, 210, 229)
-DATE_PILL_RADIUS = 70
-# 字色貼近模版「場次」藍灰，略深方便閱讀
-RACE_FG = (70, 105, 135)
-TEXT_FG = (70, 105, 135)
-# 推介字級加大，減少格內留白
-FONT_BASE_PX = 108
+RACE_COL = (48, 175)
+CONTENT_X0 = 185
+CONTENT_X1 = 1220
+PICK_GAP = 12
+DATE_PILL = (40, 206, 460, 257)
+DATE_PILL_RADIUS = 24
+# 預設字色（會依 theme 覆寫）
+RACE_FG = (55, 55, 55)
+TEXT_FG = (40, 40, 40)
+FONT_BASE_PX = 34
 # 表身分隔
-GRID_LINE = (170, 185, 195)
-GRID_LINE_STRONG = (140, 165, 185)
-ROW_TINT = (236, 244, 250)
-THEMES = ("blue", "beige")
+GRID_LINE = (210, 210, 210)
+GRID_LINE_STRONG = (170, 170, 170)
+ROW_TINT = (245, 245, 245)
+# 日馬啡色／夜馬藍色（依 fixtures.session 或 is_day_meeting 選擇）
+THEMES = ("day", "night")
+THEME_STYLES = {
+    "day": {
+        "date_pill_fill": (245, 168, 110),
+        "date_pill_text": (255, 255, 255),
+        "race_fg": (90, 55, 35),
+        "text_fg": (55, 40, 30),
+        "grid": (210, 195, 180),
+        "grid_strong": (170, 145, 125),
+        "row_tint": (250, 244, 236),
+        "canvas_bg": (180, 140, 110),
+    },
+    "night": {
+        "date_pill_fill": (70, 130, 170),
+        "date_pill_text": (255, 255, 255),
+        "race_fg": (40, 75, 105),
+        "text_fg": (35, 55, 75),
+        "grid": (195, 205, 215),
+        "grid_strong": (140, 160, 180),
+        "row_tint": (236, 244, 250),
+        "canvas_bg": (90, 120, 150),
+    },
+}
 WEEKDAY_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
 # 舊測試／相容常數（不再用於主渲染）
@@ -91,8 +110,10 @@ POSTER_H = BLANK_H
 TABLE_LEFT = RACE_COL[0]
 TABLE_RIGHT = CONTENT_X1
 COL_RACE = RACE_COL
-COL_PICKS = [(720, 1380), (1380, 2040), (2040, 2700), (2700, 3380)]
+COL_PICKS = [(185, 430), (430, 690), (690, 950), (950, 1220)]
 ROW_H = max(1, (SLICE_MID_END - SLICE_TOP_END) // REF_N_ROWS)
+# 相容舊名稱
+DATE_PILL_FILL = THEME_STYLES["night"]["date_pill_fill"]
 
 
 def _max_bytes() -> int:
@@ -642,12 +663,88 @@ def _theme_paths(theme: str) -> Dict[str, Path]:
 
 
 def _blank_template_path(theme: str) -> Path:
-    """空白模版：優先 blank_{theme}，否則 fallback blank_blue。"""
-    for name in (f"blank_{theme}.jpg", f"blank_{theme}.jpeg", f"blank_{theme}.png", "blank_blue.jpg", "blank_blue.png"):
+    """空白模版：優先 blank_{theme}；night fallback blank_blue；day fallback blank_night/blue。"""
+    theme = resolve_poster_theme(theme=theme)
+    names = [
+        f"blank_{theme}.png",
+        f"blank_{theme}.jpg",
+        f"blank_{theme}.jpeg",
+    ]
+    if theme == "night":
+        names += ["blank_blue.png", "blank_blue.jpg"]
+    else:
+        names += ["blank_night.png", "blank_night.jpg", "blank_blue.png", "blank_blue.jpg"]
+    for name in names:
         p = COMPANY_DIR / name
         if p.is_file():
             return p
-    raise FileNotFoundError(f"缺少空白海報模版 blank_*.jpg：{COMPANY_DIR}")
+    raise FileNotFoundError(f"缺少空白海報模版 blank_day/night：{COMPANY_DIR}")
+
+
+def resolve_poster_theme(
+    *,
+    theme: Optional[str] = None,
+    course: str = "",
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
+) -> str:
+    """
+    日馬 → day（啡色）；夜馬 → night（藍色）。
+    優先明示 theme，其次 fixtures.session／is_day_meeting，最後以場地慣例（HV=夜、ST=日）。
+    """
+    t = str(theme or "").strip().lower()
+    if t in ("day", "beige", "brown", "日"):
+        return "day"
+    if t in ("night", "blue", "夜"):
+        return "night"
+    s = str(session or "").strip().lower()
+    if s in ("day", "dusk", "日", "黄昏", "黃昏"):
+        return "day"
+    if s in ("night", "夜"):
+        return "night"
+    if is_day_meeting is True:
+        return "day"
+    if is_day_meeting is False:
+        return "night"
+    return "night" if str(course or "").upper() == "HV" else "day"
+
+
+def _theme_style(theme: str) -> Dict[str, Any]:
+    return dict(THEME_STYLES.get(resolve_poster_theme(theme=theme), THEME_STYLES["night"]))
+
+
+def lookup_meeting_session(racing_date: str, course: str) -> Dict[str, Any]:
+    """從 fixtures 讀 session／is_day_meeting；失敗則空 dict。"""
+    d = str(racing_date or "")[:10]
+    c = str(course or "").upper()
+    if not d or not c:
+        return {}
+    try:
+        from sqlalchemy import text
+
+        from factor_calibration import FactorCalibration
+
+        cal = FactorCalibration()
+        df = pd.read_sql(
+            text(
+                "SELECT session, is_day_meeting FROM fixtures "
+                "WHERE CAST(racing_date AS TEXT) LIKE :d AND UPPER(CAST(course AS TEXT)) = :c "
+                "LIMIT 1"
+            ),
+            cal.engine,
+            params={"d": f"{d}%", "c": c},
+        )
+        if df is None or df.empty:
+            return {}
+        row = df.iloc[0]
+        out: Dict[str, Any] = {}
+        if "session" in df.columns and pd.notna(row.get("session")):
+            out["session"] = str(row.get("session"))
+        if "is_day_meeting" in df.columns and pd.notna(row.get("is_day_meeting")):
+            out["is_day_meeting"] = bool(row.get("is_day_meeting"))
+        return out
+    except Exception:
+        return {}
 
 
 def _venue_label(course: str) -> str:
@@ -659,7 +756,13 @@ def _venue_label(course: str) -> str:
     return str(course or "")
 
 
-def _meeting_date_line(racing_date: str, course: str) -> str:
+def _meeting_date_line(
+    racing_date: str,
+    course: str,
+    *,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
+) -> str:
     """例：2026/09/09 星期三 谷草 (夜)"""
     ds = str(racing_date or "")[:10].replace("-", "/")
     wd = ""
@@ -669,30 +772,40 @@ def _meeting_date_line(racing_date: str, course: str) -> str:
     except Exception:
         pass
     venue = _venue_label(course)
-    # HV 夜賽為主；ST 日賽為主（無確切場次時用慣例括號）
-    session = "夜" if str(course or "").upper() == "HV" else "日"
-    parts = [p for p in (ds, wd, f"{venue} ({session})" if venue else "") if p]
+    theme = resolve_poster_theme(course=course, session=session, is_day_meeting=is_day_meeting)
+    session_zh = "日" if theme == "day" else "夜"
+    parts = [p for p in (ds, wd, f"{venue} ({session_zh})" if venue else "") if p]
     return " ".join(parts)
 
 
-def _paint_date_pill(canvas: "Image.Image", date_line: str) -> None:
+def _paint_date_pill(
+    canvas: "Image.Image",
+    date_line: str,
+    *,
+    theme: str = "night",
+) -> None:
     """覆蓋空白模版日期膠囊並寫入當期賽事資料。"""
     from PIL import ImageDraw
 
+    style = _theme_style(theme)
     draw = ImageDraw.Draw(canvas)
     box = DATE_PILL
-    draw.rounded_rectangle(box, radius=DATE_PILL_RADIUS, fill=DATE_PILL_FILL)
-    font = _load_font(64)
+    draw.rounded_rectangle(box, radius=DATE_PILL_RADIUS, fill=tuple(style["date_pill_fill"]))
+    font = _load_font(28)
     bbox = font.getbbox(date_line)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     # 過長則略縮字
-    if tw > (box[2] - box[0] - 80):
-        font = _load_font(54)
+    if tw > (box[2] - box[0] - 36):
+        font = _load_font(22)
         bbox = font.getbbox(date_line)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = box[0] + 48
-    ty = box[1] + (box[3] - box[1] - th) // 2 - 2
-    draw.text((tx, ty), date_line, font=font, fill=(255, 255, 255))
+    if tw > (box[2] - box[0] - 24):
+        font = _load_font(18)
+        bbox = font.getbbox(date_line)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = box[0] + 18
+    ty = box[1] + (box[3] - box[1] - th) // 2 - 1
+    draw.text((tx, ty), date_line, font=font, fill=tuple(style["date_pill_text"]))
 
 
 def _cell_text(pick: Optional[PickItem]) -> str:
@@ -729,36 +842,37 @@ def _draw_table_guides(
     n: int,
     row_h: float,
     cols: Sequence[Tuple[int, int]],
+    style: Optional[Dict[str, Any]] = None,
 ) -> None:
     """畫行底、橫線與欄分隔，區分每一場／每一揀馬欄。"""
+    st = style or _theme_style("night")
+    row_tint = tuple(st.get("row_tint", ROW_TINT))
+    grid = tuple(st.get("grid", GRID_LINE))
+    grid_strong = tuple(st.get("grid_strong", GRID_LINE_STRONG))
     x_left = RACE_COL[0]
     x_right = CONTENT_X1
-    # 偶數行淺底（只蓋揀馬白區，保留場次米色欄）
     for i in range(n):
         if i % 2 == 0:
             continue
         y0 = int(mid_top + i * row_h)
         y1 = int(mid_top + (i + 1) * row_h)
-        draw.rectangle((CONTENT_X0 - 8, y0, x_right, y1), fill=ROW_TINT)
+        draw.rectangle((CONTENT_X0 - 8, y0, x_right, y1), fill=row_tint)
 
-    # 場次／內容分界（矩形條，縮圖不易消失）
-    vx = CONTENT_X0 - 16
-    draw.rectangle((vx - 2, int(mid_top), vx + 3, int(mid_bot)), fill=GRID_LINE_STRONG)
+    vx = CONTENT_X0 - 12
+    draw.rectangle((vx - 1, int(mid_top), vx + 2, int(mid_bot)), fill=grid_strong)
 
-    # 列分隔橫線
     for i in range(n + 1):
         y = int(mid_top + i * row_h)
         strong = i in (0, n)
-        half = 3 if strong else 2
+        half = 2 if strong else 1
         draw.rectangle(
             (x_left, y - half, x_right, y + half),
-            fill=GRID_LINE_STRONG if strong else GRID_LINE,
+            fill=grid_strong if strong else grid,
         )
 
-    # 揀馬欄分隔
     for ci in range(1, len(cols)):
         x = (cols[ci - 1][1] + cols[ci][0]) // 2
-        draw.rectangle((x - 1, int(mid_top), x + 2, int(mid_bot)), fill=GRID_LINE)
+        draw.rectangle((x - 1, int(mid_top), x + 1, int(mid_bot)), fill=grid)
 
 
 def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.Image", int, float]:
@@ -786,7 +900,7 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
         mid = mid.resize((w, new_mid_h), Image.Resampling.LANCZOS)
 
     canvas_h = top.height + mid.height + bot.height
-    canvas = Image.new("RGB", (w, canvas_h), (200, 220, 235))
+    canvas = Image.new("RGB", (w, canvas_h), (245, 245, 245))
     canvas.paste(top, (0, 0))
     canvas.paste(mid, (0, top.height))
     canvas.paste(bot, (0, top.height + mid.height))
@@ -799,14 +913,21 @@ def render_meeting_poster(
     track: str,
     out_path: Path,
     theme: Optional[str] = None,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     空白公司模版疊加：中段按場數垂直拉伸，再只畫日期／場次號／揀馬。
-    theme=blue|beige（無對應 blank 時 fallback blank_blue）。
+    theme=day|night（日馬啡色／夜馬藍色）；可由 session／is_day_meeting／場地推斷。
     """
     from PIL import Image, ImageDraw
 
-    theme = theme if theme in THEMES else random.choice(THEMES)
+    course0 = ""
+    if payloads:
+        course0 = str(getattr(list(payloads)[0], "course", "") or "")
+    theme = resolve_poster_theme(
+        theme=theme, course=course0, session=session, is_day_meeting=is_day_meeting
+    )
     blank_path = _blank_template_path(theme)
     blank = Image.open(blank_path).convert("RGB")
 
@@ -821,32 +942,40 @@ def render_meeting_poster(
     canvas, mid_top, row_h = _assemble_blank_canvas(blank, n)
     mid_bot = mid_top + n * row_h
 
+    style = _theme_style(theme)
     date_line = _meeting_date_line(
         races[0].racing_date if races else "",
         races[0].course if races else "",
+        session=session,
+        is_day_meeting=is_day_meeting,
     )
-    _paint_date_pill(canvas, date_line)
+    _paint_date_pill(canvas, date_line, theme=theme)
 
     draw = ImageDraw.Draw(canvas)
     cols = _pick_column_bounds(4)
-    _draw_table_guides(draw, mid_top=mid_top, mid_bot=mid_bot, n=n, row_h=row_h, cols=cols)
+    _draw_table_guides(
+        draw, mid_top=mid_top, mid_bot=mid_bot, n=n, row_h=row_h, cols=cols, style=style
+    )
 
-    # 字級加大填滿格高；推介／場次號皆欄內水平置中（anchor=mm）
+    # 字級隨列高；推介／場次號皆欄內水平置中（anchor=mm）
+    # 「第N場」較單數字寬，場次字略細以塞進左欄
     base = int(FONT_BASE_PX)
-    race_px = int(max(base, min(int(row_h * 0.60), base + 16)))
-    pick_px = int(max(base - 2, min(int(row_h * 0.58), base + 12)))
+    race_px = int(max(base - 10, min(int(row_h * 0.42), base - 2)))
+    pick_px = int(max(base - 6, min(int(row_h * 0.50), base + 4)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
+    race_fg = tuple(style["race_fg"])
+    text_fg = tuple(style["text_fg"])
 
     for i, race in enumerate(races):
         cy = mid_top + (i + 0.5) * row_h
         rn = race.race_num if race.race_num is not None else i + 1
-        rn_s = str(rn)
+        rn_s = f"第{rn}場"
         draw.text(
             ((RACE_COL[0] + RACE_COL[1]) // 2, int(cy)),
             rn_s,
             font=font_race,
-            fill=RACE_FG,
+            fill=race_fg,
             anchor="mm",
         )
 
@@ -879,7 +1008,7 @@ def render_meeting_poster(
                 ((x0 + x1) // 2, int(cy)),
                 label_s,
                 font=font_pick,
-                fill=TEXT_FG,
+                fill=text_fg,
                 anchor="mm",
             )
 
@@ -926,6 +1055,9 @@ def _write_primary_meeting_outputs(
     course: str,
     output_root: Path,
     errors: Optional[List[Dict[str, str]]] = None,
+    theme: Optional[str] = None,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     正式產出：只寫綜合推介 fused.png + copy.json（含 fused_copy）。
@@ -934,10 +1066,22 @@ def _write_primary_meeting_outputs(
     err_list = list(errors or [])
     out_root = Path(output_root)
     out_root.mkdir(parents=True, exist_ok=True)
-    theme = random.choice(THEMES)
+    if session is None and is_day_meeting is None:
+        meta = lookup_meeting_session(racing_date, course)
+        session = meta.get("session", session)
+        if is_day_meeting is None and "is_day_meeting" in meta:
+            is_day_meeting = meta.get("is_day_meeting")
+    theme = resolve_poster_theme(
+        theme=theme, course=course, session=session, is_day_meeting=is_day_meeting
+    )
     paths = latest_paths(out_root)
     fused_meta = render_meeting_poster(
-        payloads, track=PRIMARY_TRACK, out_path=paths["fused"], theme=theme
+        payloads,
+        track=PRIMARY_TRACK,
+        out_path=paths["fused"],
+        theme=theme,
+        session=session,
+        is_day_meeting=is_day_meeting,
     )
     fused_copy = generate_meeting_copy(payloads, PRIMARY_TRACK)
     manifest = {
@@ -973,6 +1117,17 @@ def _write_primary_meeting_outputs(
     paths["copy"].write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    # 統計／海報完成後：產出廣告包 JSON，並 webhook 通知外部助手
+    ad_pkg: Dict[str, Any] = {}
+    try:
+        from ad_package import publish_ad_package_after_outputs
+
+        ad_pkg = publish_ad_package_after_outputs(output_root=out_root, notify=True)
+    except Exception as exc:
+        print(f"[ad_poster] ad package publish failed: {exc}")
+        ad_pkg = {"ok": False, "error": str(exc)}
+
     return {
         "ok": len(err_list) == 0,
         "batch_id": batch_id,
@@ -988,6 +1143,7 @@ def _write_primary_meeting_outputs(
         "fused_meta": fused_meta,
         "primary_track": PRIMARY_TRACK,
         "primary_track_label": PRIMARY_TRACK_LABEL,
+        "ad_package": ad_pkg,
     }
 
 
@@ -998,6 +1154,9 @@ def generate_ads_for_meeting_predictions(
     output_root: Optional[Path] = None,
     racing_date: str = "",
     course: str = "",
+    theme: Optional[str] = None,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     全賽日 → fused.png（綜合推介主視覺）＋ copy.json，寫入 output_root 並覆蓋舊檔。
@@ -1044,6 +1203,9 @@ def generate_ads_for_meeting_predictions(
         course=course,
         output_root=out_root,
         errors=errors,
+        theme=theme,
+        session=session,
+        is_day_meeting=is_day_meeting,
     )
 
 
@@ -1128,6 +1290,7 @@ def generate_ads_from_snapshot_batch(
         return {"ok": False, "error": "無有效場次", "batch_id": batch_id, "errors": errors}
 
     out_root = Path(output_root) if output_root else default_output_dir()
+    # session／主題由 _write_primary_meeting_outputs 內查 fixtures（或場地慣例）
     return _write_primary_meeting_outputs(
         payloads,
         batch_id=batch_id,
@@ -1135,6 +1298,9 @@ def generate_ads_from_snapshot_batch(
         course=course,
         output_root=out_root,
         errors=errors,
+        theme=None,
+        session=None,
+        is_day_meeting=None,
     )
 
 

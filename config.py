@@ -144,7 +144,7 @@ class ModelConfig:
     FUSE_MODEL_ALPHA = 0.60
     FUSE_CONSENSUS_BONUS = 1.15  # 雙軌皆入推介列時份額加成，其後再正規化
 
-    # 廣告海報：公司原海報風格（藍／米色隨機）；全賽日表格式；固定檔名覆蓋
+    # 廣告海報：公司原海報風格（日馬啡色／夜馬藍色）；全賽日表格式；固定檔名覆蓋
     AD_OUTPUT_ON_SNAPSHOT = True
     AD_OUTPUT_DIR = ""  # 空＝專案 ad_output/；可設絕對路徑
     AD_OUTPUT_MAX_KB = 2048  # PNG 單張上限（公司原規格 2MB 以下）
