@@ -1154,6 +1154,62 @@ class MeetingPipeline:
                     racing_date, course, job_id=kwargs.get("job_id")
                 )
 
+            if action == "start_ad_regen_background":
+                from ops_jobs import start_background_job
+
+                batch_id = kwargs.get("batch_id") or ""
+                if not batch_id:
+                    return {"ok": False, "error": "需要 batch_id"}
+                return start_background_job(
+                    job_type="ad_regen",
+                    racing_date=racing_date or "",
+                    course=course or "",
+                    extra_args=["--batch", str(batch_id)],
+                    detail=f"ad_regen {batch_id}",
+                )
+
+            if action == "start_nlp_meeting_background":
+                from ops_jobs import start_background_job
+
+                return start_background_job(
+                    job_type="nlp_meeting",
+                    racing_date=racing_date,
+                    course=course,
+                    detail="nlp_meeting",
+                )
+
+            if action == "start_factors_nlp_background":
+                from ops_jobs import start_background_job
+
+                return start_background_job(
+                    job_type="factors_nlp",
+                    racing_date=racing_date or "",
+                    course=course or "",
+                    detail="factors_nlp",
+                )
+
+            if action == "start_hit_snapshot_backfill":
+                from ops_jobs import start_background_job
+
+                extra = ["--all"] if kwargs.get("force_all") else []
+                return start_background_job(
+                    job_type="hit_snapshot_bf",
+                    racing_date=racing_date or "",
+                    course=course or "",
+                    extra_args=extra,
+                    detail="hit_rate day snapshot backfill",
+                )
+
+            if action == "job_status":
+                from ops_jobs import get_job
+
+                return get_job(
+                    job_id=kwargs.get("job_id"),
+                    job_type=kwargs.get("job_type") or "form_ai",
+                    racing_date=racing_date or None,
+                    course=course or None,
+                )
+
             if action == "snapshot":
                 from factor_calibration import FactorCalibration
                 out = FactorCalibration().snapshot_meeting(racing_date, course)

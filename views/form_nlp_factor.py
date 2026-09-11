@@ -186,8 +186,8 @@ if parse_mode == "racecard":
             st.info("此賽日排位馬匹在回看期內沒有未解析報告（可能已解析完，或歷史尚無文字）。")
 
         if st.button(
-            "🚀 整個賽日解析",
-            type="primary",
+            "🚀 整個賽日解析（前台｜需開頁）",
+            type="secondary",
             disabled=(n_llm == 0 and n_trivial == 0) or (n_llm > 0 and not ready),
             key="nlp_parse_meeting",
         ):
@@ -226,6 +226,64 @@ if parse_mode == "racecard":
                 st.json(results[:5])
             st.info("請再按上方「計算並寫入馬匹近績因子」或主頁重算，補償才會進入 Z-Score。")
             st.rerun()
+
+        st.caption("建議用後台：關頁不中斷；完成後可再按「後台重算因子（含 NLP）」。")
+        nb1, nb2, nb3 = st.columns(3)
+        with nb1:
+            if st.button(
+                "後台整日 NLP",
+                type="primary",
+                disabled=(n_llm == 0 and n_trivial == 0) or (n_llm > 0 and not ready),
+                key="nlp_bg_meeting",
+            ):
+                from meeting_pipeline import MeetingPipeline
+
+                r = MeetingPipeline().run_action(
+                    date_part, course_part, "start_nlp_meeting_background"
+                )
+                st.session_state["nlp_bg_job"] = r.get("job_id")
+                if r.get("ok"):
+                    st.success(r.get("message") or r.get("job_id"))
+                else:
+                    st.error(r.get("error") or r)
+                st.rerun()
+        with nb2:
+            if st.button("後台重算因子（含 NLP）", key="nlp_bg_factors"):
+                from meeting_pipeline import MeetingPipeline
+
+                r = MeetingPipeline().run_action(
+                    date_part, course_part, "start_factors_nlp_background"
+                )
+                st.session_state["fac_bg_job"] = r.get("job_id")
+                if r.get("ok"):
+                    st.success(r.get("message") or r.get("job_id"))
+                else:
+                    st.error(r.get("error") or r)
+                st.rerun()
+        with nb3:
+            if st.button("重新整理進度", key="nlp_bg_refresh"):
+                st.rerun()
+
+        from ops_jobs import get_job
+
+        for label, jkey, jtype in (
+            ("NLP", "nlp_bg_job", "nlp_meeting"),
+            ("因子", "fac_bg_job", "factors_nlp"),
+        ):
+            jid = st.session_state.get(jkey)
+            job = (get_job(job_id=jid, job_type=jtype) or {}).get("job")
+            if not job:
+                continue
+            js = str(job.get("status") or "")
+            st.write(f"**{label} 後台** `{job.get('job_id')}` — **{js}**")
+            st.caption(str(job.get("detail") or ""))
+            prog = job.get("progress_json") or {}
+            if isinstance(prog, dict) and prog.get("total"):
+                done = int(prog.get("done") or 0)
+                total = max(int(prog.get("total") or 1), 1)
+                st.progress(min(1.0, done / total), text=f"{done}/{total}")
+            elif isinstance(prog, dict) and prog:
+                st.caption(str(prog))
 
 else:
     batch_size = st.number_input("每批筆數", min_value=1, max_value=100, value=20, key="nlp_batch_size")

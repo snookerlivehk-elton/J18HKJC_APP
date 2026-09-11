@@ -73,10 +73,11 @@ class BuildFusedPicksTest(unittest.TestCase):
         attach_fused_shares_to_snapshot_rows(rows)
         self.assertTrue(all(r.get("fused_share") is not None for r in rows))
         g = pd.DataFrame(rows)
-        top2, all_picks = ranked_picks_for_signal(g, "fused_share")
+        top2, all_picks, top3 = ranked_picks_for_signal(g, "fused_share")
         hits = evaluate_pool_hits(
             top2["finish_order_num"].tolist(),
             all_picks["finish_order_num"].tolist(),
+            top3["finish_order_num"].tolist(),
         )
         self.assertTrue(hits["win"])
         self.assertTrue(hits["pla"])

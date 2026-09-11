@@ -22,7 +22,6 @@ from ad_llm_copy import (
 )
 from ad_poster import (
     default_output_dir,
-    generate_ads_from_snapshot_batch,
     latest_paths,
     load_copy_json,
     make_preview_jpeg,
@@ -309,32 +308,55 @@ with tab_regen:
         }
         blabel = st.selectbox("預測批次", list(opts.keys()), key="ad_regen_batch")
         bid = opts[blabel]
-        if st.button("重新生成廣告輸出", type="primary", key="ad_regen_go"):
-            with st.spinner("生成全賽日海報…"):
-                try:
-                    result = generate_ads_from_snapshot_batch(bid, output_root=out_root)
-                    st.session_state["ad_last_result"] = result
-                    if not (result.get("ok") or result.get("races_written")):
-                        st.error(result.get("error") or "重產失敗")
-                    errs = result.get("errors") or []
-                    if errs:
-                        st.warning(
-                            "部分錯誤："
-                            + "；".join(
-                                f"{e.get('race_id')}: {e.get('error')}" for e in errs[:5]
-                            )
-                        )
-                except Exception as e:
-                    st.session_state["ad_last_result"] = {"ok": False, "error": str(e)}
-                    st.error(f"重產失敗：{e}")
+        st.caption("重產改走後台任務（關閉本頁不中斷）；進度見下方。")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("後台重產廣告輸出", type="primary", key="ad_regen_bg"):
+                from meeting_pipeline import MeetingPipeline
+
+                pipe = MeetingPipeline()
+                # 從 batch_id 解析日期場地（若可）
+                row = bdf[bdf["batch_id"].astype(str) == str(bid)]
+                d = str(row.iloc[0]["racing_date"])[:10] if not row.empty else ""
+                c = str(row.iloc[0]["course"]) if not row.empty else ""
+                r = pipe.run_action(
+                    d, c, "start_ad_regen_background", batch_id=str(bid)
+                )
+                st.session_state["ad_regen_job_id"] = r.get("job_id")
+                if r.get("ok"):
+                    st.success(r.get("message") or f"job `{r.get('job_id')}`")
+                else:
+                    st.error(r.get("error") or r)
+                st.rerun()
+        with c2:
+            if st.button("重新整理進度", key="ad_regen_refresh"):
+                st.rerun()
+
+        from ops_jobs import get_job
+
+        jid = st.session_state.get("ad_regen_job_id")
+        st_job = get_job(job_id=jid, job_type="ad_regen")
+        job = (st_job or {}).get("job")
+        if job:
+            js = str(job.get("status") or "")
+            prog = job.get("progress_json") or {}
+            st.write(f"**後台任務** `{job.get('job_id')}` — **{js}**")
+            st.caption(str(job.get("detail") or ""))
+            if isinstance(prog, dict) and prog:
+                st.json(prog)
+            if js in ("ok", "ok_with_errors"):
+                st.success("重產完成；可到「瀏覽輸出」下載。")
+                st.session_state["ad_last_result"] = {
+                    "ok": True,
+                    "races_written": (prog or {}).get("result", {}).get("races_written"),
+                }
+            elif js == "failed":
+                st.error("後台失敗，請看 detail／logs。")
+            elif js == "running":
+                st.info("進行中——可關頁，稍後回來按「重新整理進度」。")
 
         last: Optional[Dict[str, Any]] = st.session_state.get("ad_last_result")
         if last and (last.get("ok") or last.get("races_written")):
-            st.success(
-                f"完成：{last.get('races_written', 0)} 場合入 2 張海報 · "
-                f"模型 {int(last.get('model_bytes') or 0) // 1024} KB / "
-                f"AI {int(last.get('ai_bytes') or 0) // 1024} KB"
-            )
             st.markdown("#### 立即下載／預覽")
             _render_outputs(out_root, key_prefix="after_regen")
         elif last and last.get("error"):
