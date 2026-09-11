@@ -43,9 +43,10 @@ role = current_role()
 render_account_bar()
 
 home = st.Page("views/home.py", title="系統主頁", default=(role == ROLE_ADMIN))
-data_control = st.Page("views/data_control.py", title="資料控制中心")
+ops_center = st.Page("views/ops_center.py", title="數據營運中心")
 meeting_ops = st.Page("views/meeting_ops.py", title="賽日作戰室")
-data_backlog = st.Page("views/data_backlog.py", title="數據遺留清單")
+data_control = st.Page("views/data_control.py", title="資料控制中心（舊）")
+data_backlog = st.Page("views/data_backlog.py", title="數據遺留清單（舊）")
 ad_output = st.Page("views/ad_output.py", title="廣告輸出")
 whitelist = st.Page("views/whitelist.py", title="白名單")
 raceday = st.Page(
@@ -72,7 +73,7 @@ sg = st.Page("views/speed_guide.py", title="官方速勢能量")
 if role == ROLE_ADMIN:
     sections = {
         "系統": [home, whitelist],
-        "營運": [data_control, meeting_ops, data_backlog, ad_output],
+        "營運": [ops_center, meeting_ops, ad_output, data_control, data_backlog],
         "預測": [raceday, inference, calibration, hit_stats, form_ai],
         "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
     }

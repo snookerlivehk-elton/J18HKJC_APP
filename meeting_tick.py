@@ -1002,6 +1002,12 @@ class MeetingTickRunner:
             report["meetings"].append(meeting_out)
             report["n_actions"] += len(meeting_out.get("actions") or [])
 
+        if not dry_run:
+            report["incidents"] = self.scan_ops_incidents(report)
+            report["n_actions"] += int(
+                (report.get("incidents") or {}).get("n_created") or 0
+            )
+
         report["n_meetings"] = len(report["meetings"])
         return report
 
@@ -1673,8 +1679,98 @@ class MeetingTickRunner:
                 (report.get("backlog") or {}).get("n_processed") or 0
             )
 
+        # needs_human／failed → 營運介入報告（notify_admins 入口；預設可 stub）
+        if not dry_run:
+            report["incidents"] = self.scan_ops_incidents(report)
+            report["n_actions"] += int(
+                (report.get("incidents") or {}).get("n_created") or 0
+            )
+
         report["n_meetings"] = len(report["meetings"])
         return report
+
+    def scan_ops_incidents(self, tick_report: Dict[str, Any]) -> Dict[str, Any]:
+        """依本輪 meeting readiness／tick fail_count／backlog 寫介入報告。"""
+        try:
+            from ops_incidents import OpsIncidentService
+
+            svc = OpsIncidentService(engine=self.pipe.engine)
+            created: List[Dict[str, Any]] = []
+            n_created = 0
+            meetings = tick_report.get("meetings") or []
+            pairs: List[Tuple[str, str]] = []
+            for m in meetings:
+                d = str(m.get("racing_date") or "")[:10]
+                c = str(m.get("course") or "").upper()
+                if d and c:
+                    pairs.append((d, c))
+            # 去重
+            seen = set()
+            uniq: List[Tuple[str, str]] = []
+            for p in pairs:
+                if p not in seen:
+                    seen.add(p)
+                    uniq.append(p)
+
+            backlog = tick_report.get("backlog") or {}
+            backlog_expiring = False
+            try:
+                from data_backlog import STATUS_EXPIRED, STATUS_OPEN
+
+                # 粗判：本輪有 expired 計數或 open 且接近保留窗
+                counts = backlog.get("counts") or {}
+                if int(counts.get(STATUS_EXPIRED) or 0) > 0:
+                    backlog_expiring = True
+                # 亦對個別 open 項標將過期（由 evaluate 統一建）
+                if int(counts.get(STATUS_OPEN) or 0) > 0 and int(
+                    counts.get(STATUS_EXPIRED) or 0
+                ) == 0:
+                    # 不強制；僅當 process 回傳 expiring 標記
+                    backlog_expiring = bool(backlog.get("expiring"))
+            except Exception:
+                pass
+
+            for d, c in uniq:
+                ready = self.pipe.refresh_readiness(d, c)
+                # 取各 stage 最大 fail_count
+                max_fc = 0
+                try:
+                    for stage, _label in (
+                        ("RACECARD", ""),
+                        ("SPEEDGUIDE", ""),
+                        ("FORMGUIDE", ""),
+                        ("FORM_AI", ""),
+                        ("SNAPSHOT", ""),
+                        ("RESULTS", ""),
+                        ("SETTLED", ""),
+                    ):
+                        st_row = self.get_tick_state(d, c, stage)
+                        max_fc = max(max_fc, int(st_row.get("fail_count") or 0))
+                except Exception:
+                    max_fc = 0
+                outs = svc.evaluate_meeting_needs_human(
+                    d,
+                    c,
+                    ready,
+                    tick_fail_count=max_fc if max_fc else None,
+                    max_fails=int(self.guards.max_fails),
+                    backlog_expiring=backlog_expiring,
+                    notify=True,
+                )
+                for o in outs:
+                    created.append(o)
+                    if o.get("created"):
+                        n_created += 1
+
+            return {
+                "ok": True,
+                "n_meetings": len(uniq),
+                "n_actions": len(created),
+                "n_created": n_created,
+                "reports": created,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "n_created": 0}
 
     def run_backlog_pass(
         self,

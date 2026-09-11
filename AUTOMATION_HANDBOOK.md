@@ -19,7 +19,8 @@
 |------|------|------|
 | **api_jjjc**（例 Railway：`https://apicc.up.railway.app`） | 官網／GraphQL 拉取；賽前未來數日排位；完場約 **+12h** 拉賽果；缺料自帶重試；提供 JSON export | 不寫 J18 snapshot／settle |
 | **J18HKJC_APP**（本 repo） | `GET /api/export/*` → 入庫；因子／Form AI／快照／結算／廣告；狀態機＋tick | **不應**再爬馬會官網作主路徑（HTML 僅備援） |
-| **作戰室** `views/meeting_ops.py` | 人工監看、放行、略過、備援重抓 | 不取代 Cron 長跑 |
+| **作戰室** `views/meeting_ops.py` | 單日深挖、一鍵完成階段、遺留鏈、drill-down、放行／略過 | 不取代 Cron 長跑；人工動作寫 `ops_incident_reports` |
+| **數據營運中心** `views/ops_center.py` | 多日整備總覽、遺留佇列、開放介入報告 | 合併原資料控制中心＋遺留清單 |
 
 ### 1.1 資料契約（取貨主路徑）
 
@@ -735,8 +736,11 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 
 | 頁 | 職責 |
 |----|------|
-| **自動化中控（新）** | 多日總覽、告警、遺留、產檔回測、一鍵重試 |
-| **作戰室（現有）** | 單日深挖、手動 sync／放行／略過 |
+| **數據營運中心** `views/ops_center.py` | 多日總覽、告警、遺留、介入報告、一鍵遺留鏈 |
+| **作戰室** `views/meeting_ops.py` | 單日深挖、一鍵完成階段、drill-down、手動 sync／放行／略過 |
+| **舊頁** data_control／data_backlog | 導流 stub，避免書籤失效 |
+
+**程式現況（2026-09-11）：** ✅ Ops Center＋作戰室一鍵；`ops_incidents.py`；tick 掃描 needs_human；`MEETING_TICK_BACKLOG_AUTO_FACTORS` 預設 true；`notify_admins` Resend 入口（文案後期優化）。
 
 ---
 

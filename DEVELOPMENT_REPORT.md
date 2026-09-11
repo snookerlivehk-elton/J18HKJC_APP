@@ -78,8 +78,11 @@ auth_utils.py            # 白名單／bootstrap／登入登出
 ui_theme.py              # 登入／管理／用戶 CSS
 views/home.py            # 系統主頁（載歷史、重算因子）
 views/whitelist.py       # 白名單 CRUD（僅 admin）
-views/data_control.py    # 資料控制中心
-views/meeting_ops.py     # 賽日作戰室
+views/ops_center.py       # 數據營運中心（多日總覽／遺留／介入報告）
+views/meeting_ops.py     # 賽日作戰室（單日深挖／一鍵介入）
+views/data_control.py    # 舊頁導流 → ops_center
+views/data_backlog.py    # 舊頁導流 → ops_center
+ops_incidents.py         # 介入報告＋notify_admins（Resend 入口）
 views/ad_output.py       # 廣告輸出（公司原圖風格全賽日 PNG）
 views/raceday.py         # 賽日速覽（用戶主畫面）
 views/inference.py       # 融合預測
@@ -88,7 +91,7 @@ views/form_ai.py         # 賽績 AI
 views/*_factor.py         # 各因子診斷頁
 pages/                   # 留空（勿自動掛頁，避免用戶看到管理選單）
 bucket_utils.py / config.py / factor_calculator.py / inference_engine.py
-meeting_pipeline.py / fixture_crawler.py / …
+meeting_pipeline.py / meeting_tick.py / fixture_crawler.py / …
 prediction_api.py / prediction_export.py / start-api.sh   # 對外賽前預測 API
 schema.sql
 ```
@@ -180,6 +183,13 @@ AUTH_BOOTSTRAP_ADMIN=...  # 僅庫內尚無 admin 時的開機通行碼
 PREDICTION_API_KEY=...    # 對外預測 API（獨立服務）；Header X-API-Key
 PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 # OpenRouter 時設 OPENAI_BASE_URL + 對應 model 名
+# 遺留評述補齊後自動 NLP→因子（預設 true）
+# MEETING_TICK_BACKLOG_AUTO_FACTORS=true
+# 營運介入通知（Resend；預設關；notify_admins 為唯一入口）
+# NOTIFY_ENABLED=false
+# RESEND_API_KEY=
+# NOTIFY_FROM=alerts@j18ai.local
+# NOTIFY_ADMIN_EMAILS=admin@example.com
 ```
 
 本地 `.env` 同上；**勿 commit**。`J18_API_BASE_URL` 可填 `https://api.j18.hk`（自動接 path）或完整 `…/historyResult`。密碼若曾貼在聊天室請輪替。
@@ -270,18 +280,21 @@ OpenAPI：部署後 `/docs`。
 
 ## 5. 自動化藍圖與賽後開發流程
 
-### 5.1 已落地（手動作戰室）
+### 5.1 已落地（作戰室＋營運中心）
 
 - `fixture_crawler.py` → `fixtures`（無參數當月頁才有當月；`CalMonth=當月` 可能空殼）
-- `meeting_pipeline.py`：`refresh_readiness` + stage + 手動動作
-- UI：`pages/14_賽日作戰室.py`
+- `meeting_pipeline.py`：`refresh_readiness` + stage + 一鍵 `complete_stage`／`run_backlog_chain` + 場次 drill-down
+- `ops_incidents.py`：needs_human／人工介入 → `ops_incident_reports`；`notify_admins`（Resend stub）
+- UI：`views/ops_center.py`（多日總覽）＋`views/meeting_ops.py`（單日介入）；舊 data_control／data_backlog 導流
 
 階段：`FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS → NLP → FORM_AI → SNAPSHOT → RESULTS → SETTLED`
 
-### 5.2 賽前手動 SOP（目前生產）
+**原則**：tick 是主管道；管理 UI＝查看＋人工介入。評述遲到補齊後預設自動 NLP→因子（`MEETING_TICK_BACKLOG_AUTO_FACTORS=true`）。
 
-1. 作戰室選賽日 → 重新檢查 readiness  
-2. 缺什麼按什麼（排位／SG／Form Guide／Form AI）  
+### 5.2 賽前手動 SOP（介入時）
+
+1. **數據營運中心**看多日卡點／介入報告；點進 **賽日作戰室**  
+2. 缺什麼按「一鍵完成此階段」；評述補洞按「一鍵遺留鏈」  
 3. **賽前**建立預測快照（鎖總分＋當版模型勝率）  
 4. 改了勝率公式／權重後：**必須重建快照**再賽  
 
@@ -396,6 +409,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-11 | **數據營運 UI**：Ops Center 合併控制中心＋遺留清單；作戰室一鍵完成／遺留鏈／drill-down；`ops_incidents`＋tick 掃描；`AUTO_BACKLOG_FACTORS` 預設 true；`notify_admins` Resend 入口 |
 | 2026-09-09 | **廣告輸出公司模版**：跟從藍／米色原圖；動態高度；每場最多 4 匹只顯示馬號＋馬名；PNG≤2MB；隨機色調 |
 | 2026-09-08 | **雙軌部署說明**：阿里雲＝主要運作；Railway 暫時並行；開發須先顧及阿里雲 |
 | 2026-09-08 | **廣告輸出改版**：全賽日模型／AI 各一張（固定 `model.jpg`/`ai.jpg` 覆蓋）；單張 ≤800KB；緊湊排版 |
@@ -419,4 +433,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-08 — 雙軌部署（阿里雲為主）／全賽日廣告海報已落地。*
+*最後更新：2026-09-11 — 數據營運中心／作戰室一鍵介入／介入報告＋Resend 入口。*
