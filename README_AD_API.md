@@ -153,3 +153,12 @@ pytest tests/test_ad_package_api.py -q
 ```
 
 > 賽後命中廣告目前只得邏輯／文案 job，未有海報同呢條 API；本服務只涵蓋賽前預測包。
+
+
+## 歷史歸檔（不存海報 PNG）
+
+- 路徑：`ad_output/archive/{YYYY-MM-DD}_{COURSE}/`
+- 種類：`copy_latest.json`（海報生成資料）、`social_latest.json`、`promo_hits_latest.json`、`post_race_latest.json`
+- **不歸檔 fused.png**；需要海報時用「廣告輸出 → 手動重產」由快照重畫
+- UI：廣告輸出／命中率榜可翻查最新歸檔並「強制重做」
+- 賽後 AI 文案輸入已含每匹推介馬嘅 `name`／`finish`／`win_odds`（`picks_detail`）
