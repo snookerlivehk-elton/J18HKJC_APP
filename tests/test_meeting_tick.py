@@ -62,9 +62,133 @@ class PlanPreRaceTest(unittest.TestCase):
         self.assertTrue(plan.pull_speedguide)
         self.assertTrue(plan.pull_formguide)
         self.assertTrue(plan.run_factors)
+        # Form AI 可樂觀排入（本輪會拉上游），但 deferred；snapshot 仍閘住
         self.assertTrue(plan.start_form_ai)
+        self.assertTrue(
+            any("FORM_AI deferred_until_execute" in s for s in plan.skip_reasons)
+        )
         self.assertFalse(plan.snapshot)  # 閘門未齊
         self.assertTrue(any("gates" in s for s in plan.skip_reasons))
+
+    def test_form_ai_blocked_when_speedguide_not_pullable(self):
+        """SG 未 ok 且本輪不拉（例如 cooldown）→ 不准開 Form AI。"""
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "ok"},
+            "SPEEDGUIDE": {"status": "waiting"},
+            "FORMGUIDE": {"status": "ok"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [{"stage": s, "status": "pending", "manual_override": 0} for s in ("FORM_AI",)]
+        )
+        # 模擬 SPEEDGUIDE 仍在 cooldown → 不排 pull
+        runner.get_tick_state = MagicMock(
+            side_effect=lambda d, c, stage: {
+                "fail_count": 0,
+                "last_attempt_at": "2099-01-01T00:00:00+00:00",
+                "last_ok_at": None,
+                "last_status": "waiting",
+                "last_detail": None,
+            }
+            if stage == "SPEEDGUIDE"
+            else {
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": None,
+                "last_detail": None,
+            }
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.pull_speedguide)
+        self.assertFalse(plan.start_form_ai)
+        self.assertTrue(any("FORM_AI wait: SPEEDGUIDE" in s for s in plan.skip_reasons))
+
+    def test_form_ai_starts_when_upstream_ok(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "ok"},
+            "SPEEDGUIDE": {"status": "ok"},
+            "FORMGUIDE": {"status": "ok"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        stages = pd.DataFrame(
+            [
+                {
+                    "stage": s,
+                    "status": "ok" if s != "FORM_AI" else "pending",
+                    "manual_override": 0,
+                }
+                for s in (
+                    "RACECARD",
+                    "SPEEDGUIDE",
+                    "FORMGUIDE",
+                    "FACTORS",
+                    "FORM_AI",
+                    "SNAPSHOT",
+                )
+            ]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.pull_speedguide)
+        self.assertTrue(plan.start_form_ai)
+        self.assertFalse(
+            any("FORM_AI deferred_until_execute" in s for s in plan.skip_reasons)
+        )
+        self.assertFalse(plan.snapshot)  # FORM_AI 未 ok
+
+    def test_execute_skips_form_ai_when_sg_still_missing(self):
+        from meeting_tick import PreRaceActionPlan, MeetingTickRunner, TickGuards, STATUS_WAITING
+
+        pipe = MagicMock()
+        pipe.refresh_readiness.return_value = {
+            "RACECARD": {"status": "ok"},
+            "SPEEDGUIDE": {"status": "waiting"},
+            "FORMGUIDE": {"status": "ok"},
+            "FACTORS": {"status": "ok"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        pipe.get_stages.return_value = pd.DataFrame()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards()
+        runner._factors_ran = False
+        runner.record_tick_attempt = MagicMock()
+        plan = PreRaceActionPlan(
+            racing_date="2026-09-13",
+            course="ST",
+            start_form_ai=True,
+            readiness={
+                "RACECARD": {"status": "ok"},
+                "SPEEDGUIDE": {"status": "pending"},
+                "FORMGUIDE": {"status": "ok"},
+                "FACTORS": {"status": "ok"},
+            },
+        )
+        out = runner.execute_pre_race_meeting(plan, dry_run=False)
+        pipe.run_action.assert_not_called()
+        skipped = [a for a in out["actions"] if a.get("action") == "start_form_ai_background"]
+        self.assertEqual(len(skipped), 1)
+        self.assertTrue(skipped[0].get("skipped"))
+        self.assertIn("SPEEDGUIDE", skipped[0].get("reason") or "")
+        runner.record_tick_attempt.assert_any_call(
+            "2026-09-13",
+            "ST",
+            "FORM_AI",
+            ok=True,
+            status=STATUS_WAITING,
+            detail="wait gates SPEEDGUIDE",
+        )
 
     def test_snapshot_when_gates_ok(self):
         runner = self._runner()
@@ -96,6 +220,35 @@ class PlanPreRaceTest(unittest.TestCase):
         self.assertFalse(plan.pull_speedguide)
         self.assertTrue(plan.snapshot)
         self.assertTrue(plan.social_copy)
+
+    def test_factors_wait_without_racecard(self):
+        runner = self._runner()
+        readiness = {
+            "RACECARD": {"status": "pending"},
+            "SPEEDGUIDE": {"status": "pending"},
+            "FORMGUIDE": {"status": "pending"},
+            "FACTORS": {"status": "pending"},
+            "FORM_AI": {"status": "pending"},
+            "SNAPSHOT": {"status": "pending"},
+        }
+        # 排位人工略過 → 下游全部停
+        stages = pd.DataFrame(
+            [
+                {
+                    "stage": "RACECARD",
+                    "status": "skipped_manual",
+                    "manual_override": 1,
+                },
+            ]
+        )
+        plan = runner.plan_pre_race_meeting(
+            "2026-09-13", "ST", readiness=readiness, stages_df=stages
+        )
+        self.assertFalse(plan.sync_racecard)
+        self.assertFalse(plan.run_factors)
+        self.assertFalse(plan.start_form_ai)
+        self.assertTrue(any("FACTORS wait: RACECARD" in s for s in plan.skip_reasons))
+        self.assertTrue(any("FORM_AI wait: RACECARD" in s for s in plan.skip_reasons))
 
     def test_social_copy_waits_without_snapshot(self):
         runner = self._runner()

@@ -68,10 +68,10 @@ STAGE_HELP: Dict[str, str] = {
     "RACECARD": "優先同步 jjjc 排位 export；錯位時改用備援 HKJC HTML。",
     "SPEEDGUIDE": "JJJC speedguide 主路徑，未上架則 waiting；可強制 CMS 備援。",
     "FORMGUIDE": "JJJC formguide 主路徑；覆蓋不足可重抓或等待。",
-    "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；有評述後再用「含 NLP」。",
+    "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
-    "FORM_AI": "建議後台啟動（關頁不中斷）。覆蓋 ≥80% 才出正式快照。",
-    "SNAPSHOT": "SG＋FormGuide＋Form AI 齊備才建 primary；否則可 provisional／revision。",
+    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 才出正式快照。",
+    "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；否則可 provisional／revision。",
     "RESULTS": "賽後同步 jjjc results（名次／派彩）；結算依賴此步。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。",
 }

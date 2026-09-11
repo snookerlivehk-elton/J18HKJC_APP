@@ -1,13 +1,23 @@
 """
 賽日自動 tick（賽前 pre_race + 賽後 post_race）。
 
-賽前（fixtures 今日～未來 N 日）：
+賽前硬依賴鏈（環環緊扣；缺上游則下游 skip_reasons 可監察）：
+  RACECARD
+    → SPEEDGUIDE ∥ FORMGUIDE（排位齊後可並行）
+    → FACTORS（需排位；基礎因子可不待 NLP）
+    → FORM_AI（硬閘：SPEEDGUIDE＋FORMGUIDE＋FACTORS 皆 ok）
+    → SNAPSHOT（硬閘：SPEEDGUIDE＋FORMGUIDE＋FACTORS＋FORM_AI）
+    → social_copy（需快照）
+
+  NLP／沿路走勢：賽後／遺留鏈（評述→NLP→含干擾因子→revision），不擋賽前 Form AI／正式快照。
+
+賽前動作：
   1) sync_jjjc_racecard
   2) crawl_speedguide／crawl_formguide（JJJC 主路徑，CMS 備援）
   3) run_factors（每輪最多一次）
-  4) start_form_ai_background
-  5) snapshot（僅當 SG＋FormGuide＋Form AI 皆 ok）
-  6) social_copy（快照／海報後；MEETING_TICK_AUTO_SOCIAL_COPY）
+  4) start_form_ai_background（僅上游齊備後）
+  5) snapshot
+  6) social_copy（MEETING_TICK_AUTO_SOCIAL_COPY）
 
 賽後（lookback）：
   1) sync_jjjc_results
@@ -20,6 +30,7 @@
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
   - 依 readiness 重試；禁止無限狂爬（cooldown + max fails）
   - 人工略過／放行（manual_override）不覆蓋、不強跑
+  - 同輪可樂觀排下游，但 execute 必須以 refresh 後真實 status 再開閘
 
 用法：
   python meeting_tick.py --mode all --dry-run --json
@@ -484,14 +495,43 @@ class MeetingTickRunner:
     def _stage_status(readiness: Dict[str, Any], stage: str) -> str:
         return str((readiness.get(stage) or {}).get("status") or STATUS_PENDING)
 
+    # 正式快照硬閘（順序即依賴說明；NLP 刻意不在此列）
+    FORMAL_SNAPSHOT_GATES: Tuple[str, ...] = (
+        "SPEEDGUIDE",
+        "FORMGUIDE",
+        "FACTORS",
+        "FORM_AI",
+    )
+    # Form AI 啟動硬閘（不含自身）
+    FORM_AI_PREREQ_GATES: Tuple[str, ...] = (
+        "SPEEDGUIDE",
+        "FORMGUIDE",
+        "FACTORS",
+    )
+
     @staticmethod
-    def _gates_for_formal_snapshot(readiness: Dict[str, Any]) -> Tuple[bool, List[str]]:
-        """正式快照硬閘：SG + FormGuide + Form AI 皆 ok。"""
+    def _gates_ok(
+        readiness: Dict[str, Any], stages: Sequence[str]
+    ) -> Tuple[bool, List[str]]:
         missing: List[str] = []
-        for st in ("SPEEDGUIDE", "FORMGUIDE", "FORM_AI"):
+        for st in stages:
             if MeetingTickRunner._stage_status(readiness, st) != STATUS_OK:
                 missing.append(st)
         return (len(missing) == 0, missing)
+
+    @classmethod
+    def _gates_for_formal_snapshot(
+        cls, readiness: Dict[str, Any]
+    ) -> Tuple[bool, List[str]]:
+        """正式快照硬閘：SG + FormGuide + Factors + Form AI 皆 ok。"""
+        return cls._gates_ok(readiness, cls.FORMAL_SNAPSHOT_GATES)
+
+    @classmethod
+    def _gates_for_form_ai(
+        cls, readiness: Dict[str, Any]
+    ) -> Tuple[bool, List[str]]:
+        """Form AI 啟動硬閘：SG + FormGuide + Factors 皆 ok。"""
+        return cls._gates_ok(readiness, cls.FORM_AI_PREREQ_GATES)
 
     def plan_pre_race_meeting(
         self,
@@ -565,11 +605,16 @@ class MeetingTickRunner:
             else:
                 plan.pull_formguide = True
 
-        # --- FACTORS ---
+        speedguide_ready_soon = sg == STATUS_OK or plan.pull_speedguide
+        formguide_ready_soon = fg == STATUS_OK or plan.pull_formguide
+
+        # --- FACTORS（需排位；可不待 SG／FG／NLP）---
         if not auto_factors:
             plan.skip_reasons.append("FACTORS disabled by env")
         elif is_manual_blocked(stages.get("FACTORS")):
             plan.skip_reasons.append("FACTORS manual block")
+        elif not racecard_ready_soon:
+            plan.skip_reasons.append("FACTORS wait: RACECARD not ready")
         elif fac == STATUS_OK:
             plan.skip_reasons.append("FACTORS already ok")
         else:
@@ -579,23 +624,46 @@ class MeetingTickRunner:
             else:
                 plan.run_factors = True
 
-        # --- FORM_AI ---
+        factors_ready_soon = fac == STATUS_OK or plan.run_factors
+
+        # --- FORM_AI（硬閘：SG＋FG＋FACTORS；同輪可樂觀排，execute 再驗真實 status）---
         if not auto_form_ai:
             plan.skip_reasons.append("FORM_AI disabled by env")
         elif is_manual_blocked(stages.get("FORM_AI")):
             plan.skip_reasons.append("FORM_AI manual block")
         elif not racecard_ready_soon:
             plan.skip_reasons.append("FORM_AI wait: RACECARD not ready")
+        elif not speedguide_ready_soon:
+            plan.skip_reasons.append("FORM_AI wait: SPEEDGUIDE not ready")
+        elif not formguide_ready_soon:
+            plan.skip_reasons.append("FORM_AI wait: FORMGUIDE not ready")
+        elif not factors_ready_soon:
+            plan.skip_reasons.append("FORM_AI wait: FACTORS not ready")
         elif ai == STATUS_OK:
             plan.skip_reasons.append("FORM_AI already ok")
         else:
+            # 計劃層：上游已 ok 或本輪將嘗試；缺料時 execute 會 skip
             allowed, why = self._attempt_allowed(d, c, "FORM_AI", ai, now=now)
             if not allowed:
                 plan.skip_reasons.append(f"FORM_AI skip: {why}")
             else:
                 plan.start_form_ai = True
+                if sg != STATUS_OK or fg != STATUS_OK or fac != STATUS_OK:
+                    pending = [
+                        st
+                        for st, st_ok in (
+                            ("SPEEDGUIDE", sg == STATUS_OK),
+                            ("FORMGUIDE", fg == STATUS_OK),
+                            ("FACTORS", fac == STATUS_OK),
+                        )
+                        if not st_ok
+                    ]
+                    plan.skip_reasons.append(
+                        "FORM_AI deferred_until_execute: waiting "
+                        + ",".join(pending)
+                    )
 
-        # --- SNAPSHOT（硬閘：SG+FG+FORM_AI）---
+        # --- SNAPSHOT（硬閘：SG+FG+FACTORS+FORM_AI）---
         gates_ok, missing = self._gates_for_formal_snapshot(readiness)
         if not auto_snapshot:
             plan.skip_reasons.append("SNAPSHOT disabled by env")
@@ -811,6 +879,15 @@ class MeetingTickRunner:
                     out["readiness_after_factors"] = self.pipe.refresh_readiness(d, c)
 
         if plan.start_form_ai:
+            if not dry_run:
+                # 同輪拉完 SG／FG／factors 後再驗硬閘（計劃層可樂觀，執行層必須真實 ok）
+                ready_for_ai = self.pipe.refresh_readiness(d, c)
+                out["readiness_before_form_ai"] = ready_for_ai
+                racecard_ok = self._stage_status(ready_for_ai, "RACECARD") == STATUS_OK
+                ai_gates_ok, ai_missing = self._gates_for_form_ai(ready_for_ai)
+            else:
+                ai_gates_ok, ai_missing = True, []
+
             if not racecard_ok and not dry_run:
                 out["actions"].append(
                     {
@@ -819,6 +896,23 @@ class MeetingTickRunner:
                         "skipped": True,
                         "reason": "RACECARD not ok",
                     }
+                )
+            elif not ai_gates_ok and not dry_run:
+                out["actions"].append(
+                    {
+                        "action": "start_form_ai_background",
+                        "ok": False,
+                        "skipped": True,
+                        "reason": "gates " + ",".join(ai_missing),
+                    }
+                )
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "FORM_AI",
+                    ok=True,
+                    status=STATUS_WAITING,
+                    detail="wait gates " + ",".join(ai_missing),
                 )
             else:
                 rec = _act("start_form_ai_background")
