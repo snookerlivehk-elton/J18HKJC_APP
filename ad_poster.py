@@ -64,8 +64,8 @@ SLICE_TOP_END = 400
 SLICE_MID_END = 980
 REF_N_ROWS = 10  # 模版中段對應參考場數
 ROW_H_SCALE = 1.0
-RACE_COL = (55, 160)
-CONTENT_X0 = 175
+RACE_COL = (48, 175)
+CONTENT_X0 = 185
 CONTENT_X1 = 1220
 PICK_GAP = 12
 DATE_PILL = (40, 206, 460, 257)
@@ -958,8 +958,9 @@ def render_meeting_poster(
     )
 
     # 字級隨列高；推介／場次號皆欄內水平置中（anchor=mm）
+    # 「第N場」較單數字寬，場次字略細以塞進左欄
     base = int(FONT_BASE_PX)
-    race_px = int(max(base - 4, min(int(row_h * 0.55), base + 8)))
+    race_px = int(max(base - 10, min(int(row_h * 0.42), base - 2)))
     pick_px = int(max(base - 6, min(int(row_h * 0.50), base + 4)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
@@ -969,7 +970,7 @@ def render_meeting_poster(
     for i, race in enumerate(races):
         cy = mid_top + (i + 0.5) * row_h
         rn = race.race_num if race.race_num is not None else i + 1
-        rn_s = str(rn)
+        rn_s = f"第{rn}場"
         draw.text(
             ((RACE_COL[0] + RACE_COL[1]) // 2, int(cy)),
             rn_s,

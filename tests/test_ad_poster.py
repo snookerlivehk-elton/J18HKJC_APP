@@ -114,7 +114,7 @@ def test_mid_stretch_scales_with_race_count(tmp_path: Path):
         assert out.is_file()
         assert meta["n_races"] == n
         assert abs(meta["row_h"] - row_ref) < 1.0
-        assert meta["race_px"] >= FONT_BASE_PX - 8
+        assert meta["race_px"] >= FONT_BASE_PX - 12
         assert meta["pick_px"] >= FONT_BASE_PX - 10
         assert meta["theme"] == "night"
         assert meta["blank"].startswith("blank_night")
