@@ -169,8 +169,13 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
 .auth-wrap { text-align: center; margin-bottom: 0.5rem; }
 .auth-wrap img { border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .auth-card h1 {
-  font-size: 1.55rem; font-weight: 800; margin: 0.55rem 0 0.4rem;
+  font-size: 1.55rem; font-weight: 800; margin: 0.55rem 0 0.15rem;
   color: var(--text-color, #14241c);
+}
+.auth-ver {
+  margin: 0 0 0.55rem; font-size: 0.82rem; font-weight: 700;
+  letter-spacing: 0.04em; opacity: 0.55;
+  color: var(--text-color, #5a6b62);
 }
 .auth-sub { color: var(--text-color, #5a6b62); opacity: 0.75; font-size: 0.92rem; margin: 0 0 1rem; }
 </style>
@@ -217,6 +222,15 @@ html[data-theme="light"] [data-testid="stSidebarUserContent"] {
   border-bottom: 1px solid rgba(128, 128, 128, 0.28);
   padding-bottom: 0.65rem;
   margin-bottom: 1rem;
+}
+.j18-app-ver {
+  text-align: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  color: var(--text-color);
+  padding-top: 0.15rem;
 }
 .j18-page-head h1 {
   font-size: 1.45rem; font-weight: 800; margin: 0;
@@ -327,6 +341,15 @@ html[data-theme="light"] [data-testid="stSidebar"] > div {
 :root {
   --accent: #0b6e4f;
   --warn: #c45c26;
+}
+.j18-app-ver {
+  text-align: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  color: var(--text-color);
+  padding-top: 0.15rem;
 }
 @media (max-width: 640px) {
   .block-container {

@@ -267,14 +267,17 @@ def try_login(raw: str) -> Tuple[bool, str]:
 def render_login_page():
     """簡潔登入頁（未登入時由 ui_app 呼叫）。"""
     import streamlit as st
+    from app_version import get_version_display
     from ui_theme import inject_login_css
 
     inject_login_css()
+    ver = get_version_display()
     st.markdown(
-        """
+        f"""
         <div class="auth-wrap">
           <div class="auth-card">
             <h1>J18AI Plus+</h1>
+            <p class="auth-ver">{ver}</p>
             <p class="auth-sub">請輸入白名單內的 Email 或通行碼</p>
           </div>
         </div>
@@ -301,16 +304,24 @@ def render_login_page():
 def render_account_bar():
     """主內容區帳號列（搭配頂部導航；避免手機側欄與頁面疊字）。"""
     import streamlit as st
+    from app_version import get_version_display
+
     role = current_role()
     if not role:
         return
     identity = st.session_state.get(SESSION_IDENTITY, "")
     via = st.session_state.get(SESSION_VIA, "")
-    left, right = st.columns([4, 1], vertical_alignment="center")
+    ver = get_version_display()
+    left, mid, right = st.columns([3.2, 1.2, 1], vertical_alignment="center")
     with left:
         st.caption(f"{'管理' if role == ROLE_ADMIN else '用戶'}｜{identity}")
         if via == "bootstrap":
             st.warning("開機通行碼模式：請立刻到「白名單」新增正式 admin")
+    with mid:
+        st.markdown(
+            f'<div class="j18-app-ver" title="應用版本">{ver}</div>',
+            unsafe_allow_html=True,
+        )
     with right:
         if st.button("登出", use_container_width=True):
             logout()

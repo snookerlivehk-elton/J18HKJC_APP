@@ -8,6 +8,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from app_version import get_version_display
 from auth_utils import (
     ROLE_ADMIN,
     is_logged_in,
@@ -19,9 +20,10 @@ from ui_theme import inject_admin_css, inject_home_screen_icons, render_main_nav
 
 _ROOT = Path(__file__).resolve().parent
 _LOGO = _ROOT / "assets" / "j18ai_plus_logo.png"
+_APP_VER = get_version_display()
 
 st.set_page_config(
-    page_title="J18AI Plus+",
+    page_title=f"J18AI Plus+ {_APP_VER}",
     page_icon=str(_LOGO) if _LOGO.is_file() else "🏇",
     layout="wide",
     # auto：有參數頁時側欄仍可開；參數已改主區 expander，不依賴側欄
