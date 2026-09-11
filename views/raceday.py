@@ -129,8 +129,7 @@ st.markdown(
   display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem;
   margin-top: 0.35rem;
 }
-.rd-picks-triple {
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.45rem;
+.rd-picks-main {
   margin-top: 0.35rem;
 }
 .rd-picks-col {
@@ -152,9 +151,12 @@ st.markdown(
 .rd-picks-col.fuse-col .tag {
   color: #0b6e4f; background: rgba(11,110,79,0.18);
 }
+.rd-picks-col.fuse-col .tag.pos {
+  color: #2f9e6f; background: rgba(47,158,111,0.14);
+}
 .rd-pick-empty { font-size: 0.78rem; opacity: 0.55; padding: 0.25rem 0; }
 @media (max-width: 520px) {
-  .rd-picks-dual, .rd-picks-triple { grid-template-columns: 1fr; }
+  .rd-picks-dual { grid-template-columns: 1fr; }
 }
 /* 場次數字 pill：壓低高度 */
 div[data-testid="stPills"] button {
@@ -345,22 +347,6 @@ fused_share_by_hno = {
 }
 
 
-def _model_pick_rows(df_slice, tag_prefix: str) -> str:
-    parts = []
-    for i, (_, r) in enumerate(df_slice.iterrows(), start=1):
-        hno = int(r["馬號"])
-        name = r["馬名"]
-        prob = float(r["模型勝率%"]) if pd.notna(r.get("模型勝率%")) else 0.0
-        parts.append(
-            f'<div class="rd-pick-row">'
-            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
-            f'<span class="nm">{hno} {name}</span></div>'
-            f'<div class="right">{prob:.1f}%</div>'
-            f"</div>"
-        )
-    return "".join(parts) if parts else '<div class="rd-pick-empty">—</div>'
-
-
 def _fmt_ai_display(share_pct) -> str:
     """推介列：場內 AI 份額%（瓜分 100%）。"""
     if share_pct is None:
@@ -371,57 +357,114 @@ def _fmt_ai_display(share_pct) -> str:
         return "—"
 
 
-def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
-    if not picks:
-        if ai_picks.get("skipped_low_confidence"):
-            return f'<div class="rd-pick-empty">{ai_picks.get("message") or "信心不足，本場不推"}</div>'
-        return '<div class="rd-pick-empty">尚無 AI 評價</div>'
-    parts = []
-    for i, r in enumerate(picks, start=1):
-        hno = r.get("horse_no")
-        name = r.get("horse_name") or ""
-        right = _fmt_ai_display(r.get("ai_share_pct"))
-        parts.append(
-            f'<div class="rd-pick-row">'
-            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
-            f'<span class="nm">{hno} {name}</span></div>'
-            f'<div class="right">{right}</div>'
-            f"</div>"
-        )
-    return "".join(parts)
+def _pick_row_html(tag: str, name_left: str, right: str, *, tag_class: str = "") -> str:
+    cls = f' class="tag {tag_class}"' if tag_class else ' class="tag"'
+    return (
+        f'<div class="rd-pick-row">'
+        f'<div class="left"><span{cls}>{tag}</span>'
+        f'<span class="nm">{name_left}</span></div>'
+        f'<div class="right">{right}</div>'
+        f"</div>"
+    )
 
 
-def _fused_pick_rows(picks: list, tag_prefix: str) -> str:
-    if not picks:
-        if fused_picks.get("fallback_model_only"):
-            return f'<div class="rd-pick-empty">{fused_picks.get("message") or "退回純模型"}</div>'
-        return '<div class="rd-pick-empty">尚無融合推介</div>'
-    parts = []
-    for i, r in enumerate(picks, start=1):
-        hno = r.get("horse_no")
-        name = r.get("horse_name") or ""
+def _deduped_pick_html(
+    win_picks: list,
+    place_picks: list,
+    *,
+    empty_msg: str,
+    pct_key: str,
+    pct_fmt: str = "{:.0f}%",
+) -> str:
+    """
+    單列顯示：爭勝1…N + 位置1…M（位置＝推介列去掉與爭勝重複的頭 win_n 匹）。
+    """
+    win_picks = list(win_picks or [])
+    place_picks = list(place_picks or [])
+    if not win_picks and not place_picks:
+        return f'<div class="rd-pick-empty">{empty_msg}</div>'
+
+    def _pct(row) -> str:
         try:
-            right = f"{float(r.get('fused_share_pct')):.0f}%"
+            return pct_fmt.format(float(row.get(pct_key)))
         except (TypeError, ValueError):
-            right = "—"
+            return "—"
+
+    def _name(row) -> str:
+        hno = row.get("horse_no")
+        name = row.get("horse_name") or ""
+        return f"{hno} {name}".strip()
+
+    parts = []
+    for i, r in enumerate(win_picks, start=1):
+        parts.append(_pick_row_html(f"爭勝{i}", _name(r), _pct(r)))
+    # 推介尾段：略過與爭勝重疊的前 len(win) 匹
+    rest = place_picks[len(win_picks) :]
+    for i, r in enumerate(rest, start=1):
         parts.append(
-            f'<div class="rd-pick-row">'
-            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
-            f'<span class="nm">{hno} {name}</span></div>'
-            f'<div class="right">{right}</div>'
-            f"</div>"
+            _pick_row_html(f"位置{i}", _name(r), _pct(r), tag_class="pos")
         )
-    return "".join(parts)
+    return "".join(parts) if parts else f'<div class="rd-pick-empty">{empty_msg}</div>'
 
 
-win_html = _model_pick_rows(pred_df.head(win_n), "勝")
-place_html = _model_pick_rows(pred_df.head(pick_n), "推")
-ai_win_html = _ai_pick_rows(ai_picks.get("win") or [], "勝")
-ai_place_html = _ai_pick_rows(ai_picks.get("place") or [], "推")
-ai_pick_n = ai_picks.get("pick_n") or len(ai_picks.get("place") or [])
-fuse_win_html = _fused_pick_rows(fused_picks.get("win") or [], "勝")
-fuse_place_html = _fused_pick_rows(fused_picks.get("place") or [], "推")
-fuse_pick_n = fused_picks.get("pick_n") or len(fused_picks.get("place") or [])
+def _model_deduped_html(win_n: int, pick_n: int) -> str:
+    """模型軌：DataFrame → 爭勝／位置（去重）。"""
+    win_df = pred_df.head(win_n)
+    place_df = pred_df.head(pick_n)
+    win_rows = []
+    for _, r in win_df.iterrows():
+        win_rows.append(
+            {
+                "horse_no": int(r["馬號"]),
+                "horse_name": r["馬名"],
+                "pct": float(r["模型勝率%"]) if pd.notna(r.get("模型勝率%")) else 0.0,
+            }
+        )
+    place_rows = []
+    for _, r in place_df.iterrows():
+        place_rows.append(
+            {
+                "horse_no": int(r["馬號"]),
+                "horse_name": r["馬名"],
+                "pct": float(r["模型勝率%"]) if pd.notna(r.get("模型勝率%")) else 0.0,
+            }
+        )
+    # 借用 _deduped_pick_html：把 pct 寫進假 key
+    for rows in (win_rows, place_rows):
+        for r in rows:
+            r["model_pct"] = r["pct"]
+    return _deduped_pick_html(
+        win_rows,
+        place_rows,
+        empty_msg="—",
+        pct_key="model_pct",
+        pct_fmt="{:.1f}%",
+    )
+
+
+fuse_empty = "尚無融合推介"
+if fused_picks.get("fallback_model_only"):
+    fuse_empty = fused_picks.get("message") or "退回純模型"
+fuse_html = _deduped_pick_html(
+    fused_picks.get("win") or [],
+    fused_picks.get("place") or [],
+    empty_msg=fuse_empty,
+    pct_key="fused_share_pct",
+)
+ai_empty = "尚無 AI 評價"
+if ai_picks.get("skipped_low_confidence"):
+    ai_empty = ai_picks.get("message") or "信心不足，本場不推"
+ai_html = _deduped_pick_html(
+    ai_picks.get("win") or [],
+    ai_picks.get("place") or [],
+    empty_msg=ai_empty,
+    pct_key="ai_share_pct",
+)
+model_html = _model_deduped_html(win_n, pick_n)
+
+fuse_win_n = len(fused_picks.get("win") or [])
+fuse_place_n = len(fused_picks.get("place") or [])
+fuse_pos_n = max(0, fuse_place_n - fuse_win_n)
 fuse_note = ""
 if fused_picks.get("fallback_model_only"):
     fuse_note = " · 無 AI 時退回模型"
@@ -446,36 +489,33 @@ meta_html = f"""
     <div>覆蓋 <b>{(meta.get('avg_model_coverage') or 0):.0%}</b>{' · provisional' if meta.get('provisional') else ''}</div>
   </div>
   <div class="rd-picks">
-    <div class="rd-picks-triple">
+    <div class="rd-picks-main">
       <div class="rd-picks-col fuse-col">
         <div class="col-title">融合推介{fuse_note}</div>
-        <div class="sec">爭勝</div>
-        {fuse_win_html}
-        <div class="sec">推介 · 前{fuse_pick_n}</div>
-        {fuse_place_html}
-      </div>
-      <div class="rd-picks-col">
-        <div class="col-title">模型 · 勝率份額</div>
-        <div class="sec">爭勝</div>
-        {win_html}
-        <div class="sec">推介 · 前{pick_n}</div>
-        {place_html}
-      </div>
-      <div class="rd-picks-col ai-col">
-        <div class="col-title">AI 馬評 · 份額</div>
-        <div class="sec">爭勝</div>
-        {ai_win_html}
-        <div class="sec">推介 · 前{ai_pick_n}</div>
-        {ai_place_html}
+        {fuse_html}
       </div>
     </div>
-    <div class="note">三軌：融合＝模型×AI（社交／廣告主視覺）；左／中／右獨立計算。推介最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹。本場 {n_runners} 匹。</div>
+    <div class="note">主顯示＝模型×AI 融合（爭勝＋位置，位置不重複爭勝）。最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹｜本場 {n_runners} 匹｜爭勝 {fuse_win_n}｜位置 {fuse_pos_n}</div>
   </div>
 </div>
 """
 st.markdown(meta_html, unsafe_allow_html=True)
 if pace_note:
     st.caption(pace_note)
+
+with st.expander("模型 · 勝率份額（對照）", expanded=False):
+    st.markdown(
+        f'<div class="rd-picks-col">{model_html}</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption("依模型場內勝率份額；標籤同融合：爭勝／位置（去重）。")
+
+with st.expander("AI 馬評 · 份額（對照）", expanded=False):
+    st.markdown(
+        f'<div class="rd-picks-col ai-col">{ai_html}</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption("依 AI 評價×信心場內份額；信心不足可不推。")
 
 st.caption(f"全部 {n_runners} 匹 · 按模型勝率排序")
 
