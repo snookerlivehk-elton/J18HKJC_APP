@@ -347,22 +347,6 @@ fused_share_by_hno = {
 }
 
 
-def _model_pick_rows(df_slice, tag_prefix: str) -> str:
-    parts = []
-    for i, (_, r) in enumerate(df_slice.iterrows(), start=1):
-        hno = int(r["馬號"])
-        name = r["馬名"]
-        prob = float(r["模型勝率%"]) if pd.notna(r.get("模型勝率%")) else 0.0
-        parts.append(
-            f'<div class="rd-pick-row">'
-            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
-            f'<span class="nm">{hno} {name}</span></div>'
-            f'<div class="right">{prob:.1f}%</div>'
-            f"</div>"
-        )
-    return "".join(parts) if parts else '<div class="rd-pick-empty">—</div>'
-
-
 def _fmt_ai_display(share_pct) -> str:
     """推介列：場內 AI 份額%（瓜分 100%）。"""
     if share_pct is None:
@@ -456,26 +440,6 @@ def _model_deduped_html(win_n: int, pick_n: int) -> str:
         pct_key="model_pct",
         pct_fmt="{:.1f}%",
     )
-
-
-def _ai_pick_rows_legacy(picks: list, tag_prefix: str) -> str:
-    if not picks:
-        if ai_picks.get("skipped_low_confidence"):
-            return f'<div class="rd-pick-empty">{ai_picks.get("message") or "信心不足，本場不推"}</div>'
-        return '<div class="rd-pick-empty">尚無 AI 評價</div>'
-    parts = []
-    for i, r in enumerate(picks, start=1):
-        hno = r.get("horse_no")
-        name = r.get("horse_name") or ""
-        right = _fmt_ai_display(r.get("ai_share_pct"))
-        parts.append(
-            f'<div class="rd-pick-row">'
-            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
-            f'<span class="nm">{hno} {name}</span></div>'
-            f'<div class="right">{right}</div>'
-            f"</div>"
-        )
-    return "".join(parts)
 
 
 fuse_empty = "尚無融合推介"
