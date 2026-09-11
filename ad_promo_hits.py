@@ -1,7 +1,7 @@
 """
 廣告推介賽後命中（宣傳素材篩選）。
 
-賽前：快照鎖定融合推介列（最多 AD_OUTPUT_PICK_MAX＝4）為 ad_pick_rank。
+賽前：快照鎖定綜合推介列（最多 AD_OUTPUT_PICK_MAX＝4）為 ad_pick_rank。
 賽後：回填名次＋獨贏賠率後，依四項原則標記可作宣傳的場次。
 
 1) WIN_ODDS7  — 推介頭兩位命中獨贏，且冠軍最終獨贏賠率 ≥ 7
@@ -147,7 +147,7 @@ def evaluate_ad_race_hits(
 
 
 def attach_ad_pick_ranks_to_snapshot_rows(rows: List[dict]) -> None:
-    """就地寫入 ad_pick_rank（融合推介列，最多 4；非推介為 None）。"""
+    """就地寫入 ad_pick_rank（綜合推介列，最多 4；非推介為 None）。"""
     from collections import defaultdict
 
     from form_ai_picks import build_fused_picks

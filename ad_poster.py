@@ -2,10 +2,10 @@
 廣告輸出模組：依公司原海報風格生成全賽日推介圖。
 
 每次產出（固定檔名，下次覆蓋）：
-  - ad_output/fused.png  全賽日 · 模型×AI 融合推介（社交主視覺，最多 4 匹／場）
-  - ad_output/model.png  全賽日 · 模型推介（對照）
-  - ad_output/ai.png     全賽日 · AI 馬評推介（對照）
-  - ad_output/copy.json  宣傳文案
+  - ad_output/fused.png  全賽日 · 模型×AI 綜合推介（社交主視覺，最多 4 匹／場）
+  - ad_output/copy.json  宣傳文案（僅綜合推介）
+
+內部仍保留 model／ai 渲染路徑供對照測試；正式產出只寫綜合軌。
 
 版式：公司空白模版（header 固定 + 表身中段垂直拉伸 + footer 固定）。
 只疊加日期條、場次號、揀馬（馬號＋馬名，最多 4 匹）；不含勝率。
@@ -48,6 +48,14 @@ FONT_CANDIDATES = [
 FUSED_FILE = "fused.png"
 MODEL_FILE = "model.png"
 AI_FILE = "ai.png"
+# 對外顯示名稱（內部 track key 仍為 fused）
+TRACK_DISPLAY = {
+    "fused": "綜合",
+    "model": "模型",
+    "ai": "AI 馬評",
+}
+PRIMARY_TRACK = "fused"
+PRIMARY_TRACK_LABEL = TRACK_DISPLAY[PRIMARY_TRACK]  # 綜合
 COPY_FILE = "copy.json"
 
 # 空白模版量測（blank_blue.jpg = 3625×4096；表身中段可垂直拉伸）
@@ -498,9 +506,9 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
     title = f"第{rn}場" if rn is not None else payload.race_id
     picks = _limit_picks(_picks_for_track(payload, track))
     if track == "fused":
-        headline = f"【{BRAND_NAME} 融合推介】{date_s} {course} {title}"
-        line = "融合推介："
-        empty = "本場暫無融合推介。"
+        headline = f"【{BRAND_NAME} 綜合推介】{date_s} {course} {title}"
+        line = "綜合推介："
+        empty = "本場暫無綜合推介。"
     elif track == "model":
         headline = f"【{BRAND_NAME} 模型推介】{date_s} {course} {title}"
         line = "模型推介："
@@ -536,14 +544,14 @@ def generate_meeting_copy(payloads: Sequence[RaceAdPayload], track: str) -> Dict
     date_s = payloads[0].racing_date
     course = payloads[0].course
     if track == "fused":
-        headline = f"【{BRAND_NAME} 融合推介】{date_s} {course} 全賽日"
-        label = "融合"
+        headline = f"【{BRAND_NAME} 綜合推介】{date_s} {course} 全賽日"
+        label = TRACK_DISPLAY["fused"]
     elif track == "model":
         headline = f"【{BRAND_NAME} 模型推介】{date_s} {course} 全賽日"
-        label = "模型"
+        label = TRACK_DISPLAY["model"]
     else:
         headline = f"【{BRAND_NAME} AI 馬評】{date_s} {course} 全賽日"
-        label = "AI 馬評"
+        label = TRACK_DISPLAY["ai"]
     lines = []
     for p in payloads:
         rn = p.race_num if p.race_num is not None else "?"
@@ -910,6 +918,79 @@ def latest_paths(output_root: Optional[Path] = None) -> Dict[str, Path]:
     }
 
 
+def _write_primary_meeting_outputs(
+    payloads: Sequence[RaceAdPayload],
+    *,
+    batch_id: str,
+    racing_date: str,
+    course: str,
+    output_root: Path,
+    errors: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    """
+    正式產出：只寫綜合推介 fused.png + copy.json（含 fused_copy）。
+    copy.json 仍保留各場 model／ai picks 供社交文案候選池使用。
+    """
+    err_list = list(errors or [])
+    out_root = Path(output_root)
+    out_root.mkdir(parents=True, exist_ok=True)
+    theme = random.choice(THEMES)
+    paths = latest_paths(out_root)
+    fused_meta = render_meeting_poster(
+        payloads, track=PRIMARY_TRACK, out_path=paths["fused"], theme=theme
+    )
+    fused_copy = generate_meeting_copy(payloads, PRIMARY_TRACK)
+    manifest = {
+        "meeting": {
+            "batch_id": batch_id,
+            "racing_date": racing_date,
+            "course": course,
+            "n_races": len(payloads),
+            "theme": theme,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "primary_track": PRIMARY_TRACK,
+            "primary_track_label": PRIMARY_TRACK_LABEL,
+            "fused_file": FUSED_FILE,
+            "max_kb": _max_bytes() // 1024,
+            "fused_bytes": fused_meta.get("bytes"),
+        },
+        "fused_copy": fused_copy.get("full"),
+        "races": [
+            {
+                "race_id": p.race_id,
+                "race_no": p.race_num,
+                "race_name": p.race_name,
+                "distance": p.distance_m,
+                "fused_picks": [asdict(x) for x in p.fused_picks],
+                "model_picks": [asdict(x) for x in p.model_picks],
+                "ai_picks": [asdict(x) for x in p.ai_picks],
+                "ai_skipped": p.ai_skipped,
+                "fused_fallback_model_only": p.fused_fallback_model_only,
+            }
+            for p in payloads
+        ],
+    }
+    paths["copy"].write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return {
+        "ok": len(err_list) == 0,
+        "batch_id": batch_id,
+        "n_races": len(payloads),
+        "races_written": len(payloads),
+        "files_written": 2,
+        "theme": theme,
+        "errors": err_list,
+        "output_dir": str(out_root),
+        "fused_file": str(paths["fused"]),
+        "copy_json": str(paths["copy"]),
+        "fused_bytes": fused_meta.get("bytes"),
+        "fused_meta": fused_meta,
+        "primary_track": PRIMARY_TRACK,
+        "primary_track_label": PRIMARY_TRACK_LABEL,
+    }
+
+
 def generate_ads_for_meeting_predictions(
     *,
     batch_id: str,
@@ -919,7 +1000,7 @@ def generate_ads_for_meeting_predictions(
     course: str = "",
 ) -> Dict[str, Any]:
     """
-    全賽日 → fused.png（主視覺）+ model.png / ai.png（對照），寫入 output_root 並覆蓋舊檔。
+    全賽日 → fused.png（綜合推介主視覺）＋ copy.json，寫入 output_root 並覆蓋舊檔。
     空白模版中段按場數拉伸；表內只顯示「馬號 馬名」（最多 4 匹），不含勝率。
     """
     out_root = Path(output_root) if output_root else default_output_dir()
@@ -956,78 +1037,14 @@ def generate_ads_for_meeting_predictions(
             "errors": errors,
         }
 
-    theme = random.choice(THEMES)
-    paths = latest_paths(out_root)
-    fused_meta = render_meeting_poster(
-        payloads, track="fused", out_path=paths["fused"], theme=theme
+    return _write_primary_meeting_outputs(
+        payloads,
+        batch_id=batch_id,
+        racing_date=racing_date,
+        course=course,
+        output_root=out_root,
+        errors=errors,
     )
-    model_meta = render_meeting_poster(
-        payloads, track="model", out_path=paths["model"], theme=theme
-    )
-    ai_meta = render_meeting_poster(
-        payloads, track="ai", out_path=paths["ai"], theme=theme
-    )
-
-    fused_copy = generate_meeting_copy(payloads, "fused")
-    model_copy = generate_meeting_copy(payloads, "model")
-    ai_copy = generate_meeting_copy(payloads, "ai")
-    manifest = {
-        "meeting": {
-            "batch_id": batch_id,
-            "racing_date": racing_date,
-            "course": course,
-            "n_races": len(payloads),
-            "theme": theme,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "primary_track": "fused",
-            "fused_file": FUSED_FILE,
-            "model_file": MODEL_FILE,
-            "ai_file": AI_FILE,
-            "max_kb": _max_bytes() // 1024,
-            "fused_bytes": fused_meta.get("bytes"),
-            "model_bytes": model_meta.get("bytes"),
-            "ai_bytes": ai_meta.get("bytes"),
-        },
-        "fused_copy": fused_copy.get("full"),
-        "model_copy": model_copy.get("full"),
-        "ai_copy": ai_copy.get("full"),
-        "races": [
-            {
-                "race_id": p.race_id,
-                "race_no": p.race_num,
-                "race_name": p.race_name,
-                "distance": p.distance_m,
-                "fused_picks": [asdict(x) for x in p.fused_picks],
-                "model_picks": [asdict(x) for x in p.model_picks],
-                "ai_picks": [asdict(x) for x in p.ai_picks],
-                "ai_skipped": p.ai_skipped,
-                "fused_fallback_model_only": p.fused_fallback_model_only,
-            }
-            for p in payloads
-        ],
-    }
-    paths["copy"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    return {
-        "ok": len(errors) == 0,
-        "batch_id": batch_id,
-        "n_races": len(payloads),
-        "races_written": len(payloads),
-        "files_written": 4,
-        "theme": theme,
-        "errors": errors,
-        "output_dir": str(out_root),
-        "fused_file": str(paths["fused"]),
-        "model_file": str(paths["model"]),
-        "ai_file": str(paths["ai"]),
-        "copy_json": str(paths["copy"]),
-        "fused_bytes": fused_meta.get("bytes"),
-        "model_bytes": model_meta.get("bytes"),
-        "ai_bytes": ai_meta.get("bytes"),
-        "fused_meta": fused_meta,
-        "model_meta": model_meta,
-        "ai_meta": ai_meta,
-    }
 
 
 def generate_ads_from_snapshot_batch(
@@ -1110,87 +1127,22 @@ def generate_ads_from_snapshot_batch(
     if not payloads:
         return {"ok": False, "error": "無有效場次", "batch_id": batch_id, "errors": errors}
 
-    theme = random.choice(THEMES)
     out_root = Path(output_root) if output_root else default_output_dir()
-    out_root.mkdir(parents=True, exist_ok=True)
-    paths = latest_paths(out_root)
-    fused_meta = render_meeting_poster(
-        payloads, track="fused", out_path=paths["fused"], theme=theme
+    return _write_primary_meeting_outputs(
+        payloads,
+        batch_id=batch_id,
+        racing_date=racing_date,
+        course=course,
+        output_root=out_root,
+        errors=errors,
     )
-    model_meta = render_meeting_poster(
-        payloads, track="model", out_path=paths["model"], theme=theme
-    )
-    ai_meta = render_meeting_poster(
-        payloads, track="ai", out_path=paths["ai"], theme=theme
-    )
-    fused_copy = generate_meeting_copy(payloads, "fused")
-    model_copy = generate_meeting_copy(payloads, "model")
-    ai_copy = generate_meeting_copy(payloads, "ai")
-    manifest = {
-        "meeting": {
-            "batch_id": batch_id,
-            "racing_date": racing_date,
-            "course": course,
-            "n_races": len(payloads),
-            "theme": theme,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "primary_track": "fused",
-            "fused_file": FUSED_FILE,
-            "model_file": MODEL_FILE,
-            "ai_file": AI_FILE,
-            "max_kb": _max_bytes() // 1024,
-            "fused_bytes": fused_meta.get("bytes"),
-            "model_bytes": model_meta.get("bytes"),
-            "ai_bytes": ai_meta.get("bytes"),
-        },
-        "fused_copy": fused_copy.get("full"),
-        "model_copy": model_copy.get("full"),
-        "ai_copy": ai_copy.get("full"),
-        "races": [
-            {
-                "race_id": p.race_id,
-                "race_no": p.race_num,
-                "race_name": p.race_name,
-                "distance": p.distance_m,
-                "fused_picks": [asdict(x) for x in p.fused_picks],
-                "model_picks": [asdict(x) for x in p.model_picks],
-                "ai_picks": [asdict(x) for x in p.ai_picks],
-                "ai_skipped": p.ai_skipped,
-                "fused_fallback_model_only": p.fused_fallback_model_only,
-            }
-            for p in payloads
-        ],
-    }
-    paths["copy"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {
-        "ok": len(errors) == 0,
-        "batch_id": batch_id,
-        "n_races": len(payloads),
-        "races_written": len(payloads),
-        "files_written": 4,
-        "theme": theme,
-        "errors": errors,
-        "output_dir": str(out_root),
-        "fused_file": str(paths["fused"]),
-        "model_file": str(paths["model"]),
-        "ai_file": str(paths["ai"]),
-        "copy_json": str(paths["copy"]),
-        "fused_bytes": fused_meta.get("bytes"),
-        "model_bytes": model_meta.get("bytes"),
-        "ai_bytes": ai_meta.get("bytes"),
-    }
 
 
 def list_ad_batches(output_root: Optional[Path] = None) -> List[str]:
     """相容舊 UI：若根目錄有最新海報則回傳 ['latest']。"""
     root = Path(output_root) if output_root else default_output_dir()
     paths = latest_paths(root)
-    if (
-        paths["fused"].is_file()
-        or paths["model"].is_file()
-        or paths["ai"].is_file()
-        or paths["copy"].is_file()
-    ):
+    if paths["fused"].is_file() or paths["copy"].is_file():
         return ["latest"]
     return []
 
@@ -1226,9 +1178,8 @@ def list_batch_images(batch_dir: Path) -> List[Path]:
         root = root.parent
     paths = latest_paths(root)
     out = []
-    for key in ("fused", "model", "ai"):
-        if paths[key].is_file():
-            out.append(paths[key])
+    if paths["fused"].is_file():
+        out.append(paths["fused"])
     return out
 
 
@@ -1253,7 +1204,7 @@ def zip_batch_bytes(batch_dir: Path) -> bytes:
         root = root.parent
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for name in (FUSED_FILE, MODEL_FILE, AI_FILE, COPY_FILE, SOCIAL_COPY_FILE):
+        for name in (FUSED_FILE, COPY_FILE, SOCIAL_COPY_FILE):
             p = root / name
             if p.is_file():
                 zf.write(p, arcname=p.name)

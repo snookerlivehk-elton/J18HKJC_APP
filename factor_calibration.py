@@ -1,12 +1,12 @@
 """
-賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率／AI／融合命中統計。
+賽前預測快照 → 賽後 J18 賽果結算 → 各因子／總分／勝率／AI／綜合命中統計。
 
 流程：
   1. snapshot_meeting(racing_date, course)  — 賽前寫入 prediction_snapshots
-     （含 ai_*／fused_share／ad_pick_rank；AI／融合不混入模型權重）
+     （含 ai_*／fused_share／ad_pick_rank；AI／綜合不混入模型權重）
   2. settle_pending() — 用 runners 回填 finish_order_num＋settle_win_odds
   3. evaluate_settled() — 各訊號 WIN／PLA／WQ／T3／T4
-  4. evaluate_ad_promo_hits() — 廣告融合推介四項宣傳命中（高賠／T3／T4）
+  4. evaluate_ad_promo_hits() — 廣告綜合推介四項宣傳命中（高賠／T3／T4）
 
 命中規則（每場、每訊號）：
   - 推介列：該訊號分數 → 場內份額 → select_picks_by_share（與賽日推介一致）
@@ -55,8 +55,8 @@ SIGNAL_DEFS = [
     ("模型勝率", "model_win_prob", None),
     # 獨立軌道：Form AI 馬評（評價×信心），不混入模型權重
     ("AI評價×信心", "ai_combo", None),
-    # 第三軌：模型×AI 融合推介（社交／廣告用；不寫入因子總分）
-    ("融合推介", "fused_share", None),
+    # 第三軌：模型×AI 綜合推介（社交／廣告用；不寫入因子總分）
+    ("綜合推介", "fused_share", None),
 ]
 
 
@@ -1112,7 +1112,7 @@ class FactorCalibration:
         only_settled: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
         """
-        廣告融合推介賽後宣傳命中。
+        廣告綜合推介賽後宣傳命中。
 
         Returns
         -------
@@ -1293,7 +1293,7 @@ class FactorCalibration:
             "n_promo_races": counts["any_promo"],
             "ad_pick_max": ad_pick_max(),
             "note": (
-                "基於賽前鎖定的廣告融合推介（最多 "
+                "基於賽前鎖定的廣告綜合推介（最多 "
                 f"{ad_pick_max()} 匹）× 賽後名次／獨贏賠率。"
             ),
         }

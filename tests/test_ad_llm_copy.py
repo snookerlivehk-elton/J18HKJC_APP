@@ -97,7 +97,7 @@ def test_build_system_prompt_uses_hk_and_tone():
     assert "香港" in prompt
     assert "國語" in prompt
     assert "高互動型" in prompt
-    assert "融合推介" in prompt
+    assert "綜合推介" in prompt
     assert str(COMMENT_MAX_CHARS) in prompt
     assert "{{" not in prompt
 
@@ -211,7 +211,7 @@ def test_fallback_prefers_fused_pool():
     assert len(rows) == 3
     assert rows[0]["race_id"] == "R1"
     assert rows[0]["horse_no"] == 1
-    assert "融合" in rows[0]["basis"]
+    assert "綜合" in rows[0]["basis"]
     assert len(rows[0]["comment"]) <= COMMENT_MAX_CHARS
     assert {r["race_id"] for r in rows} <= {"R1", "R2", "R3"}
 

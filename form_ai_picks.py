@@ -198,7 +198,7 @@ def build_fused_picks(
     consensus_bonus: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
-    第三軌：模型份額 × AI 份額加權融合（不寫入因子總分）。
+    第三軌：模型份額 × AI 份額加權綜合（不寫入因子總分）。
 
     P_fused = α·P_model + (1−α)·P_AI
     AI 整場不推／無 combo → 退回純模型。
@@ -276,7 +276,7 @@ def build_fused_picks(
 
     if not ai_ok:
         fused = list(m_shares)
-        empty_msg = ai_pack.get("message") or "AI 不可用，融合退回純模型"
+        empty_msg = ai_pack.get("message") or "AI 不可用，綜合退回純模型"
         fallback = True
         a_eff = 1.0
     else:
