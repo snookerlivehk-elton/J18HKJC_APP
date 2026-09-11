@@ -1118,6 +1118,22 @@ def _write_primary_meeting_outputs(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    # 歸檔海報「生成資料」only（不存 PNG）；可供翻查／之後重產
+    copy_archive: Dict[str, Any] = {}
+    try:
+        from ad_copy_jobs import archive_copy_payload
+
+        copy_archive = archive_copy_payload(
+            out_root,
+            racing_date=str(racing_date or ""),
+            course=str(course or ""),
+            copy_data=manifest,
+            batch_id=str(batch_id or ""),
+        )
+    except Exception as exc:
+        print(f"[ad_poster] copy archive failed: {exc}")
+        copy_archive = {"ok": False, "error": str(exc)}
+
     # 統計／海報完成後：產出廣告包 JSON，並 webhook 通知外部助手
     ad_pkg: Dict[str, Any] = {}
     try:
@@ -1144,6 +1160,7 @@ def _write_primary_meeting_outputs(
         "primary_track": PRIMARY_TRACK,
         "primary_track_label": PRIMARY_TRACK_LABEL,
         "ad_package": ad_pkg,
+        "copy_archive": copy_archive,
     }
 
 

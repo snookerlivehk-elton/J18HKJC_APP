@@ -1227,6 +1227,27 @@ class FactorCalibration:
                 f"{int(r.ad_pick_rank)}:{int(r.horse_no)} {r.horse_name or ''}".strip()
                 for r in picks.itertuples()
             ]
+            picks_detail = []
+            for r in picks.itertuples():
+                finish_raw = getattr(r, "finish_order_num", None)
+                odds_raw = getattr(r, "settle_win_odds", None)
+                try:
+                    finish_v = int(finish_raw) if finish_raw is not None and not pd.isna(finish_raw) else None
+                except (TypeError, ValueError):
+                    finish_v = None
+                try:
+                    odds_v = float(odds_raw) if odds_raw is not None and not pd.isna(odds_raw) else None
+                except (TypeError, ValueError):
+                    odds_v = None
+                picks_detail.append(
+                    {
+                        "rank": int(r.ad_pick_rank),
+                        "no": int(r.horse_no),
+                        "name": str(r.horse_name or "").strip(),
+                        "finish": finish_v,
+                        "win_odds": odds_v,
+                    }
+                )
             race_rows.append(
                 {
                     "賽日": batch_dates.get(str(bid), ""),
@@ -1235,6 +1256,7 @@ class FactorCalibration:
                     "race_id": rid,
                     "推介數": int(len(picks)),
                     "推介": " / ".join(pick_labels),
+                    "推介明細": picks_detail,
                     "WIN≥7": hits["win_odds7"],
                     "冠亞+賠>10": hits["qin_odds10"],
                     "T3覆蓋": hits["t3_cover"],

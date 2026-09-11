@@ -43,7 +43,7 @@ def archive_meeting_dir(
 def archive_latest_path(
     output_root: Path, racing_date: str, course: str, kind: str
 ) -> Path:
-    """kind: social | post_race | promo_hits"""
+    """kind: copy | social | post_race | promo_hits（只存 JSON，不存海報 PNG）"""
     return archive_meeting_dir(output_root, racing_date, course) / f"{kind}_latest.json"
 
 
@@ -259,6 +259,9 @@ def promo_hits_to_dict(
     races: List[Dict[str, Any]] = []
     if race_df is not None and not getattr(race_df, "empty", True):
         for row in race_df.to_dict(orient="records"):
+            detail = row.get("推介明細")
+            if not isinstance(detail, list):
+                detail = []
             races.append(
                 {
                     "racing_date": str(row.get("賽日") or racing_date)[:10],
@@ -267,6 +270,7 @@ def promo_hits_to_dict(
                     "race_id": str(row.get("race_id") or ""),
                     "n_picks": int(row.get("推介數") or 0),
                     "picks": str(row.get("推介") or ""),
+                    "picks_detail": detail,
                     "win_odds7": bool(row.get("WIN≥7")),
                     "qin_odds10": bool(row.get("冠亞+賠>10")),
                     "t3_cover": bool(row.get("T3覆蓋")),
@@ -476,27 +480,83 @@ def _race_no_from_id(race_id: str) -> Optional[int]:
     return None
 
 
+
+def _primary_horse_from_race(race: Dict[str, Any]) -> str:
+    detail = race.get("picks_detail") if isinstance(race.get("picks_detail"), list) else []
+    for p in detail:
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "").strip()
+        no = p.get("no")
+        if name:
+            return f"{no} {name}".strip() if no is not None else name
+    picks = str(race.get("picks") or "")
+    return picks.split("/")[0].strip() if picks else ""
+
+
+def _compact_promo_race(race: Dict[str, Any]) -> Dict[str, Any]:
+    """結構化場次資料，供 LLM／fallback 文案使用。"""
+    detail = []
+    for p in list(race.get("picks_detail") or []):
+        if not isinstance(p, dict):
+            continue
+        detail.append(
+            {
+                "rank": p.get("rank"),
+                "no": p.get("no"),
+                "name": str(p.get("name") or "").strip(),
+                "finish": p.get("finish"),
+                "win_odds": p.get("win_odds"),
+            }
+        )
+    return {
+        "race_id": race.get("race_id"),
+        "race_no": _race_no_from_id(str(race.get("race_id") or "")),
+        "picks": race.get("picks"),
+        "picks_detail": detail,
+        "rules": _promo_rule_labels(race),
+    }
+
 def build_post_race_fallback(promo: Dict[str, Any], *, limit: int = 3) -> Dict[str, Any]:
     promo_races = list(promo.get("promo_races") or [])
     featured: List[Dict[str, Any]] = []
     for r in promo_races[:limit]:
-        rules = _promo_rule_labels(r)
-        race_no = _race_no_from_id(str(r.get("race_id") or ""))
-        picks = str(r.get("picks") or "")
-        first_horse = picks.split("/")[0].strip() if picks else ""
+        compact = _compact_promo_race(r)
+        rules = list(compact.get("rules") or [])
+        detail = list(compact.get("picks_detail") or [])
+        bits = []
+        for p in detail[:4]:
+            name = str(p.get("name") or "").strip() or f"#{p.get('no')}"
+            fin = p.get("finish")
+            odds = p.get("win_odds")
+            seg = name
+            if fin is not None:
+                seg += f" 跑第{int(fin)}"
+            if odds is not None:
+                try:
+                    seg += f" @{float(odds):g}"
+                except (TypeError, ValueError):
+                    pass
+            bits.append(seg)
+        detail_txt = "；".join(bits) if bits else str(r.get("picks") or "")
+        if rules and detail_txt:
+            comment = f"推介命中「{'／'.join(rules)}」：{detail_txt}"
+        elif rules:
+            comment = f"推介命中「{'／'.join(rules)}」，值得作為賽後宣傳素材。"
+        elif detail_txt:
+            comment = f"推介場次表現達宣傳門檻：{detail_txt}"
+        else:
+            comment = "推介場次表現達宣傳門檻。"
         featured.append(
             {
-                "race_no": race_no,
+                "race_no": compact.get("race_no"),
                 "race_id": r.get("race_id"),
-                "horse_name": first_horse,
-                "picks": picks,
+                "horse_name": _primary_horse_from_race(r),
+                "picks": str(r.get("picks") or ""),
+                "picks_detail": detail,
                 "rules": rules,
-                "comment": (
-                    f"推介命中「{'／'.join(rules)}」，值得作為賽後宣傳素材。"
-                    if rules
-                    else "推介場次表現達宣傳門檻。"
-                ),
-                "basis": "promo_hits",
+                "comment": comment[:60],
+                "basis": "promo_hits+picks_detail",
             }
         )
     meeting = promo.get("meeting") or {}
@@ -542,21 +602,12 @@ def generate_post_race_copy(
         out["source"] = "fallback:no_api_key"
         return out
 
-    compact = []
-    for r in promo_races[:8]:
-        compact.append(
-            {
-                "race_id": r.get("race_id"),
-                "race_no": _race_no_from_id(str(r.get("race_id") or "")),
-                "picks": r.get("picks"),
-                "rules": _promo_rule_labels(r),
-            }
-        )
+    compact = [_compact_promo_race(r) for r in promo_races[:8]]
 
     system = (
         "你是香港賽馬社交媒體文案編輯，負責寫「賽後回顧」貼文。\n"
-        "根據可宣傳命中場次，挑選最多 3 場寫短評。\n"
-        "必須用香港繁體／港式社交文；不可誇大成穩膽必中；不可虛構名次。\n"
+        "根據可宣傳命中場次（含每匹推介馬嘅名次 finish、獨贏賠率 win_odds、馬名），挑選最多 3 場寫短評。\n"
+        "必須用香港繁體／港式社交文；必須忠於提供嘅名次／賠率，不可虛構；不可誇大成穩膽必中。\n"
         "嚴格輸出 JSON：\n"
         "{\n"
         '  "title": "...",\n'
@@ -580,7 +631,7 @@ def generate_post_race_copy(
             "meeting": meeting,
             "promo_races": compact,
             "tone": tone_key,
-            "instruction": "挑選最多 3 場；comment 忠於命中規則，港式繁體。",
+            "instruction": "挑選最多 3 場；comment 必須引用 picks_detail 的名次／賠率／馬名，忠於命中規則，港式繁體。",
         },
         ensure_ascii=False,
     )
@@ -760,6 +811,137 @@ def run_auto_post_race_copy(
         "post_race_copy": str(path),
         "archive": archived,
     }
+
+
+
+ARCHIVE_KINDS = ("copy", "social", "promo_hits", "post_race")
+
+
+def archive_copy_payload(
+    output_root: Path,
+    *,
+    racing_date: str,
+    course: str,
+    copy_data: Dict[str, Any],
+    batch_id: str = "",
+) -> Dict[str, str]:
+    """
+    歸檔海報生成資料（copy.json 內容），不存 PNG。
+    之後可用同一份 JSON 重產海報。
+    """
+    d, c = str(racing_date)[:10], str(course or "").upper()
+    meeting = dict((copy_data or {}).get("meeting") or {})
+    if batch_id:
+        meeting["batch_id"] = batch_id
+    meeting.setdefault("racing_date", d)
+    meeting.setdefault("course", c)
+    meeting["kind"] = "copy"
+    meeting["poster_archived"] = False
+    payload = {
+        "meeting": meeting,
+        "fused_copy": (copy_data or {}).get("fused_copy"),
+        "races": list((copy_data or {}).get("races") or []),
+        "assets": {
+            "poster_file": "fused.png",
+            "poster_archived": False,
+            "note": "archive 只保存生成資料；海報需由 copy 重產",
+        },
+        "archived_at": _utcnow_iso(),
+    }
+    return write_archive_version(output_root, d, c, "copy", payload)
+
+
+def list_archive_meetings(output_root: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """掃描 archive/ 下各賽日，回傳可瀏覽摘要（唔含 PNG）。"""
+    root = Path(output_root) if output_root else default_output_dir()
+    base = root / "archive"
+    if not base.is_dir():
+        return []
+    rows: List[Dict[str, Any]] = []
+    for meeting_dir in sorted(base.iterdir(), reverse=True):
+        if not meeting_dir.is_dir():
+            continue
+        name = meeting_dir.name  # YYYY-MM-DD_COURSE
+        if "_" not in name:
+            continue
+        d, c = name.rsplit("_", 1)
+        kinds: Dict[str, Any] = {}
+        for kind in ARCHIVE_KINDS:
+            latest = load_archive_latest(root, d, c, kind)
+            if not latest:
+                continue
+            meeting = latest.get("meeting") if isinstance(latest.get("meeting"), dict) else {}
+            kinds[kind] = {
+                "batch_id": _meeting_batch_id(latest),
+                "generated_at": meeting.get("generated_at")
+                or meeting.get("archived_at")
+                or latest.get("archived_at")
+                or "",
+                "n_promo_races": latest.get("n_promo_races"),
+                "n_featured": len(list(latest.get("featured") or [])),
+                "n_races": len(list(latest.get("races") or [])),
+                "path": str(archive_latest_path(root, d, c, kind)),
+                "poster_archived": bool(
+                    ((latest.get("assets") or {}) if isinstance(latest.get("assets"), dict) else {}).get(
+                        "poster_archived"
+                    )
+                ),
+            }
+        if not kinds:
+            continue
+        rows.append(
+            {
+                "racing_date": d,
+                "course": c,
+                "label": f"{d} {c}",
+                "kinds": kinds,
+                "dir": str(meeting_dir),
+            }
+        )
+    return rows
+
+
+def redo_archive_job(
+    *,
+    kind: str,
+    racing_date: str,
+    course: str,
+    batch_id: str = "",
+    output_root: Optional[Path] = None,
+    tone: Optional[str] = None,
+) -> Dict[str, Any]:
+    """UI／CLI 強制重做某一類廣告產出（force=True）。"""
+    k = str(kind or "").strip()
+    d, c = str(racing_date)[:10], str(course or "").upper()
+    out_root = Path(output_root) if output_root else default_output_dir()
+    if k == "social":
+        return run_auto_social_copy(
+            racing_date=d, course=c, batch_id=batch_id or None,
+            output_root=out_root, tone=tone, force=True,
+        )
+    if k == "promo_hits":
+        bids = [batch_id] if batch_id else None
+        return run_auto_promo_hits(
+            racing_date=d, course=c, batch_ids=bids,
+            output_root=out_root, force=True,
+        )
+    if k == "post_race":
+        return run_auto_post_race_copy(
+            racing_date=d, course=c, batch_id=batch_id or None,
+            output_root=out_root, tone=tone, force=True,
+        )
+    if k == "cascade":
+        bids = [batch_id] if batch_id else None
+        return run_post_race_ad_cascade(
+            racing_date=d, course=c, batch_ids=bids,
+            output_root=out_root, force=True,
+        )
+    if k == "copy":
+        return {
+            "ok": False,
+            "error": "copy／海報請用「廣告輸出 → 手動重產」由快照重產；archive 只保存生成資料",
+        }
+    return {"ok": False, "error": f"unknown kind: {kind}"}
 
 
 def run_post_race_ad_cascade(

@@ -269,3 +269,74 @@ def test_run_auto_promo_hits_mocked(tmp_path: Path):
     assert r["ok"] is True
     assert r["n_promo_races"] == 1
     assert (tmp_path / "promo_hits.json").is_file()
+
+
+def test_picks_detail_enriches_post_race_and_archive(tmp_path: Path):
+    import pandas as pd
+    from ad_copy_jobs import (
+        archive_copy_payload,
+        build_post_race_fallback,
+        generate_post_race_copy,
+        list_archive_meetings,
+        load_archive_latest,
+        promo_hits_to_dict,
+        redo_archive_job,
+    )
+
+    race_df = pd.DataFrame(
+        [
+            {
+                "賽日": "2026-09-06",
+                "場地": "ST",
+                "batch_id": "b1",
+                "race_id": "20260906ST01",
+                "推介數": 2,
+                "推介": "1:3 飛馬 / 2:5 星河",
+                "推介明細": [
+                    {"rank": 1, "no": 3, "name": "飛馬", "finish": 1, "win_odds": 8.5},
+                    {"rank": 2, "no": 5, "name": "星河", "finish": 2, "win_odds": 11.0},
+                ],
+                "WIN≥7": True,
+                "冠亞+賠>10": True,
+                "T3覆蓋": False,
+                "T4覆蓋": False,
+                "可宣傳": True,
+            }
+        ]
+    )
+    promo = promo_hits_to_dict(
+        race_df,
+        None,
+        {"batch_ids": ["b1"], "n_promo_races": 1, "n_races_scored": 1},
+        racing_date="2026-09-06",
+        course="ST",
+    )
+    assert promo["promo_races"][0]["picks_detail"][0]["finish"] == 1
+    fb = build_post_race_fallback(promo)
+    assert "飛馬" in fb["featured"][0]["comment"]
+    assert "@8.5" in fb["featured"][0]["comment"]
+
+    writer = MagicMock()
+    writer.is_ready.return_value = False
+    out = generate_post_race_copy(promo, writer=writer)
+    assert "fallback" in str(out.get("source"))
+
+    archive_copy_payload(
+        tmp_path,
+        racing_date="2026-09-06",
+        course="ST",
+        copy_data={
+            "meeting": {"batch_id": "b1", "racing_date": "2026-09-06", "course": "ST"},
+            "fused_copy": "x",
+            "races": [{"race_no": 1}],
+        },
+        batch_id="b1",
+    )
+    latest = load_archive_latest(tmp_path, "2026-09-06", "ST", "copy")
+    assert latest["assets"]["poster_archived"] is False
+    assert list_archive_meetings(tmp_path)
+    assert not list(tmp_path.rglob("*.png"))
+    denied = redo_archive_job(
+        kind="copy", racing_date="2026-09-06", course="ST", output_root=tmp_path
+    )
+    assert denied.get("ok") is False

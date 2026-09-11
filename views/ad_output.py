@@ -20,6 +20,7 @@ from ad_llm_copy import (
     social_copy_path,
     tone_label,
 )
+from views.ad_archive_panel import render_ad_archive_panel
 from ad_poster import (
     PRIMARY_TRACK_LABEL,
     default_output_dir,
@@ -249,6 +250,9 @@ with tab_browse:
     copy_data = load_copy_json(out_root)
     st.divider()
     _render_social_copy(out_root, copy_data)
+
+    st.divider()
+    render_ad_archive_panel(output_root=out_root, key_prefix="ad_out_arch", show_pre_race=True, show_post_race=True)
 
 with tab_regen:
     st.markdown(

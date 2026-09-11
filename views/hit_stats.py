@@ -13,6 +13,7 @@ import pandas as pd
 from auth_utils import is_admin
 from factor_calibration import FactorCalibration, PLA_FINISH_MAX, SIGNAL_DEFS
 from ui_theme import inject_admin_css, inject_user_css, page_header
+from views.ad_archive_panel import render_ad_archive_panel
 
 if is_admin():
     inject_admin_css()
@@ -226,6 +227,10 @@ else:
     only_promo = st.checkbox("只顯示可宣傳場次", value=True, key="ad_promo_only")
     show_ad = ad_races[ad_races["可宣傳"] == True] if only_promo else ad_races  # noqa: E712
     st.dataframe(show_ad, use_container_width=True, hide_index=True, height=360)
+
+    st.divider()
+    render_ad_archive_panel(key_prefix="hit_arch", show_pre_race=False, show_post_race=True)
+
 
 if is_admin():
     st.divider()
