@@ -173,10 +173,27 @@ def _run_ad_regen(eng, job_id: str, batch_id: str) -> Dict[str, Any]:
         job_id,
         status="ok" if ok else "failed",
         detail=json.dumps(
-            {k: result.get(k) for k in ("ok", "races_written", "error", "fused_bytes", "model_bytes") if k in result or result.get(k)},
+            {
+                k: result.get(k)
+                for k in (
+                    "ok",
+                    "races_written",
+                    "error",
+                    "fused_bytes",
+                    "primary_track_label",
+                    "files_written",
+                )
+                if k in result or result.get(k)
+            },
             ensure_ascii=False,
         )[:1800],
-        progress={"phase": "done", "result": {k: result.get(k) for k in ("ok", "races_written", "error")}},
+        progress={
+            "phase": "done",
+            "result": {
+                k: result.get(k)
+                for k in ("ok", "races_written", "error", "primary_track_label")
+            },
+        },
         finished=True,
     )
     return result

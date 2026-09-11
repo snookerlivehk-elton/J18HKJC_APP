@@ -139,7 +139,7 @@ class ModelConfig:
     PICK_AI_MIN_CONFIDENCE = 0.30  # 場內最高信心低於此 → 不推 AI
     PICK_AI_MIN_SHARE = 0.06       # AI 單匹最低份額
 
-    # 模型×AI 融合推介（第三軌；不寫入因子總分）
+    # 模型×AI 綜合推介（第三軌；不寫入因子總分）
     # P_fused = α·P_model + (1−α)·P_AI；AI 整場不推時退回純模型
     FUSE_MODEL_ALPHA = 0.60
     FUSE_CONSENSUS_BONUS = 1.15  # 雙軌皆入推介列時份額加成，其後再正規化
@@ -149,7 +149,7 @@ class ModelConfig:
     AD_OUTPUT_DIR = ""  # 空＝專案 ad_output/；可設絕對路徑
     AD_OUTPUT_MAX_KB = 2048  # PNG 單張上限（公司原規格 2MB 以下）
     AD_OUTPUT_PICK_MAX = 4   # 海報欄位固定 4 匹（與公司原圖一致）
-    AD_OUTPUT_PRIMARY_TRACK = "fused"  # 社交主視覺：fused｜model｜ai
+    AD_OUTPUT_PRIMARY_TRACK = "fused"  # 社交主視覺：綜合推介（內部 key=fused）
 
     # 步速熱度／形勢劇本
     # heat 顯示用：同場 early_speed_z 最高前 N 名加總（僅供參考）

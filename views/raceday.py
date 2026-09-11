@@ -442,7 +442,7 @@ def _model_deduped_html(win_n: int, pick_n: int) -> str:
     )
 
 
-fuse_empty = "尚無融合推介"
+fuse_empty = "尚無綜合推介"
 if fused_picks.get("fallback_model_only"):
     fuse_empty = fused_picks.get("message") or "退回純模型"
 fuse_html = _deduped_pick_html(
@@ -491,11 +491,11 @@ meta_html = f"""
   <div class="rd-picks">
     <div class="rd-picks-main">
       <div class="rd-picks-col fuse-col">
-        <div class="col-title">融合推介{fuse_note}</div>
+        <div class="col-title">綜合推介{fuse_note}</div>
         {fuse_html}
       </div>
     </div>
-    <div class="note">主顯示＝模型×AI 融合（爭勝＋位置，位置不重複爭勝）。最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹｜本場 {n_runners} 匹｜爭勝 {fuse_win_n}｜位置 {fuse_pos_n}</div>
+    <div class="note">主顯示＝模型×AI 綜合（爭勝＋位置，位置不重複爭勝）。最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹｜本場 {n_runners} 匹｜爭勝 {fuse_win_n}｜位置 {fuse_pos_n}</div>
   </div>
 </div>
 """
@@ -508,7 +508,7 @@ with st.expander("模型 · 勝率份額（對照）", expanded=False):
         f'<div class="rd-picks-col">{model_html}</div>',
         unsafe_allow_html=True,
     )
-    st.caption("依模型場內勝率份額；標籤同融合：爭勝／位置（去重）。")
+    st.caption("依模型場內勝率份額；標籤同綜合：爭勝／位置（去重）。")
 
 with st.expander("AI 馬評 · 份額（對照）", expanded=False):
     st.markdown(

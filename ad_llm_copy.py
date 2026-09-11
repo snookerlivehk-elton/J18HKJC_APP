@@ -24,13 +24,22 @@ SOCIAL_COPY_FILE = "social_copy.json"
 # 精選評述字數上限（繁體字元）
 COMMENT_MAX_CHARS = 60
 
-# UI / API 用的語氣預設鍵值
+# UI / API 用的語氣預設鍵值（預設高互動型；選項順序以預設為先）
+TONE_HIGH_INTERACTION = "high_interaction"
 TONE_PROFESSIONAL = "professional"
 TONE_PASSIONATE = "passionate"
-TONE_HIGH_INTERACTION = "high_interaction"
 DEFAULT_TONE = TONE_HIGH_INTERACTION
 
 TONE_PRESETS: Dict[str, Dict[str, str]] = {
+    TONE_HIGH_INTERACTION: {
+        "label": "高互動型",
+        "hint": "像香港人日常 FB／IG 貼文：易讚、易留言、易分享；有問題句或叫人一齊傾。（預設）",
+        "style_block": """語氣：高互動型（預設）
+- 寫成香港人日常 FB／IG／Threads 貼文，易讚、易留言、易分享。
+- 標題最好帶提問、叫人留言或一齊睇（例如「今晚邊場先最有睇頭？」）。
+- comment 短而有鉤，可留半句俾人回覆，但仍要忠於近績。
+- 適量用香港口語助詞（啦／喎／囉／呀），唔好整篇口語到難讀。""",
+    },
     TONE_PROFESSIONAL: {
         "label": "專業型",
         "hint": "冷靜、事實導向，像資深馬評短評；少用感嘆，重點講走勢同理據。",
@@ -46,15 +55,6 @@ TONE_PRESETS: Dict[str, Dict[str, str]] = {
 - 有氣勢、帶期待，像賽前短片旁白，但唔好誇大成「必中」。
 - 標題可以有節奏感同感染力。
 - comment 可稍為有力，但仍要忠於近績事實。""",
-    },
-    TONE_HIGH_INTERACTION: {
-        "label": "高互動型",
-        "hint": "像香港人日常 FB／IG 貼文：易讚、易留言、易分享；有問題句或叫人一齊傾。",
-        "style_block": """語氣：高互動型（預設）
-- 寫成香港人日常 FB／IG／Threads 貼文，易讚、易留言、易分享。
-- 標題最好帶提問、叫人留言或一齊睇（例如「今晚邊場先最有睇頭？」）。
-- comment 短而有鉤，可留半句俾人回覆，但仍要忠於近績。
-- 適量用香港口語助詞（啦／喎／囉／呀），唔好整篇口語到難讀。""",
     },
 }
 
@@ -81,15 +81,15 @@ HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅貼文，唔好�
 
 
 DEFAULT_SOCIAL_SYSTEM_PROMPT = (
-    "你是香港賽馬社交媒體文案編輯。你會根據全賽日「融合推介」名單與官方賽績指引近績文字，\n"
+    "你是香港賽馬社交媒體文案編輯。你會根據全賽日「綜合推介」名單與官方賽績指引近績文字，\n"
     "挑選 3 場最值得宣傳的精選場次，每場只揀 1 匹馬作重點評述。\n"
     "\n"
     "你必須遵守：\n"
-    "1) 精選馬必須來自各場 candidates（以融合推介為主）；不可另選名單外的馬。\n"
+    "1) 精選馬必須來自各場 candidates（以綜合推介為主）；不可另選名單外的馬。\n"
     "2) comment 只能引用該馬的官方近績文字（form_text）事實，不可虛構，亦不要用勝率％湊字數。\n"
     "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
-    "5) 優先挑選：融合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
+    "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
     "6) hashtag 要適合香港賽馬與社交平台搜尋，8 至 15 個，避免重覆。\n"
     "7) " + HK_WRITING_RULES + "\n"
     "\n"
@@ -311,7 +311,7 @@ class AdSocialCopywriter:
                 if p.get("horse_no") is not None
             }
 
-            # 主池：融合；無融合時退回模型 → AI（與海報對齊）
+            # 主池：綜合；無綜合時退回模型 → AI（與海報對齊）
             primary = fused_picks or model_picks or ai_picks
             pool_source = (
                 "fused" if fused_picks else ("model" if model_picks else "ai")
@@ -392,7 +392,7 @@ class AdSocialCopywriter:
     def _score_candidate(
         self, cand: Dict[str, Any], sources: set[str]
     ) -> Tuple[int, int, int, float]:
-        """優先：融合池 → 雙軌共識 → 有近績 → 份額。"""
+        """優先：綜合池 → 雙軌共識 → 有近績 → 份額。"""
         in_fused = 1 if "fused" in sources or cand.get("pool") == "fused" else 0
         dual = 1 if ("model" in sources and "ai" in sources) else 0
         has_form = 1 if str(cand.get("form_text") or "").strip() else 0
@@ -405,7 +405,7 @@ class AdSocialCopywriter:
     def build_fallback_featured(
         self, copy_data: Dict[str, Any], *, limit: int = 3
     ) -> List[Dict[str, Any]]:
-        """當 LLM 失敗／不足 3 場時，用融合推介（退回模型／AI）+ 近績自動補齊。"""
+        """當 LLM 失敗／不足 3 場時，用綜合推介（退回模型／AI）+ 近績自動補齊。"""
         race_rows: List[Dict[str, Any]] = []
         for race in list((copy_data or {}).get("races") or []):
             race_id = str(race.get("race_id") or "").strip()
@@ -478,11 +478,11 @@ class AdSocialCopywriter:
             dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
                 int(best["horse_no"]), set()
             )
-            basis = "自動補齊：融合推介"
+            basis = "自動補齊：綜合推介"
             if pool_source != "fused":
-                basis = f"自動補齊：{pool_source}（無融合名單）"
+                basis = f"自動補齊：{pool_source}（無綜合名單）"
             elif dual:
-                basis = "自動補齊：融合推介（雙軌共識）"
+                basis = "自動補齊：綜合推介（雙軌共識）"
 
             race_rows.append(
                 {

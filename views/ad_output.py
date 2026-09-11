@@ -1,4 +1,4 @@
-"""廣告輸出 — 全賽日融合主海報 + 模型／AI 對照（固定檔名覆蓋）。"""
+"""廣告輸出 — 全賽日綜合推介海報（固定檔名覆蓋）。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,6 +21,7 @@ from ad_llm_copy import (
     tone_label,
 )
 from ad_poster import (
+    PRIMARY_TRACK_LABEL,
     default_output_dir,
     latest_paths,
     load_copy_json,
@@ -33,10 +34,7 @@ from factor_calibration import FactorCalibration
 def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
     """預覽＋下載（ZIP／單張）。可在瀏覽頁或重產成功後同頁使用。"""
     paths = latest_paths(out_root)
-    has_any = (
-        paths["fused"].is_file() or paths["model"].is_file() or paths["ai"].is_file()
-    )
-    if not has_any:
+    if not paths["fused"].is_file():
         st.warning("尚無海報。請先完成預測快照，或使用「手動重產」。")
         return
 
@@ -48,17 +46,12 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
             f"{meeting.get('n_races', '?')} 場 · batch `{meeting.get('batch_id', '')}`"
         )
         fb = meeting.get("fused_bytes")
-        mb = meeting.get("model_bytes")
-        ab = meeting.get("ai_bytes")
-        if fb or mb or ab:
-            st.caption(
-                f"檔案大小：融合 {int(fb or 0) // 1024} KB · "
-                f"模型 {int(mb or 0) // 1024} KB · AI {int(ab or 0) // 1024} KB"
-            )
+        if fb:
+            st.caption(f"檔案大小：{PRIMARY_TRACK_LABEL} {int(fb) // 1024} KB")
 
     try:
         st.download_button(
-            "⬇️ 下載 ZIP（fused + model + ai + copy）",
+            f"⬇️ 下載 ZIP（{PRIMARY_TRACK_LABEL} PNG + copy）",
             data=zip_batch_bytes(out_root),
             file_name="ad_output_latest.zip",
             mime="application/zip",
@@ -68,8 +61,7 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
     except Exception as e:
         st.caption(f"ZIP 失敗：{e}")
 
-    # 主視覺：融合
-    st.markdown("**融合推介 · 全賽日（社交主視覺）**")
+    st.markdown(f"**{PRIMARY_TRACK_LABEL}推介 · 全賽日（社交主視覺）**")
     p_fused = paths["fused"]
     if p_fused.is_file():
         try:
@@ -89,44 +81,12 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
                 key=f"dl_{key_prefix}_fused",
             )
     else:
-        st.warning("尚無融合海報（請重新產生快照／廣告）")
-
-    cols = st.columns(2)
-    for col, label, key in (
-        (cols[0], "模型 · 對照", "model"),
-        (cols[1], "AI 馬評 · 對照", "ai"),
-    ):
-        with col:
-            st.markdown(f"**{label}**")
-            p = paths[key]
-            if p.is_file():
-                try:
-                    st.image(
-                        make_preview_jpeg(p),
-                        caption=f"{p.name} · {p.stat().st_size // 1024} KB",
-                        use_container_width=True,
-                    )
-                except Exception as e:
-                    st.warning(f"預覽失敗：{e}")
-                with open(p, "rb") as f:
-                    st.download_button(
-                        f"⬇️ 下載 {p.name}",
-                        data=f.read(),
-                        file_name=p.name,
-                        mime="image/png",
-                        key=f"dl_{key_prefix}_{key}",
-                    )
-            else:
-                st.warning("尚無檔案")
+        st.warning(f"尚無{PRIMARY_TRACK_LABEL}海報（請重新產生快照／廣告）")
 
     if copy:
         with st.expander("宣傳文案", expanded=False):
-            st.markdown("**融合**")
+            st.markdown(f"**{PRIMARY_TRACK_LABEL}推介**")
             st.write(copy.get("fused_copy") or "")
-            st.markdown("**模型**")
-            st.write(copy.get("model_copy") or "")
-            st.markdown("**AI 馬評**")
-            st.write(copy.get("ai_copy") or "")
 
 
 def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
@@ -143,7 +103,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     elif n_cand <= 0:
         st.warning(
             "copy.json 未有推介場次資料，無法生成精選文案。"
-            "請先重新生成廣告輸出（需含模型／AI 推介）。"
+            f"請先重新生成廣告輸出（需含{PRIMARY_TRACK_LABEL}推介）。"
         )
     else:
         st.caption(f"可用推介場次：{n_cand} 場")
@@ -158,14 +118,14 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         format_func=lambda k: tone_labels[k],
         horizontal=True,
         key="ad_social_tone",
-        help="高互動型：像香港 FB／IG 貼文，易讚易留言；文筆固定港式，避免國語翻譯腔。",
+        help="預設高互動型：像香港 FB／IG 貼文，易讚易留言；文筆固定港式，避免國語翻譯腔。",
     )
     st.caption(TONE_PRESETS[normalize_tone(tone)]["hint"])
 
     default_prompt = (
         "寫成香港人日常 FB／IG 貼文口吻；"
         "標題帶提問或叫人留言；"
-        "優先挑選融合推介名單內、模型與 AI 都有支持的場次；"
+        f"優先挑選{PRIMARY_TRACK_LABEL}推介名單內、模型與 AI 都有支持的場次；"
         f"每匹馬評述不超過{COMMENT_MAX_CHARS}字；"
         "唔好用國語翻譯腔。"
     )
@@ -208,7 +168,10 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
 
     social_data = st.session_state.get("ad_social_result") or social_data
     if not social_data:
-        st.info("揀好語氣後按「生成 AI 精選評述」，系統會以香港貼文文筆挑選精選場次、產生標題、hashtags，並自動加上文末聲明。")
+        st.info(
+            "預設語氣為高互動型；按「生成 AI 精選評述」後，"
+            "系統會以香港貼文文筆挑選精選場次、產生標題、hashtags，並自動加上文末聲明。"
+        )
         return
     if social_data.get("error"):
         st.error(str(social_data.get("error")))
@@ -260,16 +223,14 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
 st.title("廣告輸出")
 st.caption(
     "每次預測快照成功後，系統把**全賽日**推介寫入海報（公司原圖風格）："
-    "**融合推介**（社交主視覺）＋模型／AI 對照。"
+    f"**{PRIMARY_TRACK_LABEL}推介**（社交主視覺）。"
     "每場最多 **4 匹**（只顯示馬號＋馬名，不含勝率）；"
     "藍／米色隨機；下次生成會**覆蓋**同一檔名；PNG ≤2MB。"
 )
 
 out_root = default_output_dir()
 paths = latest_paths(out_root)
-st.info(
-    f"輸出：`{paths['fused'].name}` / `{paths['model'].name}` / `{paths['ai'].name}` @ `{out_root}`"
-)
+st.info(f"輸出：`{paths['fused'].name}` @ `{out_root}`")
 try:
     from ad_poster import font_status, _max_bytes
 
@@ -290,7 +251,10 @@ with tab_browse:
     _render_social_copy(out_root, copy_data)
 
 with tab_regen:
-    st.markdown("選擇預測快照批次，依鎖分重產全賽日海報（覆蓋 `model.png` / `ai.png`）。")
+    st.markdown(
+        f"選擇預測快照批次，依鎖分重產全賽日**{PRIMARY_TRACK_LABEL}推介**海報與宣傳文案"
+        f"（覆蓋 `{paths['fused'].name}`／`copy.json`）。"
+    )
     cal = FactorCalibration()
     try:
         bdf = cal.list_batches()
