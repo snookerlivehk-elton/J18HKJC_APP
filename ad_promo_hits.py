@@ -20,6 +20,40 @@ from config import ModelConfig
 AD_WIN_ODDS_MIN = 7.0
 AD_QIN_ODDS_GT = 10.0
 
+# 規則代碼 → 宣傳標籤（UI／AI 文案共用）
+PROMO_RULE_LABELS = {
+    "win_odds7": "冷門獨贏（頭兩位命中且賠率≥7）",
+    "qin_odds10": "高賠連贏（冠亞覆蓋且其中一匹賠率>10）",
+    "t3_cover": "三重彩覆蓋（冠亞季）",
+    "t4_cover": "四重彩覆蓋（Top4）",
+}
+
+PROMO_RULE_SHORT = {
+    "win_odds7": "冷門獨贏",
+    "qin_odds10": "高賠連贏",
+    "t3_cover": "三重覆蓋",
+    "t4_cover": "四重覆蓋",
+}
+
+# 撮寫優先序（愈前愈「有戲」）
+PROMO_RULE_PRIORITY = ("win_odds7", "qin_odds10", "t3_cover", "t4_cover")
+
+
+def hit_rule_codes(hits: Dict[str, bool]) -> List[str]:
+    """回傳已命中規則代碼（依宣傳優先序）。"""
+    return [k for k in PROMO_RULE_PRIORITY if hits.get(k)]
+
+
+def parse_race_no_from_id(race_id: Any) -> Optional[int]:
+    """由 race_id 尾兩位推場次（如 20260909HV05 → 5）。"""
+    s = str(race_id or "").strip()
+    if len(s) >= 2 and s[-2:].isdigit():
+        try:
+            return int(s[-2:])
+        except ValueError:
+            return None
+    return None
+
 
 def ad_pick_max() -> int:
     return int(getattr(ModelConfig, "AD_OUTPUT_PICK_MAX", None) or getattr(ModelConfig, "PICK_MAX", 4) or 4)

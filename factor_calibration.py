@@ -1123,9 +1123,12 @@ class FactorCalibration:
         from ad_promo_hits import (
             AD_QIN_ODDS_GT,
             AD_WIN_ODDS_MIN,
+            PROMO_RULE_SHORT,
             ad_pick_max,
             attach_ad_pick_ranks_to_snapshot_rows,
             evaluate_ad_race_hits,
+            hit_rule_codes,
+            parse_race_no_from_id,
         )
 
         batches = self.list_batches()
@@ -1227,14 +1230,39 @@ class FactorCalibration:
                 f"{int(r.ad_pick_rank)}:{int(r.horse_no)} {r.horse_name or ''}".strip()
                 for r in picks.itertuples()
             ]
+            picks_detail = []
+            for r in picks.itertuples():
+                odds_v = getattr(r, "settle_win_odds", None)
+                try:
+                    odds_f = None if odds_v is None or pd.isna(odds_v) else float(odds_v)
+                except (TypeError, ValueError):
+                    odds_f = None
+                try:
+                    finish_v = int(r.finish_order_num) if pd.notna(r.finish_order_num) else None
+                except (TypeError, ValueError):
+                    finish_v = None
+                picks_detail.append(
+                    {
+                        "ad_pick_rank": int(r.ad_pick_rank),
+                        "horse_no": int(r.horse_no),
+                        "horse_name": str(r.horse_name or "").strip(),
+                        "finish": finish_v,
+                        "win_odds": odds_f,
+                    }
+                )
+            codes = hit_rule_codes(hits)
             race_rows.append(
                 {
                     "賽日": batch_dates.get(str(bid), ""),
                     "場地": batch_courses.get(str(bid), ""),
                     "batch_id": bid,
                     "race_id": rid,
+                    "race_no": parse_race_no_from_id(rid),
                     "推介數": int(len(picks)),
                     "推介": " / ".join(pick_labels),
+                    "命中規則": "、".join(PROMO_RULE_SHORT[c] for c in codes if c in PROMO_RULE_SHORT),
+                    "hit_codes": codes,
+                    "picks_detail": picks_detail,
                     "WIN≥7": hits["win_odds7"],
                     "冠亞+賠>10": hits["qin_odds10"],
                     "T3覆蓋": hits["t3_cover"],
