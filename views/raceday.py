@@ -10,7 +10,7 @@ from inference_engine import InferenceEngine
 from bucket_utils import format_class_display
 from radar_charts import build_radar_figure, factor_rows_for_horse
 from form_ai_analyst import FormAIAnalyst
-from form_ai_picks import build_ai_picks, compute_ai_combo
+from form_ai_picks import build_ai_picks, build_fused_picks, compute_ai_combo
 from ui_theme import inject_user_css
 from auth_utils import is_admin
 from factor_calibration import place_cutoff
@@ -129,6 +129,10 @@ st.markdown(
   display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem;
   margin-top: 0.35rem;
 }
+.rd-picks-triple {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.45rem;
+  margin-top: 0.35rem;
+}
 .rd-picks-col {
   border: 1px solid rgba(128,128,128,0.28);
   border-radius: 10px;
@@ -142,9 +146,15 @@ st.markdown(
 .rd-picks-col.ai-col .tag {
   color: #c45c26; background: rgba(196,92,38,0.18);
 }
+.rd-picks-col.fuse-col {
+  border-color: rgba(11,110,79,0.45);
+}
+.rd-picks-col.fuse-col .tag {
+  color: #0b6e4f; background: rgba(11,110,79,0.18);
+}
 .rd-pick-empty { font-size: 0.78rem; opacity: 0.55; padding: 0.25rem 0; }
-@media (max-width: 420px) {
-  .rd-picks-dual { grid-template-columns: 1fr; }
+@media (max-width: 520px) {
+  .rd-picks-dual, .rd-picks-triple { grid-template-columns: 1fr; }
 }
 /* 場次數字 pill：壓低高度 */
 div[data-testid="stPills"] button {
@@ -322,6 +332,17 @@ ai_share_by_hno = {
     for r in (ai_picks.get("ranked") or [])
     if r.get("horse_no") is not None and r.get("ai_share_pct") is not None
 }
+fused_picks = build_fused_picks(ai_rows, n_runners=n_runners)
+fused_pick_hnos = {
+    int(x["horse_no"])
+    for x in (fused_picks.get("win") or []) + (fused_picks.get("place") or [])
+    if x.get("horse_no") is not None
+}
+fused_share_by_hno = {
+    int(r["horse_no"]): r.get("fused_share_pct")
+    for r in (fused_picks.get("ranked") or [])
+    if r.get("horse_no") is not None and r.get("fused_share_pct") is not None
+}
 
 
 def _model_pick_rows(df_slice, tag_prefix: str) -> str:
@@ -370,11 +391,42 @@ def _ai_pick_rows(picks: list, tag_prefix: str) -> str:
     return "".join(parts)
 
 
+def _fused_pick_rows(picks: list, tag_prefix: str) -> str:
+    if not picks:
+        if fused_picks.get("fallback_model_only"):
+            return f'<div class="rd-pick-empty">{fused_picks.get("message") or "退回純模型"}</div>'
+        return '<div class="rd-pick-empty">尚無融合推介</div>'
+    parts = []
+    for i, r in enumerate(picks, start=1):
+        hno = r.get("horse_no")
+        name = r.get("horse_name") or ""
+        try:
+            right = f"{float(r.get('fused_share_pct')):.0f}%"
+        except (TypeError, ValueError):
+            right = "—"
+        parts.append(
+            f'<div class="rd-pick-row">'
+            f'<div class="left"><span class="tag">{tag_prefix}{i}</span>'
+            f'<span class="nm">{hno} {name}</span></div>'
+            f'<div class="right">{right}</div>'
+            f"</div>"
+        )
+    return "".join(parts)
+
+
 win_html = _model_pick_rows(pred_df.head(win_n), "勝")
 place_html = _model_pick_rows(pred_df.head(pick_n), "推")
 ai_win_html = _ai_pick_rows(ai_picks.get("win") or [], "勝")
 ai_place_html = _ai_pick_rows(ai_picks.get("place") or [], "推")
 ai_pick_n = ai_picks.get("pick_n") or len(ai_picks.get("place") or [])
+fuse_win_html = _fused_pick_rows(fused_picks.get("win") or [], "勝")
+fuse_place_html = _fused_pick_rows(fused_picks.get("place") or [], "推")
+fuse_pick_n = fused_picks.get("pick_n") or len(fused_picks.get("place") or [])
+fuse_note = ""
+if fused_picks.get("fallback_model_only"):
+    fuse_note = " · 無 AI 時退回模型"
+elif fused_picks.get("available"):
+    fuse_note = f" · α={float(fused_picks.get('alpha') or 0):.2f}"
 
 cls_disp = format_class_display(race_row.get("class"))
 race_name = race_row.get("race_name") or ""
@@ -394,7 +446,14 @@ meta_html = f"""
     <div>覆蓋 <b>{(meta.get('avg_model_coverage') or 0):.0%}</b>{' · provisional' if meta.get('provisional') else ''}</div>
   </div>
   <div class="rd-picks">
-    <div class="rd-picks-dual">
+    <div class="rd-picks-triple">
+      <div class="rd-picks-col fuse-col">
+        <div class="col-title">融合推介{fuse_note}</div>
+        <div class="sec">爭勝</div>
+        {fuse_win_html}
+        <div class="sec">推介 · 前{fuse_pick_n}</div>
+        {fuse_place_html}
+      </div>
       <div class="rd-picks-col">
         <div class="col-title">模型 · 勝率份額</div>
         <div class="sec">爭勝</div>
@@ -410,7 +469,7 @@ meta_html = f"""
         {ai_place_html}
       </div>
     </div>
-    <div class="note">雙軌獨立：左＝模型場內份額%（加總100%）；右＝AI 評價×信心場內份額%。推介最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹，信心不足可不推。本場 {n_runners} 匹。</div>
+    <div class="note">三軌：融合＝模型×AI（社交／廣告主視覺）；左／中／右獨立計算。推介最多 {getattr(ModelConfig, 'PICK_MAX', 5)} 匹。本場 {n_runners} 匹。</div>
   </div>
 </div>
 """
@@ -423,7 +482,7 @@ st.caption(f"全部 {n_runners} 匹 · 按模型勝率排序")
 for _, row in pred_df.iterrows():
     rank = int(row["預測排名"]) if pd.notna(row.get("預測排名")) else 0
     hno = int(row["馬號"])
-    top_cls = "top1" if rank == 1 else ("pick" if hno in ai_pick_hnos else "")
+    top_cls = "top1" if rank == 1 else ("pick" if hno in fused_pick_hnos or hno in ai_pick_hnos else "")
     name = row["馬名"]
     prob = float(row["模型勝率%"]) if pd.notna(row.get("模型勝率%")) else 0.0
     jockey = row.get("騎師") or "-"

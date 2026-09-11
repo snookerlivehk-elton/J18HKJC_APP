@@ -409,6 +409,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-11 | **命中率／賽日／後台**：賽日速覽顯示融合推介；WQ＝頭三位含冠亞、新增 PQ%；`hit_rate_day_snapshots` 日快照＋`backfill_hit_snapshots.py`；廣告重產／NLP／因子改後台 `ops_jobs`＋進度監測 |
 | 2026-09-11 | **數據營運 UI**：Ops Center 合併控制中心＋遺留清單；作戰室一鍵完成／遺留鏈／drill-down；`ops_incidents`＋tick 掃描；`AUTO_BACKLOG_FACTORS` 預設 true；`notify_admins` Resend 入口 |
 | 2026-09-09 | **廣告輸出公司模版**：跟從藍／米色原圖；動態高度；每場最多 4 匹只顯示馬號＋馬名；PNG≤2MB；隨機色調 |
 | 2026-09-08 | **雙軌部署說明**：阿里雲＝主要運作；Railway 暫時並行；開發須先顧及阿里雲 |
@@ -433,4 +434,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-11 — 數據營運中心／作戰室一鍵介入／介入報告＋Resend 入口。*
+*最後更新：2026-09-11 — 融合推介上賽日速覽；WQ／PQ 新規則；命中率日快照；長任務後台化。*

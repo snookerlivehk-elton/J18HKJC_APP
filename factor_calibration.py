@@ -12,9 +12,14 @@
   - 推介列：該訊號分數 → 場內份額 → select_picks_by_share（與賽日推介一致）
   - WIN：推介頭兩位任一跑第 1
   - PLA：推介頭兩位任一跑入前 3
-  - WQ：推介頭兩位恰為冠、亞（不論順序）
+  - WQ：推介頭三位中，含冠及亞（兩席皆命中）
+  - PQ：推介頭三位中，命中冠亞季其中 ≥2 席
   - T3：全部推介馬（不論先後）覆蓋冠亞季
   - T4：全部推介馬覆蓋冠亞季殿
+
+總命中率快照：
+  - 結算後寫入 hit_rate_day_snapshots（每賽日×訊號）
+  - 命中率榜優先讀快照彙總，避免每次全庫重算
 """
 from __future__ import annotations
 
@@ -70,32 +75,45 @@ def place_cutoff(n_runners: int) -> int:
 def evaluate_pool_hits(
     top2_finishes: Sequence[int],
     all_pick_finishes: Sequence[int],
+    top3_finishes: Optional[Sequence[int]] = None,
 ) -> Dict[str, bool]:
     """
-    依推介頭兩位／全部推介名次判斷五類命中。
+    依推介頭兩／頭三／全部推介名次判斷命中。
     finishes 為實際名次（1=冠…）；缺名次者不應傳入。
+
+    WQ：頭 3 位推介中含冠及亞（兩席皆在頭三內）。
+    PQ：頭 3 位推介中，命中冠亞季其中 ≥2 席。
     """
     top2 = [int(x) for x in top2_finishes if x is not None]
     all_f = [int(x) for x in all_pick_finishes if x is not None]
+    if top3_finishes is None:
+        # 相容舊呼叫：以全部推介前 3／不足則頭兩位近似
+        top3 = list(all_f[:3]) if all_f else list(top2)
+    else:
+        top3 = [int(x) for x in top3_finishes if x is not None]
     top2_set = set(top2)
+    top3_set = set(top3)
     all_set = set(all_f)
     return {
         "win": 1 in top2_set,
         "pla": any(f <= PLA_FINISH_MAX for f in top2),
-        "wq": len(top2) >= 2 and top2_set == {1, 2},
+        "wq": {1, 2}.issubset(top3_set),
+        "pq": len(top3_set & {1, 2, 3}) >= 2,
         "t3": {1, 2, 3}.issubset(all_set),
         "t4": {1, 2, 3, 4}.issubset(all_set),
     }
 
 
-def ranked_picks_for_signal(g: pd.DataFrame, col: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def ranked_picks_for_signal(
+    g: pd.DataFrame, col: str
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    依訊號欄位場內份額排序，回傳 (推介頭兩位, 全部推介列)。
+    依訊號欄位場內份額排序，回傳 (推介頭兩位, 全部推介列, 推介頭三位)。
     推介隻數與賽日速覽相同：select_picks_by_share。
     """
     if g.empty or col not in g.columns:
         empty = g.iloc[0:0].copy()
-        return empty, empty
+        return empty, empty, empty
     work = g.copy()
     scores = pd.to_numeric(work[col], errors="coerce").to_numpy(dtype=float)
     shares = scores_to_share_probs(scores)
@@ -109,15 +127,18 @@ def ranked_picks_for_signal(g: pd.DataFrame, col: str) -> Tuple[pd.DataFrame, pd
     share_list = [float(x) for x in work["_share"].tolist()]
     if not share_list:
         empty = work.iloc[0:0]
-        return empty, empty
+        return empty, empty, empty
     pick_n = int(select_picks_by_share(share_list))
     pick_n = max(0, min(pick_n, len(work)))
     if pick_n <= 0:
         # 保底：至少取頭兩位（或全場）供 WIN／PLA／WQ
         pick_n = min(2, len(work))
     all_picks = work.head(pick_n)
+    # WQ／PQ 固定看「排序頭三」（即使動態推介不足 3 也取已有）
+    top3_n = min(3, len(work))
+    top3 = work.head(top3_n)
     top2 = all_picks.head(min(2, len(all_picks)))
-    return top2, all_picks
+    return top2, all_picks, top3
 
 
 DDL_PG = """
@@ -759,6 +780,287 @@ class FactorCalibration:
                     ),
                     {"b": batch_id},
                 )
+        try:
+            self.snapshot_hit_rates_for_batch(batch_id)
+        except Exception as e:
+            # 結算本身已成功；命中快照失敗不回滾
+            print(f"hit_rate snapshot failed for {batch_id}: {e}")
+
+    def ensure_hit_rate_snapshot_table(self) -> None:
+        if USE_SQLITE:
+            ddl = """
+            CREATE TABLE IF NOT EXISTS hit_rate_day_snapshots (
+                batch_id TEXT NOT NULL,
+                racing_date TEXT NOT NULL,
+                course TEXT NOT NULL,
+                signal_label TEXT NOT NULL,
+                scored_races INTEGER DEFAULT 0,
+                total_races INTEGER DEFAULT 0,
+                coverage_pct REAL,
+                avg_picks REAL,
+                win_hits INTEGER DEFAULT 0,
+                win_pct REAL,
+                pla_hits INTEGER DEFAULT 0,
+                pla_pct REAL,
+                wq_hits INTEGER DEFAULT 0,
+                wq_pct REAL,
+                pq_hits INTEGER DEFAULT 0,
+                pq_pct REAL,
+                t3_hits INTEGER DEFAULT 0,
+                t3_pct REAL,
+                t4_hits INTEGER DEFAULT 0,
+                t4_pct REAL,
+                win_vs_random REAL,
+                created_at TEXT,
+                PRIMARY KEY (batch_id, signal_label)
+            )
+            """
+        else:
+            ddl = """
+            CREATE TABLE IF NOT EXISTS hit_rate_day_snapshots (
+                batch_id TEXT NOT NULL,
+                racing_date DATE NOT NULL,
+                course TEXT NOT NULL,
+                signal_label TEXT NOT NULL,
+                scored_races INT DEFAULT 0,
+                total_races INT DEFAULT 0,
+                coverage_pct DOUBLE PRECISION,
+                avg_picks DOUBLE PRECISION,
+                win_hits INT DEFAULT 0,
+                win_pct DOUBLE PRECISION,
+                pla_hits INT DEFAULT 0,
+                pla_pct DOUBLE PRECISION,
+                wq_hits INT DEFAULT 0,
+                wq_pct DOUBLE PRECISION,
+                pq_hits INT DEFAULT 0,
+                pq_pct DOUBLE PRECISION,
+                t3_hits INT DEFAULT 0,
+                t3_pct DOUBLE PRECISION,
+                t4_hits INT DEFAULT 0,
+                t4_pct DOUBLE PRECISION,
+                win_vs_random DOUBLE PRECISION,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (batch_id, signal_label)
+            )
+            """
+        with self.engine.begin() as conn:
+            conn.execute(text(ddl))
+
+    def snapshot_hit_rates_for_batch(self, batch_id: str) -> Dict[str, Any]:
+        """為單一已結算 batch 寫入／覆寫各訊號命中率日快照。"""
+        self.ensure_hit_rate_snapshot_table()
+        stats, meta = self.evaluate_settled(batch_ids=[batch_id], only_settled=False)
+        if meta.get("error") or stats.empty:
+            return {"ok": False, "error": meta.get("error") or "empty stats", "batch_id": batch_id}
+
+        batches = self.list_batches()
+        row_b = batches[batches["batch_id"] == batch_id]
+        if row_b.empty:
+            return {"ok": False, "error": "batch not found", "batch_id": batch_id}
+        racing_date = str(row_b.iloc[0]["racing_date"])[:10]
+        course = str(row_b.iloc[0]["course"]).upper()
+        now = datetime.now(timezone.utc).isoformat()
+        n_written = 0
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM hit_rate_day_snapshots WHERE batch_id = :b"),
+                {"b": batch_id},
+            )
+            for _, r in stats.iterrows():
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO hit_rate_day_snapshots (
+                          batch_id, racing_date, course, signal_label,
+                          scored_races, total_races, coverage_pct, avg_picks,
+                          win_hits, win_pct, pla_hits, pla_pct,
+                          wq_hits, wq_pct, pq_hits, pq_pct,
+                          t3_hits, t3_pct, t4_hits, t4_pct,
+                          win_vs_random, created_at
+                        ) VALUES (
+                          :batch_id, :racing_date, :course, :signal_label,
+                          :scored_races, :total_races, :coverage_pct, :avg_picks,
+                          :win_hits, :win_pct, :pla_hits, :pla_pct,
+                          :wq_hits, :wq_pct, :pq_hits, :pq_pct,
+                          :t3_hits, :t3_pct, :t4_hits, :t4_pct,
+                          :win_vs_random, :created_at
+                        )
+                        """
+                    ),
+                    {
+                        "batch_id": batch_id,
+                        "racing_date": racing_date,
+                        "course": course,
+                        "signal_label": str(r.get("訊號") or ""),
+                        "scored_races": int(r.get("有效場次") or 0),
+                        "total_races": int(r.get("總場次") or 0),
+                        "coverage_pct": float(r.get("覆蓋率%") or 0),
+                        "avg_picks": float(r.get("平均推介數") or 0),
+                        "win_hits": int(r.get("WIN命中") or 0),
+                        "win_pct": float(r.get("WIN%") or 0),
+                        "pla_hits": int(r.get("PLA命中") or 0),
+                        "pla_pct": float(r.get("PLA%") or 0),
+                        "wq_hits": int(r.get("WQ命中") or 0),
+                        "wq_pct": float(r.get("WQ%") or 0),
+                        "pq_hits": int(r.get("PQ命中") or 0),
+                        "pq_pct": float(r.get("PQ%") or 0),
+                        "t3_hits": int(r.get("T3命中") or 0),
+                        "t3_pct": float(r.get("T3%") or 0),
+                        "t4_hits": int(r.get("T4命中") or 0),
+                        "t4_pct": float(r.get("T4%") or 0),
+                        "win_vs_random": (
+                            None
+                            if r.get("WIN相對隨機") is None
+                            or (isinstance(r.get("WIN相對隨機"), float) and pd.isna(r.get("WIN相對隨機")))
+                            else float(r.get("WIN相對隨機"))
+                        ),
+                        "created_at": now,
+                    },
+                )
+                n_written += 1
+        return {
+            "ok": True,
+            "batch_id": batch_id,
+            "racing_date": racing_date,
+            "course": course,
+            "n_signals": n_written,
+        }
+
+    def backfill_hit_rate_snapshots(
+        self, *, only_missing: bool = True, batch_ids: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        為已結算 batch 補回總命中率日快照（新 WQ／PQ 規則）。
+        only_missing=True 時略過已有列的 batch；False 則全部重算覆寫。
+        """
+        self.ensure_hit_rate_snapshot_table()
+        batches = self.list_batches()
+        if batches.empty:
+            return {"ok": True, "n_done": 0, "n_skip": 0, "details": []}
+        use = batches[batches["settled_at"].notna()].copy()
+        if batch_ids:
+            use = use[use["batch_id"].isin(batch_ids)]
+        existing = set()
+        if only_missing and not use.empty:
+            try:
+                ex = pd.read_sql(
+                    text("SELECT DISTINCT batch_id FROM hit_rate_day_snapshots"),
+                    self.engine,
+                )
+                existing = set(ex["batch_id"].astype(str).tolist()) if not ex.empty else set()
+            except Exception:
+                existing = set()
+        details = []
+        n_done = n_skip = 0
+        for bid in use["batch_id"].astype(str).tolist():
+            if only_missing and bid in existing:
+                n_skip += 1
+                continue
+            out = self.snapshot_hit_rates_for_batch(bid)
+            details.append(out)
+            if out.get("ok"):
+                n_done += 1
+        return {"ok": True, "n_done": n_done, "n_skip": n_skip, "details": details}
+
+    def load_hit_rate_day_snapshots(
+        self, batch_ids: Optional[List[str]] = None
+    ) -> pd.DataFrame:
+        self.ensure_hit_rate_snapshot_table()
+        if batch_ids:
+            ph = ", ".join([f":b{i}" for i in range(len(batch_ids))])
+            params = {f"b{i}": bid for i, bid in enumerate(batch_ids)}
+            return pd.read_sql(
+                text(
+                    f"SELECT * FROM hit_rate_day_snapshots WHERE batch_id IN ({ph}) "
+                    "ORDER BY racing_date DESC, course, signal_label"
+                ),
+                self.engine,
+                params=params,
+            )
+        return pd.read_sql(
+            text(
+                "SELECT * FROM hit_rate_day_snapshots "
+                "ORDER BY racing_date DESC, course, signal_label"
+            ),
+            self.engine,
+        )
+
+    def aggregate_hit_rate_from_snapshots(
+        self, snap_df: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, dict]:
+        """由日快照彙總總表（加權：命中數／有效場次）。"""
+        if snap_df is None or snap_df.empty:
+            return pd.DataFrame(), {"error": "尚無命中率日快照。請執行 backfill 或先結算。"}
+        rows = []
+        for label, g in snap_df.groupby("signal_label"):
+            scored = int(g["scored_races"].sum() or 0)
+            total = int(g["total_races"].sum() or 0)
+            win_h = int(g["win_hits"].sum() or 0)
+            pla_h = int(g["pla_hits"].sum() or 0)
+            wq_h = int(g["wq_hits"].sum() or 0)
+            pq_h = int(g["pq_hits"].sum() or 0)
+            t3_h = int(g["t3_hits"].sum() or 0)
+            t4_h = int(g["t4_hits"].sum() or 0)
+            avg_picks = (
+                float((g["avg_picks"] * g["scored_races"]).sum() / scored)
+                if scored
+                else 0.0
+            )
+
+            def _pct(h: int) -> float:
+                return round(100.0 * h / scored, 2) if scored else 0.0
+
+            rows.append(
+                {
+                    "訊號": label,
+                    "有效場次": scored,
+                    "總場次": total,
+                    "覆蓋率%": round(100.0 * scored / total, 1) if total else 0.0,
+                    "平均推介數": round(avg_picks, 2),
+                    "WIN命中": win_h,
+                    "WIN%": _pct(win_h),
+                    "PLA命中": pla_h,
+                    "PLA%": _pct(pla_h),
+                    "WQ命中": wq_h,
+                    "WQ%": _pct(wq_h),
+                    "PQ命中": pq_h,
+                    "PQ%": _pct(pq_h),
+                    "T3命中": t3_h,
+                    "T3%": _pct(t3_h),
+                    "T4命中": t4_h,
+                    "T4%": _pct(t4_h),
+                    "WIN相對隨機": None,
+                }
+            )
+        overall = pd.DataFrame(rows)
+        if not overall.empty:
+            overall = overall.sort_values("WIN%", ascending=False).reset_index(drop=True)
+        n_days = int(
+            snap_df.groupby(
+                [snap_df["racing_date"].astype(str).str[:10], snap_df["course"].astype(str)]
+            ).ngroups
+        )
+        meta = {
+            "n_batches": int(snap_df["batch_id"].nunique()),
+            "batch_ids": snap_df["batch_id"].astype(str).unique().tolist(),
+            "n_races": int(snap_df.drop_duplicates("batch_id")["total_races"].sum() or 0),
+            "n_days": n_days,
+            "avg_runners": 0.0,
+            "from_snapshot": True,
+            "note": (
+                "讀自 hit_rate_day_snapshots（結算時寫入）。"
+                "WIN/PLA＝頭兩位；WQ＝頭三位含冠亞；PQ＝頭三位命中冠亞季≥2席。"
+            ),
+            "rules": {
+                "win": "推介頭兩位任一第 1",
+                "pla": f"推介頭兩位任一前 {PLA_FINISH_MAX}",
+                "wq": "推介頭三位含冠及亞",
+                "pq": "推介頭三位命中冠亞季其中≥2席",
+                "t3": "全部推介覆蓋 1–3",
+                "t4": "全部推介覆蓋 1–4",
+            },
+        }
+        return overall, meta
 
     def _fetch_results_for_races(self, race_ids: List[str]) -> pd.DataFrame:
         if not race_ids:
@@ -1089,7 +1391,7 @@ class FactorCalibration:
 
         rows = []
         for label, col, _w in SIGNAL_DEFS:
-            win_hits = pla_hits = wq_hits = t3_hits = t4_hits = 0
+            win_hits = pla_hits = wq_hits = pq_hits = t3_hits = t4_hits = 0
             scored_races = 0
             sum_pick_n = 0
             for _, g in snaps.groupby(["batch_id", "race_id"]):
@@ -1107,7 +1409,7 @@ class FactorCalibration:
                 # 融合軌：該場全無 fused_share 則跳過（舊快照）
                 if col == "fused_share" and vals.isna().all():
                     continue
-                top2, all_picks = ranked_picks_for_signal(g, col)
+                top2, all_picks, top3 = ranked_picks_for_signal(g, col)
                 if top2.empty:
                     continue
                 scored_races += 1
@@ -1115,6 +1417,7 @@ class FactorCalibration:
                 hits = evaluate_pool_hits(
                     top2["finish_order_num"].astype(int).tolist(),
                     all_picks["finish_order_num"].astype(int).tolist(),
+                    top3["finish_order_num"].astype(int).tolist(),
                 )
                 if hits["win"]:
                     win_hits += 1
@@ -1122,6 +1425,8 @@ class FactorCalibration:
                     pla_hits += 1
                 if hits["wq"]:
                     wq_hits += 1
+                if hits.get("pq"):
+                    pq_hits += 1
                 if hits["t3"]:
                     t3_hits += 1
                 if hits["t4"]:
@@ -1144,6 +1449,8 @@ class FactorCalibration:
                     "PLA%": round(_rate(pla_hits) * 100, 2),
                     "WQ命中": wq_hits,
                     "WQ%": round(_rate(wq_hits) * 100, 2),
+                    "PQ命中": pq_hits,
+                    "PQ%": round(_rate(pq_hits) * 100, 2),
                     "T3命中": t3_hits,
                     "T3%": round(_rate(t3_hits) * 100, 2),
                     "T4命中": t4_hits,
@@ -1186,23 +1493,25 @@ class FactorCalibration:
                 key_set = set(
                     zip(sub_keys["batch_id"].tolist(), sub_keys["race_id"].tolist())
                 )
-                win_hits = pla_hits = wq_hits = t3_hits = t4_hits = scored = 0
+                win_hits = pla_hits = wq_hits = pq_hits = t3_hits = t4_hits = scored = 0
                 for (bid, rid), g in snaps.groupby(["batch_id", "race_id"]):
                     if (bid, rid) not in key_set:
                         continue
                     if "total_score" not in g.columns:
                         continue
-                    top2, all_picks = ranked_picks_for_signal(g, "total_score")
+                    top2, all_picks, top3 = ranked_picks_for_signal(g, "total_score")
                     if top2.empty:
                         continue
                     scored += 1
                     hits = evaluate_pool_hits(
                         top2["finish_order_num"].astype(int).tolist(),
                         all_picks["finish_order_num"].astype(int).tolist(),
+                        top3["finish_order_num"].astype(int).tolist(),
                     )
                     win_hits += int(hits["win"])
                     pla_hits += int(hits["pla"])
                     wq_hits += int(hits["wq"])
+                    pq_hits += int(hits.get("pq") or False)
                     t3_hits += int(hits["t3"])
                     t4_hits += int(hits["t4"])
                 cov_buckets.append(
@@ -1212,6 +1521,7 @@ class FactorCalibration:
                         "WIN%": round(100.0 * win_hits / scored, 2) if scored else 0.0,
                         "PLA%": round(100.0 * pla_hits / scored, 2) if scored else 0.0,
                         "WQ%": round(100.0 * wq_hits / scored, 2) if scored else 0.0,
+                        "PQ%": round(100.0 * pq_hits / scored, 2) if scored else 0.0,
                         "T3%": round(100.0 * t3_hits / scored, 2) if scored else 0.0,
                         "T4%": round(100.0 * t4_hits / scored, 2) if scored else 0.0,
                     }
@@ -1224,12 +1534,13 @@ class FactorCalibration:
             "avg_runners": avg_runners,
             "note": (
                 "基於賽前快照 × 賽後名次。"
-                "WIN/PLA/WQ＝推介頭兩位；T3/T4＝全部推介馬覆蓋名次席位。"
+                "WIN/PLA＝推介頭兩位；WQ/PQ＝推介頭三位；T3/T4＝全部推介覆蓋名次席位。"
             ),
             "rules": {
                 "win": "推介頭兩位任一第 1",
                 "pla": f"推介頭兩位任一前 {PLA_FINISH_MAX}",
-                "wq": "推介頭兩位恰為冠、亞",
+                "wq": "推介頭三位含冠及亞",
+                "pq": "推介頭三位命中冠亞季其中≥2席",
                 "t3": "全部推介覆蓋 1–3",
                 "t4": "全部推介覆蓋 1–4",
             },
@@ -1244,25 +1555,17 @@ class FactorCalibration:
         metric: str = "WIN%",
         top_n: int = 5,
         batch_ids: Optional[List[str]] = None,
+        prefer_snapshot: bool = True,
+        recompute_if_missing: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
         """
         總表 + 各賽日 Top-N 訊號排名（供用戶／管理端瀏覽頁）。
 
-        Returns
-        -------
-        overall : evaluate_settled 彙總表
-        day_top : 每賽日（日期×場地）依 metric 取前 top_n
-        meta : 含 overall meta 與 day 數
+        預設讀 hit_rate_day_snapshots；缺快照時可重算並寫入。
         """
-        overall, meta = self.evaluate_settled(
-            batch_ids=batch_ids, only_settled=only_settled
-        )
-        if meta.get("error"):
-            return pd.DataFrame(), pd.DataFrame(), meta
-
         batches = self.list_batches()
         if batches.empty:
-            return overall, pd.DataFrame(), meta
+            return pd.DataFrame(), pd.DataFrame(), {"error": "尚無快照。請於賽前建立預測快照。"}
 
         if batch_ids:
             use = batches[batches["batch_id"].isin(batch_ids)].copy()
@@ -1272,18 +1575,106 @@ class FactorCalibration:
             use = batches[batches["n_filled"] > 0].copy()
 
         if use.empty:
-            return overall, pd.DataFrame(), {**meta, "n_days": 0}
+            return pd.DataFrame(), pd.DataFrame(), {
+                "error": "尚無已結算快照。請等 J18 賽果入庫後執行「結算快照」。",
+                "n_batches": 0,
+            }
 
+        ids = use["batch_id"].astype(str).tolist()
         use["_d"] = use["racing_date"].astype(str).str[:10]
         metric_col = metric if metric in (
-            "WIN%", "PLA%", "WQ%", "T3%", "T4%", "WIN相對隨機"
+            "WIN%", "PLA%", "WQ%", "PQ%", "T3%", "T4%", "WIN相對隨機"
         ) else "WIN%"
         top_n = max(1, int(top_n))
 
-        day_rows: List[dict] = []
+        snap_df = pd.DataFrame()
+        if prefer_snapshot:
+            snap_df = self.load_hit_rate_day_snapshots(batch_ids=ids)
+            missing = set(ids) - set(snap_df["batch_id"].astype(str).tolist() if not snap_df.empty else [])
+            if missing and recompute_if_missing:
+                self.backfill_hit_rate_snapshots(
+                    only_missing=True, batch_ids=list(missing)
+                )
+                snap_df = self.load_hit_rate_day_snapshots(batch_ids=ids)
+
+        if prefer_snapshot and not snap_df.empty:
+            overall, meta = self.aggregate_hit_rate_from_snapshots(snap_df)
+            day_rows: List[dict] = []
+            for (d, course), g in snap_df.groupby(
+                [snap_df["racing_date"].astype(str).str[:10], snap_df["course"].astype(str)],
+                sort=True,
+            ):
+                # 轉成與 overall 相同欄名以便排序
+                day_stats = pd.DataFrame(
+                    [
+                        {
+                            "訊號": r.signal_label,
+                            "WIN%": r.win_pct,
+                            "PLA%": r.pla_pct,
+                            "WQ%": r.wq_pct,
+                            "PQ%": r.pq_pct,
+                            "T3%": r.t3_pct,
+                            "T4%": r.t4_pct,
+                            "有效場次": r.scored_races,
+                            "覆蓋率%": r.coverage_pct,
+                            "WIN相對隨機": r.win_vs_random,
+                            "總場次": r.total_races,
+                        }
+                        for r in g.itertuples()
+                    ]
+                )
+                if day_stats.empty or metric_col not in day_stats.columns:
+                    continue
+                ranked = day_stats.sort_values(
+                    by=[metric_col, "有效場次"],
+                    ascending=[False, False],
+                    kind="mergesort",
+                ).head(top_n)
+                n_races = int(g["total_races"].max() or 0)
+                for i, (_, r) in enumerate(ranked.iterrows(), start=1):
+                    day_rows.append(
+                        {
+                            "賽日": d,
+                            "場地": course,
+                            "排名": i,
+                            "訊號": r.get("訊號"),
+                            "WIN%": r.get("WIN%"),
+                            "PLA%": r.get("PLA%"),
+                            "WQ%": r.get("WQ%"),
+                            "PQ%": r.get("PQ%"),
+                            "T3%": r.get("T3%"),
+                            "T4%": r.get("T4%"),
+                            "有效場次": r.get("有效場次"),
+                            "覆蓋率%": r.get("覆蓋率%"),
+                            "WIN相對隨機": r.get("WIN相對隨機"),
+                            "排序指標": metric_col,
+                            "場次數": n_races,
+                        }
+                    )
+            day_top = pd.DataFrame(day_rows)
+            if not day_top.empty:
+                day_top = day_top.sort_values(
+                    by=["賽日", "場地", "排名"], ascending=[False, True, True]
+                ).reset_index(drop=True)
+            out_meta = {
+                **meta,
+                "n_days": int(use.groupby(["_d", "course"]).ngroups),
+                "rank_metric": metric_col,
+                "top_n": top_n,
+            }
+            return overall, day_top, out_meta
+
+        # 後備：即時重算（舊庫尚無快照表資料）
+        overall, meta = self.evaluate_settled(
+            batch_ids=ids, only_settled=False
+        )
+        if meta.get("error"):
+            return pd.DataFrame(), pd.DataFrame(), meta
+
+        day_rows = []
         for (d, course), g in use.groupby(["_d", "course"], sort=True):
-            ids = g["batch_id"].tolist()
-            stats, day_meta = self.evaluate_settled(batch_ids=ids, only_settled=False)
+            day_ids = g["batch_id"].tolist()
+            stats, day_meta = self.evaluate_settled(batch_ids=day_ids, only_settled=False)
             if stats.empty or metric_col not in stats.columns:
                 continue
             ranked = stats.sort_values(
@@ -1301,6 +1692,7 @@ class FactorCalibration:
                         "WIN%": r.get("WIN%"),
                         "PLA%": r.get("PLA%"),
                         "WQ%": r.get("WQ%"),
+                        "PQ%": r.get("PQ%"),
                         "T3%": r.get("T3%"),
                         "T4%": r.get("T4%"),
                         "有效場次": r.get("有效場次"),
@@ -1322,5 +1714,6 @@ class FactorCalibration:
             "n_days": int(use.groupby(["_d", "course"]).ngroups),
             "rank_metric": metric_col,
             "top_n": top_n,
+            "from_snapshot": False,
         }
         return overall, day_top, out_meta

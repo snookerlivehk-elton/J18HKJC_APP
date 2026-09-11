@@ -1,8 +1,9 @@
 """
 命中率瀏覽（用戶／管理端共用，唯讀）
 
-展示各因子與推介軌道的 WIN／PLA／WQ／T3／T4，以及各賽日 Top 5，
+展示各因子與推介軌道的 WIN／PLA／WQ／PQ／T3／T4，以及各賽日 Top 5，
 方便依單獨統計挑選參考訊號（非僅融合推介）。
+讀自 hit_rate_day_snapshots（結算時寫入）；缺則自動補算。
 """
 from __future__ import annotations
 
@@ -35,20 +36,22 @@ page_header(
 st.markdown(
     f"""
 **怎麼用**  
-選排序指標（WIN／PLA／WQ／T3／T4），看總表與各賽日 Top 5，自行挑命中較穩的訊號作參考。  
+選排序指標（WIN／PLA／WQ／PQ／T3／T4），看總表與各賽日 Top 5，自行挑命中較穩的訊號作參考。  
 
 **規則摘要**  
 WIN＝推介頭兩位任一第 1　·　PLA＝頭兩位任一前 {PLA_FINISH_MAX}　·　
-WQ＝頭兩位恰冠亞　·　T3／T4＝全部推介覆蓋冠亞季（殿）
+WQ＝頭三位含冠及亞　·　PQ＝頭三位命中冠亞季其中≥2席　·　
+T3／T4＝全部推介覆蓋冠亞季（殿）
 """
 )
 
-METRIC_OPTS = ["WIN%", "PLA%", "WQ%", "T3%", "T4%", "WIN相對隨機"]
+METRIC_OPTS = ["WIN%", "PLA%", "WQ%", "PQ%", "T3%", "T4%", "WIN相對隨機"]
 DISPLAY_COLS = [
     "訊號",
     "WIN%",
     "PLA%",
     "WQ%",
+    "PQ%",
     "T3%",
     "T4%",
     "有效場次",
@@ -105,7 +108,7 @@ if day_filter and course_filter:
     ].tolist()
 
 
-@st.cache_data(ttl=90, show_spinner="載入命中統計…")
+@st.cache_data(ttl=120, show_spinner="載入命中統計（日快照）…")
 def _load(metric: str, top_n: int, batch_key: tuple | None):
     ids = list(batch_key) if batch_key else None
     return FactorCalibration().evaluate_raceday_rankings(
@@ -113,6 +116,8 @@ def _load(metric: str, top_n: int, batch_key: tuple | None):
         metric=metric,
         top_n=top_n,
         batch_ids=ids,
+        prefer_snapshot=True,
+        recompute_if_missing=True,
     )
 
 
@@ -127,7 +132,7 @@ m1, m2, m3, m4 = st.columns(4)
 m1.metric("Batch", meta.get("n_batches", 0))
 m2.metric("場次", meta.get("n_races", 0))
 m3.metric("賽日組", meta.get("n_days", 0))
-m4.metric("平均頭數", f"{meta.get('avg_runners', 0):.1f}")
+m4.metric("來源", "日快照" if meta.get("from_snapshot") else "即時重算")
 st.caption(meta.get("note", ""))
 
 # —— 總表：依指標排序 ——
@@ -158,7 +163,6 @@ st.subheader(f"② 各賽日 Top {top_n}（{metric}）")
 if day_top.empty:
     st.info("尚無分日排名。")
 else:
-    # 單一賽日範圍時 day_top 仍可能含該日；全部時分日展示
     day_keys = (
         day_top.groupby(["賽日", "場地"], sort=False).size().reset_index(name="_n")
     )
@@ -175,6 +179,7 @@ else:
                     "WIN%",
                     "PLA%",
                     "WQ%",
+                    "PQ%",
                     "T3%",
                     "T4%",
                     "有效場次",
@@ -224,4 +229,24 @@ else:
 
 if is_admin():
     st.divider()
-    st.caption("管理端寫入快照／結算請到「因子命中率」校正台；本頁唯讀。")
+    st.subheader("管理：補回命中率日快照")
+    st.caption(
+        "新規則（WQ／PQ）或舊結算缺快照時，一鍵重算寫入 `hit_rate_day_snapshots`。"
+        "CLI：`python backfill_hit_snapshots.py`"
+    )
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("只補缺漏", use_container_width=True):
+            with st.spinner("補回中…"):
+                out = FactorCalibration().backfill_hit_rate_snapshots(only_missing=True)
+            st.success(f"完成 {out.get('n_done')}；略過已有 {out.get('n_skip')}")
+            st.cache_data.clear()
+            st.rerun()
+    with b2:
+        if st.button("全部重算覆寫", type="primary", use_container_width=True):
+            with st.spinner("重算全部日快照…"):
+                out = FactorCalibration().backfill_hit_rate_snapshots(only_missing=False)
+            st.success(f"完成 {out.get('n_done')} batch")
+            st.cache_data.clear()
+            st.rerun()
+    st.caption("管理端寫入預測快照／結算請到「因子命中率」校正台；本頁命中表唯讀。")
