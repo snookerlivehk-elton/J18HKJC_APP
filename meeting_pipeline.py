@@ -49,6 +49,33 @@ STATUS_FAILED = "failed"
 STATUS_WAITING = "waiting"  # 官方尚未上架（如 SG）
 STATUS_SKIPPED = "skipped_manual"
 
+# 一鍵完成階段 → 主路徑 run_action（作戰室／Ops Center）
+STAGE_PRIMARY_ACTION: Dict[str, str] = {
+    "FIXTURE": "crawl_fixtures",
+    "RACECARD": "sync_jjjc_racecard",
+    "SPEEDGUIDE": "crawl_speedguide",
+    "FORMGUIDE": "crawl_formguide",
+    "FACTORS": "run_factors",
+    "NLP": "run_backlog_chain",
+    "FORM_AI": "start_form_ai_background",
+    "SNAPSHOT": "snapshot",
+    "RESULTS": "sync_jjjc_results",
+    "SETTLED": "settle",
+}
+
+STAGE_HELP: Dict[str, str] = {
+    "FIXTURE": "從 HKJC Fixture.aspx 抓整季賽期表；通常只需做一次。",
+    "RACECARD": "優先同步 jjjc 排位 export；錯位時改用備援 HKJC HTML。",
+    "SPEEDGUIDE": "JJJC speedguide 主路徑，未上架則 waiting；可強制 CMS 備援。",
+    "FORMGUIDE": "JJJC formguide 主路徑；覆蓋不足可重抓或等待。",
+    "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；有評述後再用「含 NLP」。",
+    "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
+    "FORM_AI": "建議後台啟動（關頁不中斷）。覆蓋 ≥80% 才出正式快照。",
+    "SNAPSHOT": "SG＋FormGuide＋Form AI 齊備才建 primary；否則可 provisional／revision。",
+    "RESULTS": "賽後同步 jjjc results（名次／派彩）；結算依賴此步。",
+    "SETTLED": "快照 × 名次結算命中率；與當日評述無關。",
+}
+
 
 def _racecard_looks_corrupt(runners_df: pd.DataFrame):
     """偵測排位欄位錯位（不依賴 ui_utils，避免 Streamlit 循環 import）。"""
@@ -675,11 +702,234 @@ class MeetingPipeline:
             return {"ok": True, "job": None, "message": "尚無後台任務"}
         return {"ok": True, "job": job}
 
+    def list_meeting_races(self, racing_date: str, course: str) -> pd.DataFrame:
+        """賽日場次清單（作戰室 drill-down）。"""
+        d = racing_date[:10]
+        c = course.upper()
+        if USE_SQLITE:
+            q = text(
+                """
+                SELECT r.race_id, r.race_num, r.course, r.racing_date,
+                       COUNT(u.runner_id) AS runner_n
+                FROM upcoming_races r
+                LEFT JOIN upcoming_runners u ON r.race_id = u.race_id
+                WHERE CAST(r.racing_date AS TEXT) LIKE :d AND r.course = :c
+                GROUP BY r.race_id, r.race_num, r.course, r.racing_date
+                ORDER BY r.race_num
+                """
+            )
+        else:
+            q = text(
+                """
+                SELECT r.race_id, r.race_num, r.course, r.racing_date,
+                       COUNT(u.runner_id) AS runner_n
+                FROM upcoming_races r
+                LEFT JOIN upcoming_runners u ON r.race_id = u.race_id
+                WHERE r.racing_date = CAST(:d AS DATE) AND r.course = :c
+                GROUP BY r.race_id, r.race_num, r.course, r.racing_date
+                ORDER BY r.race_num
+                """
+            )
+        try:
+            return pd.read_sql(q, self.engine, params={"d": d, "c": c})
+        except Exception:
+            return pd.DataFrame()
+
+    def list_race_runners(self, race_id: str) -> pd.DataFrame:
+        """單場馬匹列（含 SG 若有）。"""
+        try:
+            from inference_engine import InferenceEngine
+
+            return InferenceEngine().get_race_runners(str(race_id))
+        except Exception:
+            return pd.DataFrame()
+
+    def stage_help(self, stage: str) -> str:
+        return STAGE_HELP.get(stage, "")
+
+    def stage_preview(self, racing_date: str, course: str) -> List[Dict[str, Any]]:
+        """各階段就緒預覽（不寫庫；供 Ops Center 總覽）。"""
+        ready = self.refresh_readiness(racing_date, course)
+        rows: List[Dict[str, Any]] = []
+        for stage, label in STAGES:
+            info = ready.get(stage) or {}
+            rows.append(
+                {
+                    "stage": stage,
+                    "label": label,
+                    "status": info.get("status", STATUS_PENDING),
+                    "detail": info.get("detail", ""),
+                    "manual": bool(info.get("manual")),
+                    "primary_action": STAGE_PRIMARY_ACTION.get(stage),
+                    "help": STAGE_HELP.get(stage, ""),
+                }
+            )
+        return rows
+
+    def complete_stage(
+        self,
+        racing_date: str,
+        course: str,
+        stage: str,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """一鍵完成該階段主路徑動作。"""
+        stage = (stage or "").upper()
+        action = STAGE_PRIMARY_ACTION.get(stage)
+        if not action:
+            return {"ok": False, "error": f"無主路徑對應：{stage}"}
+        if action == "run_backlog_chain":
+            return self.run_backlog_chain(racing_date, course, **kwargs)
+        if action == "crawl_fixtures":
+            return self.run_action("", "", action, **kwargs)
+        out = self.run_action(racing_date, course, action, **kwargs)
+        out.setdefault("stage", stage)
+        out.setdefault("action", action)
+        return out
+
+    def run_backlog_chain(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        force: bool = True,
+        run_nlp: bool = True,
+        run_factors: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        一鍵遺留鏈：同步 text-reports（評述）→ NLP → 因子（含干擾）。
+        作戰室／人工介入用；與 tick 自動 backlog 路徑對齊。
+        """
+        d, c = racing_date[:10], course.upper()
+        out: Dict[str, Any] = {
+            "ok": True,
+            "action": "run_backlog_chain",
+            "racing_date": d,
+            "course": c,
+            "sync": None,
+            "nlp": None,
+            "factors": None,
+        }
+        try:
+            from data_backlog import DataBacklogService
+
+            bl = DataBacklogService(engine=self.engine)
+            enroll = bl.enroll_meeting(d, c)
+            sync = self.run_action(d, c, "sync_jjjc_text_reports")
+            out["enroll"] = enroll
+            out["sync"] = {
+                k: sync.get(k)
+                for k in (
+                    "ok",
+                    "waiting",
+                    "runner_upserted",
+                    "error",
+                    "detail",
+                    "upserted",
+                )
+                if sync.get(k) is not None
+            }
+            new_n = int(
+                sync.get("runner_upserted")
+                or sync.get("upserted")
+                or sync.get("n_upserted")
+                or 0
+            )
+            # 即使本輪 upsert=0，force 時仍可嘗試 NLP（庫內可能已有未解析評述）
+            if run_nlp:
+                nlp_out = bl.maybe_run_nlp_pipeline(
+                    new_upserts=max(new_n, 1 if force else 0),
+                    dry_run=False,
+                )
+                # maybe_run_nlp 受 AUTO_BACKLOG_* 開關影響；一鍵鏈可強制補跑
+                if nlp_out.get("skipped") and force:
+                    nlp_out = self._force_nlp_factors(
+                        run_factors=run_factors
+                    )
+                elif run_factors and not (nlp_out.get("factors")):
+                    # NLP 已跑但 AUTO_FACTORS=false 時補跑
+                    try:
+                        from factor_calculator import FactorCalculator
+
+                        fac = FactorCalculator().run_all_factors(
+                            persist=True, apply_nlp=True
+                        )
+                        nlp_out["factors"] = {
+                            "ok": fac is not None,
+                            "forced": True,
+                            "result": str(fac)[:200] if fac is not None else None,
+                        }
+                    except Exception as e:
+                        nlp_out["factors"] = {"ok": False, "error": str(e)}
+                out["nlp"] = nlp_out.get("nlp")
+                out["factors"] = nlp_out.get("factors")
+                if nlp_out.get("skipped"):
+                    out["nlp_note"] = nlp_out.get("skipped")
+            self.refresh_readiness(d, c)
+            if sync.get("ok") is False:
+                out["ok"] = False
+                out["error"] = sync.get("error") or "text_reports sync failed"
+            return out
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)
+            return out
+
+    def _force_nlp_factors(self, *, run_factors: bool = True) -> Dict[str, Any]:
+        """繞過 AUTO_BACKLOG_*：強制 NLP（再可選因子）。"""
+        out: Dict[str, Any] = {"nlp": None, "factors": None}
+        try:
+            from factor_calculator import FactorCalculator
+            from nlp_processor import NLPProcessor
+
+            calc = FactorCalculator()
+            nlp = NLPProcessor()
+            if not nlp.is_ready():
+                out["nlp"] = {"ok": False, "error": "OPENAI_API_KEY 未設定"}
+                return out
+            rows = calc.load_unprocessed_reports(limit=50, skip_trivial=True)
+            done = 0
+            errors = 0
+            for r in rows:
+                try:
+                    parsed = nlp.analyze_report_sync(str(r.get("report_text") or ""))
+                    calc.save_nlp_result(int(r["id"]), parsed)
+                    done += 1
+                except Exception:
+                    errors += 1
+            out["nlp"] = {"ok": True, "parsed": done, "errors": errors, "forced": True}
+            if run_factors and done > 0:
+                try:
+                    fac = calc.run_all_factors(persist=True, apply_nlp=True)
+                    out["factors"] = {"ok": True, "result": str(fac)[:200], "forced": True}
+                except Exception as e:
+                    out["factors"] = {"ok": False, "error": str(e)}
+        except Exception as e:
+            out["nlp"] = {"ok": False, "error": str(e)}
+        return out
+
     def run_action(self, racing_date: str, course: str, action: str, **kwargs) -> Dict[str, Any]:
         """手動節點動作。kwargs：如 run_form_ai 的 only_missing、progress_cb。"""
         d_slash = racing_date.replace("-", "/")
         env = os.environ.copy()
         try:
+            if action == "run_backlog_chain":
+                return self.run_backlog_chain(
+                    racing_date,
+                    course,
+                    force=bool(kwargs.get("force", True)),
+                    run_nlp=bool(kwargs.get("run_nlp", True)),
+                    run_factors=bool(kwargs.get("run_factors", True)),
+                )
+
+            if action == "complete_stage":
+                return self.complete_stage(
+                    racing_date,
+                    course,
+                    str(kwargs.get("stage") or ""),
+                    **{k: v for k, v in kwargs.items() if k != "stage"},
+                )
+
             if action == "crawl_fixtures":
                 from fixture_crawler import HKJCFixtureCrawler
                 import asyncio

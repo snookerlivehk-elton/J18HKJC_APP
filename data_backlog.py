@@ -35,7 +35,7 @@ AUTO_BACKLOG_NLP = (
     os.getenv("MEETING_TICK_BACKLOG_AUTO_NLP", "true") or "true"
 ).lower() in ("1", "true", "yes")
 AUTO_BACKLOG_FACTORS = (
-    os.getenv("MEETING_TICK_BACKLOG_AUTO_FACTORS", "false") or "false"
+    os.getenv("MEETING_TICK_BACKLOG_AUTO_FACTORS", "true") or "true"
 ).lower() in ("1", "true", "yes")
 
 KIND_RUNNING = "running_comment"
