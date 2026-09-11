@@ -6,8 +6,8 @@
     "slice_top_end": 400,
     "slice_mid_end": 980,
     "ref_n_rows": 10,
-    "race_col": [55, 160],
-    "content_x": [175, 1220],
+    "race_col": [48, 175],
+    "content_x": [185, 1220],
     "date_pill": [40, 206, 460, 257],
     "font_base_px": 34,
     "note": "日馬啡色底圖；header+J18精選固定，白底中段垂直拉伸，footer 固定"
@@ -19,8 +19,8 @@
     "slice_top_end": 400,
     "slice_mid_end": 980,
     "ref_n_rows": 10,
-    "race_col": [55, 160],
-    "content_x": [175, 1220],
+    "race_col": [48, 175],
+    "content_x": [185, 1220],
     "date_pill": [40, 206, 460, 257],
     "font_base_px": 34,
     "note": "夜馬藍色底圖；座標與 day 對齊"
