@@ -1277,6 +1277,7 @@ def generate_ads_from_snapshot_batch(
         return {"ok": False, "error": "無有效場次", "batch_id": batch_id, "errors": errors}
 
     out_root = Path(output_root) if output_root else default_output_dir()
+    # session／主題由 _write_primary_meeting_outputs 內查 fixtures（或場地慣例）
     return _write_primary_meeting_outputs(
         payloads,
         batch_id=batch_id,
@@ -1284,9 +1285,9 @@ def generate_ads_from_snapshot_batch(
         course=course,
         output_root=out_root,
         errors=errors,
-        theme=theme,
-        session=session,
-        is_day_meeting=is_day_meeting,
+        theme=None,
+        session=None,
+        is_day_meeting=None,
     )
 
 
