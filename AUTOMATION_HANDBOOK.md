@@ -128,8 +128,8 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 |------|----------------|-----------------------------------|
 | **FIXTURE** | 賽日在 `fixtures` | 無賽期 → 跑 fixtures 爬蟲 |
 | **RACECARD** | upcoming 該日場次數達標（建議 ≥ 當日預期場數或 ≥8）；每場有馬；無錯位 | export 空 → waiting；有場無馬／錯位 → failed（可備援 HTML） |
-| **SPEEDGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照** |
-| **FORMGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照**（與 SG／AI 一致） |
+| **SPEEDGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止 Form AI 與任何快照** |
+| **FORMGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止 Form AI 與任何快照** |
 | **FORM_AI** | 馬匹覆蓋 ≥80%；且啟動前 SG＋FG＋FACTORS 須 ok | 上游未齊 → waiting／skip；未達 → pending；**未達標禁止任何快照** |
 | **SNAPSHOT** | 僅當 SG＋FormGuide＋Factors＋Form AI 皆 ok | 否則不建；無快照 ⇒ 無廣告／命中主路徑 |
 | **RESULTS** | historical `runners` 該日有 `finish_order_num` | 空 → waiting（對齊 JJJC +12h） |
