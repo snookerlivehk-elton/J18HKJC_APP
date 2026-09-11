@@ -205,6 +205,16 @@ PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 | 部署 | **Railway 第二個服務**（勿與 Streamlit 同一 process）；共用同一 `DATABASE_URL*` |
 | 認證 | Header `X-API-Key: <PREDICTION_API_KEY>`；未設 key 時受保護路由回 503 |
 
+### 2.4b 賽前預測廣告包 API（Ad Package）
+
+| 項目 | 說明 |
+|------|------|
+| 程式 | `ad_api.py` + `ad_package.py`；海報完成後由 `ad_poster` 自動 publish |
+| 啟動 | `bash start-ad-api.sh` → `uvicorn ad_api:app` |
+| 部署 | Railway 可另開服務；文件見 `README_AD_API.md` |
+| 變量 | `AD_API_KEY`、`AD_API_PUBLIC_BASE`、`GROK_BOT_WEBHOOK_URL`、`GROK_BOT_WEBHOOK_SECRET` |
+| 行為 | `GET /v1/ads/latest`；新 `ready` 包 webhook POST；`POST /v1/ads/{id}/notify` 重試 |
+
 | Method | Path | 用途 |
 |--------|------|------|
 | GET | `/health` | 探活（無需 key） |

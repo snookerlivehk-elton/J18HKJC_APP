@@ -1117,6 +1117,17 @@ def _write_primary_meeting_outputs(
     paths["copy"].write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    # 統計／海報完成後：產出廣告包 JSON，並 webhook 通知外部助手
+    ad_pkg: Dict[str, Any] = {}
+    try:
+        from ad_package import publish_ad_package_after_outputs
+
+        ad_pkg = publish_ad_package_after_outputs(output_root=out_root, notify=True)
+    except Exception as exc:
+        print(f"[ad_poster] ad package publish failed: {exc}")
+        ad_pkg = {"ok": False, "error": str(exc)}
+
     return {
         "ok": len(err_list) == 0,
         "batch_id": batch_id,
@@ -1132,6 +1143,7 @@ def _write_primary_meeting_outputs(
         "fused_meta": fused_meta,
         "primary_track": PRIMARY_TRACK,
         "primary_track_label": PRIMARY_TRACK_LABEL,
+        "ad_package": ad_pkg,
     }
 
 
