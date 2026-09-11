@@ -1626,25 +1626,8 @@ class FactorCalibration:
                 [snap_df["racing_date"].astype(str).str[:10], snap_df["course"].astype(str)],
                 sort=True,
             ):
-                # 轉成與 overall 相同欄名以便排序
-                day_stats = pd.DataFrame(
-                    [
-                        {
-                            "訊號": r.signal_label,
-                            "WIN%": r.win_pct,
-                            "PLA%": r.pla_pct,
-                            "WQ%": r.wq_pct,
-                            "PQ%": r.pq_pct,
-                            "T3%": r.t3_pct,
-                            "T4%": r.t4_pct,
-                            "有效場次": r.scored_races,
-                            "覆蓋率%": r.coverage_pct,
-                            "WIN相對隨機": r.win_vs_random,
-                            "總場次": r.total_races,
-                        }
-                        for r in g.itertuples()
-                    ]
-                )
+                # 同一賽日可能有多個 batch（重跑快照）；先按訊號彙總，避免 Top N 出現重複「SG貢獻」等列
+                day_stats, _day_meta = self.aggregate_hit_rate_from_snapshots(g)
                 if day_stats.empty or metric_col not in day_stats.columns:
                     continue
                 ranked = day_stats.sort_values(
