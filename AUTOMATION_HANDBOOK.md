@@ -2,7 +2,7 @@
 
 > **給誰看**：產品（Snooker）、開發／Cloud Agent。  
 > **用途**：作戰實驗室標準流程 + 全自動開發依據。改碼前先對本手冊對齊，避免兩邊各自狂爬。  
-> **最後更新**：2026-09-10  
+> **最後更新**：2026-09-11  
 > **相關**：`DEVELOPMENT_REPORT.md`（總覽）、`meeting_pipeline.py`（狀態機）、`meeting_tick.py`（Cron tick）、api_jjjc（上游爬蟲）
 
 ---
@@ -130,8 +130,8 @@ FIXTURE → RACECARD → SPEEDGUIDE → FORMGUIDE → FACTORS
 | **RACECARD** | upcoming 該日場次數達標（建議 ≥ 當日預期場數或 ≥8）；每場有馬；無錯位 | export 空 → waiting；有場無馬／錯位 → failed（可備援 HTML） |
 | **SPEEDGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照** |
 | **FORMGUIDE** | 馬匹覆蓋 ≥80% | 未達 → waiting／failed；**未達標禁止任何快照**（與 SG／AI 一致） |
-| **FORM_AI** | 馬匹覆蓋 ≥80% | 未達 → pending；**未達標禁止任何快照** |
-| **SNAPSHOT** | 僅當 SG＋FormGuide＋Form AI 皆 ≥80% | 否則不建；無快照 ⇒ 無廣告／命中主路徑 |
+| **FORM_AI** | 馬匹覆蓋 ≥80%；且啟動前 SG＋FG＋FACTORS 須 ok | 上游未齊 → waiting／skip；未達 → pending；**未達標禁止任何快照** |
+| **SNAPSHOT** | 僅當 SG＋FormGuide＋Factors＋Form AI 皆 ok | 否則不建；無快照 ⇒ 無廣告／命中主路徑 |
 | **RESULTS** | historical `runners` 該日有 `finish_order_num` | 空 → waiting（對齊 JJJC +12h） |
 | **TEXT／遺留覆蓋** | `DISTINCT(race_id,horse_no)`；優先只計 `jjjc_results_sync` 場次 | 勿用裸 `COUNT(*)`（舊爬蟲幽靈場會把 8×14 算成 10×14=140）；results sync 會 prune 同 prefix 不在 export 的 race |
 | **SETTLED** | 對應 batch 有 `settled_at`（每場名次覆蓋達現有 ≥50% 規則） | 有名次未滿 → 重跑 settle；無快照 → 不能結 |
@@ -148,13 +148,18 @@ fixtures 有賽日
     → 有貨？否 → waiting（冷卻）→ 結束本輪
     → 是 → sync_jjjc_racecard → check RACECARD
          → 不齊 → 備援 HTML 或 failed／人工
-         → 齊 → SPEEDGUIDE / FORMGUIDE（可並行探＋爬）
-              → 達標或可降級？
-              → FACTORS（可不待 NLP）
-              → FORM_AI（only_missing；長跑背景）
-              → SNAPSHOT（可 provisional）
-              → （可選）修訂 revision 當 SG／AI 補齊
-              → （可選）賽前 social copy
+         → 齊 → SPEEDGUIDE ∥ FORMGUIDE（可並行探＋爬）
+              → FACTORS（需排位；可不待 NLP）
+              → FORM_AI（硬閘：SG＋FG＋FACTORS 皆 ok；only_missing；長跑背景）
+              → SNAPSHOT（硬閘：SG＋FG＋FACTORS＋FORM_AI）
+              → （可選）修訂 revision 當資料再齊
+              → （可選）賽前 social copy（需快照）
+
+監察：每步未開閘寫入 plan.skip_reasons／tick_state（例：
+  FORM_AI wait: SPEEDGUIDE not ready、
+  FORM_AI deferred_until_execute: waiting SPEEDGUIDE、
+  start_form_ai skipped reason=gates SPEEDGUIDE）。
+NLP／沿路走勢：賽後／遺留鏈（§11.4），不擋賽前 Form AI／正式快照。
 ```
 
 ### 3.2 每步：動作／成功／失敗分支
@@ -164,12 +169,12 @@ fixtures 有賽日
 | F0 賽期 | `crawl_fixtures`（低頻，如每日） | FIXTURE ok | 人工補賽日 |
 | F1 探排位 | HTTP 輕探 export | race_count>0 且 generated_at 新 | waiting |
 | F2 同步排位 | `sync_jjjc_racecard` | RACECARD ok | 空→waiting；錯位→備援 `crawl_racecard` 或人工 |
-| F3 速勢 SG | **JJJC sync**（目標）；備援 `crawl_speedguide` | SPEEDGUIDE ok | 空→waiting；不足→failed／人工 |
-| F4 賽事指引 | **JJJC sync**（目標）；備援 `crawl_formguide` | FORMGUIDE ok | 同 SG |
-| F5 因子 | `run_factors`（預設無 NLP） | FACTORS ok | 無歷史→failed（查 J18 API／batch） |
-| F6 Form AI | `start_form_ai_background` | FORM_AI ok | API key／配額→failed；可略過後 provisional |
-| F7 快照 | `snapshot`（**僅當 FORM_AI ok**） | SNAPSHOT ok；鎖 fused／ad_pick_rank；可出海報 | Form AI 未達標 → **禁止正式快照／廣告** |
-| F8 修訂 | `revise_snapshot`（資料再齊後） | 新 revision batch | 已結算不覆寫；revision 亦須 Form AI 仍達標 |
+| F3 速勢 SG | **JJJC sync**（目標）；備援 `crawl_speedguide` | SPEEDGUIDE ok | 空→waiting；不足→failed／人工；**未 ok 禁止 Form AI** |
+| F4 賽事指引 | **JJJC sync**（目標）；備援 `crawl_formguide` | FORMGUIDE ok | 同 SG；**未 ok 禁止 Form AI** |
+| F5 因子 | `run_factors`（預設無 NLP；需排位） | FACTORS ok | 無歷史→failed；**未 ok 禁止 Form AI／正式快照** |
+| F6 Form AI | `start_form_ai_background`（僅 SG＋FG＋FACTORS ok） | FORM_AI ok | 上游未齊→waiting／skip；API key／配額→failed |
+| F7 快照 | `snapshot`（SG＋FG＋FACTORS＋FORM_AI） | SNAPSHOT ok；鎖 fused／ad_pick_rank；可出海報 | 閘門未齊 → **禁止正式快照／廣告** |
+| F8 修訂 | `revise_snapshot`（資料再齊後） | 新 revision batch | 已結算不覆寫；revision 亦須閘門仍達標 |
 | F9 文案／海報 | 自動 social＋歸檔 | 檔案落地 | **無正式快照 → 不觸發** |
 
 ### 3.3 賽前時間建議（可調）
@@ -253,7 +258,7 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 | 能力 | 現況（2026-09-10） | 目標 |
 |------|-------------------|------|
 | `meeting_tick.py` 賽後 RESULTS→SETTLED＋text-reports | ✅ 已有（含 cooldown／max fails／dry-run） | 加輕探、`content_updated_at` 去重、+12h 窗 |
-| 賽前 racecard→SG→FG→factors→Form AI→snapshot | ✅ `mode=pre_race`／`all`（硬閘：SG+FG+Form AI 齊才 snapshot） | 輕探 fingerprint；Webhook |
+| 賽前 racecard→SG→FG→factors→Form AI→snapshot | ✅ `mode=pre_race`／`all`（Form AI 硬閘 SG+FG+FACTORS；快照硬閘再加 FORM_AI） | 輕探 fingerprint；Webhook |
 | Railway／阿里雲 Cron | `start-tick.sh` 預設 `mode=all`；GHA 每小時 | 雙邊常駐確認掛載 |
 | 廣告賽前／賽後文案自動 | ✅ 海報跟快照；賽前 social＋賽後 promo／copy 經 tick（`ad_copy_jobs.py`） | 通知／儀表板歸檔瀏覽 |
 | Webhook 由 JJJC 推送 | ❌ | 優化項（可替代部分輪詢） |
@@ -382,8 +387,9 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 | # | 決策 | 實作含義 |
 |---|------|----------|
 | 1 | **無 Form AI → 不能出任何正式快照** | FORM_AI 馬匹覆蓋 ≥80% 前禁止 snapshot |
-| 1b | **無速勢能量 SG → 不能出任何快照** | SPEEDGUIDE 馬匹覆蓋 ≥80% 前禁止 snapshot（SG 為主要評分參考；見 §10.1c） |
-| 1c | **覆蓋門檻** | SG／FormGuide／Form AI 一律 **馬匹覆蓋 ≥80%** |
+| 1b | **無速勢能量 SG → 不能出任何快照；也不能開 Form AI** | SPEEDGUIDE 馬匹覆蓋 ≥80% 前禁止 Form AI 與 snapshot |
+| 1c | **覆蓋門檻** | SG／FormGuide／Form AI 一律 **馬匹覆蓋 ≥80%**；FACTORS 須 ok |
+| 1d | **Form AI 上游硬閘** | 須 SPEEDGUIDE＋FORMGUIDE＋FACTORS 皆 ok（計劃可樂觀同輪，execute 必驗） |
 | 3b | **資料未齊 → 不出命中快照／統計，也不觸發廣告** | 無正式快照（及賽後未結算）⇒ 不產海報定稿、不產賽前／賽後社交文案、不進可宣傳命中統計 |
 | 3c | **沿路走勢等遺留** | 最長保留 **10～14 日**；取得後 **自動 NLP（若為文字）→ 因子重算** |
 | 4 | **文案全自動產檔** | 僅在閘門通過後；每期歸檔可回測 |
@@ -396,8 +402,9 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 
 ```
 排位齊
-  → SG 馬匹覆蓋 ≥80%          ← 缺則完全不建快照
-  → FormGuide ≥80%             ← 同樣硬閘
+  → SG 馬匹覆蓋 ≥80%          ← 缺則：不啟動 Form AI、不建快照
+  → FormGuide ≥80%             ← 同樣硬閘（Form AI 依賴近績文字）
+  → FACTORS ok                 ← 缺則：不啟動 Form AI、不建快照
   → Form AI ≥80%
   → 才建立正式 primary 快照
   → 才允許海報／文案／其後命中與賽後廣告
@@ -406,7 +413,8 @@ python meeting_tick.py --date YYYY-MM-DD --course ST --dry-run --json
 | 問 | 答 |
 |----|----|
 | Form AI 在快照前還是後？ | **之前** |
-| SG 可以缺嗎？ | **不可以**——你定案：缺 SG **不生成任何快照** |
+| SG 可以缺嗎？ | **不可以**——缺 SG **不啟動 Form AI**、**不生成任何快照** |
+| Form Guide／Factors？ | **同左**——Form AI 與正式快照皆硬閘 |
 | 賽後結算／廣告？ | 只認正式快照；無快照 ⇒ 無命中主統計 ⇒ 不廣告 |
 
 ### 10.1c 舊制「可缺料仍出快照」缺什麼？vs 新定案
@@ -803,6 +811,7 @@ JJJC 欄位路徑 → 建議寫入 J18 的表.欄位
 
 | 日期 | 說明 |
 |------|------|
+| 2026-09-11 | Form AI 硬閘：缺 SG／FG／FACTORS 不准啟動；快照硬閘加入 FACTORS；execute 再驗真實 status；skip_reasons 可監察 |
 | 2026-09-10 | 多輪：JJJC 主路徑、雙跑、Form AI／SG／廣告閘門等 |
 | 2026-09-10 | 覆蓋 80%；缺 SG 不出快照；遺留 10–14 日；§16 JJJC 提示詞 |
 | 2026-09-10 | §1.3 寫入 api_jjjc 正式三支 export 契約；J18 sync 模組落地 |
