@@ -29,10 +29,11 @@ from prediction_export import (
     list_upcoming_meeting,
     parse_odds_map,
 )
+from app_version import __version__ as APP_VERSION
 
 app = FastAPI(
     title="J18 Pre-race Prediction API",
-    version="1.0.0",
+    version=APP_VERSION,
     description=(
         "賽前預測 JSON：model_win_prob 供展示與 Kelly。"
         "外部傳入小數獨贏賠率後回傳 kelly_fraction / edge_vs_market。"
@@ -66,6 +67,7 @@ def health():
     return {
         "status": "ok",
         "service": "j18-prediction-api",
+        "version": APP_VERSION,
         "auth_configured": bool((os.getenv("PREDICTION_API_KEY") or "").strip()),
     }
 
