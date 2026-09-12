@@ -1414,5 +1414,26 @@ def zip_batch_bytes(batch_dir: Path) -> bytes:
             except Exception:
                 fb_text = ""
         if fb_text:
+            try:
+                from ad_package import _sanitize_public_copy_text
+
+                meeting = {}
+                try:
+                    copy = load_copy_json(root) or {}
+                    m = copy.get("meeting") or {}
+                    meeting = {
+                        "date": str(m.get("racing_date") or "")[:10],
+                        "venue_code": str(m.get("course") or "").upper(),
+                        "session": "日" if str(m.get("course") or "").upper() == "ST" else "",
+                    }
+                    # 有 theme／session 字串時交 sanitize 判斷日／夜
+                    if m.get("session"):
+                        meeting["session"] = str(m.get("session"))
+                except Exception:
+                    meeting = {}
+                fb_text = _sanitize_public_copy_text(fb_text, meeting=meeting)
+            except Exception:
+                pass
+        if fb_text:
             zf.writestr("facebook_copy.txt", fb_text + "\n")
     return buf.getvalue()

@@ -23,7 +23,7 @@ Railway：另開一個 service（或與預測 API 分開 Start Command），設�
 |------|------|
 | `AD_API_KEY` | `Authorization: Bearer …` 讀取／產生／ingest |
 | `AD_API_PUBLIC_BASE` | 公開 base（例如 `https://xxx.up.railway.app`），用來組 `assets.poster_url` |
-| `AD_API_BASE_URL` | **Streamlit／CORN** 設此指向生產 Ad API；ready 後 HTTP `POST /v1/ads/ingest` 推送（唔靠共碟） |
+| `AD_API_BASE_URL` | **Streamlit／CORN** 設此指向生產 Ad API（例 `https://j18hkjcapp-production.up.railway.app`）；ready 後 HTTP `POST /v1/ads/ingest`。**可與 `AD_API_PUBLIC_BASE` 相同**——唔會因為「自推」而 skip（呢個係舊 bug） |
 | `GROK_BOT_WEBHOOK_URL` | 外部助手 webhook |
 | `GROK_BOT_WEBHOOK_SECRET` | 送出 Header `X-Webhook-Secret`（可用 `GROK_BOT_WEBHOOK_SECRET_HEADER` 改名） |
 | `AD_OUTPUT_DIR` | 可選；預設專案 `ad_output/` |
@@ -42,7 +42,9 @@ Start Command：`bash start-ad-api.sh`
 - `POST /v1/ads/ingest` 只接受 `status=ready` 且有 tips＋海報（＋ AI，若開啟要求）
 - remote push 同樣拒絕空包
 
-手動重產（Streamlit）成功後會自動跑 AI 精選 → publish → ingest。ZIP 下載會附 `facebook_copy.txt`。
+手動重產（Streamlit／CORN job）成功後會自動跑 AI 精選 → publish → ingest。  
+瀏覽頁「生成 AI 精選評述」成功後亦會 publish + ingest；另有「推送生產 API」按鈕可人手補推。  
+ZIP 下載會附消毒後嘅 `facebook_copy.txt`（日馬唔寫「今晚」、無系統句）。
 
 ## 端點
 

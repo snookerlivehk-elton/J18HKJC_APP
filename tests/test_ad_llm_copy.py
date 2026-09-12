@@ -221,3 +221,87 @@ def test_social_copy_roundtrip(tmp_path: Path):
     p = save_social_copy(tmp_path, payload)
     assert p.is_file()
     assert load_social_copy(tmp_path)["title"] == "t"
+
+
+def test_format_social_day_meeting_no_tonight_or_system():
+    from ad_llm_copy import format_social_post_text
+
+    copy_data = {
+        "meeting": {
+            "racing_date": "2026-09-13",
+            "course": "ST",
+            "session": "日",
+        }
+    }
+    social = {
+        "title": "今晚沙田邊場最有睇頭？",
+        "subtitle": "LLM 暫時未能完成，已用推介自動補齊精選",
+        "featured": [
+            {
+                "race_no": 1,
+                "horse_no": 7,
+                "horse_name": "增旺",
+                "comment": "能量：18% 1W1W 直路望空",
+            }
+        ],
+        "hashtags": ["#賽馬", "#J18HK", "#extra1", "#extra2"],
+        "footer": post_footer_text(),
+    }
+    text = format_social_post_text(social, copy_data=copy_data)
+    assert "今晚" not in text
+    assert "今日" in text
+    assert "LLM 暫時未能" not in text
+    assert "自動補齊" not in text
+    assert "能量" not in text
+    assert "1W1W" not in text
+    assert "#沙田" in text
+    assert "#日馬" in text
+    assert text.count("#") <= 12  # ≤6 tags roughly
+    assert "j18.hk" in text.lower() or "J18.hk" in text
+
+
+def test_normalize_strips_system_subtitle_for_day():
+    writer = DummyWriter()
+    data = writer._normalize_result(
+        {
+            "title": "今晚邊場最有睇頭？",
+            "subtitle": "LLM 暫時未能完成，已用推介自動補齊精選",
+            "featured": [
+                {
+                    "race_no": 1,
+                    "race_id": "R1",
+                    "horse_no": 1,
+                    "horse_name": "金光飛馳",
+                    "comment": "能量：20% 有睇頭",
+                },
+                {
+                    "race_no": 2,
+                    "race_id": "R2",
+                    "horse_no": 5,
+                    "horse_name": "銀河之星",
+                    "comment": "末段走勢唔錯",
+                },
+                {
+                    "race_no": 3,
+                    "race_id": "R3",
+                    "horse_no": 8,
+                    "horse_name": "疾風少年",
+                    "comment": "值得留意",
+                },
+            ],
+            "hashtags": ["#賽馬"],
+        },
+        "",
+        tone="高互動型",
+        copy_data={
+            "meeting": {"racing_date": "2026-09-13", "course": "ST", "session": "日"},
+            "races": _sample_copy()["races"],
+        },
+        source="fallback:timeout",
+    )
+    assert "今晚" not in data["title"]
+    assert data["subtitle"] == ""
+    assert "能量" not in data["featured"][0]["comment"]
+    assert "#賽前預測" in data["hashtags"]
+    assert len(data["hashtags"]) <= 6
+    assert "LLM 暫時未能" not in data["post_text"]

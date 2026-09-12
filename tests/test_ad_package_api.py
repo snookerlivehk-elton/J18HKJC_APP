@@ -476,7 +476,7 @@ class IngestAndLatestTest(unittest.TestCase):
                 self.assertEqual(built.get("status"), "ready")
                 self.assertTrue((built.get("copy") or {}).get("facebook"))
                 tags = (built.get("copy") or {}).get("hashtags") or []
-                self.assertLessEqual(len(tags), 5)
+                self.assertLessEqual(len(tags), 6)
 
                 poster_path = prod / "packages" / f"{built['id']}.png"
                 self.assertTrue(poster_path.is_file())
@@ -609,6 +609,102 @@ class RejectEmptyPendingPosterTest(unittest.TestCase):
             )
             self.assertEqual(r.status_code, 400, r.text)
             self.assertIn("ready", (r.json().get("detail") or "").lower())
+
+
+class RemotePushAndCopySanitizeTest(unittest.TestCase):
+    def test_remote_push_still_posts_when_base_equals_public(self):
+        """Streamlit 常把 BASE_URL 同 PUBLIC_BASE 都設成生產 URL；唔好因此 skip。"""
+        from ad_package import push_ad_package_remote
+
+        pkg = {
+            "id": "2026-09-13-st-day",
+            "status": "ready",
+            "tips": [{"race": 1, "horses": [{"no": 7, "name": "增旺"}]}],
+            "copy": {
+                "facebook": "今日邊場最有睇頭？",
+                "ai": {"post_text": "今日邊場最有睇頭？", "featured": [{"race_id": "x"}]},
+                "hashtags": ["#J18"],
+            },
+            "assets": {"poster_url": "/v1/ads/2026-09-13-st-day/poster"},
+            "meeting": {
+                "date": "2026-09-13",
+                "venue": "沙田",
+                "venue_code": "ST",
+                "session": "日",
+            },
+        }
+        captured = {}
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return {"ok": True, "id": "2026-09-13-st-day"}
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None, headers=None):
+                captured["url"] = url
+                captured["json"] = json
+                captured["headers"] = headers
+                return _Resp()
+
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "AD_API_BASE_URL": "https://j18hkjcapp-production.up.railway.app",
+                "AD_API_PUBLIC_BASE": "https://j18hkjcapp-production.up.railway.app",
+                "AD_API_KEY": "secret-key",
+                "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+            },
+            clear=False,
+        ):
+            with mock.patch("httpx.Client", _Client):
+                out = push_ad_package_remote(pkg, poster_png=b"\x89PNG" + b"0" * 40)
+
+        self.assertTrue(out.get("ok"), out)
+        self.assertIn("/v1/ads/ingest", captured.get("url") or "")
+        self.assertIn("poster_png_b64", captured.get("json") or {})
+        self.assertEqual(
+            (captured.get("json") or {}).get("package", {}).get("status"), "ready"
+        )
+
+    def test_sanitize_day_meeting_strips_tonight_and_system(self):
+        from ad_package import _sanitize_public_copy_text, _publish_hashtags
+
+        meeting = {
+            "date": "2026-09-13",
+            "venue": "沙田",
+            "venue_code": "ST",
+            "session": "日",
+        }
+        raw = (
+            "今晚邊場最有睇頭？\n"
+            "LLM 暫時未能完成，已用推介自動補齊精選\n"
+            "第1場｜7 增旺\n"
+            "能量：12.5% 1W1W 走勢唔錯\n"
+        )
+        cleaned = _sanitize_public_copy_text(raw, meeting=meeting)
+        self.assertNotIn("今晚", cleaned)
+        self.assertIn("今日", cleaned)
+        self.assertNotIn("LLM 暫時未能", cleaned)
+        self.assertNotIn("自動補齊", cleaned)
+        self.assertNotIn("能量", cleaned)
+        self.assertNotIn("1W1W", cleaned)
+        tags = _publish_hashtags(meeting, extra=["#extra", "#賽馬", "#J18HK", "#foo"])
+        self.assertLessEqual(len(tags), 6)
+        self.assertEqual(tags[:3], ["#J18", "#賽前預測", "#香港賽馬"])
+        self.assertIn("#沙田", tags)
+        self.assertIn("#日馬", tags)
+
 
 if __name__ == "__main__":
     unittest.main()
