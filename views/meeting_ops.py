@@ -452,12 +452,34 @@ for stage, label in STAGES:
                     phase = ""
                     if isinstance(prog, dict):
                         phase = str(prog.get("phase") or "")
-                    if phase in ("spawned", "dead"):
+                    if phase in ("spawned", "dead", "booting"):
                         st.warning(
                             "狀態仍顯示 running，但可能尚未真正開始呼叫模型"
-                            f"（phase=`{phase}`）。請再按一次「重新整理進度」；"
-                            "若仍不變，稍後重啟後台任務。"
+                            f"（phase=`{phase}`）。請再按「重新整理進度」；"
+                            "若仍卡住，按下方「強制結束殭屍任務」後再後台啟動。"
                         )
+                        if st.button(
+                            "強制結束殭屍任務",
+                            key=f"act_ai_force_fail_{stage}",
+                            type="primary",
+                        ):
+                            fr = pipe.run_action(
+                                racing_date,
+                                course,
+                                "force_fail_form_ai_job",
+                                job_id=job.get("job_id"),
+                            )
+                            _rec(
+                                "force_fail_form_ai_job",
+                                stage,
+                                str(fr.get("job_id") or fr.get("error") or ""),
+                            )
+                            st.session_state.pop("ops_ready", None)
+                            if fr.get("ok"):
+                                st.success(fr.get("message") or "已解除")
+                            else:
+                                st.error(fr.get("error") or fr)
+                            st.rerun()
                     else:
                         st.info("進行中——可關閉本頁，稍後回來按「重新整理進度」。")
         elif stage == "SNAPSHOT":

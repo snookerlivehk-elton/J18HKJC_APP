@@ -81,10 +81,58 @@ def _tail_log(path: Any, *, max_chars: int = 800) -> str:
         return ""
 
 
+def _job_age_seconds(job: dict) -> Optional[float]:
+    """用 updated_at／created_at 計年齡（秒）；解析失敗回傳 None。"""
+    raw = job.get("updated_at") or job.get("created_at")
+    if raw is None:
+        return None
+    try:
+        if isinstance(raw, datetime):
+            ts = raw
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            return max(0.0, (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds())
+        s = str(raw).strip().replace("Z", "+00:00")
+        if " " in s and "T" not in s:
+            s = s.replace(" ", "T", 1)
+        ts = datetime.fromisoformat(s)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds())
+    except Exception:
+        return None
+
+
+def _pid_cmdline(pid: int) -> str:
+    try:
+        with open(f"/proc/{int(pid)}/cmdline", "rb") as f:
+            return f.read().decode("utf-8", errors="replace").replace("\x00", " ").strip()
+    except Exception:
+        return ""
+
+
+def _pid_looks_like_form_ai(pid: int, job_id: str = "") -> bool:
+    cmd = _pid_cmdline(pid).lower()
+    if not cmd:
+        return False
+    if "form_ai_batch_job" not in cmd and "form_ai_batch" not in cmd:
+        return False
+    if job_id and job_id.lower() not in cmd:
+        # cmdline 未必帶 job-id；有 script 名已足夠
+        pass
+    return True
+
+
 def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
     """
-    若 status=running 但子進程已死（或只有 spawned 且無存活 pid），
-    標記 failed，避免作戰室永遠顯示「進行中」卻 0 token。
+    清掉殭屍 running 任務。
+
+    Railway 上 Web／APP-CORN 唔同容器，單靠 PID 存活會誤判（PID 重用或他容器 PID）。
+    因此以年齡／心跳為主，PID 只作同容器輔助：
+      - phase 仍係 spawned／booting 且超過 FORM_AI_SPAWNED_STALE_SEC（預設 120s）→ failed
+      - 寬限內唔用 PID 判死（避免剛由 CORN 啟動、Web 刷新就誤殺）
+      - phase=running 但 updated_at 超過 FORM_AI_RUNNING_STALE_SEC（預設 45min）無心跳 → failed
+      - 同容器且 cmdline 明顯唔似 form_ai_batch_job（逾短門檻）→ failed
     """
     if not job:
         return job
@@ -95,20 +143,48 @@ def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
         return job
 
     prog = _as_progress(job)
+    phase = str(prog.get("phase") or "").strip().lower() or "unknown"
+    age = _job_age_seconds(job)
+    # 預設 2 分鐘：spawned 太久無 booting／running 心跳即當殭屍（跨容器唔好信 PID）
+    spawned_stale = int(os.getenv("FORM_AI_SPAWNED_STALE_SEC", "120") or 120)
+    running_stale = int(os.getenv("FORM_AI_RUNNING_STALE_SEC", str(45 * 60)) or 45 * 60)
+
     pid_raw = prog.get("pid")
     try:
         pid = int(pid_raw) if pid_raw is not None else None
     except (TypeError, ValueError):
         pid = None
 
-    if pid and _pid_is_alive(pid):
+    stale_reason = ""
+    if phase in ("spawned", "booting", "dead", "unknown"):
+        if age is None or age >= spawned_stale:
+            age_s = "未知" if age is None else f"{int(age)}s"
+            stale_reason = (
+                f"phase={phase} 已 {age_s} 無進入 running"
+                f"（門檻 {spawned_stale}s；跨容器 PID 不可靠，視作殭屍）"
+            )
+        else:
+            # 寬限內：等 worker 打 booting／running 心跳，唔好因他容器 PID 誤殺
+            return job
+    elif phase == "running" and age is not None and age >= running_stale:
+        stale_reason = f"phase=running 但 {int(age)}s 無進度心跳（門檻 {running_stale}s）"
+    elif pid is not None and _pid_is_alive(pid) and not _pid_looks_like_form_ai(
+        pid, job_id
+    ):
+        # 同容器 PID 重用：進程在但唔係 Form AI（要過短門檻先殺，避免誤判）
+        if age is not None and age >= min(60, spawned_stale):
+            stale_reason = (
+                f"pid={pid} 仍在但 cmdline 不像 form_ai_batch_job"
+                f"（可能 PID 重用）；age={int(age)}s"
+            )
+    elif pid is None and age is not None and age >= spawned_stale:
+        stale_reason = f"無 pid 且已 {int(age)}s 仍 running"
+
+    if not stale_reason:
         return job
 
     log_tail = _tail_log(prog.get("log"))
-    detail = (
-        "後台進程已不在（狀態曾卡在 running／spawned）。"
-        "常見原因：子進程啟動即崩潰，或 .env override 令其連錯資料庫。"
-    )
+    detail = f"後台任務已視為中斷：{stale_reason}。"
     if log_tail:
         detail = f"{detail} log: {log_tail}"
 
@@ -117,7 +193,31 @@ def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
         job_id,
         status="failed",
         detail=detail[:1500],
-        progress={**prog, "phase": "dead", "reconciled": True},
+        progress={
+            **prog,
+            "phase": "dead",
+            "reconciled": True,
+            "stale_reason": stale_reason,
+        },
+        finished=True,
+    )
+    return get_job(engine, job_id)
+
+
+def force_fail_job(
+    engine,
+    job_id: str,
+    *,
+    detail: str = "人手標記失敗／強制解除 running",
+) -> Optional[dict]:
+    job = get_job(engine, job_id)
+    prog = _as_progress(job) if job else {}
+    update_job(
+        engine,
+        job_id,
+        status="failed",
+        detail=detail[:1500],
+        progress={**prog, "phase": "force_failed", "reconciled": True},
         finished=True,
     )
     return get_job(engine, job_id)
@@ -314,6 +414,20 @@ def run_meeting(
 
     engine = create_engine(DATABASE_URL_SYNC)
     ensure_jobs_table(engine)
+
+    # 盡早打心跳，避免父進程只見 phase=spawned；跨容器 reconcile 靠呢個
+    update_job(
+        engine,
+        job_id,
+        status="running",
+        detail="booting Form AI worker",
+        progress={
+            "phase": "booting",
+            "pid": os.getpid(),
+            "racing_date": racing_date[:10],
+            "course": course.upper(),
+        },
+    )
 
     analyst = FormAIAnalyst()
     if not analyst.is_ready():

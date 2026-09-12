@@ -706,6 +706,31 @@ class MeetingPipeline:
             return {"ok": True, "job": None, "message": "尚無後台任務"}
         return {"ok": True, "job": job}
 
+    def force_fail_form_ai_job(
+        self, racing_date: str, course: str, job_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """人手解除殭屍 running，之後可再後台啟動。"""
+        import form_ai_batch_job as faj
+
+        faj.ensure_jobs_table(self.engine)
+        job = None
+        if job_id:
+            job = faj.get_job(self.engine, job_id)
+        if not job:
+            job = faj.latest_job(
+                self.engine, job_type="form_ai", racing_date=racing_date, course=course
+            )
+        if not job:
+            return {"ok": False, "error": "找不到 Form AI 後台任務"}
+        jid = str(job.get("job_id") or "")
+        out = faj.force_fail_job(
+            self.engine,
+            jid,
+            detail="人手強制結束 Form AI 後台任務（解除 running 鎖）",
+        )
+        self.refresh_readiness(racing_date, course)
+        return {"ok": True, "job_id": jid, "job": out, "message": f"已強制結束 `{jid}`"}
+
     def list_meeting_races(self, racing_date: str, course: str) -> pd.DataFrame:
         """賽日場次清單（作戰室 drill-down）。"""
         d = racing_date[:10]
@@ -1185,6 +1210,11 @@ class MeetingPipeline:
 
             if action == "form_ai_job_status":
                 return self.get_form_ai_job(
+                    racing_date, course, job_id=kwargs.get("job_id")
+                )
+
+            if action == "force_fail_form_ai_job":
+                return self.force_fail_form_ai_job(
                     racing_date, course, job_id=kwargs.get("job_id")
                 )
 
