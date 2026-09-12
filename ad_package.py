@@ -189,26 +189,152 @@ def _weekday_zh(racing_date: str) -> str:
         return ""
 
 
+def _parse_race_no(race: Dict[str, Any]) -> Optional[int]:
+    for key in ("race_no", "race_num", "race", "race_number"):
+        raw = race.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            if isinstance(raw, bool):
+                continue
+            if isinstance(raw, int):
+                return int(raw)
+            if isinstance(raw, float) and raw == int(raw):
+                return int(raw)
+            s = str(raw).strip()
+            if s.isdigit():
+                return int(s)
+            # "第1場" / "1.0"
+            digits = "".join(ch for ch in s if ch.isdigit())
+            if digits:
+                return int(digits)
+        except Exception:
+            continue
+    return None
+
+
+def _parse_horse(pick: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(pick, dict):
+        return None
+    raw_no = pick.get("horse_no", pick.get("no", pick.get("horse_number")))
+    try:
+        if raw_no is None or raw_no == "":
+            return None
+        no = int(float(raw_no)) if not isinstance(raw_no, bool) else None
+    except Exception:
+        return None
+    if no is None:
+        return None
+    name = str(
+        pick.get("horse_name")
+        or pick.get("name")
+        or pick.get("horse")
+        or ""
+    ).strip()
+    return {"no": no, "name": name}
+
+
+def _picks_from_race(race: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for key in ("fused_picks", "model_picks", "ai_picks", "picks", "selections"):
+        rows = race.get(key)
+        if isinstance(rows, list) and rows:
+            return [p for p in rows if isinstance(p, dict)]
+    return []
+
+
 def _tips_from_races(races: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     tips: List[Dict[str, Any]] = []
     for r in races:
-        rn = r.get("race_no")
-        try:
-            race_n = int(rn) if rn is not None and str(rn).isdigit() else None
-        except Exception:
-            race_n = None
+        if not isinstance(r, dict):
+            continue
+        race_n = _parse_race_no(r)
         if race_n is None:
             continue
         horses: List[Dict[str, Any]] = []
-        for p in list(r.get("fused_picks") or [])[:4]:
-            try:
-                no = int(p.get("horse_no"))
-            except Exception:
-                continue
-            horses.append({"no": no, "name": str(p.get("horse_name") or "").strip()})
+        for p in _picks_from_race(r)[:4]:
+            horse = _parse_horse(p)
+            if horse:
+                horses.append(horse)
         tips.append({"race": race_n, "horses": horses})
     tips.sort(key=lambda x: x["race"])
     return tips
+
+
+def _package_quality(pkg: Optional[Dict[str, Any]]) -> int:
+    """愈高愈完整；用來阻止 pending 空包覆寫 ready 包。"""
+    if not pkg:
+        return -1
+    tips = list(pkg.get("tips") or [])
+    n_horses = sum(len(t.get("horses") or []) for t in tips if isinstance(t, dict))
+    assets = pkg.get("assets") or {}
+    copy_block = pkg.get("copy") or {}
+    meta = pkg.get("meta") or {}
+    has_poster = bool(
+        meta.get("has_poster")
+        or assets.get("poster_path")
+        or str(assets.get("poster_url") or "").strip()
+    )
+    has_ai = bool(copy_block.get("ai") or meta.get("has_ai_social"))
+    status = str(pkg.get("status") or "")
+    score = len(tips) * 10 + n_horses
+    if has_poster:
+        score += 100
+    if has_ai:
+        score += 50
+    if status == "ready":
+        score += 200
+    elif status in {"pending_ai", "pending_ai_social"}:
+        score += 80
+    elif status == "pending_poster":
+        score += 5
+    return score
+
+
+def _enrich_copy_data_from_archives(
+    copy_data: Dict[str, Any],
+    *,
+    output_root: Path,
+) -> Dict[str, Any]:
+    """copy.json 缺 races 時，嘗試由本機／DB archive(copy) 補齊。"""
+    data = dict(copy_data or {})
+    races = list(data.get("races") or [])
+    if races:
+        return data
+    meeting = dict(data.get("meeting") or {})
+    d = str(meeting.get("racing_date") or "")[:10]
+    c = str(meeting.get("course") or "").upper()
+    if not d or not c:
+        return data
+    archived: Dict[str, Any] = {}
+    try:
+        from ad_copy_jobs import load_archive_latest
+
+        archived = load_archive_latest(output_root, d, c, "copy") or {}
+    except Exception:
+        archived = {}
+    if not archived:
+        try:
+            from ad_store import load_archive_latest_db
+
+            archived = load_archive_latest_db(d, c, "copy") or {}
+        except Exception:
+            archived = {}
+    if not isinstance(archived, dict):
+        return data
+    inner = archived.get("races")
+    if not inner and isinstance(archived.get("payload"), dict):
+        inner = (archived.get("payload") or {}).get("races")
+    if isinstance(inner, list) and inner:
+        data["races"] = inner
+        if not data.get("fused_copy"):
+            data["fused_copy"] = (
+                archived.get("fused_copy")
+                or (archived.get("payload") or {}).get("fused_copy")
+            )
+        logger.info(
+            "enriched copy races from archive: %s %s n=%s", d, c, len(inner)
+        )
+    return data
 
 
 def _build_intro(meeting: Dict[str, Any], tips: Sequence[Dict[str, Any]]) -> str:
@@ -386,11 +512,39 @@ def save_ad_package(
     output_root: Optional[Path] = None,
     *,
     push_remote: bool = True,
+    force: bool = False,
 ) -> Path:
     ad_id = str(payload.get("id") or "")
     if not ad_id:
         raise ValueError("ad package missing id")
     paths = package_paths(ad_id, output_root)
+    out_root = Path(output_root) if output_root else default_output_dir()
+
+    # 阻止空／降級包覆寫已有 ready／有 tips／有海報嘅包（生產曾出現 pending_poster + tips=[]）
+    if not force:
+        existing = None
+        try:
+            existing = load_ad_package(ad_id, out_root)
+        except Exception:
+            existing = None
+        if existing and _package_quality(payload) < _package_quality(existing):
+            logger.warning(
+                "skip downgrade save id=%s new=%s/%s old=%s/%s",
+                ad_id,
+                payload.get("status"),
+                _package_quality(payload),
+                existing.get("status"),
+                _package_quality(existing),
+            )
+            payload["save_skipped"] = {
+                "reason": "downgrade_blocked",
+                "existing_status": existing.get("status"),
+                "existing_quality": _package_quality(existing),
+                "new_status": payload.get("status"),
+                "new_quality": _package_quality(payload),
+            }
+            return paths["json"] if paths["json"].is_file() else paths["json"]
+
     paths["json"].write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -401,7 +555,6 @@ def save_ad_package(
     try:
         from ad_store import upsert_ad_package
 
-        out_root = Path(output_root) if output_root else default_output_dir()
         if paths["poster"].is_file():
             poster_bytes = paths["poster"].read_bytes()
         else:
@@ -431,13 +584,13 @@ def save_ad_package(
         logger.warning("ad_store upsert failed: %s", exc)
 
     # 跨服務：Streamlit／CORN → 生產 Ad API（HTTP ingest；唔靠共碟）
+    # 只推真正可用於 FB 嘅 ready 包（有 tips + 海報 bytes）
     if push_remote and payload.get("status") == "ready":
         try:
             if poster_bytes is None:
                 if paths["poster"].is_file():
                     poster_bytes = paths["poster"].read_bytes()
                 else:
-                    out_root = Path(output_root) if output_root else default_output_dir()
                     fused = out_root / "fused.png"
                     if fused.is_file():
                         poster_bytes = fused.read_bytes()
@@ -486,6 +639,22 @@ def push_ad_package_remote(
     key = (os.getenv("AD_API_KEY") or os.getenv("PREDICTION_API_KEY") or "").strip()
     if not key:
         return {"ok": False, "skipped": True, "reason": "AD_API_KEY not set"}
+
+    
+    # 品質閘：唔好把 pending／空 tips／無海報推去生產（會令 FB bot 攞到廢包）
+    if str(payload.get("status") or "") != "ready":
+        return {
+            "ok": False,
+            "skipped": True,
+            "reason": f"status not ready ({payload.get('status')})",
+        }
+    tips = list(payload.get("tips") or [])
+    if not tips or not any((t.get("horses") or []) for t in tips if isinstance(t, dict)):
+        return {"ok": False, "skipped": True, "reason": "tips empty — refuse remote push"}
+    if not poster_png:
+        return {"ok": False, "skipped": True, "reason": "poster_png required for remote push"}
+    if require_ai_social() and not ((payload.get("copy") or {}).get("ai")):
+        return {"ok": False, "skipped": True, "reason": "copy.ai required for ready push"}
 
     import base64
 
@@ -538,14 +707,24 @@ def ingest_ad_package(
     poster_png: Optional[bytes] = None,
     output_root: Optional[Path] = None,
     notify: bool = False,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """
     接收上游推送嘅廣告包：寫本機 packages／DB，並改寫 poster_url 指向本服務公開 URL。
+    只接受可用於 FB 嘅 ready 包（有 tips + 海報）；拒絕 pending_poster／空場次覆寫。
     """
     if not isinstance(package, dict) or not package.get("id"):
         raise ValueError("package.id required")
     pkg = json.loads(json.dumps(package, ensure_ascii=False, default=str))
     ad_id = str(pkg["id"])
+    if not force:
+        if str(pkg.get("status") or "") != "ready":
+            raise ValueError(f"ingest requires status=ready (got {pkg.get('status')})")
+        tips = list(pkg.get("tips") or [])
+        if not tips or not any((t.get("horses") or []) for t in tips if isinstance(t, dict)):
+            raise ValueError("ingest requires non-empty tips with horses")
+        if require_ai_social() and not ((pkg.get("copy") or {}).get("ai")):
+            raise ValueError("ingest requires copy.ai when AD_PACKAGE_REQUIRE_AI_SOCIAL=true")
     out_root = Path(output_root) if output_root else default_output_dir()
     paths = package_paths(ad_id, out_root)
     paths["root"].mkdir(parents=True, exist_ok=True)
@@ -565,18 +744,20 @@ def ingest_ad_package(
     assets.pop("poster_path", None)
     if paths["poster"].is_file():
         assets["poster_path"] = str(paths["poster"])
+    elif not force:
+        raise ValueError("ingest requires poster bytes (poster_png_b64) or existing poster file")
     pkg["assets"] = assets
     pkg["updated_at"] = _hk_now_iso()
     if not pkg.get("created_at"):
         pkg["created_at"] = _hk_now_iso()
 
     # 寫入本機＋DB，唔再向外推（本服務就係目標）
-    save_ad_package(pkg, out_root, push_remote=False)
+    save_ad_package(pkg, out_root, push_remote=False, force=True)
 
     if notify and pkg.get("status") == "ready":
         wh = dispatch_ad_webhook(pkg)
         pkg["webhook"] = wh
-        save_ad_package(pkg, out_root, push_remote=False)
+        save_ad_package(pkg, out_root, push_remote=False, force=True)
     return pkg
 
 
@@ -613,6 +794,9 @@ def build_ad_package_from_copy(
     is_day_meeting: Optional[bool] = None,
     notify: bool = False,
 ) -> Dict[str, Any]:
+    out_root = Path(output_root) if output_root else default_output_dir()
+    copy_data = _enrich_copy_data_from_archives(copy_data, output_root=out_root)
+
     meeting_meta = dict(copy_data.get("meeting") or {})
     racing_date = str(meeting_meta.get("racing_date") or "")[:10]
     course = str(meeting_meta.get("course") or "").upper()
@@ -661,7 +845,6 @@ def build_ad_package_from_copy(
     )
     short = _build_short_copy(meeting, tips, cta)
 
-    out_root = Path(output_root) if output_root else default_output_dir()
     paths = package_paths(ad_id, out_root)
     src = Path(poster_src) if poster_src else latest_paths(out_root)["fused"]
     poster_url = ""
@@ -738,13 +921,23 @@ def build_ad_package_from_copy(
             "require_ai_social": require_ai_social(),
         },
     }
+
+    # 空 tips 的 pending 包唔好當「最新」寫入（避免生產出現共 0 場）
+    if not tips and status != "ready":
+        logger.warning(
+            "ad package %s has empty tips (status=%s); save will no-op if better exists",
+            ad_id,
+            status,
+        )
+
     save_ad_package(payload, out_root)
 
     # ready 必推；pending_ai 時若 AD_PACKAGE_WEBHOOK_ON_POSTER（預設 true）亦推海報版
     if notify and payload.get("status") in {"ready", "pending_ai", "pending_ai_social"}:
-        wh = dispatch_ad_webhook(payload)
-        payload["webhook"] = wh
-        save_ad_package(payload, out_root)
+        if not payload.get("save_skipped"):
+            wh = dispatch_ad_webhook(payload)
+            payload["webhook"] = wh
+            save_ad_package(payload, out_root)
 
     return payload
 
@@ -761,6 +954,25 @@ def publish_ad_package_after_outputs(
         pkg = build_ad_package_from_copy(
             copy_data, output_root=output_root, notify=notify
         )
+        tips = list(pkg.get("tips") or [])
+        n_horses = sum(len(t.get("horses") or []) for t in tips if isinstance(t, dict))
+        if pkg.get("status") == "pending_poster" and n_horses == 0:
+            return {
+                "ok": False,
+                "id": pkg.get("id"),
+                "status": pkg.get("status"),
+                "error": "package incomplete: no poster and empty tips (refuse publishing hollow package)",
+                "package": pkg,
+            }
+        if pkg.get("save_skipped"):
+            return {
+                "ok": False,
+                "id": pkg.get("id"),
+                "status": pkg.get("status"),
+                "error": "save skipped (downgrade blocked)",
+                "save_skipped": pkg.get("save_skipped"),
+                "package": pkg,
+            }
         return {
             "ok": True,
             "id": pkg.get("id"),

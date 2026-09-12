@@ -237,6 +237,37 @@ def upsert_ad_package(
     if not batch_id and isinstance(pkg.get("meeting"), dict):
         batch_id = (pkg.get("meeting") or {}).get("batch_id")
     status = str(pkg.get("status") or "pending")
+    # 阻止空／降級 package_json 覆寫較完整嘅現有包
+    try:
+        prev_row = None
+        eng0 = engine or get_engine()
+        with eng0.connect() as conn0:
+            prev_row = conn0.execute(
+                text("SELECT status, package_json FROM ad_packages WHERE id=:id"),
+                {"id": ad_id},
+            ).mappings().first()
+        if prev_row and prev_row.get("package_json"):
+            from ad_package import _package_quality
+
+            prev_pkg = _json_load(prev_row["package_json"]) or {}
+            if _package_quality(pkg) < _package_quality(prev_pkg):
+                logger.warning(
+                    "ad_store skip downgrade upsert id=%s %s -> %s",
+                    ad_id,
+                    prev_pkg.get("status"),
+                    status,
+                )
+                return {
+                    "ok": False,
+                    "skipped": True,
+                    "reason": "downgrade_blocked",
+                    "id": ad_id,
+                    "existing_status": prev_pkg.get("status"),
+                    "new_status": status,
+                }
+    except Exception as exc:
+        logger.warning("ad_store downgrade check failed: %s", exc)
+
     webhook = pkg.get("webhook")
     # strip local path before persist public-ish package
     store_pkg = json.loads(json.dumps(pkg, ensure_ascii=False, default=str))
