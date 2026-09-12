@@ -35,6 +35,10 @@ jobs:
         OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
         OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
       run: |
+        if [ -z "${DATABASE_URL:-}" ]; then
+          echo "::error::FATAL: set DATABASE_URL secret (Daily Update cannot run against empty DB)"
+          exit 1
+        fi
         # 計算昨天與今天的日期
         START_DATE=$(date -d "yesterday" +%Y-%m-%d)
         END_DATE=$(date +%Y-%m-%d)

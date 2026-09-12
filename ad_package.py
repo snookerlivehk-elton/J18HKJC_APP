@@ -212,6 +212,15 @@ def package_paths(ad_id: str, output_root: Optional[Path] = None) -> Dict[str, P
 def load_ad_package(
     ad_id: str, output_root: Optional[Path] = None
 ) -> Optional[Dict[str, Any]]:
+    # 跨服務：先讀共用 DB，再 fallback 本機碟
+    try:
+        from ad_store import load_ad_package_db
+
+        db_pkg = load_ad_package_db(ad_id)
+        if db_pkg:
+            return db_pkg
+    except Exception:
+        pass
     p = package_paths(ad_id, output_root)["json"]
     if not p.is_file():
         return None
@@ -224,6 +233,14 @@ def load_ad_package(
 def load_latest_ad_package(
     output_root: Optional[Path] = None,
 ) -> Optional[Dict[str, Any]]:
+    try:
+        from ad_store import load_latest_ad_package_db
+
+        db_pkg = load_latest_ad_package_db(ready_only=True)
+        if db_pkg:
+            return db_pkg
+    except Exception:
+        pass
     lid = package_paths("_", output_root)["latest_id"]
     if lid.is_file():
         ad_id = lid.read_text(encoding="utf-8").strip()
@@ -261,6 +278,20 @@ def save_ad_package(
     )
     if payload.get("status") == "ready":
         paths["latest_id"].write_text(ad_id, encoding="utf-8")
+    # dual-write 到共用 DB，讓 Streamlit／Ad API 唔共碟都睇到
+    try:
+        from ad_store import upsert_ad_package
+
+        poster_bytes = None
+        if paths["poster"].is_file():
+            poster_bytes = paths["poster"].read_bytes()
+        else:
+            fused = (Path(output_root) if output_root else default_output_dir()) / "fused.png"
+            if fused.is_file():
+                poster_bytes = fused.read_bytes()
+        upsert_ad_package(payload, poster_png=poster_bytes)
+    except Exception as exc:
+        logger.warning("ad_store upsert failed: %s", exc)
     return paths["json"]
 
 
@@ -411,8 +442,8 @@ def build_ad_package_from_copy(
     }
     save_ad_package(payload, out_root)
 
-    # 只在海報 +（預設）AI 文案齊備時 webhook，避免 Grok 提早發半成品
-    if notify and payload.get("status") == "ready":
+    # ready 必推；pending_ai 時若 AD_PACKAGE_WEBHOOK_ON_POSTER（預設 true）亦推海報版
+    if notify and payload.get("status") in {"ready", "pending_ai", "pending_ai_social"}:
         wh = dispatch_ad_webhook(payload)
         payload["webhook"] = wh
         save_ad_package(payload, out_root)
@@ -499,8 +530,20 @@ def dispatch_ad_webhook(
     url: Optional[str] = None,
     max_attempts: int = 3,
 ) -> Dict[str, Any]:
-    if payload.get("status") != "ready":
-        return {"ok": False, "skipped": True, "reason": "status not ready"}
+    status = str(payload.get("status") or "")
+    allow_poster = (os.getenv("AD_PACKAGE_WEBHOOK_ON_POSTER", "true") or "true").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    if status == "ready":
+        pass
+    elif allow_poster and status in {"pending_ai", "pending_ai_social"} and (
+        (payload.get("meta") or {}).get("has_poster")
+        or (payload.get("assets") or {}).get("poster_url")
+    ):
+        # 海報已齊但 AI 文案未到：預設仍可通知（跨服務自動化）；可用 env 關閉
+        pass
+    else:
+        return {"ok": False, "skipped": True, "reason": f"status not ready ({status})"}
     target = (url or os.getenv("GROK_BOT_WEBHOOK_URL") or "").strip()
     if not target:
         return {"ok": False, "skipped": True, "reason": "GROK_BOT_WEBHOOK_URL not set"}
@@ -544,5 +587,15 @@ def dispatch_ad_webhook(
 
 
 def list_ad_package_ids(output_root: Optional[Path] = None) -> List[str]:
+    ids: List[str] = []
+    try:
+        from ad_store import list_ad_package_ids_db
+
+        ids = list(list_ad_package_ids_db())
+    except Exception:
+        ids = []
     root = packages_dir(output_root)
-    return sorted({p.stem for p in root.glob("*.json")}, reverse=True)
+    for p in root.glob("*.json"):
+        if p.stem not in ids:
+            ids.append(p.stem)
+    return sorted(ids, reverse=True)

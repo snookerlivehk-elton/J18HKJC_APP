@@ -368,3 +368,36 @@ CREATE TABLE auth_whitelist (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+
+-- 廣告包共用儲存（跨 CORN / Streamlit / Ad API；唔依賴本機碟）
+CREATE TABLE IF NOT EXISTS ad_packages (
+    id VARCHAR(64) PRIMARY KEY,
+    racing_date DATE NOT NULL,
+    course VARCHAR(8) NOT NULL,
+    batch_id VARCHAR(64),
+    status VARCHAR(32) NOT NULL,
+    package_json JSONB NOT NULL,
+    copy_json JSONB,
+    social_json JSONB,
+    poster_png BYTEA,
+    webhook_json JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ad_packages_meeting ON ad_packages(racing_date, course);
+CREATE INDEX IF NOT EXISTS idx_ad_packages_updated ON ad_packages(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS ad_archives (
+    racing_date DATE NOT NULL,
+    course VARCHAR(8) NOT NULL,
+    kind VARCHAR(32) NOT NULL,
+    batch_id VARCHAR(64),
+    payload_json JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (racing_date, course, kind)
+);
+
+ALTER TABLE prediction_snapshot_batches
+    ADD COLUMN IF NOT EXISTS ad_status VARCHAR(20);

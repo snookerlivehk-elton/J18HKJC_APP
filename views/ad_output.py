@@ -230,6 +230,20 @@ st.caption(
 )
 
 out_root = default_output_dir()
+# 跨服務：若本機無海報，試從共用 DB hydrate（CORN 產、Streamlit 讀）
+try:
+    from ad_store import hydrate_package_to_disk, list_ad_package_ids_db, load_latest_ad_package_db
+
+    if not (out_root / "fused.png").is_file():
+        latest = load_latest_ad_package_db(ready_only=False)
+        if latest and latest.get("id"):
+            hydrate_package_to_disk(str(latest["id"]), out_root)
+        else:
+            ids = list_ad_package_ids_db()
+            if ids:
+                hydrate_package_to_disk(ids[0], out_root)
+except Exception:
+    pass
 paths = latest_paths(out_root)
 st.info(f"輸出：`{paths['fused'].name}` @ `{out_root}`")
 try:

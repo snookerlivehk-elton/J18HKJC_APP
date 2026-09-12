@@ -2,7 +2,7 @@ name: Meeting Tick (pre + post race)
 
 # 阿里雲／Railway 雙邊並行：
 #   Secrets: RAILWAY_DATABASE_URL（或沿用 DATABASE_URL）、ALIYUN_DATABASE_URL、JJJC_API_BASE
-#   未設定該邊 DB secret → 該 job 自動 skip（exit 0）
+#   未設定該邊 DB secret → 該 job 失敗（exit 1；避免假綠燈）。若刻意停用設 Vars ENABLE_MEETING_TICK_RAILWAY/ALIYUN=false
 #   Vars（可選）: ENABLE_MEETING_TICK_RAILWAY / ENABLE_MEETING_TICK_ALIYUN = false 可關閉
 #   預設 mode=all（賽前＋賽後）；可用 workflow_dispatch mode 覆寫
 
@@ -58,8 +58,8 @@ jobs:
           export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "Skip: set RAILWAY_DATABASE_URL or DATABASE_URL secret"
-            exit 0
+            echo "::error::FATAL: set RAILWAY_DATABASE_URL or DATABASE_URL secret (refusing silent skip)"
+            exit 1
           fi
           EXTRA=""
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
@@ -96,8 +96,8 @@ jobs:
         run: |
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-$DATABASE_URL}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "Skip: set ALIYUN_DATABASE_URL secret"
-            exit 0
+            echo "::error::FATAL: set ALIYUN_DATABASE_URL secret (refusing silent skip)"
+            exit 1
           fi
           EXTRA=""
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then

@@ -54,7 +54,7 @@ def write_archive_version(
     kind: str,
     data: Dict[str, Any],
 ) -> Dict[str, str]:
-    """寫 latest ＋ timestamped 版本；回傳路徑。"""
+    """寫 latest ＋ timestamped 版本；回傳路徑；並 dual-write 到共用 DB。"""
     root = archive_meeting_dir(output_root, racing_date, course)
     root.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -63,6 +63,19 @@ def write_archive_version(
     payload = json.dumps(data, ensure_ascii=False, indent=2)
     stamped.write_text(payload, encoding="utf-8")
     latest.write_text(payload, encoding="utf-8")
+    try:
+        from ad_store import upsert_archive
+
+        meeting = data.get("meeting") if isinstance(data.get("meeting"), dict) else {}
+        upsert_archive(
+            str(racing_date)[:10],
+            str(course or "").upper(),
+            str(kind),
+            data,
+            batch_id=str(meeting.get("batch_id") or data.get("batch_id") or "") or None,
+        )
+    except Exception:
+        pass
     return {"stamped": str(stamped), "latest": str(latest)}
 
 
@@ -70,10 +83,15 @@ def load_archive_latest(
     output_root: Path, racing_date: str, course: str, kind: str
 ) -> Dict[str, Any]:
     p = archive_latest_path(output_root, racing_date, course, kind)
-    if not p.is_file():
-        return {}
+    if p.is_file():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        from ad_store import load_archive_latest_db
+
+        return load_archive_latest_db(str(racing_date)[:10], str(course or "").upper(), str(kind)) or {}
     except Exception:
         return {}
 
@@ -97,7 +115,18 @@ def job_done_for_batch(
     if not batch_id:
         return False
     data = load_archive_latest(output_root, racing_date, course, kind)
-    return _meeting_batch_id(data) == str(batch_id)
+    if _meeting_batch_id(data) == str(batch_id):
+        return True
+    try:
+        from ad_store import job_done_for_batch_db
+
+        return bool(
+            job_done_for_batch_db(
+                str(racing_date)[:10], str(course or "").upper(), str(kind), str(batch_id)
+            )
+        )
+    except Exception:
+        return False
 
 
 def resolve_meeting_batch_id(
