@@ -522,5 +522,93 @@ class IngestAndLatestTest(unittest.TestCase):
                 self.assertTrue(poster_resp.content.startswith(b"\x89PNG"))
 
 
+
+
+class TipsExtractionTest(unittest.TestCase):
+    def test_alternate_race_and_horse_fields(self):
+        from ad_package import _tips_from_races
+
+        tips = _tips_from_races(
+            [
+                {
+                    "race_num": 1,
+                    "fused_picks": [{"no": 7, "name": "增旺"}],
+                },
+                {
+                    "race_no": 2,
+                    "model_picks": [{"horse_no": 3, "horse_name": "飛影"}],
+                },
+            ]
+        )
+        self.assertEqual(len(tips), 2)
+        self.assertEqual(tips[0]["horses"][0]["no"], 7)
+        self.assertEqual(tips[1]["horses"][0]["name"], "飛影")
+
+
+class RejectEmptyPendingPosterTest(unittest.TestCase):
+    def test_save_blocks_downgrade_to_empty_pending(self):
+        from ad_package import save_ad_package, _package_quality
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkg_dir = root / "packages"
+            pkg_dir.mkdir(parents=True)
+            good = {
+                "id": "2026-09-13-st-day",
+                "status": "ready",
+                "tips": [{"race": 1, "horses": [{"no": 7, "name": "增旺"}]}],
+                "copy": {"facebook": "hi", "ai": {"post_text": "hi", "featured": []}},
+                "assets": {"poster_url": "https://ads.example.com/v1/ads/2026-09-13-st-day/poster"},
+                "meta": {"has_poster": True, "has_ai_social": True},
+            }
+            (pkg_dir / "2026-09-13-st-day.json").write_text(
+                json.dumps(good), encoding="utf-8"
+            )
+            (pkg_dir / "2026-09-13-st-day.png").write_bytes(b"\x89PNG" + b"0" * 20)
+            bad = {
+                "id": "2026-09-13-st-day",
+                "status": "pending_poster",
+                "tips": [],
+                "intro": "共 0 場",
+                "copy": {"facebook": "共 0 場", "ai": None},
+                "assets": {"poster_url": ""},
+                "meta": {"has_poster": False},
+            }
+            with mock.patch.dict(
+                "os.environ",
+                {"AD_STORE_ENABLED": "false", "AD_API_BASE_URL": ""},
+                clear=False,
+            ):
+                save_ad_package(bad, root, push_remote=False)
+            kept = json.loads((pkg_dir / "2026-09-13-st-day.json").read_text(encoding="utf-8"))
+            self.assertEqual(kept.get("status"), "ready")
+            self.assertTrue(kept.get("tips"))
+            self.assertGreater(_package_quality(kept), _package_quality(bad))
+            self.assertEqual(bad.get("save_skipped", {}).get("reason"), "downgrade_blocked")
+
+    def test_ingest_rejects_pending_poster(self):
+        from fastapi.testclient import TestClient
+
+        from ad_api import app
+
+        with mock.patch.dict("os.environ", {"AD_API_KEY": "secret-key"}, clear=False):
+            client = TestClient(app)
+            r = client.post(
+                "/v1/ads/ingest",
+                headers={"Authorization": "Bearer secret-key"},
+                json={
+                    "package": {
+                        "id": "2026-09-13-st-day",
+                        "status": "pending_poster",
+                        "tips": [],
+                        "copy": {"ai": None},
+                        "assets": {},
+                    },
+                    "notify": False,
+                },
+            )
+            self.assertEqual(r.status_code, 400, r.text)
+            self.assertIn("ready", (r.json().get("detail") or "").lower())
+
 if __name__ == "__main__":
     unittest.main()

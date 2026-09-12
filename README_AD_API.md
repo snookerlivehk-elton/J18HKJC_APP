@@ -37,6 +37,11 @@ Start Command：`bash start-ad-api.sh`
 2. 若設咗 `AD_API_BASE_URL` → `POST /v1/ads/ingest` 推去生產 Ad API（含海報 bytes）
 3. 可選 webhook
 
+**品質閘（重要）：**
+- 唔會用 `pending_poster`／`tips=[]`／無海報嘅空包覆寫已有 ready 包
+- `POST /v1/ads/ingest` 只接受 `status=ready` 且有 tips＋海報（＋ AI，若開啟要求）
+- remote push 同樣拒絕空包
+
 手動重產（Streamlit）成功後會自動跑 AI 精選 → publish → ingest。ZIP 下載會附 `facebook_copy.txt`。
 
 ## 端點
