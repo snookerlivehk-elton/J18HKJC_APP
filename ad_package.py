@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 HK_TZ = timezone(timedelta(hours=8))
 PACKAGES_SUBDIR = "packages"
 LATEST_ID_NAME = "_latest_id.txt"
-DEFAULT_HASHTAGS = ["#J18", "#賽馬", "#賽前預測"]
+DEFAULT_HASHTAGS = ["#J18", "#賽前預測", "#香港賽馬"]
 DEFAULT_CTA = "想追臨場心水？而家就登入 J18.hk"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
 DEFAULT_DISCLAIMER = "預測／資料只供參考，投注前請自行判斷。"
-PACKAGE_HASHTAG_LIMIT = 5
+PACKAGE_HASHTAG_LIMIT = 6
 
 # ready 需同時有海報 + AI 精選文案（Grok Bot 輪詢用）；可設 AD_PACKAGE_REQUIRE_AI_SOCIAL=false 關閉
 def require_ai_social() -> bool:
@@ -131,10 +131,16 @@ def public_base_url() -> str:
 
 
 def remote_ad_api_base() -> str:
-    """CORN／Streamlit 推送生產 Ad API 用（與 AD_API_PUBLIC_BASE 可相同主機）。"""
+    """CORN／Streamlit 推送生產 Ad API 用。
+
+    別名：AD_API_BASE_URL / AD_API_PUSH_URL / AD_PACKAGE_API_URL / AD_PACKAGE_BASE_URL
+    例：https://j18hkjcapp-production.up.railway.app
+    """
     return (
         os.getenv("AD_API_BASE_URL")
         or os.getenv("AD_API_PUSH_URL")
+        or os.getenv("AD_PACKAGE_API_URL")
+        or os.getenv("AD_PACKAGE_BASE_URL")
         or ""
     ).strip().rstrip("/")
 
@@ -337,6 +343,79 @@ def _enrich_copy_data_from_archives(
     return data
 
 
+
+_SYSTEM_COPY_MARKERS = (
+    "LLM 暫時未能",
+    "已用推介自動補齊",
+    "自動補齊精選",
+    "fallback:",
+)
+
+
+def _session_daypart(meeting: Dict[str, Any]) -> str:
+    """日馬→今日／日間；夜馬→今晚。"""
+    session = str(meeting.get("session") or "").strip()
+    theme = str(meeting.get("theme") or "").strip().lower()
+    if session == "夜" or theme == "night":
+        return "今晚"
+    return "今日"
+
+
+def _venue_hashtag(meeting: Dict[str, Any]) -> str:
+    code = str(meeting.get("venue_code") or meeting.get("course") or "").upper()
+    if code in {"ST", "沙田"}:
+        return "#沙田"
+    if code in {"HV", "跑馬地", "谷"}:
+        return "#跑馬地"
+    return ""
+
+
+def _session_hashtag(meeting: Dict[str, Any]) -> str:
+    session = str(meeting.get("session") or "").strip()
+    if session == "夜":
+        return "#夜馬"
+    return "#日馬"
+
+
+def _publish_hashtags(meeting: Dict[str, Any], extra: Sequence[str] = ()) -> List[str]:
+    tags = ["#J18", "#賽前預測", "#香港賽馬"]
+    v = _venue_hashtag(meeting)
+    s = _session_hashtag(meeting)
+    if v:
+        tags.append(v)
+    if s:
+        tags.append(s)
+    tags.extend(list(extra or []))
+    return _cap_hashtags(tags, limit=PACKAGE_HASHTAG_LIMIT)
+
+
+def _sanitize_public_copy_text(text: str, *, meeting: Optional[Dict[str, Any]] = None) -> str:
+    """對外文案消毒：移除系統句、日馬唔用『今晚』、刪技術字串。"""
+    import re
+
+    body = str(text or "")
+    # drop system lines
+    cleaned_lines = []
+    for line in body.splitlines():
+        if any(m in line for m in _SYSTEM_COPY_MARKERS):
+            continue
+        if line.strip().startswith("（") and any(m in line for m in ("自動補齊", "LLM")):
+            continue
+        cleaned_lines.append(line)
+    body = "\n".join(cleaned_lines)
+    # strip technical tokens
+    body = re.sub(r"能量\s*[：:]\s*[\d.]+%?", "", body)
+    body = re.sub(r"\b\d+W\d+P\d+S\b", "", body, flags=re.I)
+    body = re.sub(r"\b\d+W\d+W\b", "", body, flags=re.I)
+    body = re.sub(r"share[_\s-]?pct\s*[：:=]?\s*[\d.]+", "", body, flags=re.I)
+    body = re.sub(r"[ \t]{2,}", " ", body)
+    meeting = meeting or {}
+    if _session_daypart(meeting) == "今日":
+        body = body.replace("今晚", "今日")
+        body = body.replace("今夜", "今日")
+    return body.strip()
+
+
 def _build_intro(meeting: Dict[str, Any], tips: Sequence[Dict[str, Any]]) -> str:
     start = str(meeting.get("start_time") or "").strip()
     start_bit = f"，預計{start}開跑" if start else ""
@@ -415,8 +494,8 @@ def _ensure_facebook_publish_ready(
     cta: str,
     hashtags: Sequence[str],
 ) -> str:
-    """確保 AI／模板文案含日期場地、CTA、免責；缺則補尾。"""
-    body = str(text or "").strip()
+    """確保 AI／模板文案含日期場地、CTA、免責；缺則補尾。並消毒系統句／技術字。"""
+    body = _sanitize_public_copy_text(str(text or "").strip(), meeting=meeting)
     if not body:
         return body
     lower = body.lower()
@@ -432,7 +511,7 @@ def _ensure_facebook_publish_ready(
         extras.append(cta)
     if "參考" not in body and "免責" not in body:
         extras.append(DEFAULT_DISCLAIMER)
-    tags = _cap_hashtags(hashtags)
+    tags = _publish_hashtags(meeting, extra=list(hashtags or []))
     if tags and not any(t in body for t in tags[:2]):
         extras.append(" ".join(tags))
     if not extras:
@@ -596,13 +675,26 @@ def save_ad_package(
                         poster_bytes = fused.read_bytes()
             remote = push_ad_package_remote(payload, poster_png=poster_bytes)
             if remote.get("ok"):
-                payload["remote_push"] = {"ok": True, "id": remote.get("id")}
-            elif not remote.get("skipped"):
+                payload["remote_push"] = {
+                    "ok": True,
+                    "id": remote.get("id"),
+                    "url": remote.get("url"),
+                }
+            else:
                 payload["remote_push"] = {
                     "ok": False,
+                    "skipped": bool(remote.get("skipped")),
                     "error": remote.get("error") or remote.get("reason"),
+                    "reason": remote.get("reason"),
+                    "url": remote.get("url"),
                 }
-                logger.warning("ad package remote push failed: %s", remote)
+                if not remote.get("skipped"):
+                    logger.warning("ad package remote push failed: %s", remote)
+                else:
+                    logger.info(
+                        "ad package remote push skipped: %s",
+                        remote.get("reason") or remote,
+                    )
         except Exception as exc:
             logger.warning("ad package remote push error: %s", exc)
             payload["remote_push"] = {"ok": False, "error": str(exc)}
@@ -622,20 +714,9 @@ def push_ad_package_remote(
     base = remote_ad_api_base()
     if not base:
         return {"ok": False, "skipped": True, "reason": "AD_API_BASE_URL not set"}
-    public = public_base_url()
-    # 本機就係 Ad API 且 base＝公開 URL 時唔好自推（避免無謂迴圈）
-    if public and base.rstrip("/") == public.rstrip("/"):
-        skip_self = (os.getenv("AD_API_PUSH_SELF") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        if not skip_self:
-            return {
-                "ok": False,
-                "skipped": True,
-                "reason": "AD_API_BASE_URL equals AD_API_PUBLIC_BASE (set AD_API_PUSH_SELF=1 to force)",
-            }
+    # 注意：唔好因為 BASE==PUBLIC 就略過推送。
+    # Streamlit 常會同時設兩個 URL 指住生產 Ad API；略過會令生產永遠空。
+    # ingest 端 save(..., push_remote=False)，唔會造成迴圈。
     key = (os.getenv("AD_API_KEY") or os.getenv("PREDICTION_API_KEY") or "").strip()
     if not key:
         return {"ok": False, "skipped": True, "reason": "AD_API_KEY not set"}
@@ -834,7 +915,7 @@ def build_ad_package_from_copy(
     tips = _tips_from_races(list(copy_data.get("races") or []))
     intro = _build_intro(meeting, tips)
     cta = DEFAULT_CTA
-    hashtags = _cap_hashtags(DEFAULT_HASHTAGS)
+    hashtags = _publish_hashtags(meeting, extra=DEFAULT_HASHTAGS)
     template_facebook = _build_facebook_copy(
         meeting=meeting,
         tips=tips,
@@ -863,10 +944,12 @@ def build_ad_package_from_copy(
     # Facebook 文案優先用 AI 高互動 post_text（含 J18.hk CTA footer）；否則 template
     facebook = str((ai or {}).get("post_text") or "").strip() or template_facebook
     if ai and ai.get("hashtags"):
-        hashtags = _cap_hashtags(list(ai.get("hashtags") or hashtags))
+        hashtags = _publish_hashtags(meeting, extra=list(ai.get("hashtags") or hashtags))
     facebook = _ensure_facebook_publish_ready(
         facebook, meeting=meeting, cta=cta, hashtags=hashtags
     )
+    # 對外 hashtags 再用消毒後上限（唔抄系統／過多 tag）
+    hashtags = _publish_hashtags(meeting, extra=hashtags)
 
     # Grok Bot 期望 ready = 海報 PNG + AI 精選文案齊備
     if not has_poster:
@@ -973,11 +1056,13 @@ def publish_ad_package_after_outputs(
                 "save_skipped": pkg.get("save_skipped"),
                 "package": pkg,
             }
+        remote = (pkg or {}).get("remote_push") or {}
         return {
             "ok": True,
             "id": pkg.get("id"),
             "status": pkg.get("status"),
             "package": pkg,
+            "remote_push": remote,
         }
     except Exception as e:
         logger.exception("publish_ad_package_after_outputs failed")

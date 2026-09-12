@@ -212,14 +212,88 @@ def count_candidate_races(copy_data: Dict[str, Any]) -> int:
     return n
 
 
-def format_social_post_text(social_data: Dict[str, Any]) -> str:
-    """Facebook / IG 可貼文排版（含固定結尾）。"""
+_PUBLIC_SYSTEM_MARKERS = (
+    "LLM 暫時未能",
+    "已用推介自動補齊",
+    "自動補齊精選",
+    "自動補齊：",
+)
+
+
+def _is_system_subtitle(text: str) -> bool:
+    s = str(text or "")
+    return any(m in s for m in _PUBLIC_SYSTEM_MARKERS)
+
+
+def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
+    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚。"""
+    import re
+
+    body = str(text or "").strip().replace("\n", " ")
+    body = re.sub(r"能量\s*[：:]\s*[\d.]+%?", "", body)
+    body = re.sub(r"\b\d+W\d+P\d+S\b", "", body, flags=re.I)
+    body = re.sub(r"\b\d+W\d+W\b", "", body, flags=re.I)
+    body = re.sub(r"share[_\s-]?pct\s*[：:=]?\s*[\d.]+", "", body, flags=re.I)
+    body = re.sub(r"[ \t]{2,}", " ", body).strip(" ，,;；")
+    if daypart == "今日":
+        body = body.replace("今晚", "今日").replace("今夜", "今日")
+    if not body or len(body) < 4:
+        return f"{daypart}走勢值得留意，有得傾"
+    return body[:COMMENT_MAX_CHARS]
+
+
+def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
+    meeting = (copy_data or {}).get("meeting") or {}
+    session_raw = str(meeting.get("session") or meeting.get("theme") or "")
+    session = session_raw.lower()
+    course = str(meeting.get("course") or "").upper()
+    # 明確日／夜優先；否則 HV 預設夜馬、ST／其他預設日馬
+    if "日" in session_raw and "夜" not in session_raw:
+        return "今日"
+    if "夜" in session_raw or session == "night":
+        return "今晚"
+    if course == "HV":
+        return "今晚"
+    return "今日"
+
+
+def _publish_hashtags_for_copy(copy_data: Optional[Dict[str, Any]], extra: Optional[List[str]] = None) -> List[str]:
+    meeting = (copy_data or {}).get("meeting") or {}
+    course = str(meeting.get("course") or "").upper()
+    session = str(meeting.get("session") or "")
+    tags = ["#J18", "#賽前預測", "#香港賽馬"]
+    if course == "ST" or "沙田" in session:
+        tags.append("#沙田")
+    elif course == "HV" or "跑馬地" in session or "谷" in session:
+        tags.append("#跑馬地")
+    if "夜" in session:
+        tags.append("#夜馬")
+    else:
+        tags.append("#日馬")
+    for t in list(extra or []):
+        s = str(t or "").strip()
+        if not s:
+            continue
+        if not s.startswith("#"):
+            s = "#" + s.lstrip("#")
+        if s not in tags:
+            tags.append(s)
+    return tags[:6]
+
+
+def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[Dict[str, Any]] = None) -> str:
+    """Facebook / IG 可貼文排版（含固定結尾）。唔寫入系統／fallback 提示句。"""
+    daypart = _meeting_daypart_from_copy(copy_data or {"meeting": (social_data or {}).get("meeting") or {}})
     lines: List[str] = []
     title = str((social_data or {}).get("title") or "").strip()
     if title:
+        if daypart == "今日":
+            title = title.replace("今晚", "今日").replace("今夜", "今日")
         lines.append(title)
     subtitle = str((social_data or {}).get("subtitle") or "").strip()
-    if subtitle:
+    if subtitle and not _is_system_subtitle(subtitle):
+        if daypart == "今日":
+            subtitle = subtitle.replace("今晚", "今日").replace("今夜", "今日")
         lines.append(subtitle)
     if lines:
         lines.append("")
@@ -228,15 +302,19 @@ def format_social_post_text(social_data: Dict[str, Any]) -> str:
         race_no = item.get("race_no") or "?"
         horse_no = item.get("horse_no") or "?"
         horse_name = item.get("horse_name") or ""
-        comment = item.get("comment") or ""
+        comment = _humanize_comment(item.get("comment") or "", daypart=daypart)
         lines.append(f"第{race_no}場｜{horse_no} {horse_name}".rstrip())
         if comment:
             lines.append(str(comment))
         lines.append("")
 
     hashtags = list((social_data or {}).get("hashtags") or [])
+    if not hashtags:
+        hashtags = _publish_hashtags_for_copy(copy_data)
+    else:
+        hashtags = _publish_hashtags_for_copy(copy_data, extra=hashtags)
     if hashtags:
-        lines.append(" ".join(str(t) for t in hashtags))
+        lines.append(" ".join(str(t) for t in hashtags[:6]))
         lines.append("")
 
     footer = str((social_data or {}).get("footer") or "").strip() or post_footer_text()
@@ -469,11 +547,12 @@ class AdSocialCopywriter:
                 continue
 
             form = str(best.get("form_text") or "").strip()
+            daypart = _meeting_daypart_from_copy(copy_data)
             if form:
-                comment = form.replace("\n", " ")[:COMMENT_MAX_CHARS]
+                comment = _humanize_comment(form, daypart=daypart)
             else:
                 tag = str(best.get("tag") or "推介").strip() or "推介"
-                comment = f"{tag}走勢值得留意，今晚有得傾"[:COMMENT_MAX_CHARS]
+                comment = f"{tag}走勢值得留意，有得傾"[:COMMENT_MAX_CHARS]
 
             dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
                 int(best["horse_no"]), set()
@@ -523,7 +602,8 @@ class AdSocialCopywriter:
             if not race_id or race_id in seen_races:
                 continue
             seen_races.add(race_id)
-            comment = str(item.get("comment") or "").strip()
+            daypart = _meeting_daypart_from_copy(copy_data)
+            comment = _humanize_comment(str(item.get("comment") or "").strip(), daypart=daypart)
             clean_rows.append(
                 {
                     "race_no": item.get("race_no"),
@@ -556,27 +636,28 @@ class AdSocialCopywriter:
                 s = "#" + s.lstrip("#")
             if s not in clean_tags:
                 clean_tags.append(s)
-        for default_tag in ("#J18", "#賽馬", "#賽馬貼士", "#J18HK", "#香港賽馬"):
-            if default_tag not in clean_tags:
-                clean_tags.append(default_tag)
-            if len(clean_tags) >= 8:
-                break
 
         tone_key = normalize_tone(tone)
+        daypart = _meeting_daypart_from_copy(copy_data)
         title = str(raw.get("title") or "").strip()
         subtitle = str(raw.get("subtitle") or "").strip()
+        if _is_system_subtitle(subtitle):
+            subtitle = ""
+        if daypart == "今日":
+            title = title.replace("今晚", "今日").replace("今夜", "今日")
+            subtitle = subtitle.replace("今晚", "今日").replace("今夜", "今日")
         if not title:
             meeting = (copy_data or {}).get("meeting") or {}
             course = meeting.get("course") or ""
             racing_date = str(meeting.get("racing_date") or "")[:10]
-            title = f"{racing_date} {course} 今晚邊場最有睇頭？".strip()
+            title = f"{racing_date} {course} {daypart}邊場最有睇頭？".strip()
 
         footer = post_footer_text()
         result = {
             "title": title,
             "subtitle": subtitle,
             "featured": clean_rows[:3],
-            "hashtags": clean_tags[:15],
+            "hashtags": _publish_hashtags_for_copy(copy_data, extra=clean_tags),
             "footer": footer,
             "footer_lines": list(POST_FOOTER_LINES),
             "post_text": "",
@@ -586,7 +667,10 @@ class AdSocialCopywriter:
             "source": source,
             "raw": raw,
         }
-        result["post_text"] = format_social_post_text(result)
+        result["post_text"] = format_social_post_text(result, copy_data=copy_data)
+        result["hashtags"] = _publish_hashtags_for_copy(
+            copy_data, extra=list(result.get("hashtags") or [])
+        )
         return result
 
     def _chat_json(self, messages: List[Dict[str, str]], *, temperature: float) -> Dict[str, Any]:
@@ -671,9 +755,9 @@ class AdSocialCopywriter:
                 raise ValueError(f"生成失敗：{llm_err}") from llm_err
             parsed = {
                 "title": "",
-                "subtitle": "（LLM 暫時未能完成，已用推介自動補齊精選）",
+                "subtitle": "",  # 唔寫入對外文案；UI 用 source=fallback:* 顯示提示
                 "featured": fb,
-                "hashtags": ["#J18", "#賽馬", "#賽馬貼士", "#J18HK"],
+                "hashtags": _publish_hashtags_for_copy(copy_data),
             }
             source = f"fallback:{llm_err}"
 

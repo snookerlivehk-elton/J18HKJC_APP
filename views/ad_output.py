@@ -32,6 +32,33 @@ from ad_poster import (
 from factor_calibration import FactorCalibration
 
 
+def _show_remote_push(remote: Optional[Dict[str, Any]]) -> None:
+    """顯示生產 Ad API ingest 結果（下游 Grok Bot 只睇生產 API）。"""
+    if not remote:
+        return
+    if remote.get("ok"):
+        st.success(
+            f"已推送生產 Ad API：`{remote.get('id') or 'ready'}`"
+            + (f" → {remote.get('url')}" if remote.get("url") else "")
+        )
+        return
+    reason = remote.get("error") or remote.get("reason") or "unknown"
+    if remote.get("skipped"):
+        st.warning(f"未推送生產 API（略過）：{reason}")
+    else:
+        st.error(f"推送生產 API 失敗：{reason}")
+
+
+def _sync_publish_to_prod(out_root: Path, *, notify: bool = False) -> Dict[str, Any]:
+    """fused + social／facebook 齊備時 rebuild + POST /v1/ads/ingest。"""
+    try:
+        from ad_package import publish_ad_package_after_outputs
+
+        return publish_ad_package_after_outputs(output_root=out_root, notify=notify)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
 def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
     """預覽＋下載（ZIP／單張）。可在瀏覽頁或重產成功後同頁使用。"""
     paths = latest_paths(out_root)
@@ -50,17 +77,39 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
         if fb:
             st.caption(f"檔案大小：{PRIMARY_TRACK_LABEL} {int(fb) // 1024} KB")
 
-    try:
-        st.download_button(
-            f"⬇️ 下載 ZIP（{PRIMARY_TRACK_LABEL} PNG + copy）",
-            data=zip_batch_bytes(out_root),
-            file_name="ad_output_latest.zip",
-            mime="application/zip",
-            key=f"zip_{key_prefix}",
-            type="primary",
-        )
-    except Exception as e:
-        st.caption(f"ZIP 失敗：{e}")
+    # ZIP 旁提供「推送生產 API」；下載 ZIP 本身唔會自動 POST（避免 Streamlit rerun 狂打 ingest）
+    social_ready = (out_root / "social_copy.json").is_file()
+    c_zip, c_push = st.columns([2, 1])
+    with c_zip:
+        try:
+            st.download_button(
+                f"⬇️ 下載 ZIP（{PRIMARY_TRACK_LABEL} PNG + copy）",
+                data=zip_batch_bytes(out_root),
+                file_name="ad_output_latest.zip",
+                mime="application/zip",
+                key=f"zip_{key_prefix}",
+                type="primary",
+            )
+        except Exception as e:
+            st.caption(f"ZIP 失敗：{e}")
+    with c_push:
+        push_disabled = not paths["fused"].is_file()
+        if st.button(
+            "推送生產 API",
+            key=f"push_prod_{key_prefix}",
+            disabled=push_disabled,
+            help="POST /v1/ads/ingest → 生產 Ad API（下游 Grok Bot 用）",
+        ):
+            with st.spinner("推送 /v1/ads/ingest …"):
+                push_out = _sync_publish_to_prod(out_root, notify=True)
+            if push_out.get("ok"):
+                st.caption(f"`{push_out.get('id')}` → {push_out.get('status')}")
+            _show_remote_push(
+                push_out.get("remote_push")
+                or ({"ok": False, "error": push_out.get("error")} if push_out.get("error") else {})
+            )
+        elif not social_ready:
+            st.caption("建議先生成 AI 文案再開 ready")
 
     st.markdown(f"**{PRIMARY_TRACK_LABEL}推介 · 全賽日（社交主視覺）**")
     p_fused = paths["fused"]
@@ -185,14 +234,19 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                             st.caption(
                                 f"廣告包 `{pkg_out.get('id')}` → **{pkg_out.get('status')}**（已 dual-write DB）"
                             )
+                            _show_remote_push(pkg_out.get("remote_push") or {})
                         elif pkg_out.get("error"):
                             st.caption(f"廣告包重建：{pkg_out.get('error')}")
+                            _show_remote_push(pkg_out.get("remote_push") or {})
                     except Exception as pkg_exc:
                         st.caption(f"廣告包重建略過：{pkg_exc}")
                     st.session_state["ad_social_result"] = social_data
                     src_note = social_data.get("source") or "llm"
                     if str(src_note).startswith("fallback"):
-                        st.warning("LLM 暫時未能完成，已用推介自動補齊精選，並附上固定結尾。")
+                        st.warning(
+                            "LLM 暫時未能完成，已用推介自動補齊精選（系統提示只顯示喺呢度，"
+                            "唔會寫入 facebook_copy／生產 API）。"
+                        )
                     else:
                         st.success(f"已生成 AI 精選評述（{tone_label(tone)}）與 hashtag")
                 except Exception as e:
