@@ -97,7 +97,10 @@ def test_build_system_prompt_uses_hk_and_tone():
     assert "香港" in prompt
     assert "國語" in prompt
     assert "高互動型" in prompt
-    assert "綜合推介" in prompt
+    assert "綜合分析名單" in prompt or "綜合分析" in prompt
+    assert "投注" in prompt  # 禁用作引導／出現喺禁用說明
+    assert "研究" in prompt or "統計" in prompt
+    assert "#賽事數據" in prompt or "#模型分析" in prompt
     assert str(COMMENT_MAX_CHARS) in prompt
     assert "{{" not in prompt
 
@@ -110,10 +113,10 @@ def test_parse_llm_json_from_fence():
 
 def test_post_footer_contains_required_lines():
     footer = post_footer_text()
-    assert "賽前十分鐘如有變動" in footer
-    assert "j18.hk" in footer
-    assert "數據僅供參考" in footer
-    assert "J18.HK" in footer
+    assert "j18.hk" in footer.lower()
+    assert "不構成投注建議" in footer
+    assert ("未滿18" in footer) or ("未滿18歲" in footer) or ("18歲" in footer)
+    assert "資料研究" in footer or "研究" in footer
 
 
 def test_build_llm_payload_uses_fused_primary_pool():
@@ -139,7 +142,7 @@ def test_normalize_result_appends_footer_and_post_text():
     data = writer._normalize_result(
         {
             "title": "今晚邊場最有睇頭？",
-            "subtitle": "留言你心水啦",
+            "subtitle": "留言你點睇呢個模型觀察啦",
             "featured": [
                 {
                     "race_no": 1,
@@ -175,9 +178,9 @@ def test_normalize_result_appends_footer_and_post_text():
     assert len(data["featured"]) == 3
     assert len(long_comment) > COMMENT_MAX_CHARS
     assert len(data["featured"][0]["comment"]) <= COMMENT_MAX_CHARS
-    assert "數據僅供參考" in data["footer"]
-    assert "賽前十分鐘如有變動" in data["post_text"]
-    assert "數據僅供參考" in data["post_text"]
+    assert "不構成投注建議" in data["footer"]
+    assert "j18.hk" in data["post_text"].lower()
+    assert "不構成投注建議" in data["post_text"]
     assert data["post_text"].endswith("\n") or data["post_text"].strip()
 
 
@@ -202,7 +205,7 @@ def test_normalize_fills_missing_featured_from_fallback():
         copy_data=_sample_copy(),
     )
     assert len(data["featured"]) == 3
-    assert "數據僅供參考" in format_social_post_text(data)
+    assert "不構成投注建議" in format_social_post_text(data)
 
 
 def test_fallback_prefers_fused_pool():
@@ -303,6 +306,6 @@ def test_normalize_strips_system_subtitle_for_day():
     assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"])
     assert data["subtitle"] == ""
     assert "能量" not in data["featured"][0]["comment"]
-    assert any(h in data["hashtags"] for h in ['#J18', '#賽前預測', '#香港賽馬']) or "#賽前預測" in data["hashtags"]
+    assert any(h in data["hashtags"] for h in ["#J18", "#賽事數據", "#模型分析"]) or "#賽事數據" in data["hashtags"]
     assert len(data["hashtags"]) <= 6
     assert "LLM 暫時未能" not in data["post_text"]

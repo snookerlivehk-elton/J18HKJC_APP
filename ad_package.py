@@ -33,16 +33,18 @@ logger = logging.getLogger(__name__)
 HK_TZ = timezone(timedelta(hours=8))
 PACKAGES_SUBDIR = "packages"
 LATEST_ID_NAME = "_latest_id.txt"
-DEFAULT_HASHTAGS = ["#J18", "#賽前預測", "#香港賽馬"]
-DEFAULT_CTA = "想追臨場心水？而家就登入 J18.hk"
+DEFAULT_HASHTAGS = ["#J18", "#賽事數據", "#模型分析"]
+DEFAULT_CTA = "想睇模型紀錄同系統更新？免費登入 J18.hk"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
-DEFAULT_DISCLAIMER = "預測／資料只供參考，投注前請自行判斷。"
+DEFAULT_DISCLAIMER = "⚠️ 內容只供資料研究及參考，不構成投注建議；不保證任何結果。過往表現不代表未來表現。未滿18歲切勿參與賭博。"
 PACKAGE_HASHTAG_LIMIT = 6
-# 多餘／重複 hashtag（已有 #賽前預測 #香港賽馬 時唔再加）
+# 多餘／重複 hashtag（已有 #賽事數據 #模型分析 時唔再加）
 _HASHTAG_NOISE = {
     "#賽馬",
     "#賽馬貼士",
+    "#賽前預測",
+    "#心水",
     "#J18HK",
     "#j18hk",
     "#HKJC",
@@ -438,7 +440,7 @@ def _session_hashtag(meeting: Dict[str, Any]) -> str:
 
 
 def _publish_hashtags(meeting: Dict[str, Any], extra: Sequence[str] = ()) -> List[str]:
-    tags = ["#J18", "#賽前預測", "#香港賽馬"]
+    tags = ["#J18", "#賽事數據", "#模型分析"]
     v = _venue_hashtag(meeting)
     s = _session_hashtag(meeting)
     if v:
@@ -486,8 +488,8 @@ def _build_intro(meeting: Dict[str, Any], tips: Sequence[Dict[str, Any]]) -> str
     return (
         f"{meeting.get('date', '')} {meeting.get('weekday', '')}"
         f"{meeting.get('venue', '')}{meeting.get('session', '')}賽共 {len(tips)} 場"
-        f"{start_bit}，J18 綜合推介已出爐——"
-        f"你又睇邊場最有睇頭？留言話我知！"
+        f"{start_bit}，J18 綜合數據分析已更新——"
+        f"你又覺得邊場模型觀察最有睇頭？留言一齊傾！"
     )
 
 
@@ -504,7 +506,7 @@ def _build_facebook_copy(
     start_line = f"開跑時間：{start}" if start else ""
     lines = [
         (
-            f"【J18 賽前預測】{meeting.get('date', '')} {meeting.get('weekday', '')} "
+            f"【J18 賽事數據分析】{meeting.get('date', '')} {meeting.get('weekday', '')} "
             f"{meeting.get('venue', '')}{meeting.get('session', '')}賽"
         ),
     ]
@@ -515,14 +517,14 @@ def _build_facebook_copy(
             "",
             intro,
             "",
-            "今場邊匹令你最心水？留言一齊傾下👇",
+            "今場邊個模型觀察最值得討論？留言一齊傾下👇",
             "",
         ]
     )
     for t in tips:
         horses = t.get("horses") or []
         body = (
-            "、".join(f"{h['no']} {h['name']}" for h in horses) if horses else "暫無推介"
+            "、".join(f"{h['no']} {h['name']}" for h in horses) if horses else "暫無分析名單"
         )
         lines.append(f"第{t.get('race')}場：{body}")
     lines.extend(
@@ -546,8 +548,8 @@ def _build_short_copy(
 ) -> str:
     return (
         f"【J18】{meeting.get('date', '')} {meeting.get('venue', '')}"
-        f"{meeting.get('session', '')}賽 {len(tips)} 場綜合推介已更新！"
-        f"你又點睇？留言話我知！{cta}"
+        f"{meeting.get('session', '')}賽 {len(tips)} 場數據分析已更新！"
+        f"一齊睇模型觀察？留言話我知！{cta}"
     )
 
 
@@ -573,7 +575,7 @@ def _ensure_facebook_publish_ready(
         )
     if "j18.hk" not in lower and "j18.hk" not in body:
         extras.append(cta)
-    if "參考" not in body and "免責" not in body:
+    if ("不構成投注建議" not in body) and ("未滿18歲" not in body) and ("未滿18歲" not in body):
         extras.append(DEFAULT_DISCLAIMER)
     tags = _publish_hashtags(meeting, extra=list(hashtags or []))
     if tags and not any(t in body for t in tags[:2]):
@@ -1075,7 +1077,7 @@ def build_ad_package_from_copy(
         "copy": copy_block,
         "assets": {
             "poster_url": poster_url,
-            "poster_alt": f"J18 賽前預測海報 {racing_date} {venue}{session_zh}",
+            "poster_alt": f"J18 賽事數據分析海報 {racing_date} {venue}{session_zh}",
             "poster_path": str(paths["poster"]) if paths["poster"].is_file() else "",
         },
         "publish": {

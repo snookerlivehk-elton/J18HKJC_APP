@@ -456,7 +456,7 @@ def run_auto_promo_hits(
 # ----- 賽後文案 -----
 
 POST_RACE_FOOTER_LINES: List[str] = [
-    "以上為賽後數據回顧，僅供參考。關注 J18.HK 獲取更多賽日速覽。",
+    "以上為賽後模型表現回顧，只供資料研究及參考，不構成投注建議。關注 J18.HK 睇更多數據分析。未滿18歲切勿參與賭博。",
 ]
 
 
@@ -586,13 +586,13 @@ def build_post_race_fallback(promo: Dict[str, Any], *, limit: int = 3) -> Dict[s
             bits.append(seg)
         detail_txt = "；".join(bits) if bits else str(r.get("picks") or "")
         if rules and detail_txt:
-            comment = f"推介命中「{'／'.join(rules)}」：{detail_txt}"
+            comment = f"模型觀察命中「{'／'.join(rules)}」：{detail_txt}"
         elif rules:
-            comment = f"推介命中「{'／'.join(rules)}」，值得作為賽後宣傳素材。"
+            comment = f"模型觀察命中「{'／'.join(rules)}」，值得作為賽後研究回顧素材。"
         elif detail_txt:
-            comment = f"推介場次表現達宣傳門檻：{detail_txt}"
+            comment = f"分析場次表現達研究分享門檻：{detail_txt}"
         else:
-            comment = "推介場次表現達宣傳門檻。"
+            comment = "分析場次表現達研究分享門檻。"
         featured.append(
             {
                 "race_no": compact.get("race_no"),
@@ -608,12 +608,12 @@ def build_post_race_fallback(promo: Dict[str, Any], *, limit: int = 3) -> Dict[s
     meeting = promo.get("meeting") or {}
     d = str(meeting.get("racing_date") or "")[:10]
     c = str(meeting.get("course") or "")
-    title = f"{d} {c} 賽後回顧：推介命中精選".strip()
+    title = f"{d} {c} 賽後回顧：模型觀察命中精選".strip()
     result = {
         "title": title,
         "subtitle": f"共 {len(promo_races)} 場達宣傳門檻",
         "featured": featured,
-        "hashtags": ["#J18", "#賽馬", "#賽後回顧", "#J18HK", "#香港賽馬"],
+        "hashtags": ["#J18", "#賽事數據", "#賽後回顧", "#模型分析", "#香港賽馬"],
         "footer": post_race_footer_text(),
         "footer_lines": list(POST_RACE_FOOTER_LINES),
         "tone": normalize_tone(DEFAULT_AD_TONE),
@@ -651,9 +651,9 @@ def generate_post_race_copy(
     compact = [_compact_promo_race(r) for r in promo_races[:8]]
 
     system = (
-        "你是香港賽馬社交媒體文案編輯，負責寫「賽後回顧」貼文。\n"
-        "根據可宣傳命中場次（含每匹推介馬嘅名次 finish、獨贏賠率 win_odds、馬名），挑選最多 3 場寫短評。\n"
-        "必須用香港繁體／港式社交文；必須忠於提供嘅名次／賠率，不可虛構；不可誇大成穩膽必中。\n"
+        "你是香港公開賽事數據研究平台的社交媒體文案編輯（J18），負責寫「賽後模型表現回顧」貼文。\n"
+        "根據可宣傳嘅模型命中場次（含每匹分析名單馬嘅名次 finish、獨贏賠率 win_odds、馬名），挑選最多 3 場寫研究向短評。\n"
+        "必須用香港繁體／港式社交文；必須忠於提供嘅名次／賠率，不可虛構；不可誇大成穩膽必中；禁止心水／貼士／投注誘導用詞。\n"
         "嚴格輸出 JSON：\n"
         "{\n"
         '  "title": "...",\n'
@@ -669,7 +669,7 @@ def generate_post_race_copy(
         '      "basis": "為何值得宣傳"\n'
         "    }\n"
         "  ],\n"
-        '  "hashtags": ["#J18", "#賽馬", "#賽後回顧"]\n'
+        '  "hashtags": ["#J18", "#賽事數據", "#賽後回顧"]\n'
         "}\n"
     )
     user = json.dumps(
@@ -730,7 +730,7 @@ def generate_post_race_copy(
             s = "#" + s.lstrip("#")
         if s not in clean_tags:
             clean_tags.append(s)
-    for default_tag in ("#J18", "#賽馬", "#賽後回顧", "#J18HK"):
+    for default_tag in ("#J18", "#賽事數據", "#賽後回顧", "#模型分析"):
         if default_tag not in clean_tags:
             clean_tags.append(default_tag)
 

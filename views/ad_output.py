@@ -158,10 +158,11 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any], *, key_pre
     st.caption(TONE_PRESETS[normalize_tone(tone)]["hint"])
 
     default_prompt = (
-        "寫成香港人日常 FB／IG 貼文口吻；"
-        "標題帶提問或叫人留言；"
-        f"優先挑選{PRIMARY_TRACK_LABEL}推介名單內、模型與 AI 都有支持的場次；"
+        "寫成香港人日常 FB／IG「數據研究」貼文口吻；"
+        "標題帶提問或叫人留言討論模型觀察；"
+        f"優先挑選{PRIMARY_TRACK_LABEL}分析名單內、模型與 AI 都有支持的場次；"
         f"每匹馬評述不超過{COMMENT_MAX_CHARS}字；"
+        "只講公開數據／統計傾向／模型推演，禁止心水、貼士、投注誘導用詞；"
         "唔好用國語翻譯腔。"
     )
     custom_prompt = st.text_area(
@@ -169,9 +170,9 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any], *, key_pre
         value=st.session_state.get(_k("ad_social_prompt")) or default_prompt,
         height=110,
         key=_k("ad_social_prompt"),
-        help="可補充重點或受眾要求；文末固定聲明由系統自動附加。",
+        help="可補充研究重點或受眾要求；禁止投注誘導用詞；文末合規聲明由系統自動附加。",
     )
-    with st.expander("文末固定聲明（系統自動附加）", expanded=False):
+    with st.expander("文末合規聲明（系統自動附加）", expanded=False):
         st.code(post_footer_text(), language=None)
 
     social_data = load_social_copy(output_root)

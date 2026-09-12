@@ -270,7 +270,7 @@ class SchemaAndBuildTest(unittest.TestCase):
                             "post_text": (
                                 "今晚邊場最有睇頭？\n\n"
                                 "第1場｜4 多利神駒\n近績唔錯喎\n\n"
-                                "想獲得臨場更多資訊或心水, 請即刻登錄j18.hk了解更多啦!!\n"
+                                "免費登入 j18.hk，查看部分場次分析、模型紀錄及系統更新\n"
                             ),
                             "hashtags": ["#J18", "#賽馬"],
                             "source": "llm",
@@ -440,7 +440,7 @@ class IngestAndLatestTest(unittest.TestCase):
                         "comment": "近績穩",
                     }
                 ],
-                "hashtags": ["#J18", "#賽馬", "#沙田", "#賽前預測", "#J18HK", "#extra"],
+                "hashtags": ["#J18", "#賽事數據", "#沙田", "#模型分析", "#J18HK", "#extra"],
                 "post_text": (
                     "【J18】2026-09-13 沙田日賽\n"
                     "邊場最有睇頭？留言話我知！\n"
@@ -702,7 +702,7 @@ class RemotePushAndCopySanitizeTest(unittest.TestCase):
         self.assertNotIn("1W1W", cleaned)
         tags = _publish_hashtags(meeting, extra=["#extra", "#賽馬", "#J18HK", "#foo"])
         self.assertLessEqual(len(tags), 6)
-        self.assertEqual(tags[:3], ['#J18', '#賽前預測', '#香港賽馬'])
+        self.assertEqual(tags[:3], ['#J18', '#賽事數據', '#模型分析'])
         self.assertIn("#沙田", tags)
         self.assertIn("#日馬", tags)
 

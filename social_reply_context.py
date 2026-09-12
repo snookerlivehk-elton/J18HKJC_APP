@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 HK_TZ = timezone(timedelta(hours=8))
 REPLY_SUBDIR = "reply_context"
 LATEST_ID_NAME = "_latest_id.txt"
-DEFAULT_DISCLAIMER = "預測／AI 評價只供參考，投注前請自行判斷。唔構成投注建議。"
+DEFAULT_DISCLAIMER = "⚠️ 內容只供資料研究及參考，不構成投注建議；不保證任何結果。過往表現不代表未來表現。未滿18歲切勿參與賭博。"
 DEFAULT_SITE = "https://J18.hk"
 
 

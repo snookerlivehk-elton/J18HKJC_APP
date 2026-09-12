@@ -131,9 +131,9 @@ curl -sS -o poster.png "$(curl -sS -H "Authorization: Bearer $KEY" "$BASE/v1/ads
     "start_time": "約下午1時"
   },
   "copy": {
-    "facebook": "【J18】2026-09-13 沙田日賽\n邊場最有睇頭？留言話我知！\n…\n想追臨場？登入 J18.hk\n預測只供參考。\n#J18 #賽馬 #沙田",
-    "cta": "想追臨場心水？而家就登入 J18.hk",
-    "hashtags": ["#J18", "#賽馬", "#沙田", "#賽前預測", "#J18HK"]
+    "facebook": "【J18】2026-09-13 沙田日賽\n邊場數據觀察最值得一齊睇？留言討論！\n…\n想睇模型紀錄？登入 J18.hk\n⚠️ 內容只供資料研究及參考，不構成投注建議。未滿18歲切勿參與賭博。\n#J18 #賽事數據 #沙田",
+    "cta": "想睇模型紀錄同系統更新？免費登入 J18.hk",
+    "hashtags": ["#J18", "#賽馬", "#沙田", "#賽事數據", "#J18HK"]
   },
   "assets": {
     "poster_url": "https://j18hkjcapp-production.up.railway.app/v1/ads/2026-09-13-st-day/poster"
@@ -189,7 +189,7 @@ pytest tests/test_ad_package_api.py -q
     "venue_code": "HV",
     "session": "夜"
   },
-  "intro": "2026-07-15 星期三谷草夜賽共 2 場，J18 綜合推介已出爐——開賽前或會更新，請以網站最新版為準。",
+  "intro": "2026-07-15 星期三谷草夜賽共 2 場，J18 綜合數據分析已更新——開賽前或會更新，請以網站最新版為準。",
   "tips": [
     {
       "race": 1,
@@ -204,8 +204,8 @@ pytest tests/test_ad_package_api.py -q
   "copy": {
     "facebook": "今晚邊場最有睇頭？\n\n第1場｜4 多利神駒\n近績走勢穩陣…（AI 精選全文，供 Grok 發佈）",
     "short": "【J18】2026-07-15 谷草夜賽 …",
-    "cta": "想追臨場心水？而家就登入 J18.hk",
-    "hashtags": ["#J18", "#賽馬", "#賽前預測"],
+    "cta": "想睇模型紀錄同系統更新？免費登入 J18.hk",
+    "hashtags": ["#J18", "#賽馬", "#賽事數據"],
     "ai": {
       "title": "今晚邊場最有睇頭？",
       "subtitle": "J18 AI 精選",

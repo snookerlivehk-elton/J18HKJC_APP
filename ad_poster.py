@@ -548,7 +548,7 @@ def generate_copy(payload: RaceAdPayload, track: str) -> Dict[str, str]:
         parts = [f"{p.horse_no} {p.horse_name}" for p in picks]
         body = "、".join(parts)
 
-    cta = f"數據僅供參考，投注前請自行判斷。關注 {BRAND_NAME} 獲取更多賽日速覽。"
+    cta = f"⚠️ 內容只供資料研究及參考，不構成投注建議。關注 {BRAND_NAME} 睇模型紀錄同系統更新。未滿18歲切勿參與賭博。"
     full = f"{headline}\n{line}{body}\n\n{cta}"
     return {
         "track": track,
@@ -584,7 +584,7 @@ def generate_meeting_copy(payloads: Sequence[RaceAdPayload], track: str) -> Dict
         else:
             body = "、".join(f"{x.horse_no} {x.horse_name}" for x in picks)
         lines.append(f"R{rn} {body}")
-    cta = f"數據僅供參考，投注前請自行判斷。關注 {BRAND_NAME} 獲取更多賽日速覽。"
+    cta = f"⚠️ 內容只供資料研究及參考，不構成投注建議。關注 {BRAND_NAME} 睇模型紀錄同系統更新。未滿18歲切勿參與賭博。"
     full = f"{headline}\n" + "\n".join(lines) + f"\n\n{cta}"
     return {"track": track, "headline": headline, "label": label, "full": full, "cta": cta}
 

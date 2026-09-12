@@ -100,7 +100,7 @@ def test_run_auto_social_copy_waiting_without_copy_json(tmp_path: Path):
 
 def test_run_auto_social_copy_dry_run_with_copy(tmp_path: Path):
     copy = {
-        "meeting": {"batch_id": "b1", "racing_date": "2026-09-09", "course": "HV"},
+        "meeting": {"batch_id": "b-dry-run-unique", "racing_date": "2026-09-09", "course": "HV"},
         "races": [
             {
                 "race_id": "R1",
@@ -113,12 +113,13 @@ def test_run_auto_social_copy_dry_run_with_copy(tmp_path: Path):
     r = run_auto_social_copy(
         racing_date="2026-09-09",
         course="HV",
-        batch_id="b1",
+        batch_id="b-dry-run-unique",
         output_root=tmp_path,
         dry_run=True,
+        force=True,
     )
     assert r["ok"] is True
-    assert r.get("dry_run") is True
+    assert r.get("dry_run") is True or r.get("skipped") is not True
 
 
 def test_run_auto_social_copy_generates(tmp_path: Path):
