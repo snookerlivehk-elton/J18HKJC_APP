@@ -13,13 +13,17 @@ DEFAULT_SYSTEM_PROMPT = """你是一個專業的香港賽馬分析師。請閱�
 
 class NLPProcessor:
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
+        # OpenRouter 亦可：設 OPENAI_API_KEY（或 OPENROUTER_API_KEY）+ OPENAI_BASE_URL
+        self.api_key = (
+            os.getenv("OPENAI_API_KEY", "")
+            or os.getenv("OPENROUTER_API_KEY", "")
+        ).strip()
         # 官方 OpenAI 預設 gpt-4o-mini；OpenRouter 請設 OPENAI_MODEL=openai/gpt-4o-mini 與 OPENAI_BASE_URL
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.base_url = os.getenv(
-            "OPENAI_BASE_URL",
-            "https://api.openai.com/v1/chat/completions",
-        )
+        default_base = "https://api.openai.com/v1/chat/completions"
+        if not os.getenv("OPENAI_BASE_URL") and os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
+            default_base = "https://openrouter.ai/api/v1/chat/completions"
+        self.base_url = os.getenv("OPENAI_BASE_URL", default_base)
 
     def is_ready(self) -> bool:
         return bool(self.api_key)

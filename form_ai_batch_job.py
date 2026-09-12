@@ -23,7 +23,9 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-load_dotenv(override=True)
+# 勿 override=True：Railway／容器已注入的 DATABASE_URL／OPENAI_* 不能被映像內 .env 蓋掉，
+# 否則背景子進程會寫錯庫，父進程 background_jobs 永遠停在 phase=spawned。
+load_dotenv(override=False)
 
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 
@@ -35,6 +37,90 @@ else:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if not pid or int(pid) <= 0:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # 行程存在但無權發訊號 → 視為仍在
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _as_progress(job: Optional[dict]) -> Dict[str, Any]:
+    if not job:
+        return {}
+    prog = job.get("progress_json") or {}
+    if isinstance(prog, str):
+        try:
+            prog = json.loads(prog)
+        except Exception:
+            prog = {}
+    return prog if isinstance(prog, dict) else {}
+
+
+def _tail_log(path: Any, *, max_chars: int = 800) -> str:
+    try:
+        p = str(path or "")
+        if not p or not os.path.isfile(p):
+            return ""
+        with open(p, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 2000), os.SEEK_SET)
+            raw = f.read().decode("utf-8", errors="replace")
+        return raw[-max_chars:].replace("\n", " | ").strip()
+    except Exception:
+        return ""
+
+
+def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
+    """
+    若 status=running 但子進程已死（或只有 spawned 且無存活 pid），
+    標記 failed，避免作戰室永遠顯示「進行中」卻 0 token。
+    """
+    if not job:
+        return job
+    if str(job.get("status") or "") != "running":
+        return job
+    job_id = str(job.get("job_id") or "")
+    if not job_id:
+        return job
+
+    prog = _as_progress(job)
+    pid_raw = prog.get("pid")
+    try:
+        pid = int(pid_raw) if pid_raw is not None else None
+    except (TypeError, ValueError):
+        pid = None
+
+    if pid and _pid_is_alive(pid):
+        return job
+
+    log_tail = _tail_log(prog.get("log"))
+    detail = (
+        "後台進程已不在（狀態曾卡在 running／spawned）。"
+        "常見原因：子進程啟動即崩潰，或 .env override 令其連錯資料庫。"
+    )
+    if log_tail:
+        detail = f"{detail} log: {log_tail}"
+
+    update_job(
+        engine,
+        job_id,
+        status="failed",
+        detail=detail[:1500],
+        progress={**prog, "phase": "dead", "reconciled": True},
+        finished=True,
+    )
+    return get_job(engine, job_id)
 
 
 def ensure_jobs_table(engine) -> None:
@@ -369,13 +455,29 @@ def main(argv=None) -> int:
         )
         print(f"job_id={job_id}", flush=True)
 
-    out = run_meeting(
-        racing_date,
-        course,
-        only_missing=only_missing,
-        sleep=args.sleep,
-        job_id=job_id,
-    )
+    try:
+        out = run_meeting(
+            racing_date,
+            course,
+            only_missing=only_missing,
+            sleep=args.sleep,
+            job_id=job_id,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            update_job(
+                engine,
+                job_id,
+                status="failed",
+                detail=f"crash: {e}",
+                progress={"phase": "crash", "error": str(e)},
+                finished=True,
+            )
+        except Exception:
+            pass
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
     if not out.get("ok"):
         print(f"ERROR: {out.get('error')}", file=sys.stderr)
         return 1

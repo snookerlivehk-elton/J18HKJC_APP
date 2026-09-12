@@ -19,7 +19,8 @@ from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(override=True)
+    # 與 form_ai_batch_job 相同：唔好蓋過容器已注入嘅 OPENAI_*／DATABASE_URL
+    load_dotenv(override=False)
 except ImportError:
     pass
 

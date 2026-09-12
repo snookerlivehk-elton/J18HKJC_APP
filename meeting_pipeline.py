@@ -612,10 +612,12 @@ class MeetingPipeline:
         import form_ai_batch_job as faj
 
         faj.ensure_jobs_table(self.engine)
-        # 若已有 running，避免重複開
+        # 若已有 running，先 reconcile 殭屍任務（PID 已死仍顯示 running）
         latest = faj.latest_job(
             self.engine, job_type="form_ai", racing_date=racing_date, course=course
         )
+        if latest:
+            latest = faj.reconcile_running_job(self.engine, latest) or latest
         if latest and str(latest.get("status") or "") == "running":
             return {
                 "ok": False,
@@ -698,6 +700,8 @@ class MeetingPipeline:
             job = faj.latest_job(
                 self.engine, job_type="form_ai", racing_date=racing_date, course=course
             )
+        if job:
+            job = faj.reconcile_running_job(self.engine, job) or job
         if not job:
             return {"ok": True, "job": None, "message": "尚無後台任務"}
         return {"ok": True, "job": job}
