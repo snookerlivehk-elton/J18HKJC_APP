@@ -235,25 +235,38 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
     body = re.sub(r"\b\d+W\d+W\b", "", body, flags=re.I)
     body = re.sub(r"share[_\s-]?pct\s*[：:=]?\s*[\d.]+", "", body, flags=re.I)
     body = re.sub(r"[ \t]{2,}", " ", body).strip(" ，,;；")
-    if daypart == "今日":
-        body = body.replace("今晚", "今日").replace("今夜", "今日")
+    if daypart in {"今日", "聽日"}:
+        body = body.replace("今晚", daypart).replace("今夜", daypart)
+        if daypart == "聽日":
+            body = body.replace("今日", "聽日")
     if not body or len(body) < 4:
         return f"{daypart}走勢值得留意，有得傾"
     return body[:COMMENT_MAX_CHARS]
 
 
 def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
+    from datetime import datetime, timedelta, timezone
+
     meeting = (copy_data or {}).get("meeting") or {}
     session_raw = str(meeting.get("session") or meeting.get("theme") or "")
     session = session_raw.lower()
     course = str(meeting.get("course") or "").upper()
-    # 明確日／夜優先；否則 HV 預設夜馬、ST／其他預設日馬
-    if "日" in session_raw and "夜" not in session_raw:
-        return "今日"
-    if "夜" in session_raw or session == "night":
+    is_night = (
+        "夜" in session_raw
+        or session == "night"
+        or (course == "HV" and "日" not in session_raw)
+    )
+    if is_night:
         return "今晚"
-    if course == "HV":
-        return "今晚"
+    race_date = str(meeting.get("racing_date") or meeting.get("date") or "")[:10]
+    if race_date:
+        try:
+            hk = timezone(timedelta(hours=8))
+            rd = datetime.strptime(race_date, "%Y-%m-%d").date()
+            if rd > datetime.now(hk).date():
+                return "聽日"
+        except Exception:
+            pass
     return "今日"
 
 
@@ -261,6 +274,7 @@ def _publish_hashtags_for_copy(copy_data: Optional[Dict[str, Any]], extra: Optio
     meeting = (copy_data or {}).get("meeting") or {}
     course = str(meeting.get("course") or "").upper()
     session = str(meeting.get("session") or "")
+    noise = {"#賽馬", "#賽馬貼士", "#J18HK", "#j18hk", "#HKJC", "#hkjc"}
     tags = ["#J18", "#賽前預測", "#香港賽馬"]
     if course == "ST" or "沙田" in session:
         tags.append("#沙田")
@@ -276,6 +290,8 @@ def _publish_hashtags_for_copy(copy_data: Optional[Dict[str, Any]], extra: Optio
             continue
         if not s.startswith("#"):
             s = "#" + s.lstrip("#")
+        if s in noise:
+            continue
         if s not in tags:
             tags.append(s)
     return tags[:6]
@@ -287,13 +303,17 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
     lines: List[str] = []
     title = str((social_data or {}).get("title") or "").strip()
     if title:
-        if daypart == "今日":
-            title = title.replace("今晚", "今日").replace("今夜", "今日")
+        if daypart in {"今日", "聽日"}:
+            title = title.replace("今晚", daypart).replace("今夜", daypart)
+            if daypart == "聽日":
+                title = title.replace("今日", "聽日")
         lines.append(title)
     subtitle = str((social_data or {}).get("subtitle") or "").strip()
     if subtitle and not _is_system_subtitle(subtitle):
-        if daypart == "今日":
-            subtitle = subtitle.replace("今晚", "今日").replace("今夜", "今日")
+        if daypart in {"今日", "聽日"}:
+            subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
+            if daypart == "聽日":
+                subtitle = subtitle.replace("今日", "聽日")
         lines.append(subtitle)
     if lines:
         lines.append("")
@@ -643,9 +663,12 @@ class AdSocialCopywriter:
         subtitle = str(raw.get("subtitle") or "").strip()
         if _is_system_subtitle(subtitle):
             subtitle = ""
-        if daypart == "今日":
-            title = title.replace("今晚", "今日").replace("今夜", "今日")
-            subtitle = subtitle.replace("今晚", "今日").replace("今夜", "今日")
+        if daypart in {"今日", "聽日"}:
+            title = title.replace("今晚", daypart).replace("今夜", daypart)
+            subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
+            if daypart == "聽日":
+                title = title.replace("今日", "聽日")
+                subtitle = subtitle.replace("今日", "聽日")
         if not title:
             meeting = (copy_data or {}).get("meeting") or {}
             course = meeting.get("course") or ""

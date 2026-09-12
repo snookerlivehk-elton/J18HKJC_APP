@@ -22,8 +22,9 @@ Railway：另開一個 service（或與預測 API 分開 Start Command），設�
 | 變量 | 用途 |
 |------|------|
 | `AD_API_KEY` | `Authorization: Bearer …` 讀取／產生／ingest |
-| `AD_API_PUBLIC_BASE` | 公開 base（例如 `https://xxx.up.railway.app`），用來組 `assets.poster_url` |
-| `AD_API_BASE_URL` | **Streamlit／CORN** 設此指向生產 Ad API（例 `https://j18hkjcapp-production.up.railway.app`）；ready 後 HTTP `POST /v1/ads/ingest`。**可與 `AD_API_PUBLIC_BASE` 相同**——唔會因為「自推」而 skip（呢個係舊 bug） |
+| `AD_API_PUBLIC_BASE` | 公開 base，**必須可組成絕對 https URL**（缺 `https://` 會自動補）；用來改寫 `assets.poster_url` |
+| `AD_API_BASE_URL` | **Streamlit／CORN** 指向生產 Ad API（例 `https://j18hkjcapp-production.up.railway.app`）；ready 後 `POST /v1/ads/ingest`。可與 PUBLIC 相同；**漏設 BASE 會 fallback 用 PUBLIC_BASE**（避免 latest 留舊手動 ingest） |
+| `AD_API_PUBLIC_BASE` | **必須可組成絕對 https URL**（缺 `https://` 會自動補）。用來改寫 `assets.poster_url` |
 | `GROK_BOT_WEBHOOK_URL` | 外部助手 webhook |
 | `GROK_BOT_WEBHOOK_SECRET` | 送出 Header `X-Webhook-Secret`（可用 `GROK_BOT_WEBHOOK_SECRET_HEADER` 改名） |
 | `AD_OUTPUT_DIR` | 可選；預設專案 `ad_output/` |

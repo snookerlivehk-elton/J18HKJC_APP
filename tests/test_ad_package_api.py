@@ -694,14 +694,116 @@ class RemotePushAndCopySanitizeTest(unittest.TestCase):
         )
         cleaned = _sanitize_public_copy_text(raw, meeting=meeting)
         self.assertNotIn("今晚", cleaned)
-        self.assertIn("今日", cleaned)
+        # 賽日若係翌日（相對而家）用「聽日」，否則「今日」
+        self.assertTrue(("聽日" in cleaned) or ("今日" in cleaned), cleaned)
         self.assertNotIn("LLM 暫時未能", cleaned)
         self.assertNotIn("自動補齊", cleaned)
         self.assertNotIn("能量", cleaned)
         self.assertNotIn("1W1W", cleaned)
         tags = _publish_hashtags(meeting, extra=["#extra", "#賽馬", "#J18HK", "#foo"])
         self.assertLessEqual(len(tags), 6)
-        self.assertEqual(tags[:3], ["#J18", "#賽前預測", "#香港賽馬"])
+        self.assertEqual(tags[:3], ['#J18', '#賽前預測', '#香港賽馬'])
+        self.assertIn("#沙田", tags)
+        self.assertIn("#日馬", tags)
+
+
+
+    def test_poster_url_gets_https_scheme(self):
+        from ad_package import absolute_poster_url, public_base_url
+
+        with mock.patch.dict(
+            "os.environ",
+            {"AD_API_PUBLIC_BASE": "j18hkjcapp-production.up.railway.app", "AD_API_BASE_URL": ""},
+            clear=False,
+        ):
+            base = public_base_url()
+            self.assertTrue(base.startswith("https://"), base)
+            url = absolute_poster_url("2026-09-13-st-day")
+            self.assertEqual(
+                url,
+                "https://j18hkjcapp-production.up.railway.app/v1/ads/2026-09-13-st-day/poster",
+            )
+
+    def test_remote_push_falls_back_to_public_base(self):
+        """Streamlit 若只設 PUBLIC_BASE，仍要能 POST ingest。"""
+        from ad_package import push_ad_package_remote
+
+        pkg = {
+            "id": "2026-09-13-st-day",
+            "status": "ready",
+            "tips": [{"race": 1, "horses": [{"no": 7, "name": "增旺"}]}],
+            "copy": {
+                "facebook": "聽日沙田日馬邊場最有睇頭？",
+                "ai": {"post_text": "聽日沙田日馬邊場最有睇頭？", "featured": [{"race_id": "x"}]},
+            },
+            "assets": {},
+        }
+        captured = {}
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return {"ok": True, "id": "2026-09-13-st-day"}
+
+        class _Client:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None, headers=None):
+                captured["url"] = url
+                captured["json"] = json
+                return _Resp()
+
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "AD_API_BASE_URL": "",
+                "AD_API_PUSH_URL": "",
+                "AD_PACKAGE_API_URL": "",
+                "AD_PACKAGE_BASE_URL": "",
+                "AD_API_PUBLIC_BASE": "j18hkjcapp-production.up.railway.app",
+                "AD_API_KEY": "secret-key",
+                "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+            },
+            clear=False,
+        ):
+            with mock.patch("httpx.Client", _Client):
+                out = push_ad_package_remote(pkg, poster_png=b"\x89PNG" + b"0" * 40)
+        self.assertTrue(out.get("ok"), out)
+        self.assertTrue(
+            (captured.get("url") or "").startswith(
+                "https://j18hkjcapp-production.up.railway.app/v1/ads/ingest"
+            ),
+            captured.get("url"),
+        )
+
+    def test_session_daypart_tomorrow_is_tingyat(self):
+        from ad_package import _session_daypart
+
+        meeting = {
+            "date": "2099-01-02",
+            "venue_code": "ST",
+            "session": "日",
+        }
+        self.assertEqual(_session_daypart(meeting), "聽日")
+
+    def test_hashtag_noise_filtered(self):
+        from ad_package import _publish_hashtags
+
+        tags = _publish_hashtags(
+            {"venue_code": "ST", "session": "日"},
+            extra=["#賽馬", "#J18HK", "#沙田"],
+        )
+        self.assertLessEqual(len(tags), 6)
+        self.assertNotIn("#賽馬", tags)
+        self.assertNotIn("#J18HK", tags)
         self.assertIn("#沙田", tags)
         self.assertIn("#日馬", tags)
 
