@@ -94,6 +94,44 @@ class AdStoreRoundtripTest(unittest.TestCase):
             ad_store.job_done_for_batch_db("2026-09-13", "ST", "social", "B2")
         )
 
+    def test_social_json_and_hydrate(self):
+        ad_store = self.ad_store
+        pkg = {
+            "id": "2026-09-13-st-day",
+            "status": "ready",
+            "meeting": {
+                "date": "2026-09-13",
+                "venue_code": "ST",
+                "venue": "沙田",
+                "session": "日",
+            },
+            "copy": {
+                "facebook": "post",
+                "ai": {
+                    "title": "今晚邊場？",
+                    "post_text": "今晚邊場？\nj18.hk\n",
+                    "featured": [{"race_no": 1, "horse_name": "快馬"}],
+                },
+            },
+            "assets": {"poster_url": "https://ads.example.com/v1/ads/2026-09-13-st-day/poster"},
+        }
+        social = {
+            "title": "今晚邊場？",
+            "post_text": "今晚邊場？\nj18.hk\n",
+            "featured": [{"race_no": 1, "horse_name": "快馬"}],
+        }
+        poster = b"\x89PNG\r\n\x1a\n" + b"xyz"
+        out = ad_store.upsert_ad_package(pkg, poster_png=poster, social_json=social)
+        self.assertTrue(out.get("ok"), out)
+        got = ad_store.get_social_json_db("2026-09-13-st-day")
+        self.assertEqual(got.get("title"), "今晚邊場？")
+        disk = Path(self.tmp.name) / "ad_out"
+        hyd = ad_store.hydrate_package_to_disk("2026-09-13-st-day", disk)
+        self.assertTrue(hyd.get("ok"), hyd)
+        self.assertTrue(hyd.get("has_social"))
+        self.assertTrue((disk / "social_copy.json").is_file())
+        self.assertTrue((disk / "packages" / "2026-09-13-st-day.png").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

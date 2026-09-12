@@ -46,18 +46,17 @@ def require_ai_social() -> bool:
     }
 
 
-def ai_social_payload(output_root: Path) -> Optional[Dict[str, Any]]:
-    """從 social_copy.json 組 Grok 可用的 AI 精選評述區塊；未就緒回傳 None。"""
-    try:
-        from ad_llm_copy import format_social_post_text, load_social_copy
-    except Exception:
-        return None
-    social = load_social_copy(Path(output_root))
+def _social_dict_to_ai_payload(social: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalize social_copy / archive payload → package copy.ai block."""
     if not social:
         return None
+    try:
+        from ad_llm_copy import format_social_post_text
+    except Exception:
+        format_social_post_text = None  # type: ignore
     featured = list(social.get("featured") or [])
     post_text = str(social.get("post_text") or "").strip()
-    if not post_text:
+    if not post_text and format_social_post_text:
         try:
             post_text = format_social_post_text(social).strip()
         except Exception:
@@ -75,6 +74,42 @@ def ai_social_payload(output_root: Path) -> Optional[Dict[str, Any]]:
         "tone": social.get("tone") or meeting.get("tone"),
         "generated_at": meeting.get("generated_at") or social.get("generated_at"),
     }
+
+
+def ai_social_payload(
+    output_root: Path,
+    *,
+    racing_date: str = "",
+    course: str = "",
+    ad_id: str = "",
+) -> Optional[Dict[str, Any]]:
+    """從 social_copy.json（或共用 DB archive／package）組 AI 精選區塊；未就緒回傳 None。"""
+    social: Dict[str, Any] = {}
+    try:
+        from ad_llm_copy import load_social_copy
+
+        social = load_social_copy(Path(output_root)) or {}
+    except Exception:
+        social = {}
+
+    # 跨服務：本機無 social_copy.json 時，從共用 DB 取（CORN 產、Ad API／Streamlit 讀）
+    if not social:
+        try:
+            from ad_store import get_social_json_db, load_archive_latest_db
+
+            if ad_id:
+                social = get_social_json_db(ad_id) or {}
+            if not social and racing_date and course:
+                social = (
+                    load_archive_latest_db(
+                        str(racing_date)[:10], str(course).upper(), "social"
+                    )
+                    or {}
+                )
+        except Exception:
+            social = {}
+
+    return _social_dict_to_ai_payload(social if isinstance(social, dict) else {})
 
 
 
@@ -282,14 +317,33 @@ def save_ad_package(
     try:
         from ad_store import upsert_ad_package
 
+        out_root = Path(output_root) if output_root else default_output_dir()
         poster_bytes = None
         if paths["poster"].is_file():
             poster_bytes = paths["poster"].read_bytes()
         else:
-            fused = (Path(output_root) if output_root else default_output_dir()) / "fused.png"
+            fused = out_root / "fused.png"
             if fused.is_file():
                 poster_bytes = fused.read_bytes()
-        upsert_ad_package(payload, poster_png=poster_bytes)
+        social_json = None
+        copy_json = None
+        try:
+            from ad_llm_copy import load_social_copy
+            from ad_poster import load_copy_json
+
+            social_json = load_social_copy(out_root) or None
+            if not social_json and isinstance((payload.get("copy") or {}).get("ai"), dict):
+                social_json = payload["copy"]["ai"]
+            copy_json = load_copy_json(out_root) or None
+        except Exception:
+            if isinstance((payload.get("copy") or {}).get("ai"), dict):
+                social_json = payload["copy"]["ai"]
+        upsert_ad_package(
+            payload,
+            poster_png=poster_bytes,
+            copy_json=copy_json,
+            social_json=social_json,
+        )
     except Exception as exc:
         logger.warning("ad_store upsert failed: %s", exc)
     return paths["json"]
@@ -382,7 +436,10 @@ def build_ad_package_from_copy(
             f"{base}/v1/ads/{ad_id}/poster" if base else f"/v1/ads/{ad_id}/poster"
         )
 
-    ai = ai_social_payload(out_root)
+    ai = ai_social_payload(
+        out_root, racing_date=racing_date, course=course, ad_id=ad_id
+    )
+    # Facebook 文案優先用 AI 高互動 post_text（含 J18.hk CTA footer）；否則 template
     facebook = str((ai or {}).get("post_text") or "").strip() or template_facebook
     if ai and ai.get("hashtags"):
         hashtags = list(ai.get("hashtags") or hashtags)

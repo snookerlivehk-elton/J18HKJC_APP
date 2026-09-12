@@ -76,6 +76,7 @@ class SchemaAndBuildTest(unittest.TestCase):
         """只有海報、未有 AI 文案 → pending_ai（Grok 唔應當 ready）。"""
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
+            db_path = Path(tmp) / "empty.db"
             fused = root / "fused.png"
             fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
             with mock.patch(
@@ -88,15 +89,41 @@ class SchemaAndBuildTest(unittest.TestCase):
                         {
                             "AD_API_PUBLIC_BASE": "https://ads.example.com",
                             "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                            "USE_SQLITE": "true",
+                            "AD_STORE_ENABLED": "true",
+                            "SQLITE_DB_PATH": str(db_path),
+                            "DATABASE_URL": "",
+                            "DATABASE_URL_SYNC": "",
                         },
                         clear=False,
                     ):
-                        pkg = build_ad_package_from_copy(
-                            _sample_copy(),
-                            output_root=root,
-                            poster_src=fused,
-                            notify=False,
-                        )
+                        import ad_store
+
+                        old_engine = ad_store._ENGINE
+                        old_ensured = ad_store._ENSURED
+                        old_use = ad_store.USE_SQLITE
+                        old_path = ad_store.SQLITE_DB_PATH
+                        ad_store._ENGINE = None
+                        ad_store._ENSURED = False
+                        ad_store.USE_SQLITE = True
+                        ad_store.SQLITE_DB_PATH = str(db_path)
+                        try:
+                            pkg = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                        finally:
+                            if ad_store._ENGINE is not None:
+                                try:
+                                    ad_store._ENGINE.dispose()
+                                except Exception:
+                                    pass
+                            ad_store._ENGINE = old_engine
+                            ad_store._ENSURED = old_ensured
+                            ad_store.USE_SQLITE = old_use
+                            ad_store.SQLITE_DB_PATH = old_path
             self.assertEqual(pkg["status"], "pending_ai")
             self.assertIsNone(pkg["copy"].get("ai"))
             self.assertTrue(pkg["assets"]["poster_url"].endswith("/v1/ads/2026-07-15-hv-night/poster"))
@@ -193,6 +220,101 @@ class SchemaAndBuildTest(unittest.TestCase):
             self.assertNotIn("webhook", pub)
             self.assertNotIn("meta", pub)
             self.assertNotIn("poster_path", pub.get("assets") or {})
+
+    def test_ready_via_db_archive_without_local_social_file(self):
+        """跨服務：本機無 social_copy.json，但 DB archive 有 AI → ready + facebook。"""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = Path(tmp) / "store.db"
+            fused = root / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "USE_SQLITE": "true",
+                    "AD_STORE_ENABLED": "true",
+                    "SQLITE_DB_PATH": str(db_path),
+                    "DATABASE_URL": "",
+                    "DATABASE_URL_SYNC": "",
+                    "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                    "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                },
+                clear=False,
+            ):
+                import ad_store
+
+                old_engine = ad_store._ENGINE
+                old_ensured = ad_store._ENSURED
+                old_use = ad_store.USE_SQLITE
+                old_path = ad_store.SQLITE_DB_PATH
+                ad_store._ENGINE = None
+                ad_store._ENSURED = False
+                ad_store.USE_SQLITE = True
+                ad_store.SQLITE_DB_PATH = str(db_path)
+                try:
+                    ad_store.upsert_archive(
+                        "2026-07-15",
+                        "HV",
+                        "social",
+                        {
+                            "title": "今晚邊場最有睇頭？",
+                            "featured": [
+                                {
+                                    "race_no": 1,
+                                    "horse_no": 4,
+                                    "horse_name": "多利神駒",
+                                    "comment": "近績唔錯喎",
+                                }
+                            ],
+                            "post_text": (
+                                "今晚邊場最有睇頭？\n\n"
+                                "第1場｜4 多利神駒\n近績唔錯喎\n\n"
+                                "想獲得臨場更多資訊或心水, 請即刻登錄j18.hk了解更多啦!!\n"
+                            ),
+                            "hashtags": ["#J18", "#賽馬"],
+                            "source": "llm",
+                            "meeting": {
+                                "batch_id": "b1",
+                                "racing_date": "2026-07-15",
+                                "course": "HV",
+                            },
+                        },
+                        batch_id="b1",
+                    )
+                    with mock.patch(
+                        "ad_package.lookup_meeting_session",
+                        return_value={"session": "夜", "is_day_meeting": False},
+                    ):
+                        with mock.patch(
+                            "ad_package.resolve_poster_theme", return_value="night"
+                        ):
+                            pkg = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                    self.assertEqual(pkg["status"], "ready")
+                    self.assertIsNotNone(pkg["copy"].get("ai"))
+                    self.assertIn("j18.hk", pkg["copy"]["facebook"].lower())
+                    self.assertIn("多利神駒", pkg["copy"]["facebook"])
+                    latest = ad_store.load_latest_ad_package_db(ready_only=True)
+                    self.assertIsNotNone(latest)
+                    self.assertEqual(latest["id"], pkg["id"])
+                    self.assertEqual(latest["status"], "ready")
+                    social = ad_store.get_social_json_db(pkg["id"])
+                    self.assertIsNotNone(social)
+                finally:
+                    if ad_store._ENGINE is not None:
+                        try:
+                            ad_store._ENGINE.dispose()
+                        except Exception:
+                            pass
+                    ad_store._ENGINE = old_engine
+                    ad_store._ENSURED = old_ensured
+                    ad_store.USE_SQLITE = old_use
+                    ad_store.SQLITE_DB_PATH = old_path
 
 
 class WebhookDispatchTest(unittest.TestCase):
