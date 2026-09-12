@@ -72,16 +72,78 @@ class StableIdTest(unittest.TestCase):
 
 
 class SchemaAndBuildTest(unittest.TestCase):
-    def test_build_schema_and_idempotent_created_at(self):
+    def test_pending_ai_without_social_copy(self):
+        """只有海報、未有 AI 文案 → pending_ai（Grok 唔應當 ready）。"""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fused = root / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+            with mock.patch(
+                "ad_package.lookup_meeting_session",
+                return_value={"session": "夜", "is_day_meeting": False},
+            ):
+                with mock.patch("ad_package.resolve_poster_theme", return_value="night"):
+                    with mock.patch.dict(
+                        "os.environ",
+                        {
+                            "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                            "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                        },
+                        clear=False,
+                    ):
+                        pkg = build_ad_package_from_copy(
+                            _sample_copy(),
+                            output_root=root,
+                            poster_src=fused,
+                            notify=False,
+                        )
+            self.assertEqual(pkg["status"], "pending_ai")
+            self.assertIsNone(pkg["copy"].get("ai"))
+            self.assertTrue(pkg["assets"]["poster_url"].endswith("/v1/ads/2026-07-15-hv-night/poster"))
+
+    def test_build_schema_ready_with_ai_social(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             # 假海報
             fused = root / "fused.png"
             fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+            # AI 精選文案
+            (root / "social_copy.json").write_text(
+                json.dumps(
+                    {
+                        "title": "今晚邊場最有睇頭？",
+                        "subtitle": "J18 AI 精選",
+                        "featured": [
+                            {
+                                "race_no": 1,
+                                "horse_no": 4,
+                                "horse_name": "多利神駒",
+                                "comment": "近績走勢穩陣，值得一讚",
+                            }
+                        ],
+                        "hashtags": ["#J18", "#賽馬"],
+                        "source": "llm",
+                        "post_text": "今晚邊場最有睇頭？\n\n第1場｜4 多利神駒\n近績走勢穩陣，值得一讚\n",
+                        "meeting": {"generated_at": "2026-07-15T10:00:00+08:00"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
 
-            with mock.patch("ad_package.lookup_meeting_session", return_value={"session": "夜", "is_day_meeting": False}):
+            with mock.patch(
+                "ad_package.lookup_meeting_session",
+                return_value={"session": "夜", "is_day_meeting": False},
+            ):
                 with mock.patch("ad_package.resolve_poster_theme", return_value="night"):
-                    with mock.patch.dict("os.environ", {"AD_API_PUBLIC_BASE": "https://ads.example.com"}, clear=False):
+                    with mock.patch.dict(
+                        "os.environ",
+                        {
+                            "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                            "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                        },
+                        clear=False,
+                    ):
                         pkg1 = build_ad_package_from_copy(
                             _sample_copy(),
                             output_root=root,
@@ -104,8 +166,13 @@ class SchemaAndBuildTest(unittest.TestCase):
             self.assertEqual(pkg1["meeting"]["session"], "夜")
             self.assertEqual(len(pkg1["tips"]), 2)
             self.assertEqual(len(pkg1["tips"][0]["horses"]), 4)
-            self.assertIn("J18.hk", pkg1["copy"]["facebook"])
-            self.assertTrue(pkg1["assets"]["poster_url"].endswith("/v1/ads/2026-07-15-hv-night/poster"))
+            self.assertIn("多利神駒", pkg1["copy"]["facebook"])
+            self.assertIsNotNone(pkg1["copy"].get("ai"))
+            self.assertEqual(pkg1["copy"]["ai"]["title"], "今晚邊場最有睇頭？")
+            self.assertEqual(len(pkg1["copy"]["ai"]["featured"]), 1)
+            self.assertTrue(
+                pkg1["assets"]["poster_url"].endswith("/v1/ads/2026-07-15-hv-night/poster")
+            )
 
             pub = public_payload(pkg1)
             for key in (
@@ -121,6 +188,8 @@ class SchemaAndBuildTest(unittest.TestCase):
                 "links",
             ):
                 self.assertIn(key, pub)
+            self.assertIn("ai", pub["copy"])
+            self.assertEqual(pub["copy"]["ai"]["featured"][0]["horse_name"], "多利神駒")
             self.assertNotIn("webhook", pub)
             self.assertNotIn("meta", pub)
             self.assertNotIn("poster_path", pub.get("assets") or {})

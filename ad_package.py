@@ -3,7 +3,7 @@
 
 幂等 id：{YYYY-MM-DD}-{hv|st}-{day|night}
 寫入 ad_output/packages/{id}.json 與 {id}.png
-status=ready 後 POST 去 GROK_BOT_WEBHOOK_URL（指數退避重試 ≥3 次）
+status=ready（海報 PNG + AI 精選文案）後 POST 去 GROK_BOT_WEBHOOK_URL（指數退避重試 ≥3 次）
 """
 from __future__ import annotations
 
@@ -36,6 +36,46 @@ DEFAULT_HASHTAGS = ["#J18", "#賽馬", "#賽前預測"]
 DEFAULT_CTA = "想追臨場心水？而家就登入 J18.hk"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
+
+# ready 需同時有海報 + AI 精選文案（Grok Bot 輪詢用）；可設 AD_PACKAGE_REQUIRE_AI_SOCIAL=false 關閉
+def require_ai_social() -> bool:
+    return (os.getenv("AD_PACKAGE_REQUIRE_AI_SOCIAL", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def ai_social_payload(output_root: Path) -> Optional[Dict[str, Any]]:
+    """從 social_copy.json 組 Grok 可用的 AI 精選評述區塊；未就緒回傳 None。"""
+    try:
+        from ad_llm_copy import format_social_post_text, load_social_copy
+    except Exception:
+        return None
+    social = load_social_copy(Path(output_root))
+    if not social:
+        return None
+    featured = list(social.get("featured") or [])
+    post_text = str(social.get("post_text") or "").strip()
+    if not post_text:
+        try:
+            post_text = format_social_post_text(social).strip()
+        except Exception:
+            post_text = ""
+    if not featured and not post_text:
+        return None
+    meeting = dict(social.get("meeting") or {})
+    return {
+        "title": str(social.get("title") or "").strip(),
+        "subtitle": str(social.get("subtitle") or "").strip(),
+        "featured": featured,
+        "post_text": post_text,
+        "hashtags": list(social.get("hashtags") or []),
+        "source": social.get("source"),
+        "tone": social.get("tone") or meeting.get("tone"),
+        "generated_at": meeting.get("generated_at") or social.get("generated_at"),
+    }
+
 
 
 def _hk_now_iso() -> str:
@@ -288,7 +328,7 @@ def build_ad_package_from_copy(
     intro = _build_intro(meeting, tips)
     cta = DEFAULT_CTA
     hashtags = list(DEFAULT_HASHTAGS)
-    facebook = _build_facebook_copy(
+    template_facebook = _build_facebook_copy(
         meeting=meeting,
         tips=tips,
         intro=intro,
@@ -302,12 +342,27 @@ def build_ad_package_from_copy(
     paths = package_paths(ad_id, out_root)
     src = Path(poster_src) if poster_src else latest_paths(out_root)["fused"]
     poster_url = ""
+    has_poster = False
     if src.is_file():
         shutil.copy2(src, paths["poster"])
+        has_poster = paths["poster"].is_file()
         base = public_base_url()
         poster_url = (
             f"{base}/v1/ads/{ad_id}/poster" if base else f"/v1/ads/{ad_id}/poster"
         )
+
+    ai = ai_social_payload(out_root)
+    facebook = str((ai or {}).get("post_text") or "").strip() or template_facebook
+    if ai and ai.get("hashtags"):
+        hashtags = list(ai.get("hashtags") or hashtags)
+
+    # Grok Bot 期望 ready = 海報 PNG + AI 精選文案齊備
+    if not has_poster:
+        status = "pending_poster"
+    elif require_ai_social() and not ai:
+        status = "pending_ai"
+    else:
+        status = "ready"
 
     existing = load_ad_package(ad_id, out_root)
     created_at = (
@@ -316,20 +371,23 @@ def build_ad_package_from_copy(
         else _hk_now_iso()
     )
 
+    copy_block: Dict[str, Any] = {
+        "facebook": facebook,
+        "short": short,
+        "cta": cta,
+        "hashtags": hashtags,
+        "ai": ai,  # AI 精選評述（title／featured／post_text）；未齊則 null
+    }
+
     payload: Dict[str, Any] = {
         "id": ad_id,
         "created_at": created_at,
         "updated_at": _hk_now_iso(),
-        "status": "ready",
+        "status": status,
         "meeting": meeting,
         "intro": intro,
         "tips": tips,
-        "copy": {
-            "facebook": facebook,
-            "short": short,
-            "cta": cta,
-            "hashtags": hashtags,
-        },
+        "copy": copy_block,
         "assets": {
             "poster_url": poster_url,
             "poster_alt": f"J18 賽前預測海報 {racing_date} {venue}{session_zh}",
@@ -346,10 +404,14 @@ def build_ad_package_from_copy(
             "theme": theme,
             "n_races": len(tips),
             "primary_track": meeting_meta.get("primary_track") or "fused",
+            "has_ai_social": bool(ai),
+            "has_poster": has_poster,
+            "require_ai_social": require_ai_social(),
         },
     }
     save_ad_package(payload, out_root)
 
+    # 只在海報 +（預設）AI 文案齊備時 webhook，避免 Grok 提早發半成品
     if notify and payload.get("status") == "ready":
         wh = dispatch_ad_webhook(payload)
         payload["webhook"] = wh
