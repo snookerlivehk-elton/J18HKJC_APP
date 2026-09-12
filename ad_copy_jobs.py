@@ -139,6 +139,19 @@ def copy_json_ready(output_root: Path) -> Tuple[bool, Dict[str, Any]]:
     return True, copy_data
 
 
+
+
+def _republish_ad_package_with_ai(output_root: Path, *, notify: bool = True) -> Dict[str, Any]:
+    """AI 文案落盤後重建廣告包，令 /v1/ads/latest 同時有海報 + AI 精選。"""
+    try:
+        from ad_package import publish_ad_package_after_outputs
+
+        return publish_ad_package_after_outputs(
+            output_root=Path(output_root), notify=notify
+        )
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
 def run_auto_social_copy(
     *,
     racing_date: str,
@@ -158,6 +171,7 @@ def run_auto_social_copy(
     tone_key = normalize_tone(tone or DEFAULT_AD_TONE)
 
     if not force and bid and job_done_for_batch(out_root, d, c, "social", bid):
+        pkg = _republish_ad_package_with_ai(out_root, notify=True)
         return {
             "ok": True,
             "skipped": True,
@@ -165,6 +179,7 @@ def run_auto_social_copy(
             "batch_id": bid,
             "racing_date": d,
             "course": c,
+            "ad_package": pkg,
         }
 
     ready, copy_data = copy_json_ready(out_root)
@@ -235,6 +250,7 @@ def run_auto_social_copy(
     }
     social_path = save_social_copy(out_root, social)
     archived = write_archive_version(out_root, d, c, "social", social)
+    pkg = _republish_ad_package_with_ai(out_root, notify=True)
     return {
         "ok": True,
         "batch_id": use_bid,
@@ -245,6 +261,7 @@ def run_auto_social_copy(
         "n_featured": len(list(social.get("featured") or [])),
         "social_copy": str(social_path),
         "archive": archived,
+        "ad_package": pkg,
     }
 
 

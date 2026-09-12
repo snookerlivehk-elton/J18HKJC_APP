@@ -1,6 +1,6 @@
 # 賽前預測廣告包 API（Ad Package API）
 
-給外部助手（Grok Bot / Elton-PC）攞「賽前預測」結構化 JSON + Facebook 文案，並在新一期 `ready` 時**主動 webhook POST**。
+給外部助手（Grok Bot / Elton-PC）攞「賽前預測」**海報 PNG** + **AI 精選社交文案**（`copy.ai`／`copy.facebook`），並在新一期 `ready`（兩者齊備）時**主動 webhook POST**。\n\n`status=ready` 條件：`assets.poster_url` 有圖，且 `copy.ai` 有 AI 精選（可用 `AD_PACKAGE_REQUIRE_AI_SOCIAL=false` 關閉此要求）。
 
 **唔會**直接發 Facebook；發佈由外部助手／人手處理。
 
@@ -131,10 +131,24 @@ pytest tests/test_ad_package_api.py -q
     }
   ],
   "copy": {
-    "facebook": "【J18 賽前預測】…（完整文案，含 CTA 與注意變更）",
+    "facebook": "今晚邊場最有睇頭？\n\n第1場｜4 多利神駒\n近績走勢穩陣…（AI 精選全文，供 Grok 發佈）",
     "short": "【J18】2026-07-15 谷草夜賽 …",
     "cta": "想追臨場心水？而家就登入 J18.hk",
-    "hashtags": ["#J18", "#賽馬", "#賽前預測"]
+    "hashtags": ["#J18", "#賽馬", "#賽前預測"],
+    "ai": {
+      "title": "今晚邊場最有睇頭？",
+      "subtitle": "J18 AI 精選",
+      "featured": [
+        {
+          "race_no": 1,
+          "horse_no": 4,
+          "horse_name": "多利神駒",
+          "comment": "近績走勢穩陣，值得一讚"
+        }
+      ],
+      "post_text": "今晚邊場最有睇頭？\n\n第1場｜4 多利神駒\n近績走勢穩陣，值得一讚\n",
+      "source": "llm"
+    }
   },
   "assets": {
     "poster_url": "https://YOUR-AD-API.up.railway.app/v1/ads/2026-07-15-hv-night/poster",
