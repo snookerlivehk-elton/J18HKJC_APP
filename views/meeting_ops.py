@@ -324,6 +324,12 @@ for stage, label in STAGES:
         elif stage == "NLP":
             st.caption("NLP 為可選；一鍵遺留鏈見上方按鈕，或本階段「一鍵完成」。")
         elif stage == "FORM_AI":
+            st.caption(
+                "上方 readiness「尚未跑」= `upcoming_form_ai` 仲未有結果；"
+                "下方 running = `background_jobs` 紀錄。"
+                "若 phase 長期停喺 `spawned` 且 OpenRouter 無流量，代表進程已死——"
+                "按「重新整理進度」會自動標記 failed，之後可再「後台啟動」。"
+            )
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",
                 value=True,
@@ -437,9 +443,23 @@ for stage, label in STAGES:
                 if js in ("ok", "ok_with_errors"):
                     st.success("Form AI 後台已完成；可重新檢查 readiness 後繼續快照。")
                 elif js == "failed":
-                    st.error("後台失敗，請看 detail／Railway log。")
+                    st.error(
+                        "後台失敗／已中斷："
+                        f"{job.get('detail') or '請看 Railway log'}"
+                        "。可再按「後台啟動 Form AI」。"
+                    )
                 elif js == "running":
-                    st.info("進行中——可關閉本頁，稍後回來按「重新整理進度」。")
+                    phase = ""
+                    if isinstance(prog, dict):
+                        phase = str(prog.get("phase") or "")
+                    if phase in ("spawned", "dead"):
+                        st.warning(
+                            "狀態仍顯示 running，但可能尚未真正開始呼叫模型"
+                            f"（phase=`{phase}`）。請再按一次「重新整理進度」；"
+                            "若仍不變，稍後重啟後台任務。"
+                        )
+                    else:
+                        st.info("進行中——可關閉本頁，稍後回來按「重新整理進度」。")
         elif stage == "SNAPSHOT":
             if a2.button("建立快照", key=f"act_snap_{stage}", help=help_txt):
                 with st.spinner("snapshot…"):

@@ -43,6 +43,44 @@ class FormAIJobTableTest(unittest.TestCase):
             )
             self.assertEqual(latest["job_id"], job_id)
 
+    def test_reconcile_dead_pid_marks_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "jobs.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+            import form_ai_batch_job as faj
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            faj.USE_SQLITE = True
+            faj.SQLITE_DB_PATH = db_path
+            faj.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            from sqlalchemy import create_engine
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            job_id = faj.create_job(
+                eng, job_type="form_ai", racing_date="2026-09-13", course="ST"
+            )
+            faj.update_job(
+                eng,
+                job_id,
+                status="running",
+                detail="pid=999999",
+                progress={"phase": "spawned", "pid": 999999, "log": "/tmp/missing.log"},
+            )
+            job = faj.get_job(eng, job_id)
+            out = faj.reconcile_running_job(eng, job)
+            self.assertEqual(out["status"], "failed")
+            prog = out.get("progress_json") or {}
+            if isinstance(prog, str):
+                import json
+
+                prog = json.loads(prog)
+            self.assertEqual(prog.get("phase"), "dead")
+            self.assertTrue(prog.get("reconciled"))
+
 
 if __name__ == "__main__":
     unittest.main()
