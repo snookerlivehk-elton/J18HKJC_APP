@@ -36,6 +36,8 @@ DEFAULT_HASHTAGS = ["#J18", "#賽馬", "#賽前預測"]
 DEFAULT_CTA = "想追臨場心水？而家就登入 J18.hk"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
+DEFAULT_DISCLAIMER = "預測／資料只供參考，投注前請自行判斷。"
+PACKAGE_HASHTAG_LIMIT = 5
 
 # ready 需同時有海報 + AI 精選文案（Grok Bot 輪詢用）；可設 AD_PACKAGE_REQUIRE_AI_SOCIAL=false 關閉
 def require_ai_social() -> bool:
@@ -128,6 +130,37 @@ def public_base_url() -> str:
     return (os.getenv("AD_API_PUBLIC_BASE") or os.getenv("PUBLIC_BASE_URL") or "").rstrip("/")
 
 
+def remote_ad_api_base() -> str:
+    """CORN／Streamlit 推送生產 Ad API 用（與 AD_API_PUBLIC_BASE 可相同主機）。"""
+    return (
+        os.getenv("AD_API_BASE_URL")
+        or os.getenv("AD_API_PUSH_URL")
+        or ""
+    ).strip().rstrip("/")
+
+
+def _cap_hashtags(tags: Sequence[str], *, limit: int = PACKAGE_HASHTAG_LIMIT) -> List[str]:
+    out: List[str] = []
+    for tag in tags:
+        s = str(tag or "").strip()
+        if not s:
+            continue
+        if not s.startswith("#"):
+            s = "#" + s.lstrip("#")
+        if s not in out:
+            out.append(s)
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
+def _default_start_time(theme: str, session_zh: str = "") -> str:
+    """無 race_time 時用場次慣例開跑時間（給文案用）。"""
+    if theme == "day" or session_zh == "日":
+        return "約下午1時"
+    return "約晚上7時15分"
+
+
 def stable_ad_id(
     racing_date: str,
     course: str,
@@ -179,10 +212,13 @@ def _tips_from_races(races: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _build_intro(meeting: Dict[str, Any], tips: Sequence[Dict[str, Any]]) -> str:
+    start = str(meeting.get("start_time") or "").strip()
+    start_bit = f"，預計{start}開跑" if start else ""
     return (
         f"{meeting.get('date', '')} {meeting.get('weekday', '')}"
-        f"{meeting.get('venue', '')}{meeting.get('session', '')}賽共 {len(tips)} 場，"
-        f"J18 綜合推介已出爐——開賽前或會更新，請以網站最新版為準。"
+        f"{meeting.get('venue', '')}{meeting.get('session', '')}賽共 {len(tips)} 場"
+        f"{start_bit}，J18 綜合推介已出爐——"
+        f"你又睇邊場最有睇頭？留言話我知！"
     )
 
 
@@ -195,15 +231,25 @@ def _build_facebook_copy(
     hashtags: Sequence[str],
     fused_copy: str = "",
 ) -> str:
+    start = str(meeting.get("start_time") or "").strip()
+    start_line = f"開跑時間：{start}" if start else ""
     lines = [
         (
             f"【J18 賽前預測】{meeting.get('date', '')} {meeting.get('weekday', '')} "
             f"{meeting.get('venue', '')}{meeting.get('session', '')}賽"
         ),
-        "",
-        intro,
-        "",
     ]
+    if start_line:
+        lines.append(start_line)
+    lines.extend(
+        [
+            "",
+            intro,
+            "",
+            "今場邊匹令你最心水？留言一齊傾下👇",
+            "",
+        ]
+    )
     for t in tips:
         horses = t.get("horses") or []
         body = (
@@ -213,10 +259,11 @@ def _build_facebook_copy(
     lines.extend(
         [
             "",
-            "⚠️ 預測或會於開賽前變更，請以 J18.hk 最新版本為準。",
             cta,
+            DEFAULT_DISCLAIMER,
+            "賽前如有變動，請以 J18.hk 最新版本為準。",
             "",
-            " ".join(hashtags),
+            " ".join(_cap_hashtags(hashtags)),
         ]
     )
     fc = str(fused_copy or "").strip()
@@ -230,8 +277,41 @@ def _build_short_copy(
 ) -> str:
     return (
         f"【J18】{meeting.get('date', '')} {meeting.get('venue', '')}"
-        f"{meeting.get('session', '')}賽 {len(tips)} 場綜合推介已更新！{cta}"
+        f"{meeting.get('session', '')}賽 {len(tips)} 場綜合推介已更新！"
+        f"你又點睇？留言話我知！{cta}"
     )
+
+
+def _ensure_facebook_publish_ready(
+    text: str,
+    *,
+    meeting: Dict[str, Any],
+    cta: str,
+    hashtags: Sequence[str],
+) -> str:
+    """確保 AI／模板文案含日期場地、CTA、免責；缺則補尾。"""
+    body = str(text or "").strip()
+    if not body:
+        return body
+    lower = body.lower()
+    extras: List[str] = []
+    date = str(meeting.get("date") or "")
+    venue = str(meeting.get("venue") or "")
+    if date and date not in body:
+        extras.append(
+            f"{date} {meeting.get('weekday', '')} {venue}{meeting.get('session', '')}賽"
+            f"{(' · ' + meeting['start_time']) if meeting.get('start_time') else ''}".rstrip()
+        )
+    if "j18.hk" not in lower and "j18.hk" not in body:
+        extras.append(cta)
+    if "參考" not in body and "免責" not in body:
+        extras.append(DEFAULT_DISCLAIMER)
+    tags = _cap_hashtags(hashtags)
+    if tags and not any(t in body for t in tags[:2]):
+        extras.append(" ".join(tags))
+    if not extras:
+        return body
+    return body.rstrip() + "\n\n" + "\n".join(extras)
 
 
 def package_paths(ad_id: str, output_root: Optional[Path] = None) -> Dict[str, Path]:
@@ -302,7 +382,10 @@ def load_latest_ad_package(
 
 
 def save_ad_package(
-    payload: Dict[str, Any], output_root: Optional[Path] = None
+    payload: Dict[str, Any],
+    output_root: Optional[Path] = None,
+    *,
+    push_remote: bool = True,
 ) -> Path:
     ad_id = str(payload.get("id") or "")
     if not ad_id:
@@ -314,11 +397,11 @@ def save_ad_package(
     if payload.get("status") == "ready":
         paths["latest_id"].write_text(ad_id, encoding="utf-8")
     # dual-write 到共用 DB，讓 Streamlit／Ad API 唔共碟都睇到
+    poster_bytes = None
     try:
         from ad_store import upsert_ad_package
 
         out_root = Path(output_root) if output_root else default_output_dir()
-        poster_bytes = None
         if paths["poster"].is_file():
             poster_bytes = paths["poster"].read_bytes()
         else:
@@ -346,7 +429,155 @@ def save_ad_package(
         )
     except Exception as exc:
         logger.warning("ad_store upsert failed: %s", exc)
+
+    # 跨服務：Streamlit／CORN → 生產 Ad API（HTTP ingest；唔靠共碟）
+    if push_remote and payload.get("status") == "ready":
+        try:
+            if poster_bytes is None:
+                if paths["poster"].is_file():
+                    poster_bytes = paths["poster"].read_bytes()
+                else:
+                    out_root = Path(output_root) if output_root else default_output_dir()
+                    fused = out_root / "fused.png"
+                    if fused.is_file():
+                        poster_bytes = fused.read_bytes()
+            remote = push_ad_package_remote(payload, poster_png=poster_bytes)
+            if remote.get("ok"):
+                payload["remote_push"] = {"ok": True, "id": remote.get("id")}
+            elif not remote.get("skipped"):
+                payload["remote_push"] = {
+                    "ok": False,
+                    "error": remote.get("error") or remote.get("reason"),
+                }
+                logger.warning("ad package remote push failed: %s", remote)
+        except Exception as exc:
+            logger.warning("ad package remote push error: %s", exc)
+            payload["remote_push"] = {"ok": False, "error": str(exc)}
     return paths["json"]
+
+
+def push_ad_package_remote(
+    payload: Dict[str, Any],
+    *,
+    poster_png: Optional[bytes] = None,
+    notify: bool = False,
+) -> Dict[str, Any]:
+    """
+    POST 完整 ready 包（+ 海報 bytes）到生產 Ad API /v1/ads/ingest。
+    需設 AD_API_BASE_URL + AD_API_KEY（與下游讀取用同一 key）。
+    """
+    base = remote_ad_api_base()
+    if not base:
+        return {"ok": False, "skipped": True, "reason": "AD_API_BASE_URL not set"}
+    public = public_base_url()
+    # 本機就係 Ad API 且 base＝公開 URL 時唔好自推（避免無謂迴圈）
+    if public and base.rstrip("/") == public.rstrip("/"):
+        skip_self = (os.getenv("AD_API_PUSH_SELF") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if not skip_self:
+            return {
+                "ok": False,
+                "skipped": True,
+                "reason": "AD_API_BASE_URL equals AD_API_PUBLIC_BASE (set AD_API_PUSH_SELF=1 to force)",
+            }
+    key = (os.getenv("AD_API_KEY") or os.getenv("PREDICTION_API_KEY") or "").strip()
+    if not key:
+        return {"ok": False, "skipped": True, "reason": "AD_API_KEY not set"}
+
+    import base64
+
+    try:
+        import httpx
+    except ImportError:
+        return {"ok": False, "error": "httpx not installed"}
+
+    body: Dict[str, Any] = {
+        "package": public_payload(payload),
+        "notify": bool(notify),
+    }
+    # public_payload 冇 meta；下游主要用 copy／assets；status 已有
+    if poster_png:
+        body["poster_png_b64"] = base64.b64encode(poster_png).decode("ascii")
+
+    url = f"{base}/v1/ads/ingest"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "User-Agent": "J18-AdPackage-Push/1.0",
+    }
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(url, json=body, headers=headers)
+        if 200 <= resp.status_code < 300:
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:
+                data = {}
+            return {
+                "ok": True,
+                "id": data.get("id") or payload.get("id"),
+                "status_code": resp.status_code,
+                "url": url,
+            }
+        return {
+            "ok": False,
+            "error": f"HTTP {resp.status_code}: {(resp.text or '')[:400]}",
+            "url": url,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "url": url}
+
+
+def ingest_ad_package(
+    package: Dict[str, Any],
+    *,
+    poster_png: Optional[bytes] = None,
+    output_root: Optional[Path] = None,
+    notify: bool = False,
+) -> Dict[str, Any]:
+    """
+    接收上游推送嘅廣告包：寫本機 packages／DB，並改寫 poster_url 指向本服務公開 URL。
+    """
+    if not isinstance(package, dict) or not package.get("id"):
+        raise ValueError("package.id required")
+    pkg = json.loads(json.dumps(package, ensure_ascii=False, default=str))
+    ad_id = str(pkg["id"])
+    out_root = Path(output_root) if output_root else default_output_dir()
+    paths = package_paths(ad_id, out_root)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+
+    if poster_png:
+        paths["poster"].write_bytes(poster_png)
+        try:
+            (out_root / "fused.png").write_bytes(poster_png)
+        except Exception:
+            pass
+
+    base = public_base_url()
+    assets = dict(pkg.get("assets") or {})
+    assets["poster_url"] = (
+        f"{base}/v1/ads/{ad_id}/poster" if base else f"/v1/ads/{ad_id}/poster"
+    )
+    assets.pop("poster_path", None)
+    if paths["poster"].is_file():
+        assets["poster_path"] = str(paths["poster"])
+    pkg["assets"] = assets
+    pkg["updated_at"] = _hk_now_iso()
+    if not pkg.get("created_at"):
+        pkg["created_at"] = _hk_now_iso()
+
+    # 寫入本機＋DB，唔再向外推（本服務就係目標）
+    save_ad_package(pkg, out_root, push_remote=False)
+
+    if notify and pkg.get("status") == "ready":
+        wh = dispatch_ad_webhook(pkg)
+        pkg["webhook"] = wh
+        save_ad_package(pkg, out_root, push_remote=False)
+    return pkg
 
 
 def public_payload(pkg: Dict[str, Any]) -> Dict[str, Any]:
@@ -402,17 +633,24 @@ def build_ad_package_from_copy(
     )
     venue = _venue_label(course)
     session_zh = _session_zh(theme)
+    start_time = str(
+        meeting_meta.get("start_time")
+        or meeting_meta.get("post_time")
+        or fx.get("start_time")
+        or ""
+    ).strip() or _default_start_time(theme, session_zh)
     meeting = {
         "date": racing_date,
         "weekday": _weekday_zh(racing_date),
         "venue": venue,
         "venue_code": course,
         "session": session_zh,
+        "start_time": start_time,
     }
     tips = _tips_from_races(list(copy_data.get("races") or []))
     intro = _build_intro(meeting, tips)
     cta = DEFAULT_CTA
-    hashtags = list(DEFAULT_HASHTAGS)
+    hashtags = _cap_hashtags(DEFAULT_HASHTAGS)
     template_facebook = _build_facebook_copy(
         meeting=meeting,
         tips=tips,
@@ -442,7 +680,10 @@ def build_ad_package_from_copy(
     # Facebook 文案優先用 AI 高互動 post_text（含 J18.hk CTA footer）；否則 template
     facebook = str((ai or {}).get("post_text") or "").strip() or template_facebook
     if ai and ai.get("hashtags"):
-        hashtags = list(ai.get("hashtags") or hashtags)
+        hashtags = _cap_hashtags(list(ai.get("hashtags") or hashtags))
+    facebook = _ensure_facebook_publish_ready(
+        facebook, meeting=meeting, cta=cta, hashtags=hashtags
+    )
 
     # Grok Bot 期望 ready = 海報 PNG + AI 精選文案齊備
     if not has_poster:

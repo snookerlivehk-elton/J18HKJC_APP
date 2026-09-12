@@ -161,13 +161,61 @@ def get_job(job_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
 
 
 def _run_ad_regen(eng, job_id: str, batch_id: str) -> Dict[str, Any]:
-    from ad_poster import generate_ads_from_snapshot_batch
+    from ad_poster import default_output_dir, generate_ads_from_snapshot_batch
 
     faj.update_job(
         eng, job_id, status="running", progress={"phase": "ad_regen", "batch_id": batch_id}
     )
     result = generate_ads_from_snapshot_batch(batch_id)
     ok = bool(result.get("ok") or result.get("races_written"))
+
+    # 海報後自動產 AI 文案並 publish ready 包（寫 DB + 可選推送生產 Ad API）
+    social_out: Dict[str, Any] = {}
+    pkg_out: Dict[str, Any] = {}
+    if ok:
+        try:
+            faj.update_job(
+                eng,
+                job_id,
+                status="running",
+                progress={"phase": "ad_social", "batch_id": batch_id},
+            )
+            from ad_copy_jobs import run_auto_social_copy
+            from ad_package import publish_ad_package_after_outputs
+            from ad_poster import load_copy_json
+
+            out_root = default_output_dir()
+            copy = load_copy_json(out_root) or {}
+            meeting = copy.get("meeting") or {}
+            d = str(meeting.get("racing_date") or "")[:10]
+            c = str(meeting.get("course") or "").upper()
+            if d and c:
+                social_out = run_auto_social_copy(
+                    racing_date=d, course=c, batch_id=str(batch_id), force=True
+                )
+            pkg_out = publish_ad_package_after_outputs(
+                output_root=out_root, notify=True
+            )
+            result["social_copy"] = {
+                k: social_out.get(k)
+                for k in (
+                    "ok",
+                    "error",
+                    "waiting",
+                    "skipped",
+                    "n_featured",
+                    "source",
+                    "ad_package",
+                    "batch_id",
+                )
+                if k in social_out
+            }
+            result["ad_package"] = {
+                k: pkg_out.get(k) for k in ("ok", "id", "status", "error") if k in pkg_out
+            }
+        except Exception as exc:
+            result["social_copy"] = {"ok": False, "error": str(exc)}
+
     faj.update_job(
         eng,
         job_id,
@@ -182,6 +230,8 @@ def _run_ad_regen(eng, job_id: str, batch_id: str) -> Dict[str, Any]:
                     "fused_bytes",
                     "primary_track_label",
                     "files_written",
+                    "social_copy",
+                    "ad_package",
                 )
                 if k in result or result.get(k)
             },
@@ -191,7 +241,14 @@ def _run_ad_regen(eng, job_id: str, batch_id: str) -> Dict[str, Any]:
             "phase": "done",
             "result": {
                 k: result.get(k)
-                for k in ("ok", "races_written", "error", "primary_track_label")
+                for k in (
+                    "ok",
+                    "races_written",
+                    "error",
+                    "primary_track_label",
+                    "social_copy",
+                    "ad_package",
+                )
             },
         },
         finished=True,

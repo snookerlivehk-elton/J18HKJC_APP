@@ -31,6 +31,7 @@ from ad_package import (
     build_ad_package_from_copy,
     dispatch_ad_webhook,
     generate_ad_package,
+    ingest_ad_package,
     list_ad_package_ids,
     load_ad_package,
     load_latest_ad_package,
@@ -92,6 +93,16 @@ class GenerateBody(BaseModel):
         False, description="若有 batch_id，是否先重產海報"
     )
     notify: bool = Field(True, description="是否 webhook 通知外部助手")
+
+
+class IngestBody(BaseModel):
+    """上游（Streamlit／CORN）推送完整 ready 包 + 海報。"""
+
+    package: Dict[str, Any] = Field(..., description="廣告包 JSON（含 status=ready）")
+    poster_png_b64: Optional[str] = Field(
+        None, description="海報 PNG 的 base64（可選；有則覆寫本機 poster）"
+    )
+    notify: bool = Field(False, description="寫入後是否再推 webhook")
 
 
 @app.get("/health")
@@ -233,6 +244,42 @@ def post_rebuild_from_copy(notify: bool = True) -> Dict[str, Any]:
         "id": pkg.get("id"),
         "package": public_payload(pkg),
         "webhook": pkg.get("webhook"),
+    }
+
+
+@app.post("/v1/ads/ingest", dependencies=[Depends(require_ad_api_key)])
+def post_ingest(body: IngestBody) -> Dict[str, Any]:
+    """
+    接收 Streamlit／CORN 推送嘅 ready 廣告包（JSON + 可選海報 bytes）。
+    寫入本機 packages／共用 DB，並改寫 assets.poster_url 指向本服務公開 URL，
+    令 GET /v1/ads/latest 可一次攞到文案 + 可下載海報。
+    """
+    import base64
+
+    poster_bytes: Optional[bytes] = None
+    if body.poster_png_b64:
+        try:
+            poster_bytes = base64.b64decode(body.poster_png_b64)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid poster_png_b64: {exc}"
+            ) from exc
+    try:
+        pkg = ingest_ad_package(
+            body.package,
+            poster_png=poster_bytes,
+            output_root=_output_root(),
+            notify=body.notify,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "id": pkg.get("id"),
+        "status": pkg.get("status"),
+        "package": public_payload(pkg),
     }
 
 

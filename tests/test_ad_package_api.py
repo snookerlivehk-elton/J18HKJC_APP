@@ -416,5 +416,111 @@ class ApiAuthSmokeTest(unittest.TestCase):
             self.assertIn(ok.status_code, (200, 404))
 
 
+class IngestAndLatestTest(unittest.TestCase):
+    def test_ingest_makes_latest_ready_with_facebook_and_poster(self):
+        import base64
+
+        from fastapi.testclient import TestClient
+
+        from ad_api import app
+        from ad_package import build_ad_package_from_copy, public_payload
+
+        with TemporaryDirectory() as prod_tmp, TemporaryDirectory() as api_tmp:
+            prod = Path(prod_tmp)
+            api_root = Path(api_tmp)
+            fused = prod / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+            social = {
+                "title": "沙田日賽邊場最有睇頭？留言話我知！",
+                "featured": [
+                    {
+                        "race_no": 1,
+                        "horse_no": 7,
+                        "horse_name": "增旺",
+                        "comment": "近績穩",
+                    }
+                ],
+                "hashtags": ["#J18", "#賽馬", "#沙田", "#賽前預測", "#J18HK", "#extra"],
+                "post_text": (
+                    "【J18】2026-09-13 沙田日賽\n"
+                    "邊場最有睇頭？留言話我知！\n"
+                    "第1場｜7 增旺\n近績穩\n\n"
+                    "想追臨場？登入 J18.hk\n預測只供參考。\n"
+                    "#J18 #賽馬 #沙田"
+                ),
+            }
+            (prod / "social_copy.json").write_text(
+                json.dumps(social, ensure_ascii=False), encoding="utf-8"
+            )
+            env = {
+                "AD_API_KEY": "secret-key",
+                "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                "AD_API_BASE_URL": "",
+                "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                "AD_STORE_ENABLED": "false",
+                "AD_OUTPUT_DIR": str(api_root),
+            }
+            with mock.patch.dict("os.environ", env, clear=False):
+                with mock.patch(
+                    "ad_package.lookup_meeting_session",
+                    return_value={"session": "日", "is_day_meeting": True},
+                ):
+                    with mock.patch(
+                        "ad_package.resolve_poster_theme", return_value="day"
+                    ):
+                        built = build_ad_package_from_copy(
+                            _sample_copy(),
+                            output_root=prod,
+                            notify=False,
+                        )
+                self.assertEqual(built.get("status"), "ready")
+                self.assertTrue((built.get("copy") or {}).get("facebook"))
+                tags = (built.get("copy") or {}).get("hashtags") or []
+                self.assertLessEqual(len(tags), 5)
+
+                poster_path = prod / "packages" / f"{built['id']}.png"
+                self.assertTrue(poster_path.is_file())
+                poster_b64 = base64.b64encode(poster_path.read_bytes()).decode("ascii")
+
+                client = TestClient(app)
+                self.assertEqual(
+                    client.get(
+                        "/v1/ads/latest",
+                        headers={"Authorization": "Bearer secret-key"},
+                    ).status_code,
+                    404,
+                )
+                ingested = client.post(
+                    "/v1/ads/ingest",
+                    headers={"Authorization": "Bearer secret-key"},
+                    json={
+                        "package": public_payload(built),
+                        "poster_png_b64": poster_b64,
+                        "notify": False,
+                    },
+                )
+                self.assertEqual(ingested.status_code, 200, ingested.text)
+                body = ingested.json()
+                self.assertTrue(body.get("ok"))
+                self.assertEqual(body.get("status"), "ready")
+
+                latest = client.get(
+                    "/v1/ads/latest",
+                    headers={"Authorization": "Bearer secret-key"},
+                )
+                self.assertEqual(latest.status_code, 200, latest.text)
+                data = latest.json()
+                self.assertEqual(data.get("status"), "ready")
+                self.assertIn("facebook", data.get("copy") or {})
+                self.assertTrue((data.get("copy") or {}).get("facebook"))
+                poster_url = (data.get("assets") or {}).get("poster_url") or ""
+                self.assertTrue(poster_url.endswith(f"/v1/ads/{data['id']}/poster"))
+                # 公開海報可下載（唔使 login Streamlit）
+                rel = poster_url.replace("https://ads.example.com", "")
+                poster_resp = client.get(rel)
+                self.assertEqual(poster_resp.status_code, 200)
+                self.assertTrue(poster_resp.content.startswith(b"\x89PNG"))
+
+
 if __name__ == "__main__":
     unittest.main()
