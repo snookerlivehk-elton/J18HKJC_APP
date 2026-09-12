@@ -118,7 +118,11 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
             st.write(copy.get("fused_copy") or "")
 
 
-def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
+def _render_social_copy(output_root: Path, copy_data: Dict[str, Any], *, key_prefix: str = "browse") -> None:
+    # Streamlit tabs 會同時跑兩個 tab；widget key 必須按 prefix 分開，否則 DuplicateElementKey
+    def _k(name: str) -> str:
+        return f"{name}_{key_prefix}"
+
     st.markdown("### AI 社交文案")
     writer = AdSocialCopywriter()
     if writer.is_ready():
@@ -139,14 +143,14 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
 
     tone_options = list(TONE_PRESETS.keys())
     tone_labels = {k: TONE_PRESETS[k]["label"] for k in tone_options}
-    current_tone = normalize_tone(st.session_state.get("ad_social_tone") or DEFAULT_TONE)
+    current_tone = normalize_tone(st.session_state.get(_k("ad_social_tone")) or DEFAULT_TONE)
     tone = st.radio(
         "文案語氣",
         options=tone_options,
         index=tone_options.index(current_tone),
         format_func=lambda k: tone_labels[k],
         horizontal=True,
-        key="ad_social_tone",
+        key=_k("ad_social_tone"),
         help="預設高互動型：像香港 FB／IG 貼文，易讚易留言；文筆固定港式，避免國語翻譯腔。",
     )
     st.caption(TONE_PRESETS[normalize_tone(tone)]["hint"])
@@ -160,9 +164,9 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     )
     custom_prompt = st.text_area(
         "LLM 提示詞",
-        value=st.session_state.get("ad_social_prompt") or default_prompt,
+        value=st.session_state.get(_k("ad_social_prompt")) or default_prompt,
         height=110,
-        key="ad_social_prompt",
+        key=_k("ad_social_prompt"),
         help="可補充重點或受眾要求；文末固定聲明由系統自動附加。",
     )
     with st.expander("文末固定聲明（系統自動附加）", expanded=False):
@@ -172,7 +176,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     c1, c2 = st.columns([1, 1])
     with c1:
         disabled = (not writer.is_ready()) or n_cand <= 0
-        if st.button("生成 AI 精選評述並推送生產", type="primary", key="ad_social_generate", disabled=disabled, help="一次完成：寫文案 → 重建 ready 包 → POST /v1/ads/ingest 去生產 API"):
+        if st.button("生成 AI 精選評述並推送生產", type="primary", key=_k("ad_social_generate"), disabled=disabled, help="一次完成：寫文案 → 重建 ready 包 → POST /v1/ads/ingest 去生產 API"):
             with st.spinner("AI 正在挑選精選場次與撰寫文案…"):
                 try:
                     social_data = writer.generate_social_copy(
@@ -219,7 +223,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                             _show_remote_push(pkg_out.get("remote_push") or {})
                     except Exception as pkg_exc:
                         st.caption(f"廣告包重建略過：{pkg_exc}")
-                    st.session_state["ad_social_result"] = social_data
+                    st.session_state[_k("ad_social_result")] = social_data
                     src_note = social_data.get("source") or "llm"
                     if str(src_note).startswith("fallback"):
                         st.warning(
@@ -229,7 +233,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                     else:
                         st.success(f"已生成 AI 精選評述（{tone_label(tone)}）並推送生產 API")
                 except Exception as e:
-                    st.session_state["ad_social_result"] = {"error": str(e)}
+                    st.session_state[_k("ad_social_result")] = {"error": str(e)}
                     st.error(f"生成失敗：{e}")
     with c2:
         p = social_copy_path(output_root)
@@ -239,7 +243,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     # 補推／重試（已有 social 時先用；正常唔使撳）
     with st.expander("進階：只重試推送生產 API", expanded=False):
         st.caption("正常撳上面「生成 AI…並推送生產」已夠。呢度只係 ingest 失敗時補推。")
-        if st.button("重試推送生產 API", key=f"ad_social_retry_push"):
+        if st.button("重試推送生產 API", key=_k("ad_social_retry_push")):
             with st.spinner("推送 /v1/ads/ingest …"):
                 push_out = _sync_publish_to_prod(output_root, notify=True)
             if push_out.get("ok"):
@@ -249,7 +253,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                 or ({"ok": False, "error": push_out.get("error")} if push_out.get("error") else {})
             )
 
-    social_data = st.session_state.get("ad_social_result") or social_data
+    social_data = st.session_state.get(_k("ad_social_result")) or social_data
     if not social_data:
         st.info(
             "一次流程：撳「生成 AI 精選評述並推送生產」→ 寫文案 → 自動 ingest 生產 API；"
@@ -291,7 +295,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         "Facebook / IG 貼文（可直接複製）",
         value=post_text,
         height=280,
-        key="ad_social_post_layout",
+        key=_k("ad_social_post_layout"),
     )
 
     st.download_button(
@@ -299,7 +303,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         data=__import__("json").dumps(social_data, ensure_ascii=False, indent=2),
         file_name="social_copy.json",
         mime="application/json",
-        key="ad_social_download",
+        key=_k("ad_social_download"),
     )
 
 
@@ -349,7 +353,7 @@ with tab_browse:
     _render_outputs(out_root, key_prefix="browse")
     copy_data = load_copy_json(out_root)
     st.divider()
-    _render_social_copy(out_root, copy_data)
+    _render_social_copy(out_root, copy_data, key_prefix="browse")
 
     st.divider()
     render_ad_archive_panel(output_root=out_root, key_prefix="ad_out_arch", show_pre_race=True, show_post_race=True)
@@ -429,6 +433,6 @@ with tab_regen:
             _render_outputs(out_root, key_prefix="after_regen")
             st.divider()
             copy_after = load_copy_json(out_root)
-            _render_social_copy(out_root, copy_after or {})
+            _render_social_copy(out_root, copy_after or {}, key_prefix="after_regen")
         elif last and last.get("error"):
             st.error(last.get("error"))
