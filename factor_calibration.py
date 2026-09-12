@@ -527,7 +527,8 @@ class FactorCalibration:
             "provisional_reasons": meta_reasons,
         }
 
-        # 快照成功後自動產出廣告海報（模型＋AI 各一）
+        # 快照成功後自動產出廣告海報（模型＋AI 各一）；失敗唔回滾快照，但標 ad_ok／ad_status
+        ad_ok = False
         if bool(getattr(ModelConfig, "AD_OUTPUT_ON_SNAPSHOT", True)) and ad_race_items:
             try:
                 from ad_poster import default_output_dir, generate_ads_for_meeting_predictions
@@ -540,8 +541,19 @@ class FactorCalibration:
                     course=str(course),
                 )
                 out["ad_output"] = ad_out
+                ad_ok = bool(ad_out.get("ok"))
             except Exception as e:
                 out["ad_output"] = {"ok": False, "error": str(e)}
+                ad_ok = False
+        elif not ad_race_items:
+            out["ad_output"] = {"ok": False, "error": "no race items for ads"}
+        out["ad_ok"] = ad_ok
+        try:
+            from ad_store import set_batch_ad_status
+
+            set_batch_ad_status(batch_id, "ok" if ad_ok else "failed")
+        except Exception:
+            pass
 
         return out
 

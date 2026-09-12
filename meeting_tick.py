@@ -958,6 +958,41 @@ class MeetingTickRunner:
                         res = {**res, "ok": True}
                     self._record_pull_attempt(d, c, "SNAPSHOT", res)
                     out["readiness_after_snapshot"] = self.pipe.refresh_readiness(d, c)
+                    # 快照 ok 但廣告失敗／未寫入共用 store → 用 batch 重試海報（寫 DB）
+                    if res.get("ok") and res.get("batch_id") and not res.get("ad_ok"):
+                        ad_retry = {
+                            "action": "ad_output_retry",
+                            "batch_id": res.get("batch_id"),
+                        }
+                        try:
+                            from ad_poster import generate_ads_from_snapshot_batch
+
+                            ad_retry_out = generate_ads_from_snapshot_batch(
+                                str(res.get("batch_id"))
+                            )
+                            ad_retry["ok"] = bool(ad_retry_out.get("ok"))
+                            ad_retry["result"] = {
+                                k: ad_retry_out.get(k)
+                                for k in ("ok", "error", "batch_id", "ad_package", "output_dir")
+                                if k in ad_retry_out
+                            } or ad_retry_out
+                            try:
+                                from ad_store import set_batch_ad_status
+
+                                set_batch_ad_status(
+                                    str(res.get("batch_id")),
+                                    "ok" if ad_retry["ok"] else "failed",
+                                )
+                            except Exception:
+                                pass
+                        except Exception as exc:
+                            ad_retry["ok"] = False
+                            ad_retry["result"] = {"ok": False, "error": str(exc)}
+                        out["actions"].append(ad_retry)
+                        # 同步回 snapshot result，方便 log 追查
+                        if isinstance(rec.get("result"), dict):
+                            rec["result"]["ad_ok"] = bool(ad_retry.get("ok"))
+                            rec["result"]["ad_output_retry"] = ad_retry.get("result")
                 else:
                     out["actions"].append(
                         {
@@ -978,6 +1013,45 @@ class MeetingTickRunner:
                 )
         elif plan.snapshot:
             _act("snapshot")
+
+        # --- AD_OUTPUT ensure：快照已 ok 但共用 store 未有海報時補產 ---
+        if not dry_run:
+            try:
+                from ad_store import get_batch_ad_status
+                from ad_poster import generate_ads_from_snapshot_batch
+                from factor_calibration import FactorCalibration
+
+                snap_ready = self.pipe.refresh_readiness(d, c)
+                if str((snap_ready.get("SNAPSHOT") or {}).get("status") or "") == STATUS_OK:
+                    cal = FactorCalibration()
+                    batches = cal.list_batches()
+                    bid = None
+                    if batches is not None and not getattr(batches, "empty", True):
+                        sub = batches[
+                            (batches["racing_date"].astype(str).str[:10] == d)
+                            & (batches["course"].astype(str).str.upper() == c)
+                        ]
+                        if not sub.empty:
+                            bid = str(sub.iloc[0]["batch_id"])
+                    st = get_batch_ad_status(bid) if bid else None
+                    already = any(a.get("action") == "ad_output_retry" for a in out["actions"])
+                    if bid and st != "ok" and not already:
+                        ad_ens = {"action": "ad_output_ensure", "batch_id": bid}
+                        try:
+                            ad_out = generate_ads_from_snapshot_batch(bid)
+                            ad_ens["ok"] = bool(ad_out.get("ok"))
+                            ad_ens["result"] = ad_out
+                            from ad_store import set_batch_ad_status
+
+                            set_batch_ad_status(bid, "ok" if ad_ens["ok"] else "failed")
+                        except Exception as exc:
+                            ad_ens["ok"] = False
+                            ad_ens["result"] = {"ok": False, "error": str(exc)}
+                        out["actions"].append(ad_ens)
+            except Exception as exc:
+                out["actions"].append(
+                    {"action": "ad_output_ensure", "ok": False, "error": str(exc)}
+                )
 
         # --- SOCIAL_COPY：本輪快照成功，或快照已 ok 且計劃要跑 ---
         want_social = plan.social_copy

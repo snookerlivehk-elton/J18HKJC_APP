@@ -151,6 +151,21 @@ def get_ad_poster(
             if fused.is_file():
                 poster = fused
     if not poster.is_file():
+        try:
+            from ad_store import get_poster_bytes_db, hydrate_package_to_disk
+
+            blob = get_poster_bytes_db(ad_id)
+            if blob:
+                # 順便 hydrate 本機，之後請求可走檔案
+                try:
+                    hydrate_package_to_disk(ad_id, _output_root())
+                except Exception:
+                    pass
+                from fastapi.responses import Response
+
+                return Response(content=blob, media_type="image/png")
+        except Exception:
+            pass
         raise HTTPException(status_code=404, detail="Poster not found")
     return FileResponse(
         path=str(poster),
