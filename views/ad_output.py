@@ -77,39 +77,18 @@ def _render_outputs(out_root: Path, *, key_prefix: str = "browse") -> None:
         if fb:
             st.caption(f"檔案大小：{PRIMARY_TRACK_LABEL} {int(fb) // 1024} KB")
 
-    # ZIP 旁提供「推送生產 API」；下載 ZIP 本身唔會自動 POST（避免 Streamlit rerun 狂打 ingest）
-    social_ready = (out_root / "social_copy.json").is_file()
-    c_zip, c_push = st.columns([2, 1])
-    with c_zip:
-        try:
-            st.download_button(
-                f"⬇️ 下載 ZIP（{PRIMARY_TRACK_LABEL} PNG + copy）",
-                data=zip_batch_bytes(out_root),
-                file_name="ad_output_latest.zip",
-                mime="application/zip",
-                key=f"zip_{key_prefix}",
-                type="primary",
-            )
-        except Exception as e:
-            st.caption(f"ZIP 失敗：{e}")
-    with c_push:
-        push_disabled = not paths["fused"].is_file()
-        if st.button(
-            "推送生產 API",
-            key=f"push_prod_{key_prefix}",
-            disabled=push_disabled,
-            help="POST /v1/ads/ingest → 生產 Ad API（下游 Grok Bot 用）",
-        ):
-            with st.spinner("推送 /v1/ads/ingest …"):
-                push_out = _sync_publish_to_prod(out_root, notify=True)
-            if push_out.get("ok"):
-                st.caption(f"`{push_out.get('id')}` → {push_out.get('status')}")
-            _show_remote_push(
-                push_out.get("remote_push")
-                or ({"ok": False, "error": push_out.get("error")} if push_out.get("error") else {})
-            )
-        elif not social_ready:
-            st.caption("建議先生成 AI 文案再開 ready")
+    # 只提供 ZIP 下載。推送生產改喺「生成 AI」同一掣完成，唔使換頁／撳兩次。
+    try:
+        st.download_button(
+            f"⬇️ 下載 ZIP（{PRIMARY_TRACK_LABEL} PNG + copy）",
+            data=zip_batch_bytes(out_root),
+            file_name="ad_output_latest.zip",
+            mime="application/zip",
+            key=f"zip_{key_prefix}",
+            type="primary",
+        )
+    except Exception as e:
+        st.caption(f"ZIP 失敗：{e}")
 
     st.markdown(f"**{PRIMARY_TRACK_LABEL}推介 · 全賽日（社交主視覺）**")
     p_fused = paths["fused"]
@@ -193,7 +172,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
     c1, c2 = st.columns([1, 1])
     with c1:
         disabled = (not writer.is_ready()) or n_cand <= 0
-        if st.button("生成 AI 精選評述", type="primary", key="ad_social_generate", disabled=disabled):
+        if st.button("生成 AI 精選評述並推送生產", type="primary", key="ad_social_generate", disabled=disabled, help="一次完成：寫文案 → 重建 ready 包 → POST /v1/ads/ingest 去生產 API"):
             with st.spinner("AI 正在挑選精選場次與撰寫文案…"):
                 try:
                     social_data = writer.generate_social_copy(
@@ -248,7 +227,7 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                             "唔會寫入 facebook_copy／生產 API）。"
                         )
                     else:
-                        st.success(f"已生成 AI 精選評述（{tone_label(tone)}）與 hashtag")
+                        st.success(f"已生成 AI 精選評述（{tone_label(tone)}）並推送生產 API")
                 except Exception as e:
                     st.session_state["ad_social_result"] = {"error": str(e)}
                     st.error(f"生成失敗：{e}")
@@ -257,11 +236,24 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
         if p.is_file():
             st.caption(f"已保存：`{p.name}`")
 
+    # 補推／重試（已有 social 時先用；正常唔使撳）
+    with st.expander("進階：只重試推送生產 API", expanded=False):
+        st.caption("正常撳上面「生成 AI…並推送生產」已夠。呢度只係 ingest 失敗時補推。")
+        if st.button("重試推送生產 API", key=f"ad_social_retry_push"):
+            with st.spinner("推送 /v1/ads/ingest …"):
+                push_out = _sync_publish_to_prod(output_root, notify=True)
+            if push_out.get("ok"):
+                st.caption(f"`{push_out.get('id')}` → {push_out.get('status')}")
+            _show_remote_push(
+                push_out.get("remote_push")
+                or ({"ok": False, "error": push_out.get("error")} if push_out.get("error") else {})
+            )
+
     social_data = st.session_state.get("ad_social_result") or social_data
     if not social_data:
         st.info(
-            "預設語氣為高互動型；按「生成 AI 精選評述」後，"
-            "系統會以香港貼文文筆挑選精選場次、產生標題、hashtags，並自動加上文末聲明。"
+            "一次流程：撳「生成 AI 精選評述並推送生產」→ 寫文案 → 自動 ingest 生產 API；"
+            "唔使換頁再撳推送。文筆港式，自動加 hashtags／文末聲明。"
         )
         return
     if social_data.get("error"):
@@ -350,6 +342,10 @@ except Exception as e:
 tab_browse, tab_regen = st.tabs(["瀏覽輸出", "手動重產"])
 
 with tab_browse:
+    st.info(
+        "日常用法：海報齊 → 下面撳「生成 AI 精選評述並推送生產」一次搞掂。"
+        "「手動重產」完成後亦會留喺該頁預覽，唔使嚟回切換。"
+    )
     _render_outputs(out_root, key_prefix="browse")
     copy_data = load_copy_json(out_root)
     st.divider()
@@ -417,7 +413,7 @@ with tab_regen:
             if isinstance(prog, dict) and prog:
                 st.json(prog)
             if js in ("ok", "ok_with_errors"):
-                st.success("重產完成；可到「瀏覽輸出」下載。")
+                st.success("重產完成（後台已自動跑 AI 文案＋推送生產）。下面可直接預覽，唔使換頁。")
                 st.session_state["ad_last_result"] = {
                     "ok": True,
                     "races_written": (prog or {}).get("result", {}).get("races_written"),
@@ -429,7 +425,10 @@ with tab_regen:
 
         last: Optional[Dict[str, Any]] = st.session_state.get("ad_last_result")
         if last and (last.get("ok") or last.get("races_written")):
-            st.markdown("#### 立即下載／預覽")
+            st.markdown("#### 立即下載／預覽（同頁，唔使轉「瀏覽輸出」）")
             _render_outputs(out_root, key_prefix="after_regen")
+            st.divider()
+            copy_after = load_copy_json(out_root)
+            _render_social_copy(out_root, copy_after or {})
         elif last and last.get("error"):
             st.error(last.get("error"))
