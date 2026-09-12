@@ -74,6 +74,20 @@
 
 **建議同步順序：** 賽前 racecard → speedguide → formguide；賽後 results → text-reports。
 
+#### 速勢 SG 空殼判準（2026-09-12｜對齊 api_jjjc）
+
+若 export 有 runners 但 **`energy` 全 null** + **`energy_is_placeholder=true`** + **`status=suspicious`**：
+
+| 判斷 | 做法 |
+|------|------|
+| **不是**欄位／解析失敗 | 勿當硬 failed 狂打或改 parser |
+| 多半是「官方未上架」或「上游早拉殼未覆寫」 | 對照 `content_updated_at`／CMS `lastupdatetime` |
+| 上游補救 | `POST {JJJC_API_BASE}/api/speedguide/fetch?date=&venue=` 後再 `GET /api/export/speedguide` |
+| 下游 | `crawl_speedguide`：空殼視為 waiting；預設再打 HKJC CMS 備援（`MEETING_TICK_SG_CMS_ON_WAITING`，預設 true） |
+| 上游長修 | api_jjjc `AUTO_PRE_CHASE_SPEEDPRO=1`：排位齊後繼續追 SpeedPRO，避免留下 null energy 殼 |
+
+實測（2026-09-13 ST）：重拉後 `status=obtained`、`placeholder_count=0`、139 匹皆有 energy → 下游可同步並開下一閘。
+
 **探針備註（2026-09-10 复测 apicc）：**  
 `/api/export/text-reports`、`/speedguide`、`/formguide` **已上線**（200）。text-reports 實測 9/6 ST、9/9 HV 可入庫；沿途評述常仍 placeholder／suspicious，競賽報告可先入庫，之後重拉冪等 upsert。
 

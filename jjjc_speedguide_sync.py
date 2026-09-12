@@ -8,6 +8,11 @@ schema：jjjc.speedguide.v1
   fitness_rating   → form_rating
   energy_required  → raw_json.energy_required
 
+空殼判準（對齊上游）：
+  energy 全 null + energy_is_placeholder + status=suspicious
+  → 視為官方未上架／上游未覆寫（waiting），不是解析失敗。
+  上游可 POST /api/speedguide/fetch 重拉；下游 waiting 時預設打 CMS 備援。
+
 CLI：
   python jjjc_speedguide_sync.py --date 2026-09-09 --course HV
   python jjjc_speedguide_sync.py --from-file fixtures/jjjc_speedguide_HV_20260909_R1.json
