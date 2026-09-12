@@ -66,7 +66,7 @@ STAGE_PRIMARY_ACTION: Dict[str, str] = {
 STAGE_HELP: Dict[str, str] = {
     "FIXTURE": "從 HKJC Fixture.aspx 抓整季賽期表；通常只需做一次。",
     "RACECARD": "優先同步 jjjc 排位 export；錯位時改用備援 HKJC HTML。",
-    "SPEEDGUIDE": "JJJC speedguide 主路徑，未上架則 waiting；可強制 CMS 備援。",
+    "SPEEDGUIDE": "JJJC speedguide 主路徑；空殼／waiting 會打 HKJC CMS 備援（JJJC 爬蟲修好前）。",
     "FORMGUIDE": "JJJC formguide 主路徑；覆蓋不足可重抓或等待。",
     "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
@@ -1012,8 +1012,14 @@ class MeetingPipeline:
                 return out
 
             if action == "crawl_speedguide":
-                # 主路徑：JJJC export；失敗／unavailable 才 CMS 備援
+                # 主路徑：JJJC export；空殼／waiting／失敗 → HKJC CMS 備援
+                # （JJJC 爬蟲過渡期：waiting 也打 CMS，可用 MEETING_TICK_SG_CMS_ON_WAITING=false 關）
                 from jjjc_speedguide_sync import sync_meeting as sync_sg
+
+                cms_on_waiting = (
+                    os.getenv("MEETING_TICK_SG_CMS_ON_WAITING", "true") or "true"
+                ).lower() in ("1", "true", "yes")
+                force_fallback = bool(kwargs.get("force_fallback"))
 
                 jjjc = sync_sg(
                     racing_date=racing_date,
@@ -1022,11 +1028,27 @@ class MeetingPipeline:
                     from_file=kwargs.get("from_file"),
                     base_url=kwargs.get("base_url"),
                 )
-                if jjjc.get("ok") and not jjjc.get("waiting") and int(jjjc.get("runner_upserted") or 0) > 0:
+                with_energy = int(
+                    jjjc.get("runners_with_energy")
+                    if jjjc.get("runners_with_energy") is not None
+                    else jjjc.get("runner_upserted")
+                    or 0
+                )
+                if (
+                    jjjc.get("ok")
+                    and not jjjc.get("waiting")
+                    and with_energy > 0
+                    and not force_fallback
+                ):
                     self.refresh_readiness(racing_date, course)
                     return {**jjjc, "source": "jjjc"}
-                if jjjc.get("ok") and jjjc.get("waiting") and not kwargs.get("force_fallback"):
-                    # 空殼／未上架：視為 waiting，不立刻打 CMS（賽前中午前常見）
+                if (
+                    jjjc.get("ok")
+                    and jjjc.get("waiting")
+                    and not force_fallback
+                    and not cms_on_waiting
+                ):
+                    # 僅當明確關閉 CMS-on-waiting 時才略過備援
                     self.refresh_readiness(racing_date, course)
                     return {**jjjc, "source": "jjjc", "fallback_skipped": "waiting"}
                 py = env.get("PYTHON", "python3")
@@ -1040,7 +1062,15 @@ class MeetingPipeline:
                     "source": "hkjc_cms_fallback",
                     "jjjc": {
                         k: jjjc.get(k)
-                        for k in ("ok", "waiting", "phase", "error", "runner_upserted", "detail")
+                        for k in (
+                            "ok",
+                            "waiting",
+                            "phase",
+                            "error",
+                            "runner_upserted",
+                            "runners_with_energy",
+                            "detail",
+                        )
                         if k in jjjc
                     },
                     "stdout": r.stdout[-2000:],

@@ -67,6 +67,54 @@ class JjjcSpeedguideSyncTest(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertTrue(out["waiting"])
 
+    def test_placeholder_shells_waiting(self):
+        """JJJC 回傳有 runners 但 energy 全 null／placeholder → waiting。"""
+        import jjjc_speedguide_sync as sync
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            out = sync.upsert_payload(
+                {
+                    "schema": "jjjc.speedguide.v1",
+                    "status": "suspicious",
+                    "races": [
+                        {
+                            "race_id": "20260913ST01",
+                            "runners": [
+                                {
+                                    "horse_no": 1,
+                                    "horse_name": "甲",
+                                    "energy": None,
+                                    "energy_delta": None,
+                                    "energy_required": 90,
+                                    "energy_is_placeholder": True,
+                                },
+                                {
+                                    "horse_no": 2,
+                                    "horse_name": "乙",
+                                    "energy": 88,
+                                    "energy_is_placeholder": True,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            )
+            self.assertTrue(out["ok"])
+            self.assertTrue(out["waiting"])
+            self.assertEqual(out["runners_with_energy"], 0)
+            self.assertEqual(out["runners_placeholder"], 2)
+
 
 class JjjcFormguideSyncTest(unittest.TestCase):
     def test_upsert_fixture(self):
@@ -261,6 +309,65 @@ class JjjcTextReportsSyncTest(unittest.TestCase):
             finally:
                 eng.dispose()
             self.assertEqual(types, {"running_comment", "incident_report"})
+
+
+class CrawlSpeedguideCmsFallbackTest(unittest.TestCase):
+    def test_waiting_shells_trigger_cms_by_default(self):
+        from unittest.mock import MagicMock, patch
+
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        os.environ.pop("MEETING_TICK_SG_CMS_ON_WAITING", None)
+
+        jjjc_waiting = {
+            "ok": True,
+            "waiting": True,
+            "phase": "waiting",
+            "runner_upserted": 139,
+            "runners_with_energy": 0,
+            "detail": "export 空殼",
+        }
+        cms = MagicMock(
+            returncode=0, stdout="cms ok", stderr="",
+        )
+        with patch("jjjc_speedguide_sync.sync_meeting", return_value=jjjc_waiting), patch(
+            "subprocess.run", return_value=cms
+        ) as run:
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-13", "ST", "crawl_speedguide"
+            )
+        self.assertEqual(out.get("source"), "hkjc_cms_fallback")
+        self.assertTrue(out.get("ok"))
+        self.assertTrue(run.called)
+        self.assertIn("speedguide_crawler.py", run.call_args[0][0])
+
+    def test_cms_on_waiting_can_be_disabled(self):
+        from unittest.mock import MagicMock, patch
+
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        os.environ["MEETING_TICK_SG_CMS_ON_WAITING"] = "false"
+        self.addCleanup(lambda: os.environ.pop("MEETING_TICK_SG_CMS_ON_WAITING", None))
+
+        jjjc_waiting = {
+            "ok": True,
+            "waiting": True,
+            "runner_upserted": 10,
+            "runners_with_energy": 0,
+        }
+        with patch("jjjc_speedguide_sync.sync_meeting", return_value=jjjc_waiting), patch(
+            "subprocess.run"
+        ) as run:
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-13", "ST", "crawl_speedguide"
+            )
+        self.assertEqual(out.get("fallback_skipped"), "waiting")
+        self.assertEqual(out.get("source"), "jjjc")
+        run.assert_not_called()
 
 
 if __name__ == "__main__":

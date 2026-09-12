@@ -142,6 +142,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     runner_n = 0
     race_ids: List[str] = []
     skipped_empty = 0
+    runners_with_energy = 0
+    runners_placeholder = 0
 
     try:
         with engine.begin() as conn:
@@ -164,9 +166,16 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     form_rating = (
                         None if fitness is None or str(fitness).strip() == "" else str(fitness).strip()
                     )
+                    is_placeholder = bool(ru.get("energy_is_placeholder"))
+                    if is_placeholder:
+                        runners_placeholder += 1
+                        # 官方／JJJC 標 placeholder：勿當真實能量寫入
+                        energy = None
                     # 全空殼列：仍可 upsert 但視為未齊（不擋寫）
                     if energy is None and delta is None and form_rating is None:
                         skipped_empty += 1
+                    if energy is not None:
+                        runners_with_energy += 1
 
                     runner_id = f"{race_id}_{horse_no}"
                     meta = content_meta(payload, race if isinstance(race, dict) else None)
@@ -177,6 +186,7 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         "energy_delta": delta,
                         "energy_required": safe_float(ru.get("energy_required")),
                         "fitness_rating": form_rating,
+                        "energy_is_placeholder": is_placeholder,
                         "runner": ru,
                     }
                     raw_s = json.dumps(raw_obj, ensure_ascii=False)
@@ -240,10 +250,13 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     finally:
         engine.dispose()
 
+    # 有列但無真實 energy（含全 placeholder）→ waiting，讓 crawl 走 CMS 備援
+    shell_only = runner_n > 0 and runners_with_energy == 0
+    waiting = shell_only or phase == "waiting"
     return {
         "ok": True,
-        "waiting": False,
-        "phase": "ready",
+        "waiting": waiting,
+        "phase": "waiting" if waiting else "ready",
         "schema": schema or SCHEMA_NAME,
         "race_date": payload.get("race_date"),
         "venue_code": payload.get("venue_code"),
@@ -252,7 +265,14 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "race_count": len(race_ids),
         "race_ids": race_ids,
         "runner_upserted": runner_n,
+        "runners_with_energy": runners_with_energy,
+        "runners_placeholder": runners_placeholder,
         "runners_all_empty_fields": skipped_empty,
+        "detail": (
+            f"export 空殼／placeholder（energy {runners_with_energy}/{runner_n}）"
+            if shell_only
+            else None
+        ),
     }
 
 
