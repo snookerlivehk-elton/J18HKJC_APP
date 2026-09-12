@@ -418,6 +418,42 @@ def get_poster_bytes_db(
         return None
 
 
+def get_social_json_db(
+    ad_id: str, *, engine: Optional[Engine] = None
+) -> Optional[Dict[str, Any]]:
+    """讀 ad_packages.social_json；若空則從 package_json.copy.ai 還原。"""
+    if not ad_store_enabled() or not ad_id:
+        return None
+    try:
+        ensure_ad_tables(engine)
+        eng = engine or get_engine()
+        with eng.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT social_json, package_json FROM ad_packages WHERE id=:id"
+                ),
+                {"id": ad_id},
+            ).mappings().first()
+        if not row:
+            return None
+        social = _json_load(row["social_json"])
+        if isinstance(social, dict) and (
+            social.get("featured") or social.get("post_text") or social.get("title")
+        ):
+            return social
+        pkg = _json_load(row["package_json"])
+        if isinstance(pkg, dict):
+            ai = (pkg.get("copy") or {}).get("ai")
+            if isinstance(ai, dict) and (
+                ai.get("featured") or ai.get("post_text") or ai.get("title")
+            ):
+                return ai
+        return None
+    except Exception as exc:
+        logger.warning("get_social_json_db failed: %s", exc)
+        return None
+
+
 def upsert_archive(
     racing_date: str,
     course: str,
@@ -586,7 +622,7 @@ def hydrate_package_to_disk(
     *,
     engine: Optional[Engine] = None,
 ) -> Dict[str, Any]:
-    """把 DB 內 package／海報寫回本機 ad_output，方便舊 UI 讀檔。"""
+    """把 DB 內 package／海報／AI 文案寫回本機 ad_output，方便舊 UI 讀檔。"""
     from pathlib import Path
 
     root = Path(output_root)
@@ -604,6 +640,16 @@ def hydrate_package_to_disk(
         fused = root / "fused.png"
         if not fused.is_file():
             fused.write_bytes(blob)
+    social = get_social_json_db(ad_id, engine=engine)
+    if social:
+        (root / "social_copy.json").write_text(
+            json.dumps(social, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     if pkg.get("status") == "ready":
         (packages / "_latest_id.txt").write_text(ad_id, encoding="utf-8")
-    return {"ok": True, "id": ad_id, "bytes": len(blob or b"")}
+    return {
+        "ok": True,
+        "id": ad_id,
+        "bytes": len(blob or b""),
+        "has_social": bool(social),
+    }

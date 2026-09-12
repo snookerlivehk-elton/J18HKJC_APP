@@ -21,16 +21,23 @@ Railway：另開一個 service（或與預測 API 分開 Start Command），設�
 
 | 變量 | 用途 |
 |------|------|
-| `AD_API_KEY` | `Authorization: Bearer …` 讀取／產生 |
+| `AD_API_KEY` | `Authorization: Bearer …` 讀取／產生／ingest |
 | `AD_API_PUBLIC_BASE` | 公開 base（例如 `https://xxx.up.railway.app`），用來組 `assets.poster_url` |
+| `AD_API_BASE_URL` | **Streamlit／CORN** 設此指向生產 Ad API；ready 後 HTTP `POST /v1/ads/ingest` 推送（唔靠共碟） |
 | `GROK_BOT_WEBHOOK_URL` | 外部助手 webhook |
 | `GROK_BOT_WEBHOOK_SECRET` | 送出 Header `X-Webhook-Secret`（可用 `GROK_BOT_WEBHOOK_SECRET_HEADER` 改名） |
 | `AD_OUTPUT_DIR` | 可選；預設專案 `ad_output/` |
-| `DATABASE_URL` | 若要 `POST /v1/ads/generate` 連 snapshot 重產海報 |
+| `DATABASE_URL` | 可選共用 DB dual-write；無共碟時靠 ingest 即可 |
+| `OPENAI_API_KEY` | Streamlit／CORN 產 AI 精選文案 |
 
 Start Command：`bash start-ad-api.sh`
 
-統計／海報完成後（`ad_poster._write_primary_meeting_outputs`）會自動寫入 `ad_output/packages/{id}.json` 並嘗試 webhook。
+統計／海報完成後會寫 `ad_output/packages/{id}.json`；有 AI 文案後 `status=ready`，並：
+1. dual-write 共用 DB（若有 `DATABASE_URL`）
+2. 若設咗 `AD_API_BASE_URL` → `POST /v1/ads/ingest` 推去生產 Ad API（含海報 bytes）
+3. 可選 webhook
+
+手動重產（Streamlit）成功後會自動跑 AI 精選 → publish → ingest。ZIP 下載會附 `facebook_copy.txt`。
 
 ## 端點
 
@@ -43,6 +50,7 @@ Start Command：`bash start-ad-api.sh`
 | GET | `/v1/ads` | Bearer | id 清單 |
 | POST | `/v1/ads/generate` | Bearer | 由 copy／snapshot 產出並可 notify |
 | POST | `/v1/ads/rebuild-from-copy` | Bearer | 用現有 `copy.json` 重建 |
+| POST | `/v1/ads/ingest` | Bearer | **上游推送 ready 包 + 海報**（Streamlit／CORN → 生產 API） |
 | POST | `/v1/ads/{id}/notify` | Bearer | **手動重發 webhook** |
 
 幂等 `id`：`{YYYY-MM-DD}-{hv\|st}-{day\|night}`（同一期重複產出覆寫同一檔，保留首次 `created_at`）。
@@ -73,6 +81,62 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
 # 手動重發 webhook
 curl -sS -X POST -H "Authorization: Bearer $KEY" \
   "$BASE/v1/ads/2026-07-15-hv-night/notify" | jq .
+
+# 上游 ingest（Streamlit／CORN 自動做；亦可人手補推）
+# BODY 含 package JSON + poster_png_b64
+curl -sS -X POST -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d @ingest_payload.json \
+  "$BASE/v1/ads/ingest" | jq .
+```
+
+### 下游 Grok Bot 一次攞齊（完成標準）
+
+```bash
+BASE=https://j18hkjcapp-production.up.railway.app
+KEY=$AD_API_KEY
+
+curl -sS -H "Authorization: Bearer $KEY" "$BASE/v1/ads/latest" | jq '{
+  id, status,
+  facebook: .copy.facebook,
+  cta: .copy.cta,
+  hashtags: .copy.hashtags,
+  poster_url: .assets.poster_url,
+  meeting, tips, publish
+}'
+
+# 下載海報（預設唔使 key）
+curl -sS -o poster.png "$(curl -sS -H "Authorization: Bearer $KEY" "$BASE/v1/ads/latest" | jq -r .assets.poster_url)"
+```
+
+**Sample `ready` JSON（精簡）：**
+
+```json
+{
+  "id": "2026-09-13-st-day",
+  "status": "ready",
+  "meeting": {
+    "date": "2026-09-13",
+    "weekday": "星期日",
+    "venue": "沙田",
+    "venue_code": "ST",
+    "session": "日",
+    "start_time": "約下午1時"
+  },
+  "copy": {
+    "facebook": "【J18】2026-09-13 沙田日賽\n邊場最有睇頭？留言話我知！\n…\n想追臨場？登入 J18.hk\n預測只供參考。\n#J18 #賽馬 #沙田",
+    "cta": "想追臨場心水？而家就登入 J18.hk",
+    "hashtags": ["#J18", "#賽馬", "#沙田", "#賽前預測", "#J18HK"]
+  },
+  "assets": {
+    "poster_url": "https://j18hkjcapp-production.up.railway.app/v1/ads/2026-09-13-st-day/poster"
+  },
+  "publish": {
+    "channels": ["facebook"],
+    "page": "https://www.facebook.com/j18hk"
+  },
+  "tips": [{"race": 1, "horses": [{"no": 7, "name": "增旺"}]}]
+}
 ```
 
 ### 本機模擬 webhook 接收

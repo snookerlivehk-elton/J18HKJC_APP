@@ -1391,4 +1391,28 @@ def zip_batch_bytes(batch_dir: Path) -> bytes:
             p = root / name
             if p.is_file():
                 zf.write(p, arcname=p.name)
+        # 額外放一份可直接貼 FB 的純文字（方便 ZIP 下載唔止得 PNG）
+        fb_text = ""
+        social_p = root / SOCIAL_COPY_FILE
+        if social_p.is_file():
+            try:
+                import json as _json
+                from ad_llm_copy import format_social_post_text
+
+                social = _json.loads(social_p.read_text(encoding="utf-8"))
+                fb_text = str(social.get("post_text") or "").strip()
+                if not fb_text:
+                    fb_text = format_social_post_text(social).strip()
+            except Exception:
+                fb_text = ""
+        if not fb_text:
+            try:
+                from ad_package import load_latest_ad_package
+
+                pkg = load_latest_ad_package(root) or {}
+                fb_text = str(((pkg.get("copy") or {}).get("facebook")) or "").strip()
+            except Exception:
+                fb_text = ""
+        if fb_text:
+            zf.writestr("facebook_copy.txt", fb_text + "\n")
     return buf.getvalue()

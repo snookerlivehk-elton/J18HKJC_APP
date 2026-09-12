@@ -76,6 +76,7 @@ class SchemaAndBuildTest(unittest.TestCase):
         """只有海報、未有 AI 文案 → pending_ai（Grok 唔應當 ready）。"""
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
+            db_path = Path(tmp) / "empty.db"
             fused = root / "fused.png"
             fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
             with mock.patch(
@@ -88,15 +89,41 @@ class SchemaAndBuildTest(unittest.TestCase):
                         {
                             "AD_API_PUBLIC_BASE": "https://ads.example.com",
                             "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                            "USE_SQLITE": "true",
+                            "AD_STORE_ENABLED": "true",
+                            "SQLITE_DB_PATH": str(db_path),
+                            "DATABASE_URL": "",
+                            "DATABASE_URL_SYNC": "",
                         },
                         clear=False,
                     ):
-                        pkg = build_ad_package_from_copy(
-                            _sample_copy(),
-                            output_root=root,
-                            poster_src=fused,
-                            notify=False,
-                        )
+                        import ad_store
+
+                        old_engine = ad_store._ENGINE
+                        old_ensured = ad_store._ENSURED
+                        old_use = ad_store.USE_SQLITE
+                        old_path = ad_store.SQLITE_DB_PATH
+                        ad_store._ENGINE = None
+                        ad_store._ENSURED = False
+                        ad_store.USE_SQLITE = True
+                        ad_store.SQLITE_DB_PATH = str(db_path)
+                        try:
+                            pkg = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                        finally:
+                            if ad_store._ENGINE is not None:
+                                try:
+                                    ad_store._ENGINE.dispose()
+                                except Exception:
+                                    pass
+                            ad_store._ENGINE = old_engine
+                            ad_store._ENSURED = old_ensured
+                            ad_store.USE_SQLITE = old_use
+                            ad_store.SQLITE_DB_PATH = old_path
             self.assertEqual(pkg["status"], "pending_ai")
             self.assertIsNone(pkg["copy"].get("ai"))
             self.assertTrue(pkg["assets"]["poster_url"].endswith("/v1/ads/2026-07-15-hv-night/poster"))
@@ -193,6 +220,101 @@ class SchemaAndBuildTest(unittest.TestCase):
             self.assertNotIn("webhook", pub)
             self.assertNotIn("meta", pub)
             self.assertNotIn("poster_path", pub.get("assets") or {})
+
+    def test_ready_via_db_archive_without_local_social_file(self):
+        """跨服務：本機無 social_copy.json，但 DB archive 有 AI → ready + facebook。"""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = Path(tmp) / "store.db"
+            fused = root / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "USE_SQLITE": "true",
+                    "AD_STORE_ENABLED": "true",
+                    "SQLITE_DB_PATH": str(db_path),
+                    "DATABASE_URL": "",
+                    "DATABASE_URL_SYNC": "",
+                    "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                    "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                },
+                clear=False,
+            ):
+                import ad_store
+
+                old_engine = ad_store._ENGINE
+                old_ensured = ad_store._ENSURED
+                old_use = ad_store.USE_SQLITE
+                old_path = ad_store.SQLITE_DB_PATH
+                ad_store._ENGINE = None
+                ad_store._ENSURED = False
+                ad_store.USE_SQLITE = True
+                ad_store.SQLITE_DB_PATH = str(db_path)
+                try:
+                    ad_store.upsert_archive(
+                        "2026-07-15",
+                        "HV",
+                        "social",
+                        {
+                            "title": "今晚邊場最有睇頭？",
+                            "featured": [
+                                {
+                                    "race_no": 1,
+                                    "horse_no": 4,
+                                    "horse_name": "多利神駒",
+                                    "comment": "近績唔錯喎",
+                                }
+                            ],
+                            "post_text": (
+                                "今晚邊場最有睇頭？\n\n"
+                                "第1場｜4 多利神駒\n近績唔錯喎\n\n"
+                                "想獲得臨場更多資訊或心水, 請即刻登錄j18.hk了解更多啦!!\n"
+                            ),
+                            "hashtags": ["#J18", "#賽馬"],
+                            "source": "llm",
+                            "meeting": {
+                                "batch_id": "b1",
+                                "racing_date": "2026-07-15",
+                                "course": "HV",
+                            },
+                        },
+                        batch_id="b1",
+                    )
+                    with mock.patch(
+                        "ad_package.lookup_meeting_session",
+                        return_value={"session": "夜", "is_day_meeting": False},
+                    ):
+                        with mock.patch(
+                            "ad_package.resolve_poster_theme", return_value="night"
+                        ):
+                            pkg = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                    self.assertEqual(pkg["status"], "ready")
+                    self.assertIsNotNone(pkg["copy"].get("ai"))
+                    self.assertIn("j18.hk", pkg["copy"]["facebook"].lower())
+                    self.assertIn("多利神駒", pkg["copy"]["facebook"])
+                    latest = ad_store.load_latest_ad_package_db(ready_only=True)
+                    self.assertIsNotNone(latest)
+                    self.assertEqual(latest["id"], pkg["id"])
+                    self.assertEqual(latest["status"], "ready")
+                    social = ad_store.get_social_json_db(pkg["id"])
+                    self.assertIsNotNone(social)
+                finally:
+                    if ad_store._ENGINE is not None:
+                        try:
+                            ad_store._ENGINE.dispose()
+                        except Exception:
+                            pass
+                    ad_store._ENGINE = old_engine
+                    ad_store._ENSURED = old_ensured
+                    ad_store.USE_SQLITE = old_use
+                    ad_store.SQLITE_DB_PATH = old_path
 
 
 class WebhookDispatchTest(unittest.TestCase):
@@ -292,6 +414,112 @@ class ApiAuthSmokeTest(unittest.TestCase):
             )
             # 未必有資料，但認證應通過（404 或 200）
             self.assertIn(ok.status_code, (200, 404))
+
+
+class IngestAndLatestTest(unittest.TestCase):
+    def test_ingest_makes_latest_ready_with_facebook_and_poster(self):
+        import base64
+
+        from fastapi.testclient import TestClient
+
+        from ad_api import app
+        from ad_package import build_ad_package_from_copy, public_payload
+
+        with TemporaryDirectory() as prod_tmp, TemporaryDirectory() as api_tmp:
+            prod = Path(prod_tmp)
+            api_root = Path(api_tmp)
+            fused = prod / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+            social = {
+                "title": "沙田日賽邊場最有睇頭？留言話我知！",
+                "featured": [
+                    {
+                        "race_no": 1,
+                        "horse_no": 7,
+                        "horse_name": "增旺",
+                        "comment": "近績穩",
+                    }
+                ],
+                "hashtags": ["#J18", "#賽馬", "#沙田", "#賽前預測", "#J18HK", "#extra"],
+                "post_text": (
+                    "【J18】2026-09-13 沙田日賽\n"
+                    "邊場最有睇頭？留言話我知！\n"
+                    "第1場｜7 增旺\n近績穩\n\n"
+                    "想追臨場？登入 J18.hk\n預測只供參考。\n"
+                    "#J18 #賽馬 #沙田"
+                ),
+            }
+            (prod / "social_copy.json").write_text(
+                json.dumps(social, ensure_ascii=False), encoding="utf-8"
+            )
+            env = {
+                "AD_API_KEY": "secret-key",
+                "AD_API_PUBLIC_BASE": "https://ads.example.com",
+                "AD_API_BASE_URL": "",
+                "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                "AD_STORE_ENABLED": "false",
+                "AD_OUTPUT_DIR": str(api_root),
+            }
+            with mock.patch.dict("os.environ", env, clear=False):
+                with mock.patch(
+                    "ad_package.lookup_meeting_session",
+                    return_value={"session": "日", "is_day_meeting": True},
+                ):
+                    with mock.patch(
+                        "ad_package.resolve_poster_theme", return_value="day"
+                    ):
+                        built = build_ad_package_from_copy(
+                            _sample_copy(),
+                            output_root=prod,
+                            notify=False,
+                        )
+                self.assertEqual(built.get("status"), "ready")
+                self.assertTrue((built.get("copy") or {}).get("facebook"))
+                tags = (built.get("copy") or {}).get("hashtags") or []
+                self.assertLessEqual(len(tags), 5)
+
+                poster_path = prod / "packages" / f"{built['id']}.png"
+                self.assertTrue(poster_path.is_file())
+                poster_b64 = base64.b64encode(poster_path.read_bytes()).decode("ascii")
+
+                client = TestClient(app)
+                self.assertEqual(
+                    client.get(
+                        "/v1/ads/latest",
+                        headers={"Authorization": "Bearer secret-key"},
+                    ).status_code,
+                    404,
+                )
+                ingested = client.post(
+                    "/v1/ads/ingest",
+                    headers={"Authorization": "Bearer secret-key"},
+                    json={
+                        "package": public_payload(built),
+                        "poster_png_b64": poster_b64,
+                        "notify": False,
+                    },
+                )
+                self.assertEqual(ingested.status_code, 200, ingested.text)
+                body = ingested.json()
+                self.assertTrue(body.get("ok"))
+                self.assertEqual(body.get("status"), "ready")
+
+                latest = client.get(
+                    "/v1/ads/latest",
+                    headers={"Authorization": "Bearer secret-key"},
+                )
+                self.assertEqual(latest.status_code, 200, latest.text)
+                data = latest.json()
+                self.assertEqual(data.get("status"), "ready")
+                self.assertIn("facebook", data.get("copy") or {})
+                self.assertTrue((data.get("copy") or {}).get("facebook"))
+                poster_url = (data.get("assets") or {}).get("poster_url") or ""
+                self.assertTrue(poster_url.endswith(f"/v1/ads/{data['id']}/poster"))
+                # 公開海報可下載（唔使 login Streamlit）
+                rel = poster_url.replace("https://ads.example.com", "")
+                poster_resp = client.get(rel)
+                self.assertEqual(poster_resp.status_code, 200)
+                self.assertTrue(poster_resp.content.startswith(b"\x89PNG"))
 
 
 if __name__ == "__main__":

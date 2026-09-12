@@ -153,6 +153,42 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any]) -> None:
                         tone=tone,
                     )
                     save_social_copy(output_root, social_data)
+                    # 歸檔＋重建廣告包 → status=ready 寫入共用 DB，供 GET /v1/ads/latest
+                    meeting = (copy_data or {}).get("meeting") or {}
+                    d = str(meeting.get("racing_date") or "")[:10]
+                    c = str(meeting.get("course") or "").upper()
+                    if d and c:
+                        try:
+                            from ad_copy_jobs import write_archive_version
+
+                            social_data = dict(social_data)
+                            social_data.setdefault(
+                                "meeting",
+                                {
+                                    "batch_id": meeting.get("batch_id") or "",
+                                    "racing_date": d,
+                                    "course": c,
+                                    "kind": "pre_race_social",
+                                },
+                            )
+                            write_archive_version(output_root, d, c, "social", social_data)
+                            save_social_copy(output_root, social_data)
+                        except Exception as arch_exc:
+                            st.caption(f"歸檔略過：{arch_exc}")
+                    try:
+                        from ad_package import publish_ad_package_after_outputs
+
+                        pkg_out = publish_ad_package_after_outputs(
+                            output_root=output_root, notify=True
+                        )
+                        if pkg_out.get("ok"):
+                            st.caption(
+                                f"廣告包 `{pkg_out.get('id')}` → **{pkg_out.get('status')}**（已 dual-write DB）"
+                            )
+                        elif pkg_out.get("error"):
+                            st.caption(f"廣告包重建：{pkg_out.get('error')}")
+                    except Exception as pkg_exc:
+                        st.caption(f"廣告包重建略過：{pkg_exc}")
                     st.session_state["ad_social_result"] = social_data
                     src_note = social_data.get("source") or "llm"
                     if str(src_note).startswith("fallback"):
