@@ -40,11 +40,24 @@ from ad_package import (
 )
 from ad_poster import default_output_dir, latest_paths, load_copy_json
 from app_version import get_version
+from social_reply_context import (
+    dispatch_reply_webhook,
+    format_reply_context_prompt,
+    list_reply_context_ids,
+    load_latest_reply_context,
+    load_reply_context,
+    public_reply_payload,
+    publish_reply_context,
+    publish_reply_context_from_latest_ad,
+)
 
 app = FastAPI(
     title="J18 Ad Package API",
     version=get_version(),
-    description="賽前預測廣告包：結構化 JSON + 海報 + webhook 通知",
+    description=(
+        "賽前預測廣告包：結構化 JSON + 海報 + webhook；"
+        "另提供留言機械人用綜合推介＋AI 評價上下文 /v1/reply-context"
+    ),
 )
 
 _cors = os.getenv("AD_API_CORS") or os.getenv("PREDICTION_API_CORS") or "*"
@@ -106,6 +119,13 @@ class IngestBody(BaseModel):
     force: bool = Field(False, description="僅管理用途：跳過 ready／tips 檢查；一般 ingest 靠 save force 覆寫同 id")
 
 
+class ReplyRebuildBody(BaseModel):
+    """由最新／指定廣告包重建留言上下文。"""
+
+    ad_id: Optional[str] = Field(None, description="廣告包 id；空則用最新")
+    notify: bool = Field(True, description="是否 webhook 推去留言機械人")
+
+
 @app.get("/health")
 def health():
     return {
@@ -114,6 +134,13 @@ def health():
         "version": get_version(),
         "auth_configured": bool(_expected_api_key()),
         "webhook_configured": bool((os.getenv("GROK_BOT_WEBHOOK_URL") or "").strip()),
+        "reply_webhook_configured": bool(
+            (
+                os.getenv("SOCIAL_REPLY_BOT_WEBHOOK_URL")
+                or os.getenv("REPLY_BOT_WEBHOOK_URL")
+                or ""
+            ).strip()
+        ),
     }
 
 
@@ -283,6 +310,111 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
         "status": pkg.get("status"),
         "package": public_payload(pkg),
     }
+
+
+# ─── 留言機械人：綜合推介 + 推介馬 AI 評價 ───────────────────────────
+
+
+@app.get("/v1/reply-context/latest", dependencies=[Depends(require_ad_api_key)])
+def get_latest_reply_context():
+    """最新一期留言答覆上下文（綜合推介 + Form AI 評價）。"""
+    pkg = load_latest_reply_context(_output_root())
+    if not pkg or pkg.get("status") != "ready":
+        raise HTTPException(status_code=404, detail="No ready reply context")
+    return public_reply_payload(pkg)
+
+
+@app.get(
+    "/v1/reply-context/latest/prompt",
+    dependencies=[Depends(require_ad_api_key)],
+)
+def get_latest_reply_prompt():
+    """LLM 可直接注入嘅參考文本（繁中）。"""
+    pkg = load_latest_reply_context(_output_root())
+    if not pkg or pkg.get("status") != "ready":
+        # 嘗試由最新廣告包即時重建（唔推 webhook）
+        result = publish_reply_context_from_latest_ad(
+            output_root=_output_root(), notify=False
+        )
+        pkg = result.get("package") if result.get("ok") else None
+    if not pkg or pkg.get("status") != "ready":
+        raise HTTPException(status_code=404, detail="No ready reply context")
+    return {
+        "id": pkg.get("id"),
+        "status": pkg.get("status"),
+        "prompt": format_reply_context_prompt(pkg),
+    }
+
+
+@app.get("/v1/reply-context", dependencies=[Depends(require_ad_api_key)])
+def list_reply_contexts():
+    return {"ids": list_reply_context_ids(_output_root())}
+
+
+@app.get("/v1/reply-context/{context_id}", dependencies=[Depends(require_ad_api_key)])
+def get_reply_context(context_id: str):
+    pkg = load_reply_context(context_id, _output_root())
+    if not pkg:
+        raise HTTPException(
+            status_code=404, detail=f"Reply context not found: {context_id}"
+        )
+    return public_reply_payload(pkg)
+
+
+@app.post(
+    "/v1/reply-context/rebuild",
+    dependencies=[Depends(require_ad_api_key)],
+)
+def post_rebuild_reply_context(body: ReplyRebuildBody) -> Dict[str, Any]:
+    """由廣告包＋Form AI 重建留言上下文，並可 webhook 推去留言機械人。"""
+    root = _output_root()
+    if body.ad_id:
+        ad_pkg = load_ad_package(body.ad_id, root)
+        if not ad_pkg:
+            raise HTTPException(
+                status_code=404, detail=f"Ad package not found: {body.ad_id}"
+            )
+        result = publish_reply_context(
+            ad_pkg, output_root=root, notify=body.notify
+        )
+    else:
+        result = publish_reply_context_from_latest_ad(
+            output_root=root, notify=body.notify
+        )
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error") or result.get("reason") or "rebuild failed",
+        )
+    pkg = result.get("package") or {}
+    return {
+        "ok": True,
+        "id": result.get("id"),
+        "status": result.get("status"),
+        "package": public_reply_payload(pkg) if pkg else None,
+        "webhook": result.get("webhook"),
+    }
+
+
+@app.post(
+    "/v1/reply-context/{context_id}/notify",
+    dependencies=[Depends(require_ad_api_key)],
+)
+def post_notify_reply_context(context_id: str) -> Dict[str, Any]:
+    """手動重發留言上下文 webhook。"""
+    pkg = load_reply_context(context_id, _output_root())
+    if not pkg:
+        raise HTTPException(
+            status_code=404, detail=f"Reply context not found: {context_id}"
+        )
+    if pkg.get("status") != "ready":
+        raise HTTPException(status_code=409, detail="Context status is not ready")
+    result = dispatch_reply_webhook(pkg)
+    pkg["webhook"] = result
+    from social_reply_context import save_reply_context
+
+    save_reply_context(pkg, _output_root())
+    return {"ok": bool(result.get("ok")), "id": context_id, "webhook": result}
 
 
 def create_app() -> FastAPI:
