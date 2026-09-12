@@ -485,6 +485,29 @@ def get_social_json_db(
         return None
 
 
+def get_copy_json_db(
+    ad_id: str, *, engine: Optional[Engine] = None
+) -> Optional[Dict[str, Any]]:
+    """讀 ad_packages.copy_json（海報生成／場次 fused_picks 明細）。"""
+    if not ad_store_enabled() or not ad_id:
+        return None
+    try:
+        ensure_ad_tables(engine)
+        eng = engine or get_engine()
+        with eng.connect() as conn:
+            row = conn.execute(
+                text("SELECT copy_json FROM ad_packages WHERE id=:id"),
+                {"id": ad_id},
+            ).mappings().first()
+        if not row:
+            return None
+        data = _json_load(row["copy_json"])
+        return data if isinstance(data, dict) else None
+    except Exception as exc:
+        logger.warning("get_copy_json_db failed: %s", exc)
+        return None
+
+
 def upsert_archive(
     racing_date: str,
     course: str,

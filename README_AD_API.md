@@ -239,6 +239,14 @@ pytest tests/test_ad_package_api.py -q
 
 > 賽後命中廣告目前只得邏輯／文案 job，未有海報同呢條 API；本服務只涵蓋賽前預測包。
 
+## 留言答覆上下文（綜合推介 + Form AI）
+
+負責回覆社交媒體留言嘅機械人，請用 **`/v1/reply-context`**（唔好只用 `tips` 馬名）：
+
+- 文件：[`README_REPLY_CONTEXT_API.md`](README_REPLY_CONTEXT_API.md)
+- CLI：`python social_reply_bot.py push`
+- Webhook：`SOCIAL_REPLY_BOT_WEBHOOK_URL`
+
 
 ## 歷史歸檔（不存海報 PNG）
 

@@ -919,6 +919,18 @@ def ingest_ad_package(
         wh = dispatch_ad_webhook(pkg)
         pkg["webhook"] = wh
         save_ad_package(pkg, out_root, push_remote=False, force=True)
+
+    reply = _maybe_publish_reply_context(
+        pkg, output_root=out_root, notify=notify
+    )
+    if reply is not None:
+        pkg["reply_context"] = {
+            "ok": bool(reply.get("ok")),
+            "id": reply.get("id"),
+            "status": reply.get("status"),
+            "webhook": reply.get("webhook"),
+            "error": reply.get("error") or reply.get("reason"),
+        }
     return pkg
 
 
@@ -1130,6 +1142,23 @@ def build_ad_package_from_copy(
             payload["webhook"] = wh
             save_ad_package(payload, out_root, force=force_save, push_remote=False)
 
+    # 留言機械人：綜合推介 + Form AI（有 tips 即推，唔等海報／AI 社交文案）
+    if not payload.get("save_skipped"):
+        reply = _maybe_publish_reply_context(
+            payload,
+            output_root=out_root,
+            copy_data=copy_data,
+            notify=notify,
+        )
+        if reply is not None:
+            payload["reply_context"] = {
+                "ok": bool(reply.get("ok")),
+                "id": reply.get("id"),
+                "status": reply.get("status"),
+                "webhook": reply.get("webhook"),
+                "error": reply.get("error") or reply.get("reason"),
+            }
+
     return payload
 
 
@@ -1287,6 +1316,39 @@ def dispatch_ad_webhook(
             time.sleep(2 ** i)
 
     return {"ok": False, "error": last_error, "attempts": attempts, "url": target}
+
+
+def _maybe_publish_reply_context(
+    payload: Dict[str, Any],
+    *,
+    output_root: Optional[Path] = None,
+    copy_data: Optional[Dict[str, Any]] = None,
+    notify: bool = True,
+) -> Optional[Dict[str, Any]]:
+    """廣告包有 tips 時同步留言機械人上下文（失敗唔阻主流程）。"""
+    tips = list(payload.get("tips") or [])
+    if not tips or not any((t.get("horses") or []) for t in tips if isinstance(t, dict)):
+        return None
+    auto = (os.getenv("SOCIAL_REPLY_AUTO_PUBLISH", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not auto:
+        return {"ok": False, "skipped": True, "reason": "SOCIAL_REPLY_AUTO_PUBLISH off"}
+    try:
+        from social_reply_context import publish_reply_context
+
+        return publish_reply_context(
+            payload,
+            output_root=output_root,
+            copy_data=copy_data,
+            notify=notify,
+        )
+    except Exception as exc:
+        logger.warning("reply context publish failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
 
 
 def list_ad_package_ids(output_root: Optional[Path] = None) -> List[str]:

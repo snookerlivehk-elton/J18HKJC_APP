@@ -215,6 +215,16 @@ PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 | 變量 | `AD_API_KEY`、`AD_API_PUBLIC_BASE`、`GROK_BOT_WEBHOOK_URL`、`GROK_BOT_WEBHOOK_SECRET` |
 | 行為 | `GET /v1/ads/latest`；新 `ready` 包 webhook POST；`POST /v1/ads/{id}/notify` 重試 |
 
+### 2.4c 留言答覆上下文 API（Reply Context）
+
+| 項目 | 說明 |
+|------|------|
+| 程式 | `social_reply_context.py` + `social_reply_bot.py`；路由掛喺 `ad_api.py` |
+| 啟動 | 同 Ad API：`bash start-ad-api.sh` |
+| 文件 | `README_REPLY_CONTEXT_API.md` |
+| 變量 | `SOCIAL_REPLY_BOT_WEBHOOK_URL`、`SOCIAL_REPLY_BOT_WEBHOOK_SECRET`、`SOCIAL_REPLY_AUTO_PUBLISH` |
+| 行為 | `GET /v1/reply-context/latest`（綜合推介＋推介馬 Form AI）；廣告包有 tips 時自動 publish＋webhook；CLI `python social_reply_bot.py push` |
+
 | Method | Path | 用途 |
 |--------|------|------|
 | GET | `/health` | 探活（無需 key） |
@@ -419,6 +429,7 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 | 日期 | 內容 |
 |------|------|
+| 2026-09-12 | **留言答覆上下文**：`/v1/reply-context` 提供綜合推介＋推介馬 Form AI；`social_reply_bot.py` webhook／prompt；見 `README_REPLY_CONTEXT_API.md` |
 | 2026-09-11 | **版本管理**：根目錄 `VERSION` + `app_version.py`；登入頁／頂部帳號列顯示 `vX.Y.Z`；prediction_api 同步 |
 | 2026-09-11 | **命中率／賽日／後台**：賽日速覽顯示融合推介；WQ＝頭三位含冠亞、新增 PQ%；`hit_rate_day_snapshots` 日快照＋`backfill_hit_snapshots.py`；廣告重產／NLP／因子改後台 `ops_jobs`＋進度監測 |
 | 2026-09-11 | **數據營運 UI**：Ops Center 合併控制中心＋遺留清單；作戰室一鍵完成／遺留鏈／drill-down；`ops_incidents`＋tick 掃描；`AUTO_BACKLOG_FACTORS` 預設 true；`notify_admins` Resend 入口 |
@@ -445,4 +456,4 @@ Smoke：各 `factor_type` 有列；預測 `hit_counts` 對 JOCKEY/TRAINER/HORSE 
 
 ---
 
-*最後更新：2026-09-11 — 應用版本 VERSION／頂部展示。*
+*最後更新：2026-09-12 — 留言答覆上下文 API／機械人。*
