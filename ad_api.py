@@ -103,6 +103,7 @@ class IngestBody(BaseModel):
         None, description="海報 PNG 的 base64（可選；有則覆寫本機 poster）"
     )
     notify: bool = Field(False, description="寫入後是否再推 webhook")
+    force: bool = Field(False, description="僅管理用途：跳過 ready／tips 檢查；一般 ingest 靠 save force 覆寫同 id")
 
 
 @app.get("/health")
@@ -270,6 +271,7 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
             poster_png=poster_bytes,
             output_root=_output_root(),
             notify=body.notify,
+            force=bool(getattr(body, "force", True)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

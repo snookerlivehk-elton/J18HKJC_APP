@@ -8,6 +8,7 @@ status=ready（海報 PNG + AI 精選文案）後 POST 去 GROK_BOT_WEBHOOK_URL�
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 import shutil
@@ -38,6 +39,31 @@ DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
 DEFAULT_DISCLAIMER = "預測／資料只供參考，投注前請自行判斷。"
 PACKAGE_HASHTAG_LIMIT = 6
+# 多餘／重複 hashtag（已有 #賽前預測 #香港賽馬 時唔再加）
+_HASHTAG_NOISE = {
+    "#賽馬",
+    "#賽馬貼士",
+    "#J18HK",
+    "#j18hk",
+    "#HKJC",
+    "#hkjc",
+}
+
+
+def _normalize_https_base(url: str) -> str:
+    """確保公開／推送 base 係絕對 https URL（避免 poster_url 缺 scheme）。"""
+    u = (url or "").strip().rstrip("/")
+    if not u:
+        return ""
+    if u.startswith("//"):
+        return "https:" + u
+    if not re.match(r"^https?://", u, flags=re.I):
+        return "https://" + u.lstrip("/")
+    # 統一小寫 scheme
+    if u.lower().startswith("http://"):
+        return "https://" + u[7:]
+    return u
+
 
 # ready 需同時有海報 + AI 精選文案（Grok Bot 輪詢用）；可設 AD_PACKAGE_REQUIRE_AI_SOCIAL=false 關閉
 def require_ai_social() -> bool:
@@ -127,22 +153,44 @@ def packages_dir(output_root: Optional[Path] = None) -> Path:
 
 
 def public_base_url() -> str:
-    return (os.getenv("AD_API_PUBLIC_BASE") or os.getenv("PUBLIC_BASE_URL") or "").rstrip("/")
+    """海報公開 base。缺 scheme 會自動補 https://；可 fallback 去 AD_API_BASE_URL。"""
+    return _normalize_https_base(
+        os.getenv("AD_API_PUBLIC_BASE")
+        or os.getenv("PUBLIC_BASE_URL")
+        or os.getenv("AD_API_BASE_URL")
+        or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        or ""
+    )
 
 
 def remote_ad_api_base() -> str:
     """CORN／Streamlit 推送生產 Ad API 用。
 
     別名：AD_API_BASE_URL / AD_API_PUSH_URL / AD_PACKAGE_API_URL / AD_PACKAGE_BASE_URL
+    若只設咗 AD_API_PUBLIC_BASE（常見 Streamlit 漏設 BASE），亦會用作推送目標，
+    否則生產 latest 永遠留住舊手動 ingest。
     例：https://j18hkjcapp-production.up.railway.app
     """
-    return (
+    return _normalize_https_base(
         os.getenv("AD_API_BASE_URL")
         or os.getenv("AD_API_PUSH_URL")
         or os.getenv("AD_PACKAGE_API_URL")
         or os.getenv("AD_PACKAGE_BASE_URL")
+        or os.getenv("AD_API_PUBLIC_BASE")
+        or os.getenv("PUBLIC_BASE_URL")
         or ""
-    ).strip().rstrip("/")
+    )
+
+
+def absolute_poster_url(ad_id: str, *, base: Optional[str] = None) -> str:
+    """永遠回傳可下載嘅絕對 https poster URL（有 base 時）。"""
+    b = _normalize_https_base(base or public_base_url())
+    aid = str(ad_id or "").strip()
+    if not aid:
+        return ""
+    if b:
+        return f"{b}/v1/ads/{aid}/poster"
+    return f"/v1/ads/{aid}/poster"
 
 
 def _cap_hashtags(tags: Sequence[str], *, limit: int = PACKAGE_HASHTAG_LIMIT) -> List[str]:
@@ -153,6 +201,8 @@ def _cap_hashtags(tags: Sequence[str], *, limit: int = PACKAGE_HASHTAG_LIMIT) ->
             continue
         if not s.startswith("#"):
             s = "#" + s.lstrip("#")
+        if s in _HASHTAG_NOISE:
+            continue
         if s not in out:
             out.append(s)
         if len(out) >= max(1, int(limit)):
@@ -353,11 +403,21 @@ _SYSTEM_COPY_MARKERS = (
 
 
 def _session_daypart(meeting: Dict[str, Any]) -> str:
-    """日馬→今日／日間；夜馬→今晚。"""
+    """日馬→今日／聽日；夜馬→今晚。賽日若係翌日用「聽日」。"""
     session = str(meeting.get("session") or "").strip()
     theme = str(meeting.get("theme") or "").strip().lower()
     if session == "夜" or theme == "night":
         return "今晚"
+    # 對照香港今日：賽日遲過今日 → 聽日
+    race_date = str(meeting.get("date") or meeting.get("racing_date") or "")[:10]
+    if race_date:
+        try:
+            rd = datetime.strptime(race_date, "%Y-%m-%d").date()
+            today = datetime.now(HK_TZ).date()
+            if rd > today:
+                return "聽日"
+        except Exception:
+            pass
     return "今日"
 
 
@@ -410,7 +470,11 @@ def _sanitize_public_copy_text(text: str, *, meeting: Optional[Dict[str, Any]] =
     body = re.sub(r"share[_\s-]?pct\s*[：:=]?\s*[\d.]+", "", body, flags=re.I)
     body = re.sub(r"[ \t]{2,}", " ", body)
     meeting = meeting or {}
-    if _session_daypart(meeting) == "今日":
+    daypart = _session_daypart(meeting)
+    if daypart == "聽日":
+        body = body.replace("今晚", "聽日").replace("今夜", "聽日")
+        body = body.replace("今日", "聽日")
+    elif daypart == "今日":
         body = body.replace("今晚", "今日")
         body = body.replace("今夜", "今日")
     return body.strip()
@@ -747,6 +811,8 @@ def push_ad_package_remote(
     body: Dict[str, Any] = {
         "package": public_payload(payload),
         "notify": bool(notify),
+        # 唔傳 force=True：否則會跳過 ready／tips 品質閘。
+        # 同 id 覆寫靠 ingest 端 save(..., force=True)。
     }
     # public_payload 冇 meta；下游主要用 copy／assets；status 已有
     if poster_png:
@@ -817,11 +883,8 @@ def ingest_ad_package(
         except Exception:
             pass
 
-    base = public_base_url()
     assets = dict(pkg.get("assets") or {})
-    assets["poster_url"] = (
-        f"{base}/v1/ads/{ad_id}/poster" if base else f"/v1/ads/{ad_id}/poster"
-    )
+    assets["poster_url"] = absolute_poster_url(ad_id)
     assets.pop("poster_path", None)
     if paths["poster"].is_file():
         assets["poster_path"] = str(paths["poster"])
@@ -832,7 +895,24 @@ def ingest_ad_package(
     if not pkg.get("created_at"):
         pkg["created_at"] = _hk_now_iso()
 
-    # 寫入本機＋DB，唔再向外推（本服務就係目標）
+    # 上游 Streamlit 重產必須蓋過舊手動 editorial rewrite
+    copy_block = dict(pkg.get("copy") or {})
+    ai_block = copy_block.get("ai")
+    if isinstance(ai_block, dict):
+        ai_block = dict(ai_block)
+        note = str(ai_block.get("note") or "")
+        if "editorial" in note.lower() or "user_zip" in note.lower():
+            ai_block.pop("note", None)
+        ai_block["ingested_from"] = "upstream_streamlit_or_corn"
+        ai_block["ingested_at"] = _hk_now_iso()
+        copy_block["ai"] = ai_block
+        pkg["copy"] = copy_block
+    meta = dict(pkg.get("meta") or {})
+    meta["ingested_at"] = _hk_now_iso()
+    meta["ingest_overwrite"] = True
+    pkg["meta"] = meta
+
+    # 寫入本機＋DB，唔再向外推（本服務就係目標）；force 蓋同 id
     save_ad_package(pkg, out_root, push_remote=False, force=True)
 
     if notify and pkg.get("status") == "ready":
@@ -874,6 +954,7 @@ def build_ad_package_from_copy(
     session: Optional[str] = None,
     is_day_meeting: Optional[bool] = None,
     notify: bool = False,
+    force_save: bool = False,
 ) -> Dict[str, Any]:
     out_root = Path(output_root) if output_root else default_output_dir()
     copy_data = _enrich_copy_data_from_archives(copy_data, output_root=out_root)
@@ -933,10 +1014,7 @@ def build_ad_package_from_copy(
     if src.is_file():
         shutil.copy2(src, paths["poster"])
         has_poster = paths["poster"].is_file()
-        base = public_base_url()
-        poster_url = (
-            f"{base}/v1/ads/{ad_id}/poster" if base else f"/v1/ads/{ad_id}/poster"
-        )
+        poster_url = absolute_poster_url(ad_id)
 
     ai = ai_social_payload(
         out_root, racing_date=racing_date, course=course, ad_id=ad_id
@@ -1013,14 +1091,44 @@ def build_ad_package_from_copy(
             status,
         )
 
-    save_ad_package(payload, out_root)
+    # 用戶主動 publish／生成文案：force 蓋過舊包，並必定嘗試 remote ingest
+    save_ad_package(payload, out_root, force=force_save)
 
-    # ready 必推；pending_ai 時若 AD_PACKAGE_WEBHOOK_ON_POSTER（預設 true）亦推海報版
+    # 若本機／DB 因降級閘跳過，仍然強制推生產（下游要同 ZIP 一致）
+    if (
+        force_save
+        and payload.get("save_skipped")
+        and payload.get("status") == "ready"
+        and not (payload.get("remote_push") or {}).get("ok")
+    ):
+        try:
+            poster_bytes = None
+            paths = package_paths(str(payload.get("id") or ""), out_root)
+            if paths["poster"].is_file():
+                poster_bytes = paths["poster"].read_bytes()
+            else:
+                fused = out_root / "fused.png"
+                if fused.is_file():
+                    poster_bytes = fused.read_bytes()
+            remote = push_ad_package_remote(payload, poster_png=poster_bytes)
+            payload["remote_push"] = {
+                "ok": bool(remote.get("ok")),
+                "skipped": bool(remote.get("skipped")),
+                "error": remote.get("error") or remote.get("reason"),
+                "reason": remote.get("reason"),
+                "id": remote.get("id"),
+                "url": remote.get("url"),
+                "forced_after_save_skip": True,
+            }
+        except Exception as exc:
+            payload["remote_push"] = {"ok": False, "error": str(exc), "forced_after_save_skip": True}
+
+    # ready 必推 webhook；pending_ai 時若 AD_PACKAGE_WEBHOOK_ON_POSTER（預設 true）亦推海報版
     if notify and payload.get("status") in {"ready", "pending_ai", "pending_ai_social"}:
         if not payload.get("save_skipped"):
             wh = dispatch_ad_webhook(payload)
             payload["webhook"] = wh
-            save_ad_package(payload, out_root)
+            save_ad_package(payload, out_root, force=force_save, push_remote=False)
 
     return payload
 
@@ -1035,7 +1143,7 @@ def publish_ad_package_after_outputs(
         return {"ok": False, "error": "copy.json 未就緒"}
     try:
         pkg = build_ad_package_from_copy(
-            copy_data, output_root=output_root, notify=notify
+            copy_data, output_root=output_root, notify=notify, force_save=True
         )
         tips = list(pkg.get("tips") or [])
         n_horses = sum(len(t.get("horses") or []) for t in tips if isinstance(t, dict))
@@ -1100,7 +1208,7 @@ def generate_ad_package(
     if not copy_data.get("meeting"):
         return {"ok": False, "error": "無可用 copy.json／meeting 資料"}
 
-    pkg = build_ad_package_from_copy(copy_data, output_root=out_root, notify=notify)
+    pkg = build_ad_package_from_copy(copy_data, output_root=out_root, notify=notify, force_save=True)
     return {"ok": True, "id": pkg["id"], "status": pkg["status"], "package": pkg}
 
 

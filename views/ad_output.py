@@ -35,18 +35,20 @@ from factor_calibration import FactorCalibration
 def _show_remote_push(remote: Optional[Dict[str, Any]]) -> None:
     """顯示生產 Ad API ingest 結果（下游 Grok Bot 只睇生產 API）。"""
     if not remote:
+        st.error(
+            "未見 remote_push 結果——請確認 Streamlit 已設 "
+            "`AD_API_BASE_URL`（或 `AD_API_PUBLIC_BASE`）+ `AD_API_KEY` 指向生產 Ad API。"
+        )
         return
     if remote.get("ok"):
         st.success(
-            f"已推送生產 Ad API：`{remote.get('id') or 'ready'}`"
+            f"已推送／覆寫生產 Ad API：`{remote.get('id') or 'ready'}`"
             + (f" → {remote.get('url')}" if remote.get("url") else "")
         )
         return
     reason = remote.get("error") or remote.get("reason") or "unknown"
-    if remote.get("skipped"):
-        st.warning(f"未推送生產 API（略過）：{reason}")
-    else:
-        st.error(f"推送生產 API 失敗：{reason}")
+    # 缺 env／略過一律當錯誤顯示，避免以為 dual-write DB = 已更新生產
+    st.error(f"推送生產 API 失敗／略過：{reason}")
 
 
 def _sync_publish_to_prod(out_root: Path, *, notify: bool = False) -> Dict[str, Any]:
@@ -215,9 +217,17 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any], *, key_pre
                         )
                         if pkg_out.get("ok"):
                             st.caption(
-                                f"廣告包 `{pkg_out.get('id')}` → **{pkg_out.get('status')}**（已 dual-write DB）"
+                                f"廣告包 `{pkg_out.get('id')}` → **{pkg_out.get('status')}**"
                             )
-                            _show_remote_push(pkg_out.get("remote_push") or {})
+                            remote = pkg_out.get("remote_push") or {}
+                            _show_remote_push(remote)
+                            if remote.get("ok"):
+                                st.success(f"已生成 AI 精選評述（{tone_label(tone)}）並覆寫生產 latest")
+                            else:
+                                st.warning(
+                                    f"已生成 AI 精選評述（{tone_label(tone)}），但生產尚未覆寫——"
+                                    "請檢查 AD_API_BASE_URL／AD_API_KEY，或用下面「重試推送」。"
+                                )
                         elif pkg_out.get("error"):
                             st.caption(f"廣告包重建：{pkg_out.get('error')}")
                             _show_remote_push(pkg_out.get("remote_push") or {})
@@ -230,8 +240,6 @@ def _render_social_copy(output_root: Path, copy_data: Dict[str, Any], *, key_pre
                             "LLM 暫時未能完成，已用推介自動補齊精選（系統提示只顯示喺呢度，"
                             "唔會寫入 facebook_copy／生產 API）。"
                         )
-                    else:
-                        st.success(f"已生成 AI 精選評述（{tone_label(tone)}）並推送生產 API")
                 except Exception as e:
                     st.session_state[_k("ad_social_result")] = {"error": str(e)}
                     st.error(f"生成失敗：{e}")

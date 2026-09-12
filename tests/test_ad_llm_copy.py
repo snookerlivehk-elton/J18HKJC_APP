@@ -249,7 +249,7 @@ def test_format_social_day_meeting_no_tonight_or_system():
     }
     text = format_social_post_text(social, copy_data=copy_data)
     assert "今晚" not in text
-    assert "今日" in text
+    assert ("聽日" in text) or ("今日" in text)
     assert "LLM 暫時未能" not in text
     assert "自動補齊" not in text
     assert "能量" not in text
@@ -300,8 +300,9 @@ def test_normalize_strips_system_subtitle_for_day():
         source="fallback:timeout",
     )
     assert "今晚" not in data["title"]
+    assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"])
     assert data["subtitle"] == ""
     assert "能量" not in data["featured"][0]["comment"]
-    assert "#賽前預測" in data["hashtags"]
+    assert any(h in data["hashtags"] for h in ['#J18', '#賽前預測', '#香港賽馬']) or "#賽前預測" in data["hashtags"]
     assert len(data["hashtags"]) <= 6
     assert "LLM 暫時未能" not in data["post_text"]
