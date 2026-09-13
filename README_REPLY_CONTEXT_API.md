@@ -57,7 +57,7 @@ curl -sS "$BASE/health" | jq .
 
 # 最新上下文
 curl -sS -H "Authorization: Bearer $KEY" \
-  "$BASE/v1/reply-context/latest" | jq '{id, status, meeting, tips: .tips[:1], meta}'
+  "$BASE/v1/reply-context/latest" | jq '{id, status, meeting, timezone, schedule, tips: .tips[:1], meta}'
 
 # LLM prompt
 curl -sS -H "Authorization: Bearer $KEY" \
@@ -83,11 +83,28 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
     "venue_code": "HV",
     "session": "夜"
   },
+  "timezone": "Asia/Hong_Kong",
+  "schedule": [
+    {
+      "race": 1,
+      "race_id": "20260715HV01",
+      "post_time": "2026-07-15T19:15:00+08:00",
+      "post_time_hk": "19:15"
+    },
+    {
+      "race": 2,
+      "race_id": "20260715HV02",
+      "post_time": "2026-07-15T19:45:00+08:00",
+      "post_time_hk": "19:45"
+    }
+  ],
   "intro": "…J18 綜合推介已出爐…",
   "tips": [
     {
       "race": 1,
       "race_id": "20260715HV01",
+      "post_time": "2026-07-15T19:15:00+08:00",
+      "post_time_hk": "19:15",
       "horses": [
         {
           "no": 4,
@@ -109,7 +126,14 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
   ],
   "featured": [],
   "disclaimer": "預測／AI 評價只供參考…",
-  "meta": { "n_races": 2, "n_horses": 3, "n_ai_evals": 3, "coverage": 1.0 }
+  "meta": {
+    "n_races": 2,
+    "n_horses": 3,
+    "n_ai_evals": 3,
+    "coverage": 1.0,
+    "n_scheduled_races": 2,
+    "timezone": "Asia/Hong_Kong"
+  }
 }
 ```
 
@@ -117,6 +141,7 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
 
 - 開賽前／收到 webhook 後拉 `GET /v1/reply-context/latest`
 - 或把 `GET …/prompt` 嘅文本注入 system／context
+- 用 `schedule[]`／`tips[].post_time`（香港時間 `Asia/Hong_Kong`）對比**回覆當下時間**，優先引用尚未開跑或即將開跑嘅場次；已過開跑時間嘅場次視為已完成／進行中
 - 回答時只引用 `tips` 內推介同 `ai.summary`；冇 `ai` 就只講推介馬名，唔好捏造評價
 
 ## 測試
