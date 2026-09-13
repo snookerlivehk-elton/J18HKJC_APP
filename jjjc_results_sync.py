@@ -79,6 +79,18 @@ def _safe_float(v: Any) -> Optional[float]:
         return None
 
 
+def _clip(v: Any, max_len: int) -> Optional[str]:
+    """裁切字串以符合既有 PG varchar 上限（避免 StringDataRightTruncation 令成日 sync 回滾）。"""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    if len(s) <= max_len:
+        return s
+    return s[: max(1, max_len - 1)] + "…"
+
+
 def _runner_ids(race_id: str, horse_no: int, horse_code: Optional[str], race_date: str) -> Tuple[str, str, str]:
     brand = (horse_code or "").strip().upper() or None
     if brand:
@@ -391,16 +403,20 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         """
                     ),
                     {
-                        "race_id": race_id,
-                        "meeting_id": meeting_id,
+                        "race_id": _clip(race_id, 50) or race_id,
+                        "meeting_id": _clip(meeting_id, 50),
                         "race_num": race_num,
-                        "title": f"R{race_num}" if race_num else None,
-                        "race_name": race.get("race_name"),
-                        "klass": race.get("race_class"),
-                        "distance_text": f"{distance_m}米" if distance_m else None,
+                        # schema: title/class/distance_text/course/ground = VARCHAR(50)
+                        # race_name = VARCHAR(100)；完整原文仍在 raw_detail_json
+                        "title": _clip(f"R{race_num}" if race_num else None, 50),
+                        "race_name": _clip(race.get("race_name"), 100),
+                        "klass": _clip(race.get("race_class"), 50),
+                        "distance_text": _clip(
+                            f"{distance_m}米" if distance_m else None, 50
+                        ),
                         "distance_m": distance_m,
-                        "course": course_text,
-                        "ground": going,
+                        "course": _clip(course_text, 50),
+                        "ground": _clip(going, 50),
                         "raw": json.dumps(race, ensure_ascii=False),
                     },
                 )

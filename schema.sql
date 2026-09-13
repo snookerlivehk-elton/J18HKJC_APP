@@ -28,9 +28,9 @@ CREATE TABLE races (
     distance_m INT,             -- 例如 1650
     distance_text VARCHAR(50),  -- 例如 '1650米'
     rating_text VARCHAR(50),    -- 例如 '40-0'
-    course VARCHAR(50),         -- 例如 '草地'
+    course VARCHAR(100),        -- 草地等；jjjc 原文可能較長，sync 端會 clip 至欄寬
     track VARCHAR(50),          -- 例如 '"C" 賽道'
-    ground VARCHAR(50),         -- 例如 '好地'
+    ground VARCHAR(100),        -- 好地等；超長 going 由 jjjc_results_sync._clip 保護
     race_time_raw VARCHAR(50),
     raw_detail_json JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),

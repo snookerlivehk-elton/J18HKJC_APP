@@ -9,6 +9,61 @@ from pathlib import Path
 
 
 class JjjcResultsSyncTest(unittest.TestCase):
+    def test_clip_varchar_fields(self):
+        import jjjc_results_sync as sync
+
+        self.assertEqual(sync._clip(None, 50), None)
+        self.assertEqual(sync._clip("短", 50), "短")
+        long = "G" * 80
+        clipped = sync._clip(long, 50)
+        self.assertEqual(len(clipped), 50)
+        self.assertTrue(clipped.endswith("…"))
+
+    def test_upsert_truncates_long_going_for_varchar50(self):
+        """PG races.ground/course 為 VARCHAR(50)；超長 going 不可令整日 sync 回滾。"""
+        root = Path(__file__).resolve().parents[1]
+        fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"
+        self.assertTrue(fixture.is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+            import jjjc_results_sync as sync
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            payload = json.loads(fixture.read_text(encoding="utf-8"))
+            long_going = (
+                "GOOD TO FIRM — SECTIONAL TIMES DISPLAYED IN TENTHS OF A SECOND "
+                "ON THE GLENEALY HANDICAP TURF A COURSE (OFFICIAL)"
+            )
+            self.assertGreater(len(long_going), 50)
+            payload["races"][0]["going"] = long_going
+            payload["races"][0]["course"] = "TURF - \"A+3\" Course " + ("X" * 40)
+            out = sync.upsert_payload(payload)
+            self.assertTrue(out["ok"], out)
+
+            from sqlalchemy import create_engine, text
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            with eng.connect() as conn:
+                row = conn.execute(
+                    text(
+                        "SELECT ground, course FROM races WHERE race_id='20260906ST01'"
+                    )
+                ).mappings().first()
+            eng.dispose()
+            self.assertIsNotNone(row)
+            self.assertLessEqual(len(row["ground"] or ""), 50)
+            self.assertLessEqual(len(row["course"] or ""), 50)
+            self.assertTrue((row["ground"] or "").startswith("GOOD TO FIRM"))
+
     def test_upsert_fixture_into_sqlite(self):
         root = Path(__file__).resolve().parents[1]
         fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"

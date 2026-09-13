@@ -209,12 +209,24 @@ for stage, label in STAGES:
                     detail=str(r.get("error") or r.get("msg") or r.get("message") or "")[:500],
                     notify=not bool(r.get("ok")),
                 )
+                # 保留結果，避免 st.rerun 後 error 閃一下就冇
+                st.session_state[f"ops_stage_result_{stage}"] = r
+                if stage == "RESULTS":
+                    st.session_state["ops_results_result"] = r
+                if stage == "SETTLED":
+                    st.session_state["ops_settle_result"] = r
                 st.session_state.pop("ops_ready", None)
-                if r.get("ok"):
-                    st.success(r.get("msg") or r.get("message") or "完成")
-                else:
-                    st.error(r.get("error") or r)
                 st.rerun()
+            oneclick_last = st.session_state.get(f"ops_stage_result_{stage}")
+            if oneclick_last and stage not in ("RESULTS", "SETTLED", "SNAPSHOT"):
+                if oneclick_last.get("ok"):
+                    st.success(
+                        oneclick_last.get("msg")
+                        or oneclick_last.get("message")
+                        or "完成"
+                    )
+                else:
+                    st.error(oneclick_last.get("error") or oneclick_last)
 
         # 節點細部動作（保留備援）
         if stage == "RACECARD":
@@ -540,12 +552,17 @@ for stage, label in STAGES:
                 with st.spinner("jjjc results export → runners…"):
                     r = pipe.run_action(racing_date, course, "sync_jjjc_results")
                 _rec("sync_jjjc_results", stage, str(r.get("error") or ""))
+                st.session_state["ops_results_result"] = r
                 st.session_state.pop("ops_ready", None)
-                if r.get("ok"):
+                st.rerun()
+            last_res = st.session_state.get("ops_results_result")
+            if last_res:
+                if last_res.get("ok"):
                     st.success(
-                        f"寫入 {r.get('runner_upserted')} 匹／{r.get('race_count')} 場"
+                        f"寫入 {last_res.get('runner_upserted')} 匹／"
+                        f"{last_res.get('race_count')} 場"
                     )
-                    auto = r.get("auto_settle") or {}
+                    auto = last_res.get("auto_settle") or {}
                     if auto.get("settled_batches"):
                         st.success(
                             f"已自動結算：{', '.join(auto.get('settled_batches') or [])}"
@@ -553,8 +570,7 @@ for stage, label in STAGES:
                     elif auto.get("message"):
                         st.info(f"自動結算：{auto.get('message')}")
                 else:
-                    st.error(r.get("error") or r)
-                st.rerun()
+                    st.error(last_res.get("error") or last_res)
         elif stage == "SETTLED":
             if a2.button("結算快照", key=f"act_set_{stage}", help=help_txt):
                 with st.spinner("settle…"):
