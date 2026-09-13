@@ -72,8 +72,8 @@ STAGE_HELP: Dict[str, str] = {
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
     "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 才出正式快照。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；否則可 provisional／revision。",
-    "RESULTS": "賽後同步 jjjc results（名次／派彩）；結算依賴此步。",
-    "SETTLED": "快照 × 名次結算命中率；與當日評述無關。",
+    "RESULTS": "賽後同步 jjjc results（名次／派彩）；快照各場齊名次後才標 ok，並會自動觸發結算。",
+    "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle。",
 }
 
 
@@ -524,7 +524,69 @@ class MeetingPipeline:
         tag_s = f" [{', '.join(tags)}]" if tags else ""
         return STATUS_OK, f"最新 batch `{row['batch_id']}`{tag_s}（{int(row['n'])} 列）"
 
+    def _latest_snapshot_batch_id(self, racing_date: str, course: str) -> Optional[str]:
+        """最新未結算 batch 優先，否則最新已結算 batch。"""
+        d, c = racing_date[:10], (course or "").upper()
+
+        def _query(order_sql: str) -> Optional[str]:
+            if USE_SQLITE:
+                q = text(
+                    f"""
+                    SELECT batch_id FROM prediction_snapshot_batches
+                    WHERE CAST(racing_date AS TEXT) LIKE :d AND course=:c
+                    ORDER BY
+                      CASE WHEN settled_at IS NULL THEN 0 ELSE 1 END,
+                      {order_sql}
+                    LIMIT 1
+                    """
+                )
+            else:
+                q = text(
+                    f"""
+                    SELECT batch_id FROM prediction_snapshot_batches
+                    WHERE racing_date = CAST(:d AS DATE) AND course=:c
+                    ORDER BY
+                      CASE WHEN settled_at IS NULL THEN 0 ELSE 1 END,
+                      {order_sql}
+                    LIMIT 1
+                    """
+                )
+            df = pd.read_sql(q, self.engine, params={"d": d, "c": c})
+            if df.empty:
+                return None
+            return str(df.iloc[0]["batch_id"])
+
+        try:
+            return _query("created_at DESC NULLS LAST" if not USE_SQLITE else "created_at DESC")
+        except Exception:
+            try:
+                return _query("batch_id DESC")
+            except Exception:
+                return None
+
+    def _snapshot_race_ids(self, racing_date: str, course: str) -> List[str]:
+        batch_id = self._latest_snapshot_batch_id(racing_date, course)
+        if not batch_id:
+            return []
+        try:
+            df = pd.read_sql(
+                text(
+                    "SELECT DISTINCT race_id FROM prediction_snapshots WHERE batch_id = :b"
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+        except Exception:
+            return []
+        return [str(x) for x in df["race_id"].tolist() if pd.notna(x) and str(x)]
+
     def check_results(self, racing_date: str, course: str) -> Tuple[str, str]:
+        """
+        RESULTS 就緒＝足以驅動結算：
+        - 無名次 → waiting
+        - 有快照時：快照內每一場都要有至少一匹 finish_order_num（不足則 waiting）
+        - 無快照時：任一場有名次即 ok（結算仍會等 SNAPSHOT）
+        """
         d = racing_date.replace("-", "")[:8]
         prefix = f"{d}{course}"
         q = text(
@@ -540,6 +602,34 @@ class MeetingPipeline:
         races, runners = int(row["races"] or 0), int(row["runners"] or 0)
         if races == 0:
             return STATUS_WAITING, "歷史庫尚無名次（待 jjjc 同步或 J18 賽後更新）"
+
+        expected = self._snapshot_race_ids(racing_date, course)
+        if expected:
+            placeholders = ", ".join([f":r{i}" for i in range(len(expected))])
+            params = {f"r{i}": rid for i, rid in enumerate(expected)}
+            filled_df = pd.read_sql(
+                text(
+                    f"""
+                    SELECT DISTINCT race_id FROM runners
+                    WHERE race_id IN ({placeholders}) AND finish_order_num IS NOT NULL
+                    """
+                ),
+                self.engine,
+                params=params,
+            )
+            filled = {str(x) for x in filled_df["race_id"].tolist()}
+            missing = [rid for rid in expected if rid not in filled]
+            if missing:
+                return (
+                    STATUS_WAITING,
+                    f"快照 {len(filled)}/{len(expected)} 場已有名次；尚缺 "
+                    f"{len(missing)} 場（例 `{missing[0]}`）",
+                )
+            return (
+                STATUS_OK,
+                f"{races} 場已有名次、{runners} 匹（快照 {len(expected)} 場齊）",
+            )
+
         return STATUS_OK, f"{races} 場已有名次、{runners} 匹"
 
     def check_settled(self, racing_date: str, course: str) -> Tuple[str, str]:
@@ -564,9 +654,48 @@ class MeetingPipeline:
             df = pd.read_sql(q, self.engine, params={"d": racing_date[:10], "c": course})
         except Exception:
             return STATUS_PENDING, "無結算紀錄"
-        if df.empty:
+        if not df.empty:
+            return STATUS_OK, f"已結算 `{df.iloc[0]['batch_id']}`"
+
+        # 尚未結算：附上快照填寫進度，方便對照 RESULTS=ok 但仍 pending 的情況
+        batch_id = self._latest_snapshot_batch_id(racing_date, course)
+        if not batch_id:
+            return STATUS_PENDING, "快照尚未結算（無 batch）"
+        try:
+            left = pd.read_sql(
+                text(
+                    """
+                    SELECT race_id,
+                           COUNT(*) AS n,
+                           SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS filled
+                    FROM prediction_snapshots
+                    WHERE batch_id = :b
+                    GROUP BY race_id
+                    """
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+        except Exception:
             return STATUS_PENDING, "快照尚未結算"
-        return STATUS_OK, f"已結算 `{df.iloc[0]['batch_id']}`"
+        if left.empty:
+            return STATUS_PENDING, f"快照尚未結算（`{batch_id}` 無列）"
+        left["filled"] = left["filled"].fillna(0).astype(int)
+        left["n"] = left["n"].fillna(0).astype(int)
+        ready_races = int(((left["filled"] > 0) & (left["filled"] / left["n"] >= 0.5)).sum())
+        total_races = int(len(left))
+        filled_rows = int(left["filled"].sum())
+        total_rows = int(left["n"].sum())
+        if ready_races < total_races:
+            return (
+                STATUS_PENDING,
+                f"快照尚未結算｜`{batch_id}` 達標 {ready_races}/{total_races} 場"
+                f"（列 {filled_rows}/{total_rows}；每場需 ≥50% 名次）",
+            )
+        return (
+            STATUS_PENDING,
+            f"快照尚未結算｜`{batch_id}` 名次已齊（{filled_rows}/{total_rows}），待跑 settle",
+        )
 
     def refresh_readiness(self, racing_date: str, course: str) -> Dict[str, Any]:
         """重算各階段真實狀態（保留 manual_override=ok 的不覆蓋）。"""
@@ -998,6 +1127,11 @@ class MeetingPipeline:
                     base_url=kwargs.get("base_url"),
                 )
                 self.refresh_readiness(racing_date, course)
+                # RESULTS 齊備且有快照時立刻 settle（唔使等下一輪 tick）
+                auto = self._maybe_auto_settle_after_results(racing_date, course)
+                if auto is not None:
+                    out["auto_settle"] = auto
+                    self.refresh_readiness(racing_date, course)
                 return out
 
             if action == "sync_jjjc_speedguide":
@@ -1304,3 +1438,26 @@ class MeetingPipeline:
             return {"ok": False, "error": f"未知動作 {action}"}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _maybe_auto_settle_after_results(
+        self, racing_date: str, course: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        賽果同步後：SNAPSHOT ok、RESULTS ok、SETTLED 未 ok → 立刻 settle_pending。
+        避免 RESULTS 已綠但仍要等 hourly tick 才結算。
+        """
+        try:
+            results_st, _ = self.check_results(racing_date, course)
+            if results_st != STATUS_OK:
+                return None
+            snap_st, _ = self.check_snapshot(racing_date, course)
+            if snap_st != STATUS_OK:
+                return None
+            settled_st, _ = self.check_settled(racing_date, course)
+            if settled_st == STATUS_OK:
+                return None
+            from factor_calibration import FactorCalibration
+
+            return FactorCalibration().settle_pending()
+        except Exception as e:
+            return {"ok": False, "error": str(e), "skipped": True}

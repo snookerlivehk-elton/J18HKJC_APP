@@ -535,7 +535,7 @@ for stage, label in STAGES:
             if a2.button(
                 "同步 jjjc 賽果",
                 key=f"act_res_{stage}",
-                help="名次／派彩入庫；結算依賴此步",
+                help="名次／派彩入庫；快照各場齊名次後會自動觸發結算",
             ):
                 with st.spinner("jjjc results export → runners…"):
                     r = pipe.run_action(racing_date, course, "sync_jjjc_results")
@@ -545,6 +545,13 @@ for stage, label in STAGES:
                     st.success(
                         f"寫入 {r.get('runner_upserted')} 匹／{r.get('race_count')} 場"
                     )
+                    auto = r.get("auto_settle") or {}
+                    if auto.get("settled_batches"):
+                        st.success(
+                            f"已自動結算：{', '.join(auto.get('settled_batches') or [])}"
+                        )
+                    elif auto.get("message"):
+                        st.info(f"自動結算：{auto.get('message')}")
                 else:
                     st.error(r.get("error") or r)
                 st.rerun()

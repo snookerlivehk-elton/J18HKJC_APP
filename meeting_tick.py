@@ -1783,7 +1783,8 @@ class MeetingTickRunner:
                             p.racing_date,
                             p.course,
                             "SETTLED",
-                            ok=settled_ok,
+                            # 部分名次未齊屬 waiting，唔當 fail（唔累加 fail_count）
+                            ok=True,
                             status=STATUS_OK if settled_ok else STATUS_WAITING,
                             detail=(
                                 f"settled_batches={settled_batches}"
