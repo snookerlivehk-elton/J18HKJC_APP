@@ -134,6 +134,14 @@ def _meeting_race_prefix(race_date: str, venue_code: str) -> Optional[str]:
     return f"{d}{v}"
 
 
+def _race_no_from_race_id(race_id: str) -> Optional[int]:
+    s = str(race_id or "").strip().upper()
+    if len(s) < 10:
+        return None
+    tail = s[10:]
+    return _safe_int(tail)
+
+
 def _prune_orphan_meeting_races(
     conn,
     *,
@@ -143,7 +151,13 @@ def _prune_orphan_meeting_races(
 ) -> Dict[str, Any]:
     """
     刪除同日同場地、但不在本次 export 的 race／runners／payouts。
-    只在 keep 非空時執行，避免空 export 誤刪整日。
+
+    安全規則（避免賽中 partial export 誤刪已入庫之後數場）：
+    - 空 keep → 不刪
+    - 無 finish 的幽靈場：可刪
+    - 已有 finish_order_num 的場次：僅當本次 export 像「完整卡」
+      （含 1..keep_max 全部、且 keep_max >= 既有最大場號）時才刪
+      → 可清 HV09/10 幽靈；唔會因只同步到 R5 而刪走 R6–R8
     """
     prefix = _meeting_race_prefix(race_date, venue_code)
     keep = sorted({str(x).strip() for x in keep_race_ids if str(x).strip()})
@@ -170,10 +184,70 @@ def _prune_orphan_meeting_races(
     if not orphans:
         return {"race_ids": [], "runners": 0, "races": 0, "payouts": 0}
 
+    keep_nos = {
+        n for n in (_race_no_from_race_id(rid) for rid in keep) if n is not None
+    }
+    keep_max = max(keep_nos) if keep_nos else 0
+    contiguous_full = bool(keep_nos) and keep_nos >= set(range(1, keep_max + 1))
+    existing_nos = [
+        n for n in (_race_no_from_race_id(rid) for rid in existing) if n is not None
+    ]
+    existing_max = max(existing_nos) if existing_nos else 0
+    # 完整卡判斷：
+    # - export 已覆蓋既有最高場號，或
+    # - 典型全日卡 keep_max>=8（可清 HV09/10 幽靈）
+    # 賽中只到 R5（keep_max=5）時唔好刪已有名次的 R6+。
+    allow_prune_finished = bool(
+        contiguous_full
+        and keep_max > 0
+        and (keep_max >= existing_max or keep_max >= 8)
+    )
+
+    finished_orphans = {
+        str(r[0])
+        for r in conn.execute(
+            text(
+                """
+                SELECT DISTINCT race_id FROM runners
+                WHERE race_id LIKE :p || '%'
+                  AND finish_order_num IS NOT NULL
+                """
+            ),
+            {"p": prefix},
+        ).fetchall()
+        if r and r[0]
+    }
+
+    deletable: List[str] = []
+    skipped_protected: List[str] = []
+    for rid in orphans:
+        rno = _race_no_from_race_id(rid)
+        if rid in finished_orphans:
+            # 已有名次：只刪「高於本次 export 最高場號」的幽靈場
+            if not (
+                allow_prune_finished
+                and rno is not None
+                and rno > keep_max
+            ):
+                skipped_protected.append(rid)
+                continue
+        deletable.append(rid)
+
+    if not deletable:
+        return {
+            "race_ids": [],
+            "runners": 0,
+            "races": 0,
+            "payouts": 0,
+            "prefix": prefix,
+            "skipped_protected_race_ids": skipped_protected,
+            "allow_prune_finished": allow_prune_finished,
+        }
+
     runners_n = 0
     races_n = 0
     payouts_n = 0
-    for rid in orphans:
+    for rid in deletable:
         runners_n += int(
             conn.execute(
                 text("DELETE FROM runners WHERE race_id = :rid"),
@@ -203,11 +277,13 @@ def _prune_orphan_meeting_races(
             pass
 
     return {
-        "race_ids": orphans,
+        "race_ids": deletable,
         "runners": runners_n,
         "races": races_n,
         "payouts": payouts_n,
         "prefix": prefix,
+        "skipped_protected_race_ids": skipped_protected,
+        "allow_prune_finished": allow_prune_finished,
     }
 
 
@@ -340,7 +416,17 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     fin_num = _safe_int(ru.get("finish_order_num"))
                     if fin_num is None:
                         fin_num = _safe_int(ru.get("finishing_position"))
-                    fin_raw = ru.get("finishing_position_raw")
+                    if fin_num is None:
+                        fin_num = _safe_int(ru.get("finish_position"))
+                    if fin_num is None:
+                        fin_num = _safe_int(ru.get("place"))
+                    if fin_num is None:
+                        fin_num = _safe_int(ru.get("position"))
+                    fin_raw = (
+                        ru.get("finishing_position_raw")
+                        or ru.get("finish_order_raw")
+                        or ru.get("place_raw")
+                    )
                     if fin_raw is None and fin_num is not None:
                         fin_raw = str(fin_num)
                     win_odds = _safe_float(ru.get("win_odds"))

@@ -620,10 +620,17 @@ class MeetingPipeline:
             filled = {str(x) for x in filled_df["race_id"].tolist()}
             missing = [rid for rid in expected if rid not in filled]
             if missing:
+                # 診斷：runners 全日有名次場數（可能與快照場次集合不一致）
+                prefix_n = races
+                tip = ""
+                if prefix_n != len(filled):
+                    tip = f"；runners 全日有名次 {prefix_n} 場（與快照交集 {len(filled)}）"
+                if len(expected) > prefix_n >= 1:
+                    tip += f"；快照 {len(expected)} 場 vs 庫內 {prefix_n} 場（可能含幽靈場或 jjjc 尚未齊）"
                 return (
                     STATUS_WAITING,
                     f"快照 {len(filled)}/{len(expected)} 場已有名次；尚缺 "
-                    f"{len(missing)} 場（例 `{missing[0]}`）",
+                    f"{len(missing)} 場（例 `{missing[0]}`）{tip}",
                 )
             return (
                 STATUS_OK,
