@@ -260,8 +260,7 @@ def _render_social_copy(
                         st.warning(pkg_out.get("error") or "廣告包重建失敗")
                     if remote or pkg_out.get("error"):
                         _show_remote_push(
-                            remote
-                            or {"ok": False, "error": pkg_out.get("error")}
+                            remote or {"ok": False, "error": pkg_out.get("error")}
                         )
                 except Exception as pkg_exc:
                     st.caption(f"推送略過：{pkg_exc}")

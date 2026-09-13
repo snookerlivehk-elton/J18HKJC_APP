@@ -64,10 +64,9 @@ def render_ad_archive_panel(
         st.warning("此賽日尚未有符合本區的歸檔。")
         return
 
-    status_bits = []
-    for kind_name in allowed:
-        label = _KIND_LABELS.get(kind_name, kind_name)
-        status_bits.append(f"**{label}** {'✅' if kind_name in kinds else '—'}")
+    status_bits = [
+        f"**{_KIND_LABELS.get(k, k)}** {'✅' if k in kinds else '—'}" for k in allowed
+    ]
     st.markdown(" · ".join(status_bits))
 
     kind = st.radio(
