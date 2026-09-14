@@ -304,33 +304,69 @@ def render_raceday_embed() -> None:
       <div>覆蓋 <b>{(meta.get('avg_model_coverage') or 0):.0%}{' · provisional' if meta.get('provisional') else ''}</b></div>
     </div>
   </div>
+</div>
+<div class="rd-tips">
   <div class="rd-fuse">
     <div class="col-title">綜合推介{fuse_note}</div>
     {fuse_html}
     <div class="note">主顯示＝模型×AI 綜合。本場 {n_runners} 匹</div>
+  </div>
+  <div class="rd-side">
+    <div class="col-title">模型 · 勝率份額</div>
+    {model_html}
+  </div>
+  <div class="rd-side ai">
+    <div class="col-title">AI 馬評 · 份額</div>
+    {ai_html}
   </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(
-            f'<div class="rd-side"><div class="col-title">模型 · 勝率份額</div>{model_html}</div>',
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            f'<div class="rd-side ai"><div class="col-title">AI 馬評 · 份額</div>{ai_html}</div>',
-            unsafe_allow_html=True,
-        )
+    # 一馬一列 + 可排序
+    sort_opts = {
+        "綜合份額高→低": "fused",
+        "模型份額高→低": "model",
+        "AI 份額高→低": "ai",
+        "預測排名": "rank",
+        "馬號": "no",
+        "檔位": "draw",
+    }
+    sort_label = st.selectbox("出馬排序", list(sort_opts.keys()), index=0, key="rd_embed_sort")
+    sort_key = sort_opts[sort_label]
 
-    # 三欄出馬卡
-    cards = []
+    rows = []
     for _, row in pred_df.iterrows():
-        rank = int(row["預測排名"]) if pd.notna(row.get("預測排名")) else 0
         hno = int(row["馬號"])
+        rows.append(
+            {
+                "row": row,
+                "rank": int(row["預測排名"]) if pd.notna(row.get("預測排名")) else 999,
+                "hno": hno,
+                "model": float(row["模型勝率%"]) if pd.notna(row.get("模型勝率%")) else -1.0,
+                "fused": float(fused_share_by_hno.get(hno) or -1),
+                "ai": float(ai_share_by_hno.get(hno) or -1),
+                "draw": float(row["檔位"]) if pd.notna(row.get("檔位")) else 999,
+            }
+        )
+    if sort_key == "model":
+        rows.sort(key=lambda x: (-x["model"], x["hno"]))
+    elif sort_key == "ai":
+        rows.sort(key=lambda x: (-x["ai"], x["hno"]))
+    elif sort_key == "rank":
+        rows.sort(key=lambda x: (x["rank"], x["hno"]))
+    elif sort_key == "no":
+        rows.sort(key=lambda x: x["hno"])
+    elif sort_key == "draw":
+        rows.sort(key=lambda x: (x["draw"], x["hno"]))
+    else:
+        rows.sort(key=lambda x: (-x["fused"], x["hno"]))
+
+    for item in rows:
+        row = item["row"]
+        rank = item["rank"] if item["rank"] != 999 else 0
+        hno = item["hno"]
         top_cls = "top1" if rank == 1 else ("pick" if hno in fused_pick_hnos or hno in ai_pick_hnos else "")
         name = row["馬名"]
         prob = float(row["模型勝率%"]) if pd.notna(row.get("模型勝率%")) else 0.0
@@ -343,15 +379,9 @@ def render_raceday_embed() -> None:
         ai_pct = ai_share_by_hno.get(hno)
         fuse_pct = fused_share_by_hno.get(hno)
         if ai is not None and pd.notna(ai.get("ai_score")) and ai_pct is not None:
-            ai_block = (
-                f'<div><div class="m-lbl">AI 份額</div>'
-                f'<div class="m-val">{_fmt_ai_display(ai_pct)}</div></div>'
-            )
+            ai_txt = _fmt_ai_display(ai_pct)
         else:
-            ai_block = (
-                '<div><div class="m-lbl">AI 馬評</div>'
-                '<div class="m-val" style="opacity:0.5">尚無</div></div>'
-            )
+            ai_txt = "尚無"
 
         def _fmt(v, suffix=""):
             if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -361,38 +391,28 @@ def render_raceday_embed() -> None:
             except (TypeError, ValueError):
                 return str(v)
 
-        cards.append(
+        st.markdown(
             f"""
 <div class="horse-card {top_cls}">
-  <div class="hc-top">
-    <div>
-      <span class="hc-rank">#{rank}</span>
-      <div class="hc-name"><span class="hc-no">{hno}</span>　{name}</div>
+  <div class="hc-rankcol"><span class="hc-rank">#{rank}</span></div>
+  <div class="hc-main">
+    <div class="hc-name"><span class="hc-no">{hno}</span>{name}</div>
+    <div class="hc-sub">
+      騎師 <b>{jockey}</b>　·　練馬師 <b>{trainer}</b>　·　檔位 <b>{_fmt(draw)}</b>　·　負磅 <b>{_fmt(hw)}</b>　·　馬重 <b>{_fmt(bw)}</b>
     </div>
-    <div class="hc-prob">
-      <div class="pct">{prob:.1f}%</div>
-      <div class="lbl">模型份額</div>
+    <div class="hc-metrics">
+      <div><span class="m-lbl">綜合</span><span class="m-val">{_fmt_ai_display(fuse_pct)}</span></div>
+      <div><span class="m-lbl">AI</span><span class="m-val">{ai_txt}</span></div>
     </div>
   </div>
-  <div class="hc-sub">
-    騎師 <b>{jockey}</b>　·　練馬師 <b>{trainer}</b><br/>
-    檔位 <b>{_fmt(draw)}</b>　·　負磅 <b>{_fmt(hw)}</b>　·　馬重 <b>{_fmt(bw)}</b>
-  </div>
-  <div class="hc-metrics">
-    <div><div class="m-lbl">綜合份額</div><div class="m-val">{_fmt_ai_display(fuse_pct)}</div></div>
-    {ai_block}
+  <div class="hc-prob">
+    <div class="pct">{prob:.1f}%</div>
+    <div class="lbl">模型份額</div>
   </div>
 </div>
-"""
+""",
+            unsafe_allow_html=True,
         )
-
-    # 每列最多 3 張
-    for i in range(0, len(cards), 3):
-        cols = st.columns(3)
-        for j, col in enumerate(cols):
-            if i + j < len(cards):
-                with col:
-                    st.markdown(cards[i + j], unsafe_allow_html=True)
 
     st.caption(
         "公開嵌入頁 · 無需登入 · 專為 j18.hk/pc 右手邊。"

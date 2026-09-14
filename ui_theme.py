@@ -369,16 +369,28 @@ section[data-testid="stSidebar"] {
 }
 .rd-hero p { margin: 0.25rem 0 0; opacity: 0.62; font-size: 0.86rem; color: #f2f2f2; }
 .rd-panel {
-  display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 0.85rem;
-  margin: 0.5rem 0 0.85rem;
+  display: block;
+  margin: 0.5rem 0 0.75rem;
 }
-@media (max-width: 980px) { .rd-panel { grid-template-columns: 1fr; } }
 .rd-meta, .rd-fuse, .rd-side {
   background: var(--bg-card) !important;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.85rem 0.95rem;
   color: #f2f2f2 !important;
+}
+.rd-meta { margin-bottom: 0; }
+.rd-tips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.85rem;
+}
+@media (max-width: 980px) {
+  .rd-tips { grid-template-columns: 1fr; }
+}
+.rd-fuse {
+  border-color: rgba(62,207,142,0.35) !important;
 }
 .rd-meta .title { font-weight: 800; font-size: 1.08rem; margin-bottom: 0.45rem; }
 .rd-meta .grid {
@@ -413,31 +425,38 @@ section[data-testid="stSidebar"] {
   color: #f2f2f2 !important;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.8rem 0.85rem;
-  margin-bottom: 0.55rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.55rem 0.85rem;
+  align-items: center;
 }
 .horse-card.top1 { border-color: var(--accent); }
 .horse-card.pick { border-color: rgba(62,207,142,0.55); }
-.hc-top { display: flex; justify-content: space-between; gap: 0.5rem; }
+.hc-rankcol { min-width: 2.2rem; text-align: center; }
 .hc-rank {
-  display: inline-block; font-size: 0.68rem; font-weight: 800;
+  display: inline-block; font-size: 0.72rem; font-weight: 800;
   color: var(--accent); background: rgba(240,193,75,0.16);
-  border-radius: 999px; padding: 0.08rem 0.45rem; margin-bottom: 0.2rem;
+  border-radius: 999px; padding: 0.08rem 0.45rem;
 }
+.hc-main { min-width: 0; }
 .hc-name { font-size: 1.02rem; font-weight: 800; line-height: 1.25; }
-.hc-no { opacity: 0.65; font-weight: 700; font-size: 0.86rem; }
+.hc-no { opacity: 0.65; font-weight: 700; font-size: 0.86rem; margin-right: 0.25rem; }
 .hc-prob { text-align: right; flex-shrink: 0; }
 .hc-prob .pct { font-size: 1.28rem; font-weight: 800; color: var(--good); line-height: 1; }
 .hc-prob .lbl { font-size: 0.66rem; opacity: 0.65; margin-top: 0.12rem; }
-.hc-sub { margin-top: 0.45rem; font-size: 0.78rem; opacity: 0.85; line-height: 1.45; }
+.hc-sub {
+  margin-top: 0.3rem; font-size: 0.76rem; opacity: 0.85; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .hc-sub b { font-weight: 600; opacity: 1; }
 .hc-metrics {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
-  margin-top: 0.5rem; padding-top: 0.5rem;
-  border-top: 1px solid var(--line); font-size: 0.78rem;
+  display: flex; flex-wrap: wrap; gap: 0.55rem 1rem;
+  margin-top: 0.35rem; font-size: 0.74rem;
 }
-.hc-metrics .m-lbl { opacity: 0.65; font-size: 0.66rem; }
-.hc-metrics .m-val { font-weight: 800; margin-top: 0.1rem; }
+.hc-metrics .m-lbl { opacity: 0.65; font-size: 0.64rem; margin-right: 0.2rem; }
+.hc-metrics .m-val { font-weight: 800; }
 div[data-testid="stPills"] button {
   min-width: 2.5rem !important; min-height: 2.5rem !important;
   border-radius: 999px !important; font-weight: 800 !important;

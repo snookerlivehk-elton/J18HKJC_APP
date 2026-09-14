@@ -82,14 +82,12 @@
     }
     .race-pills button:active { transform: scale(0.97); }
 
+    /* 場次資訊：獨佔一行 */
     .panel {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 14px;
-      margin-bottom: 16px;
+      display: block;
+      margin-bottom: 12px;
     }
     @media (max-width: 980px) {
-      .panel { grid-template-columns: 1fr; }
       body { min-width: 0; }
       .shell { padding: 14px 12px 22px; }
     }
@@ -131,58 +129,112 @@
     .pick-empty { color: var(--muted); font-size: 0.86rem; padding: 4px 0; }
     .note { margin-top: 10px; font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
 
-    .tracks {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-      margin-bottom: 16px;
-    }
-    @media (max-width: 980px) { .tracks { grid-template-columns: 1fr; } }
-    .tracks .card { padding: 12px 14px; }
-    .tracks .card h2 { margin-bottom: 8px; }
-
-    .horses {
+    /* 三項推介：綜合／模型／AI 同列三卡 */
+    .tips {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
+      margin-bottom: 16px;
     }
-    @media (max-width: 1100px) {
-      .horses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (max-width: 980px) {
+      .tips { grid-template-columns: 1fr; }
     }
-    @media (max-width: 720px) {
-      .horses { grid-template-columns: 1fr; }
+    .tips .card { padding: 12px 14px; }
+    .tips .card h2 { margin-bottom: 8px; }
+    .tips .card.fuse-card {
+      border-color: rgba(62,207,142,0.35);
+    }
+
+    .horse-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin: 4px 0 10px;
+    }
+    .horse-toolbar .count {
+      font-size: 0.78rem; color: var(--muted); font-weight: 600;
+    }
+    .horse-toolbar .sort-wrap {
+      display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--muted);
+    }
+    .horse-toolbar select {
+      appearance: none;
+      background: var(--bg-elev);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.4rem 1.8rem 0.4rem 0.7rem;
+      font: inherit; font-weight: 700; font-size: 0.82rem;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23aaa' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.65rem center;
+    }
+    .horse-toolbar select:focus {
+      outline: none; border-color: rgba(240,193,75,0.55);
+    }
+
+    /* 一馬一列：橫向卡片列表（非 3 欄網格） */
+    .horses {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .horse {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px 14px;
+      align-items: center;
       background: var(--bg-card);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 12px 13px;
-      transition: border-color .15s;
+      padding: 10px 14px;
+      transition: border-color .15s, background .15s;
     }
+    .horse:hover { background: #2c2c2c; }
     .horse.pick { border-color: rgba(62,207,142,0.55); }
     .horse.top1 { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(240,193,75,0.25); }
-    .horse-top {
-      display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;
+    .horse-rankcol {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 2.4rem;
     }
     .rank {
-      display: inline-block; font-size: 0.68rem; font-weight: 800;
+      display: inline-block; font-size: 0.72rem; font-weight: 800;
       color: var(--accent); background: var(--accent-dim);
-      border-radius: 999px; padding: 0.08rem 0.45rem; margin-bottom: 4px;
+      border-radius: 999px; padding: 0.12rem 0.5rem;
     }
-    .hname { font-size: 1.02rem; font-weight: 800; line-height: 1.25; }
-    .hno { opacity: 0.65; font-weight: 700; font-size: 0.86rem; margin-right: 0.25rem; }
-    .prob { text-align: right; flex-shrink: 0; }
-    .prob .pct { font-size: 1.28rem; font-weight: 800; color: var(--good); line-height: 1; }
-    .prob .lbl { font-size: 0.66rem; color: var(--muted); margin-top: 3px; }
+    .horse-main { min-width: 0; }
+    .hname { font-size: 1.05rem; font-weight: 800; line-height: 1.25; }
+    .hno { opacity: 0.65; font-weight: 700; font-size: 0.9rem; margin-right: 0.3rem; }
     .sub {
-      margin-top: 8px; font-size: 0.78rem; color: var(--muted); line-height: 1.45;
+      margin-top: 4px; font-size: 0.76rem; color: var(--muted); line-height: 1.45;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .sub b { color: var(--text); font-weight: 600; }
-    .metrics {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
-      font-size: 0.78rem;
+    .metrics-inline {
+      display: flex; flex-wrap: wrap; gap: 10px 16px;
+      margin-top: 5px; font-size: 0.74rem;
     }
-    .metrics .lbl { color: var(--muted); font-size: 0.66rem; }
-    .metrics .val { font-weight: 800; margin-top: 2px; }
+    .metrics-inline .chip .lbl { color: var(--muted); font-size: 0.64rem; margin-right: 0.25rem; }
+    .metrics-inline .chip .val { font-weight: 800; color: var(--text); }
+    .prob { text-align: right; flex-shrink: 0; padding-left: 8px; }
+    .prob .pct { font-size: 1.35rem; font-weight: 800; color: var(--good); line-height: 1; }
+    .prob .lbl { font-size: 0.66rem; color: var(--muted); margin-top: 3px; }
+    details.more {
+      margin-top: 4px; font-size: 0.74rem; color: var(--muted);
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 720px) {
+      .horse {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+          "rank main"
+          "rank prob";
+      }
+      .horse-rankcol { grid-area: rank; }
+      .horse-main { grid-area: main; }
+      .prob { grid-area: prob; text-align: left; padding-left: 0; padding-top: 2px; }
+      .prob .pct { font-size: 1.15rem; }
+      .sub { white-space: normal; }
+    }
 
     .status {
       padding: 28px 8px; text-align: center; color: var(--muted); font-size: 0.95rem;
@@ -311,35 +363,75 @@
         ? (ai.message || "信心不足，本場不推")
         : (ai.message || "尚無 AI 評價");
 
-      const horses = (data.runners || []).map((h) => {
+      let currentSort = "fused_desc";
+      let runners = (data.runners || []).slice();
+
+      function numOrNeg(v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : -1;
+      }
+
+      function sortRunners(list, key) {
+        const arr = list.slice();
+        const byNo = (a, b) => numOrNeg(a.horse_no) - numOrNeg(b.horse_no);
+        switch (key) {
+          case "model_desc":
+            return arr.sort((a, b) => numOrNeg(b.model_win_prob_pct) - numOrNeg(a.model_win_prob_pct) || byNo(a, b));
+          case "ai_desc":
+            return arr.sort((a, b) => numOrNeg(b.ai_share_pct) - numOrNeg(a.ai_share_pct) || byNo(a, b));
+          case "draw_asc":
+            return arr.sort((a, b) => numOrNeg(a.draw) - numOrNeg(b.draw) || byNo(a, b));
+          case "no_asc":
+            return arr.sort(byNo);
+          case "rank_asc":
+            return arr.sort((a, b) => numOrNeg(a.pred_rank) - numOrNeg(b.pred_rank) || byNo(a, b));
+          case "fused_desc":
+          default:
+            return arr.sort((a, b) => numOrNeg(b.fused_share_pct) - numOrNeg(a.fused_share_pct) || byNo(a, b));
+        }
+      }
+
+      function horseCardHtml(h) {
         const rank = h.pred_rank || 0;
         const cls = rank === 1 ? "top1" : (h.is_fused_pick ? "pick" : "");
-        const aiBlock = h.ai_share_pct != null
-          ? '<div><div class="lbl">AI 份額</div><div class="val">' + esc(fmtPct(h.ai_share_pct)) + "</div></div>"
-          : '<div><div class="lbl">AI 馬評</div><div class="val" style="opacity:.5">' +
-            (h.ai_score != null ? "計算中" : "尚無") + "</div></div>";
+        const aiVal = h.ai_share_pct != null
+          ? esc(fmtPct(h.ai_share_pct))
+          : (h.ai_score != null ? "計算中" : "尚無");
         const summary = h.ai_summary
           ? '<details class="more"><summary>AI 評語</summary><div class="ai-sum">' +
             esc(h.ai_summary) + "</div></details>"
           : "";
         return (
           '<article class="horse ' + cls + '">' +
-            '<div class="horse-top"><div>' +
-              '<span class="rank">#' + esc(rank) + "</span>" +
+            '<div class="horse-rankcol"><span class="rank">#' + esc(rank) + "</span></div>" +
+            '<div class="horse-main">' +
               '<div class="hname"><span class="hno">' + esc(h.horse_no) + "</span>" +
-              esc(h.horse_name) + "</div></div>" +
-              '<div class="prob"><div class="pct">' + esc(fmtPct(h.model_win_prob_pct, 1)) +
-              '</div><div class="lbl">模型份額</div></div></div>' +
-            '<div class="sub">騎師 <b>' + esc(h.jockey || "-") + "</b>　·　練馬師 <b>" +
-              esc(h.trainer || "-") + "</b><br/>檔位 <b>" + esc(h.draw ?? "-") +
+              esc(h.horse_name) + "</div>" +
+              '<div class="sub">騎師 <b>' + esc(h.jockey || "-") + "</b>　·　練馬師 <b>" +
+              esc(h.trainer || "-") + "</b>　·　檔位 <b>" + esc(h.draw ?? "-") +
               "</b>　·　負磅 <b>" + esc(h.handicap_weight ?? "-") +
               "</b>　·　馬重 <b>" + esc(h.horse_weight ?? "-") + "</b></div>" +
-            '<div class="metrics"><div><div class="lbl">綜合份額</div><div class="val">' +
-              esc(fmtPct(h.fused_share_pct)) + "</div></div>" + aiBlock + "</div>" +
-            summary +
+              '<div class="metrics-inline">' +
+                '<span class="chip"><span class="lbl">綜合</span><span class="val">' +
+                esc(fmtPct(h.fused_share_pct)) + "</span></span>" +
+                '<span class="chip"><span class="lbl">AI</span><span class="val">' +
+                aiVal + "</span></span>" +
+              "</div>" + summary +
+            "</div>" +
+            '<div class="prob"><div class="pct">' + esc(fmtPct(h.model_win_prob_pct, 1)) +
+            '</div><div class="lbl">模型份額</div></div>' +
           "</article>"
         );
-      }).join("");
+      }
+
+      function renderHorseList() {
+        const sorted = sortRunners(runners, currentSort);
+        const list = document.getElementById("horseList");
+        if (!list) return;
+        list.innerHTML = sorted.length
+          ? sorted.map(horseCardHtml).join("")
+          : '<div class="status">暫無出馬</div>';
+      }
 
       el.content.innerHTML =
         '<div class="panel">' +
@@ -357,16 +449,16 @@
                 (meta.provisional ? " · provisional" : "") + "</b></div>" +
             "</div>" +
           "</section>" +
-          '<section class="card">' +
+        "</div>" +
+        '<div class="tips">' +
+          '<section class="card fuse-card">' +
             "<h2>綜合推介" + esc(fuseNote) + "</h2>" +
             '<div class="pick-list">' +
               dedupePickHtml(fused.win, fused.place, "fused_share_pct", fuseEmpty) +
             "</div>" +
-            '<div class="note">主顯示＝模型×AI 綜合（爭勝＋位置，位置不重複爭勝）。本場 ' +
-              esc(race.n_runners || (data.runners || []).length) + " 匹</div>" +
+            '<div class="note">模型×AI 綜合 · 本場 ' +
+              esc(race.n_runners || runners.length) + " 匹</div>" +
           "</section>" +
-        "</div>" +
-        '<div class="tracks">' +
           '<section class="card"><h2>模型 · 勝率份額</h2><div class="pick-list">' +
             dedupePickHtml(model.win, model.place, "model_win_prob_pct", "—") +
           "</div></section>" +
@@ -374,7 +466,29 @@
             dedupePickHtml(ai.win, ai.place, "ai_share_pct", aiEmpty) +
           "</div></section>" +
         "</div>" +
-        '<div class="horses">' + (horses || '<div class="status">暫無出馬</div>') + "</div>";
+        '<div class="horse-toolbar">' +
+          '<div class="count">出馬 ' + esc(runners.length) + " 匹</div>" +
+          '<label class="sort-wrap">排序 ' +
+            '<select id="horseSort">' +
+              '<option value="fused_desc">綜合份額高→低</option>' +
+              '<option value="model_desc">模型份額高→低</option>' +
+              '<option value="ai_desc">AI 份額高→低</option>' +
+              '<option value="rank_asc">預測排名</option>' +
+              '<option value="no_asc">馬號</option>' +
+              '<option value="draw_asc">檔位</option>' +
+            "</select></label>" +
+        "</div>" +
+        '<div class="horses" id="horseList"></div>';
+
+      const sortEl = document.getElementById("horseSort");
+      if (sortEl) {
+        sortEl.value = currentSort;
+        sortEl.addEventListener("change", () => {
+          currentSort = sortEl.value;
+          renderHorseList();
+        });
+      }
+      renderHorseList();
     }
 
     function selectRace(raceId) {
