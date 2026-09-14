@@ -25,6 +25,104 @@ def _fmt_ai_display(share_pct) -> str:
         return "—"
 
 
+_RADAR_COLS = [
+    ("騎師分", "騎師"),
+    ("練馬師分", "練馬師"),
+    ("騎練分", "騎練"),
+    ("檔位分", "檔位"),
+    ("近績分", "近績"),
+    ("步速分", "步速"),
+    ("速度分", "速度"),
+    ("SG貢獻", "速勢"),  # 與 radar_charts 軸標一致
+]
+
+
+def _radar_norm_matrix(pred_df: pd.DataFrame) -> dict:
+    """同場每軸 min→0、max→1（與 radar_charts / embed payload 一致）。"""
+    out = {}
+    for col, _lab in _RADAR_COLS:
+        if col not in pred_df.columns:
+            out[col] = pd.Series(0.5, index=pred_df.index)
+            continue
+        s = pd.to_numeric(pred_df[col], errors="coerce")
+        valid = s.dropna()
+        if valid.empty:
+            out[col] = pd.Series(0.5, index=pred_df.index)
+            continue
+        lo, hi = float(valid.min()), float(valid.max())
+        if hi - lo < 1e-9:
+            out[col] = pd.Series(0.5, index=pred_df.index)
+        else:
+            out[col] = ((s - lo) / (hi - lo)).fillna(0.5)
+    return out
+
+
+def _radar_svg(values: list, labels: list) -> str:
+    import math
+
+    if not labels or len(values) != len(labels):
+        return '<div class="radar-empty">暫無雷達</div>'
+    cx, cy, R, n = 70, 66, 44, len(labels)
+    pts = []
+    for i, v in enumerate(values):
+        try:
+            vv = max(0.0, min(1.0, float(v)))
+        except (TypeError, ValueError):
+            vv = 0.5
+        ang = -math.pi / 2 + (i * 2 * math.pi) / n
+        pts.append((cx + R * vv * math.cos(ang), cy + R * vv * math.sin(ang)))
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    rings = "".join(
+        f'<circle cx="{cx}" cy="{cy}" r="{R * s:.1f}" fill="none" '
+        f'stroke="rgba(255,255,255,0.14)" stroke-width="1"/>'
+        for s in (0.33, 0.66, 1.0)
+    )
+    spokes = ""
+    labs = ""
+    for i, lab in enumerate(labels):
+        ang = -math.pi / 2 + (i * 2 * math.pi) / n
+        x2 = cx + R * math.cos(ang)
+        y2 = cy + R * math.sin(ang)
+        spokes += (
+            f'<line x1="{cx}" y1="{cy}" x2="{x2:.1f}" y2="{y2:.1f}" '
+            f'stroke="rgba(255,255,255,0.10)" stroke-width="1"/>'
+        )
+        lx = cx + (R + 13) * math.cos(ang)
+        ly = cy + (R + 13) * math.sin(ang)
+        labs += (
+            f'<text x="{lx:.1f}" y="{ly:.1f}" fill="rgba(242,242,242,0.52)" '
+            f'font-size="7.5" text-anchor="middle" dominant-baseline="middle">{lab}</text>'
+        )
+    return (
+        '<svg viewBox="0 0 140 132" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        f"{rings}{spokes}"
+        f'<polygon points="{poly}" fill="rgba(62,207,142,0.30)" stroke="#3ecf8e" stroke-width="1.7"/>'
+        f"{labs}</svg>"
+    )
+
+
+def _fmt_ai_head(ai_row, share_pct) -> str:
+    """AI 評價標題：場內份額；原始 × 信心 = combo。"""
+    bits = []
+    if share_pct is not None:
+        try:
+            bits.append(f"場內份額 {float(share_pct):.0f}%")
+        except (TypeError, ValueError):
+            pass
+    if ai_row is not None and pd.notna(ai_row.get("ai_score")) and pd.notna(ai_row.get("confidence")):
+        sc = float(ai_row["ai_score"])
+        cf = float(ai_row["confidence"])
+        combo = compute_ai_combo(sc, cf)
+        if combo is None:
+            combo = sc * cf
+        bits.append(
+            f"原始 {sc:+.2f} × 信心 {cf * 100:.0f}% = {combo:+.2f}"
+        )
+    if not bits:
+        return ""
+    return f' <span class="meta">({"；".join(bits)})</span>'
+
+
 def _pick_row_html(tag: str, name_left: str, right: str, *, tag_class: str = "") -> str:
     cls = f' class="tag {tag_class}"' if tag_class else ' class="tag"'
     return (
@@ -363,6 +461,9 @@ def render_raceday_embed() -> None:
     else:
         rows.sort(key=lambda x: (-x["fused"], x["hno"]))
 
+    radar_norm = _radar_norm_matrix(pred_df)
+    radar_labels = [lab for _, lab in _RADAR_COLS]
+
     for item in rows:
         row = item["row"]
         rank = item["rank"] if item["rank"] != 999 else 0
@@ -375,13 +476,9 @@ def render_raceday_embed() -> None:
         draw = row.get("檔位")
         hw = row.get("負磅")
         bw = row.get("體重")
+        total = row.get("總預測分")
         ai = ai_map.get(hno)
         ai_pct = ai_share_by_hno.get(hno)
-        fuse_pct = fused_share_by_hno.get(hno)
-        if ai is not None and pd.notna(ai.get("ai_score")) and ai_pct is not None:
-            ai_txt = _fmt_ai_display(ai_pct)
-        else:
-            ai_txt = "尚無"
 
         def _fmt(v, suffix=""):
             if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -391,23 +488,59 @@ def render_raceday_embed() -> None:
             except (TypeError, ValueError):
                 return str(v)
 
+        # 該列在 pred_df 的 index（排序後可能與 iterrows index 不同）
+        idx = row.name if hasattr(row, "name") else None
+        vals = []
+        for col, _ in _RADAR_COLS:
+            series = radar_norm.get(col)
+            if series is None or idx is None or idx not in series.index:
+                vals.append(0.5)
+            else:
+                try:
+                    vals.append(float(series.loc[idx]))
+                except Exception:
+                    vals.append(0.5)
+        radar_html = _radar_svg(vals, radar_labels)
+
+        ai_head_meta = _fmt_ai_head(ai, ai_pct)
+        summary = ""
+        if ai is not None and pd.notna(ai.get("summary")):
+            summary = str(ai.get("summary") or "").strip()
+        score_line = ""
+        if total is not None and not (isinstance(total, float) and pd.isna(total)):
+            try:
+                score_line = f"{name}系統統計總預測分{float(total):.2f}"
+            except (TypeError, ValueError):
+                score_line = ""
+        if summary and score_line:
+            ai_body = f"{score_line}。{summary}"
+        else:
+            ai_body = summary or score_line
+        ai_body_html = (
+            f'<div class="ai-body">{ai_body}</div>'
+            if ai_body
+            else '<div class="ai-empty">尚無 AI 評價</div>'
+        )
+
         st.markdown(
             f"""
 <div class="horse-card {top_cls}">
-  <div class="hc-rankcol"><span class="hc-rank">#{rank}</span></div>
-  <div class="hc-main">
-    <div class="hc-name"><span class="hc-no">{hno}</span>{name}</div>
-    <div class="hc-sub">
-      騎師 <b>{jockey}</b>　·　練馬師 <b>{trainer}</b>　·　檔位 <b>{_fmt(draw)}</b>　·　負磅 <b>{_fmt(hw)}</b>　·　馬重 <b>{_fmt(bw)}</b>
+  <div class="hc-info">
+    <div class="hc-id">
+      <span class="hc-rank">#{rank or "—"}</span>
+      <div class="hc-name"><span class="hc-no">{hno}</span>{name}</div>
+      <div class="hc-sub">騎師 {jockey} · 練馬師 {trainer}</div>
+      <div class="hc-sub">檔位 {_fmt(draw)} · 負磅 {_fmt(hw)} · 馬重 {_fmt(bw)}</div>
     </div>
-    <div class="hc-metrics">
-      <div><span class="m-lbl">綜合</span><span class="m-val">{_fmt_ai_display(fuse_pct)}</span></div>
-      <div><span class="m-lbl">AI</span><span class="m-val">{ai_txt}</span></div>
+    <div class="hc-prob">
+      <div class="pct">{prob:.1f}%</div>
+      <div class="lbl">模型份額</div>
     </div>
   </div>
-  <div class="hc-prob">
-    <div class="pct">{prob:.1f}%</div>
-    <div class="lbl">模型份額</div>
+  <div class="hc-radar">{radar_html}</div>
+  <div class="hc-ai">
+    <div class="ai-head">AI 評價{ai_head_meta}</div>
+    {ai_body_html}
   </div>
 </div>
 """,

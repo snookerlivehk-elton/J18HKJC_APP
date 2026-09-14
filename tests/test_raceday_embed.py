@@ -21,6 +21,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn("x-frame-options", {k.lower() for k in r.headers.keys()})
         self.assertIn("賽日速覽", r.text)
         self.assertIn("/embed/api/default", r.text)
+        self.assertIn("horse-radar", r.text)
+        self.assertIn("AI 評價", r.text)
+        self.assertIn("radarSvg", r.text)
 
     def test_health_and_default_empty(self):
         from raceday_embed_api import create_app
@@ -89,8 +92,19 @@ class RacedayEmbedApiTest(unittest.TestCase):
                     "jockey": "J1",
                     "trainer": "T1",
                     "pred_rank": 1,
+                    "total_score": 5.55,
                     "model_win_prob": 0.6,
                     "model_win_prob_pct": 60.0,
+                    "factors": {
+                        "jockey": 1.0,
+                        "trainer": 0.8,
+                        "synergy": 0.9,
+                        "draw": 0.5,
+                        "form": 1.2,
+                        "pace": 0.7,
+                        "speed": 1.1,
+                        "speed_guide": 0.4,
+                    },
                     "ai": {"ai_score": 0.8, "confidence": 0.9, "ai_combo": 0.72, "summary": "穩"},
                 },
                 {
@@ -100,8 +114,19 @@ class RacedayEmbedApiTest(unittest.TestCase):
                     "jockey": "J2",
                     "trainer": "T2",
                     "pred_rank": 2,
+                    "total_score": 4.10,
                     "model_win_prob": 0.4,
                     "model_win_prob_pct": 40.0,
+                    "factors": {
+                        "jockey": 0.2,
+                        "trainer": 0.3,
+                        "synergy": 0.1,
+                        "draw": 0.9,
+                        "form": 0.4,
+                        "pace": 0.2,
+                        "speed": 0.3,
+                        "speed_guide": 0.8,
+                    },
                     "ai": {"ai_score": 0.2, "confidence": 0.5, "ai_combo": 0.1, "summary": ""},
                 },
             ],
@@ -115,6 +140,13 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertEqual(out["race"]["course_label"], "沙田")
         self.assertEqual(len(out["runners"]), 2)
         self.assertIn("fused_share_pct", out["runners"][0])
+        r0 = out["runners"][0]
+        self.assertIn("radar", r0)
+        self.assertEqual(len(r0["radar"]["labels"]), 8)
+        self.assertEqual(len(r0["radar"]["values"]), 8)
+        self.assertEqual(r0["ai_combo"], 0.72)
+        self.assertEqual(r0["ai_summary"], "穩")
+        self.assertIn("radar_axes", out)
 
 
 if __name__ == "__main__":

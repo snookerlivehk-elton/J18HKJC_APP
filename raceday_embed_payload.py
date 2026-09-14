@@ -49,9 +49,9 @@ def build_public_meetings(
 
 def build_public_race_view(race_id: str) -> Dict[str, Any]:
     """
-    單場公開速覽：綜合推介＋模型／AI 對照＋出馬列表（無 factors／Kelly）。
+    單場公開速覽：綜合推介＋模型／AI 對照＋出馬列表（含雷達因子；無 Kelly）。
     """
-    base = build_race_prediction(race_id, include_factors=False)
+    base = build_race_prediction(race_id, include_factors=True)
     if not base.get("ok"):
         return base
 
@@ -96,14 +96,63 @@ def build_public_race_view(race_id: str) -> Dict[str, Any]:
         if x.get("horse_no") is not None
     }
 
-    runners_out: List[dict] = []
+    # 雷達軸：同場 min→0、max→1（與 radar_charts 一致）
+    radar_keys = [
+        ("jockey", "騎師"),
+        ("trainer", "練馬師"),
+        ("synergy", "騎練"),
+        ("draw", "檔位"),
+        ("form", "近績"),
+        ("pace", "步速"),
+        ("speed", "速度"),
+        ("speed_guide", "速勢"),
+    ]
+    factor_series: Dict[str, List[Optional[float]]] = {k: [] for k, _ in radar_keys}
     for r in runners_in:
+        f = r.get("factors") or {}
+        for k, _ in radar_keys:
+            v = f.get(k)
+            try:
+                factor_series[k].append(float(v) if v is not None else None)
+            except (TypeError, ValueError):
+                factor_series[k].append(None)
+
+    def _norm_axis(vals: List[Optional[float]]) -> List[float]:
+        valid = [v for v in vals if v is not None]
+        if not valid:
+            return [0.5] * len(vals)
+        lo, hi = min(valid), max(valid)
+        if hi - lo < 1e-9:
+            return [0.5 if v is not None else 0.5 for v in vals]
+        out = []
+        for v in vals:
+            if v is None:
+                out.append(0.5)
+            else:
+                out.append((v - lo) / (hi - lo))
+        return out
+
+    radar_norm = {k: _norm_axis(factor_series[k]) for k, _ in radar_keys}
+
+    runners_out: List[dict] = []
+    for i, r in enumerate(runners_in):
         hno = r.get("horse_no")
         try:
             hno_i = int(hno) if hno is not None else None
         except (TypeError, ValueError):
             hno_i = None
         a = r.get("ai") or {}
+        sc = a.get("ai_score")
+        cf = a.get("confidence")
+        try:
+            combo = (
+                round(float(sc) * float(cf), 4)
+                if sc is not None and cf is not None
+                else None
+            )
+        except (TypeError, ValueError):
+            combo = None
+        factors = r.get("factors") or {}
         runners_out.append(
             {
                 "horse_no": hno_i,
@@ -114,15 +163,22 @@ def build_public_race_view(race_id: str) -> Dict[str, Any]:
                 "handicap_weight": r.get("handicap_weight"),
                 "horse_weight": r.get("horse_weight"),
                 "pred_rank": r.get("pred_rank"),
+                "total_score": r.get("total_score"),
                 "model_win_prob": r.get("model_win_prob"),
                 "model_win_prob_pct": r.get("model_win_prob_pct"),
                 "model_coverage": r.get("model_coverage"),
-                "ai_score": a.get("ai_score"),
-                "ai_confidence": a.get("confidence"),
+                "ai_score": sc,
+                "ai_confidence": cf,
+                "ai_combo": combo if combo is not None else a.get("ai_combo"),
                 "ai_summary": a.get("summary"),
                 "ai_share_pct": ai_share_map.get(hno_i) if hno_i is not None else None,
                 "fused_share_pct": fused_share_map.get(hno_i) if hno_i is not None else None,
                 "is_fused_pick": hno_i in fused_pick_hnos if hno_i is not None else False,
+                "factors": factors,
+                "radar": {
+                    "labels": [lab for _, lab in radar_keys],
+                    "values": [radar_norm[k][i] for k, _ in radar_keys],
+                },
             }
         )
 
@@ -165,6 +221,7 @@ def build_public_race_view(race_id: str) -> Dict[str, Any]:
             },
         },
         "runners": runners_out,
+        "radar_axes": [{"key": k, "label": lab} for k, lab in radar_keys],
     }
 
 
