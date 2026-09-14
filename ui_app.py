@@ -2,12 +2,14 @@
 J18AI Plus+ 入口：登入關卡 + 依角色導航。
 用戶：賽日速覽 + 命中率榜；管理員見全部管理頁。
 
-公開嵌入（無需登入）：
-  /?embed=raceday  → 電腦版賽日速覽（j18.hk/pc 右手邊 iframe）
+公開嵌入（無需登入；勿用 Streamlit 保留參數 embed=）：
+  /?view=raceday  → 電腦版賽日速覽（j18.hk/pc 右手邊 iframe）
+  相容：/?j18=raceday 、/?page=raceday
 """
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import streamlit as st
 
@@ -33,15 +35,39 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
+_PUBLIC_RACEDAY_VALUES = frozenset({"raceday", "raceday_embed", "1", "true", "yes"})
+
 
 def _is_raceday_public_embed() -> bool:
+    """
+    偵測公開賽日速覽嵌入。
+    注意：不可用 query `embed=`——那是 Streamlit 官方保留參數（會被吃掉）。
+    """
+    candidates = []
     try:
-        raw = st.query_params.get("embed", "")
+        for key in ("view", "j18", "page", "raceday"):
+            candidates.append(st.query_params.get(key, ""))
+            try:
+                candidates.extend(st.query_params.get_all(key) or [])
+            except Exception:
+                pass
     except Exception:
-        return False
-    if isinstance(raw, (list, tuple)):
-        raw = raw[0] if raw else ""
-    return str(raw).strip().lower() in ("raceday", "1", "true", "yes")
+        pass
+    try:
+        url = getattr(st.context, "url", None) or ""
+        if url:
+            qs = parse_qs(urlparse(str(url)).query)
+            for key in ("view", "j18", "page", "raceday"):
+                candidates.extend(qs.get(key) or [])
+    except Exception:
+        pass
+
+    for raw in candidates:
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else ""
+        if str(raw).strip().lower() in _PUBLIC_RACEDAY_VALUES:
+            return True
+    return False
 
 
 if _is_raceday_public_embed():

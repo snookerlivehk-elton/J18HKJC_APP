@@ -203,14 +203,14 @@ PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 | 輕量 HTML | `GET /embed/raceday`（`static/raceday_embed.html` + `/embed/api/*`） |
 | 程式 | `raceday_embed_api.py`、`raceday_embed_payload.py`；已掛入 `ad_api`／`prediction_api` |
 | 獨立啟動 | `bash start-raceday-embed.sh` |
-| Streamlit 後備 | `/?embed=raceday`（`views/raceday_embed.py`，同 host 隨 main 更新） |
+| Streamlit 後備 | `/?view=raceday`（`views/raceday_embed.py`；**勿用** Streamlit 保留參數 `embed=`） |
 | iframe 例 | 把右手邊 `src` 改成下方連結之一 |
 
 嵌入連結（部署後）：
 
 - **Ad API（建議）**：`https://YOUR-AD-API.up.railway.app/embed/raceday`（生產 host 見 `AD_API_PUBLIC_BASE`）
-- **阿里雲 Streamlit**：`http://47.83.164.64/?embed=raceday`
-- **Railway Streamlit**：`https://j18hkjc-app.up.railway.app/?embed=raceday`
+- **阿里雲 Streamlit**：`http://47.83.164.64/?view=raceday`
+- **Railway Streamlit**：`https://j18hkjc-app.up.railway.app/?view=raceday`
 
 ### 2.4 賽前預測 API（外部平台）
 
