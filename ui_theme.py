@@ -428,9 +428,9 @@ section[data-testid="stSidebar"] {
   padding: 0.75rem 0.9rem;
   margin-bottom: 0.55rem;
   display: grid;
-  /* 左資料｜中雷達｜右 AI 評價 */
-  grid-template-columns: minmax(210px, 1.05fr) 148px minmax(260px, 1.45fr);
-  gap: 0.55rem 0.85rem;
+  /* 左資料｜中雷達｜右 AI 評價（右欄寛度仍保持三區橫向） */
+  grid-template-columns: minmax(180px, 1fr) 132px minmax(200px, 1.4fr);
+  gap: 0.45rem 0.7rem;
   align-items: center;
 }
 .horse-card.top1 { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(240,193,75,0.25); }
@@ -459,9 +459,9 @@ section[data-testid="stSidebar"] {
 }
 .hc-radar {
   display: flex; align-items: center; justify-content: center;
-  width: 148px; height: 132px;
+  width: 132px; height: 124px;
 }
-.hc-radar svg { width: 140px; height: 132px; display: block; }
+.hc-radar svg { width: 128px; height: 120px; display: block; }
 .hc-radar .radar-empty { font-size: 0.72rem; opacity: 0.55; text-align: center; }
 .hc-ai { min-width: 0; }
 .hc-ai .ai-head {
@@ -474,7 +474,7 @@ section[data-testid="stSidebar"] {
   overflow: hidden;
 }
 .hc-ai .ai-empty { font-size: 0.78rem; opacity: 0.55; }
-@media (max-width: 980px) {
+@media (max-width: 720px) {
   .horse-card {
     grid-template-columns: minmax(0, 1fr) 120px;
     grid-template-areas:
@@ -486,7 +486,7 @@ section[data-testid="stSidebar"] {
   .hc-radar svg { width: 112px; height: 110px; }
   .hc-ai { grid-area: ai; }
 }
-@media (max-width: 640px) {
+@media (max-width: 520px) {
   .horse-card {
     grid-template-columns: 1fr;
     grid-template-areas:
