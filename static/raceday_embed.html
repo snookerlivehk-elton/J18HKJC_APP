@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>賽日速覽 · J18</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --bg-elev: #2a2a2a;
+      --bg-card: #262626;
+      --line: rgba(255,255,255,0.10);
+      --text: #f2f2f2;
+      --muted: rgba(242,242,242,0.62);
+      --accent: #f0c14b;
+      --accent-dim: rgba(240,193,75,0.16);
+      --good: #3ecf8e;
+      --good-dim: rgba(62,207,142,0.16);
+      --warn: #e08a4a;
+      --radius: 8px;
+      --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      /* 專為 j18.hk/pc 右手邊：左欄 450px，本頁吃剩餘寛度 */
+      min-width: 640px;
+      overflow-x: hidden;
+    }
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 18px 22px 28px;
+      min-height: 100%;
+    }
+    .topbar {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 16px; margin-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+    }
+    .brand {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .brand .mark {
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em;
+      color: var(--accent); text-transform: uppercase;
+    }
+    .brand h1 {
+      margin: 0; font-size: 1.55rem; font-weight: 800; letter-spacing: 0.02em;
+      line-height: 1.15;
+    }
+    .meta-line {
+      color: var(--muted); font-size: 0.86rem; margin-top: 4px;
+    }
+    .ver {
+      font-size: 0.72rem; color: var(--muted); white-space: nowrap;
+    }
+    .race-pills {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin: 12px 0 16px;
+    }
+    .race-pills button {
+      appearance: none; border: 1px solid var(--line);
+      background: var(--bg-elev); color: var(--text);
+      min-width: 2.6rem; height: 2.6rem; border-radius: 999px;
+      font-weight: 800; font-size: 0.95rem; cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s, transform .1s;
+    }
+    .race-pills button:hover { border-color: rgba(240,193,75,0.45); }
+    .race-pills button.active {
+      background: var(--accent); color: #1a1408; border-color: var(--accent);
+    }
+    .race-pills button:active { transform: scale(0.97); }
+
+    .panel {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 980px) {
+      .panel { grid-template-columns: 1fr; }
+      body { min-width: 0; }
+      .shell { padding: 14px 12px 22px; }
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .card h2 {
+      margin: 0 0 10px; font-size: 0.78rem; font-weight: 800;
+      letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase;
+    }
+    .race-title {
+      font-size: 1.12rem; font-weight: 800; margin: 0 0 10px;
+    }
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px;
+      font-size: 0.84rem; color: var(--muted);
+    }
+    .info-grid b { color: var(--text); font-weight: 700; }
+
+    .pick-list { display: flex; flex-direction: column; gap: 6px; }
+    .pick-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px; padding: 6px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.08);
+      font-size: 0.92rem;
+    }
+    .pick-row:last-child { border-bottom: none; }
+    .tag {
+      display: inline-block; font-size: 0.68rem; font-weight: 800;
+      padding: 0.08rem 0.42rem; border-radius: 999px; margin-right: 0.35rem;
+      background: var(--good-dim); color: var(--good);
+    }
+    .tag.pos { background: var(--accent-dim); color: var(--accent); }
+    .pick-row .nm { font-weight: 700; }
+    .pick-row .pct { font-weight: 800; color: var(--good); white-space: nowrap; }
+    .pick-empty { color: var(--muted); font-size: 0.86rem; padding: 4px 0; }
+    .note { margin-top: 10px; font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
+
+    .tracks {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 980px) { .tracks { grid-template-columns: 1fr; } }
+    .tracks .card { padding: 12px 14px; }
+    .tracks .card h2 { margin-bottom: 8px; }
+
+    .horses {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 1100px) {
+      .horses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .horses { grid-template-columns: 1fr; }
+    }
+    .horse {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 13px;
+      transition: border-color .15s;
+    }
+    .horse.pick { border-color: rgba(62,207,142,0.55); }
+    .horse.top1 { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(240,193,75,0.25); }
+    .horse-top {
+      display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;
+    }
+    .rank {
+      display: inline-block; font-size: 0.68rem; font-weight: 800;
+      color: var(--accent); background: var(--accent-dim);
+      border-radius: 999px; padding: 0.08rem 0.45rem; margin-bottom: 4px;
+    }
+    .hname { font-size: 1.02rem; font-weight: 800; line-height: 1.25; }
+    .hno { opacity: 0.65; font-weight: 700; font-size: 0.86rem; margin-right: 0.25rem; }
+    .prob { text-align: right; flex-shrink: 0; }
+    .prob .pct { font-size: 1.28rem; font-weight: 800; color: var(--good); line-height: 1; }
+    .prob .lbl { font-size: 0.66rem; color: var(--muted); margin-top: 3px; }
+    .sub {
+      margin-top: 8px; font-size: 0.78rem; color: var(--muted); line-height: 1.45;
+    }
+    .sub b { color: var(--text); font-weight: 600; }
+    .metrics {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+      font-size: 0.78rem;
+    }
+    .metrics .lbl { color: var(--muted); font-size: 0.66rem; }
+    .metrics .val { font-weight: 800; margin-top: 2px; }
+
+    .status {
+      padding: 28px 8px; text-align: center; color: var(--muted); font-size: 0.95rem;
+    }
+    .status.error { color: #ff8f8f; }
+    .spinner {
+      width: 22px; height: 22px; border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: var(--accent); border-radius: 50%;
+      margin: 0 auto 10px; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    details.more {
+      margin-top: 8px; font-size: 0.78rem; color: var(--muted);
+    }
+    details.more summary {
+      cursor: pointer; color: var(--accent); font-weight: 700; outline: none;
+    }
+    details.more .ai-sum { margin-top: 6px; line-height: 1.45; color: var(--text); opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">J18 · Race Day</div>
+        <h1>賽日速覽</h1>
+        <div class="meta-line" id="meetingMeta">載入中…</div>
+      </div>
+      <div class="ver">v__APP_VERSION__</div>
+    </div>
+
+    <div id="racePills" class="race-pills" aria-label="場次"></div>
+    <div id="content">
+      <div class="status"><div class="spinner"></div>正在載入賽日資料…</div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const params = new URLSearchParams(location.search);
+    const API_BASE = (params.get("api") || "").replace(/\/$/, "") || "";
+
+    const el = {
+      meta: document.getElementById("meetingMeta"),
+      pills: document.getElementById("racePills"),
+      content: document.getElementById("content"),
+    };
+
+    let races = [];
+    let currentId = null;
+
+    function api(path) {
+      return fetch(API_BASE + path, { credentials: "omit" }).then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || data.detail || ("HTTP " + r.status));
+        return data;
+      });
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function fmtPct(v, digits) {
+      if (v == null || v === "" || Number.isNaN(Number(v))) return "—";
+      return Number(v).toFixed(digits == null ? 0 : digits) + "%";
+    }
+
+    function dedupePickHtml(win, place, pctKey, emptyMsg) {
+      win = win || []; place = place || [];
+      if (!win.length && !place.length) {
+        return '<div class="pick-empty">' + esc(emptyMsg || "—") + "</div>";
+      }
+      const parts = [];
+      win.forEach((r, i) => {
+        parts.push(
+          '<div class="pick-row"><div><span class="tag">爭勝' + (i + 1) + '</span>' +
+          '<span class="nm">' + esc(r.horse_no) + " " + esc(r.horse_name) + "</span></div>" +
+          '<div class="pct">' + esc(fmtPct(r[pctKey])) + "</div></div>"
+        );
+      });
+      place.slice(win.length).forEach((r, i) => {
+        parts.push(
+          '<div class="pick-row"><div><span class="tag pos">位置' + (i + 1) + '</span>' +
+          '<span class="nm">' + esc(r.horse_no) + " " + esc(r.horse_name) + "</span></div>" +
+          '<div class="pct">' + esc(fmtPct(r[pctKey])) + "</div></div>"
+        );
+      });
+      return parts.join("") || '<div class="pick-empty">' + esc(emptyMsg || "—") + "</div>";
+    }
+
+    function renderPills() {
+      el.pills.innerHTML = races.map((r) => {
+        const n = r.race_num;
+        const active = String(r.race_id) === String(currentId) ? " active" : "";
+        return '<button type="button" class="' + active.trim() + '" data-id="' +
+          esc(r.race_id) + '" aria-label="第' + n + '場">' + n + "</button>";
+      }).join("");
+      el.pills.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => selectRace(btn.getAttribute("data-id")));
+      });
+    }
+
+    function renderRace(data) {
+      const race = data.race || {};
+      const picks = data.picks || {};
+      const fused = picks.fused || {};
+      const model = picks.model || {};
+      const ai = picks.ai || {};
+      const meta = data.meta || {};
+
+      const title = "第 " + esc(race.race_num) + " 場" +
+        (race.race_name ? " · " + esc(race.race_name) : "");
+
+      let fuseNote = "";
+      if (fused.fallback_model_only) fuseNote = " · 無 AI 時退回模型";
+      else if (fused.available && fused.alpha != null) fuseNote = " · α=" + Number(fused.alpha).toFixed(2);
+
+      const fuseEmpty = fused.fallback_model_only
+        ? (fused.message || "退回純模型")
+        : (fused.message || "尚無綜合推介");
+      const aiEmpty = ai.skipped_low_confidence
+        ? (ai.message || "信心不足，本場不推")
+        : (ai.message || "尚無 AI 評價");
+
+      const horses = (data.runners || []).map((h) => {
+        const rank = h.pred_rank || 0;
+        const cls = rank === 1 ? "top1" : (h.is_fused_pick ? "pick" : "");
+        const aiBlock = h.ai_share_pct != null
+          ? '<div><div class="lbl">AI 份額</div><div class="val">' + esc(fmtPct(h.ai_share_pct)) + "</div></div>"
+          : '<div><div class="lbl">AI 馬評</div><div class="val" style="opacity:.5">' +
+            (h.ai_score != null ? "計算中" : "尚無") + "</div></div>";
+        const summary = h.ai_summary
+          ? '<details class="more"><summary>AI 評語</summary><div class="ai-sum">' +
+            esc(h.ai_summary) + "</div></details>"
+          : "";
+        return (
+          '<article class="horse ' + cls + '">' +
+            '<div class="horse-top"><div>' +
+              '<span class="rank">#' + esc(rank) + "</span>" +
+              '<div class="hname"><span class="hno">' + esc(h.horse_no) + "</span>" +
+              esc(h.horse_name) + "</div></div>" +
+              '<div class="prob"><div class="pct">' + esc(fmtPct(h.model_win_prob_pct, 1)) +
+              '</div><div class="lbl">模型份額</div></div></div>' +
+            '<div class="sub">騎師 <b>' + esc(h.jockey || "-") + "</b>　·　練馬師 <b>" +
+              esc(h.trainer || "-") + "</b><br/>檔位 <b>" + esc(h.draw ?? "-") +
+              "</b>　·　負磅 <b>" + esc(h.handicap_weight ?? "-") +
+              "</b>　·　馬重 <b>" + esc(h.horse_weight ?? "-") + "</b></div>" +
+            '<div class="metrics"><div><div class="lbl">綜合份額</div><div class="val">' +
+              esc(fmtPct(h.fused_share_pct)) + "</div></div>" + aiBlock + "</div>" +
+            summary +
+          "</article>"
+        );
+      }).join("");
+
+      el.content.innerHTML =
+        '<div class="panel">' +
+          '<section class="card">' +
+            '<div class="race-title">' + title + "</div>" +
+            '<div class="info-grid">' +
+              "<div>日期 <b>" + esc(race.racing_date) + "</b></div>" +
+              "<div>場地 <b>" + esc(race.course_label || race.course) + "</b></div>" +
+              "<div>賽道 <b>" + esc(race.track || "-") + "</b></div>" +
+              "<div>距離 <b>" + esc(race.distance_m || "-") + " 米</b></div>" +
+              "<div>班次 <b>" + esc(race.class_display || race.class || "-") + "</b></div>" +
+              "<div>預計步速 <b>" + esc(meta.expected_pace || race.expected_pace || "-") + "</b></div>" +
+              "<div>匹配 <b>" + esc(meta.match_rate != null ? (meta.match_rate * 100).toFixed(0) + "%" : "-") + "</b></div>" +
+              "<div>覆蓋 <b>" + esc(meta.avg_model_coverage != null ? (meta.avg_model_coverage * 100).toFixed(0) + "%" : "-") +
+                (meta.provisional ? " · provisional" : "") + "</b></div>" +
+            "</div>" +
+          "</section>" +
+          '<section class="card">' +
+            "<h2>綜合推介" + esc(fuseNote) + "</h2>" +
+            '<div class="pick-list">' +
+              dedupePickHtml(fused.win, fused.place, "fused_share_pct", fuseEmpty) +
+            "</div>" +
+            '<div class="note">主顯示＝模型×AI 綜合（爭勝＋位置，位置不重複爭勝）。本場 ' +
+              esc(race.n_runners || (data.runners || []).length) + " 匹</div>" +
+          "</section>" +
+        "</div>" +
+        '<div class="tracks">' +
+          '<section class="card"><h2>模型 · 勝率份額</h2><div class="pick-list">' +
+            dedupePickHtml(model.win, model.place, "model_win_prob_pct", "—") +
+          "</div></section>" +
+          '<section class="card"><h2>AI 馬評 · 份額</h2><div class="pick-list">' +
+            dedupePickHtml(ai.win, ai.place, "ai_share_pct", aiEmpty) +
+          "</div></section>" +
+        "</div>" +
+        '<div class="horses">' + (horses || '<div class="status">暫無出馬</div>') + "</div>";
+    }
+
+    function selectRace(raceId) {
+      currentId = raceId;
+      renderPills();
+      el.content.innerHTML = '<div class="status"><div class="spinner"></div>計算本場…</div>';
+      api("/embed/api/races/" + encodeURIComponent(raceId))
+        .then(renderRace)
+        .catch((err) => {
+          el.content.innerHTML = '<div class="status error">載入失敗：' + esc(err.message) + "</div>";
+        });
+    }
+
+    function boot() {
+      api("/embed/api/default")
+        .then((data) => {
+          const m = data.meeting;
+          races = data.races || [];
+          if (!m || !races.length) {
+            el.meta.textContent = "尚無賽日排位";
+            el.content.innerHTML = '<div class="status">暫無即將舉行的賽事資料，請稍後再試。</div>';
+            return;
+          }
+          el.meta.textContent =
+            m.racing_date + "　" + (m.course_label || m.course) + "　共 " + (m.n_races || races.length) + " 場";
+          currentId = String(races[0].race_id);
+          const qRace = params.get("race");
+          if (qRace && races.some((r) => String(r.race_id) === String(qRace))) {
+            currentId = String(qRace);
+          }
+          renderPills();
+          selectRace(currentId);
+        })
+        .catch((err) => {
+          el.meta.textContent = "無法連線";
+          el.content.innerHTML = '<div class="status error">載入失敗：' + esc(err.message) + "</div>";
+        });
+    }
+
+    boot();
+  })();
+  </script>
+</body>
+</html>

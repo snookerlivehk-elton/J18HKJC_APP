@@ -1,6 +1,9 @@
 """
 J18AI Plus+ 入口：登入關卡 + 依角色導航。
 用戶：賽日速覽 + 命中率榜；管理員見全部管理頁。
+
+公開嵌入（無需登入）：
+  /?embed=raceday  → 電腦版賽日速覽（j18.hk/pc 右手邊 iframe）
 """
 from __future__ import annotations
 
@@ -29,6 +32,24 @@ st.set_page_config(
     # auto：有參數頁時側欄仍可開；參數已改主區 expander，不依賴側欄
     initial_sidebar_state="auto",
 )
+
+
+def _is_raceday_public_embed() -> bool:
+    try:
+        raw = st.query_params.get("embed", "")
+    except Exception:
+        return False
+    if isinstance(raw, (list, tuple)):
+        raw = raw[0] if raw else ""
+    return str(raw).strip().lower() in ("raceday", "1", "true", "yes")
+
+
+if _is_raceday_public_embed():
+    # 無需登入：專為 https://j18.hk/pc 右手邊嵌入
+    from views.raceday_embed import render_raceday_embed
+
+    render_raceday_embed()
+    st.stop()
 
 inject_home_screen_icons()
 

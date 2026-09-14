@@ -49,6 +49,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 公開賽日速覽嵌入（無需 X-API-Key；專為 j18.hk/pc 右手邊）
+try:
+    from raceday_embed_api import mount_raceday_embed
+
+    mount_raceday_embed(app)
+except Exception as _embed_exc:  # pragma: no cover
+    print(f"⚠️ raceday embed mount skipped: {_embed_exc}")
+
 
 def require_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     expected = (os.getenv("PREDICTION_API_KEY") or "").strip()

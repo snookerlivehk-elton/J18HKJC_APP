@@ -1,0 +1,121 @@
+"""公開賽日速覽嵌入 API／payload 測試。"""
+from __future__ import annotations
+
+import unittest
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+
+class RacedayEmbedApiTest(unittest.TestCase):
+    def test_html_page_serves_and_allows_j18_frame(self):
+        from raceday_embed_api import create_app
+
+        client = TestClient(create_app())
+        r = client.get("/embed/raceday")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers.get("content-type", ""))
+        csp = r.headers.get("content-security-policy", "")
+        self.assertIn("frame-ancestors", csp)
+        self.assertIn("j18.hk", csp)
+        self.assertNotIn("x-frame-options", {k.lower() for k in r.headers.keys()})
+        self.assertIn("賽日速覽", r.text)
+        self.assertIn("/embed/api/default", r.text)
+
+    def test_health_and_default_empty(self):
+        from raceday_embed_api import create_app
+
+        client = TestClient(create_app())
+        h = client.get("/embed/api/health")
+        self.assertEqual(h.status_code, 200)
+        self.assertEqual(h.json().get("service"), "j18-raceday-embed")
+
+        d = client.get("/embed/api/default")
+        self.assertEqual(d.status_code, 200)
+        body = d.json()
+        self.assertTrue(body.get("ok"))
+        self.assertIn("races", body)
+
+    def test_race_not_found(self):
+        from raceday_embed_api import create_app
+
+        with patch(
+            "raceday_embed_payload.build_race_prediction",
+            return_value={"ok": False, "error": "no_prediction", "race_id": "x"},
+        ):
+            # patch where used inside build_public_race_view
+            with patch(
+                "raceday_embed_payload.build_public_race_view",
+                return_value={"ok": False, "error": "no_prediction", "race_id": "x"},
+            ):
+                client = TestClient(create_app())
+                r = client.get("/embed/api/races/NOPE")
+                self.assertEqual(r.status_code, 404)
+
+    def test_mounted_on_ad_api(self):
+        import ad_api
+
+        client = TestClient(ad_api.app)
+        r = client.get("/embed/raceday")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("賽日速覽", r.text)
+
+    def test_public_race_view_includes_fused(self):
+        from raceday_embed_payload import build_public_race_view
+
+        fake_base = {
+            "ok": True,
+            "race_id": "20260906ST01",
+            "race": {
+                "racing_date": "2026-09-06",
+                "course": "ST",
+                "race_num": 1,
+                "n_runners": 2,
+                "expected_pace": "快",
+            },
+            "meta": {"match_rate": 0.9, "avg_model_coverage": 0.8, "provisional": False},
+            "picks": {
+                "win": [{"horse_no": 1, "horse_name": "甲", "model_win_prob_pct": 60}],
+                "place": [
+                    {"horse_no": 1, "horse_name": "甲", "model_win_prob_pct": 60},
+                    {"horse_no": 2, "horse_name": "乙", "model_win_prob_pct": 40},
+                ],
+            },
+            "runners": [
+                {
+                    "horse_no": 1,
+                    "horse_name": "甲",
+                    "draw": 1,
+                    "jockey": "J1",
+                    "trainer": "T1",
+                    "pred_rank": 1,
+                    "model_win_prob": 0.6,
+                    "model_win_prob_pct": 60.0,
+                    "ai": {"ai_score": 0.8, "confidence": 0.9, "ai_combo": 0.72, "summary": "穩"},
+                },
+                {
+                    "horse_no": 2,
+                    "horse_name": "乙",
+                    "draw": 2,
+                    "jockey": "J2",
+                    "trainer": "T2",
+                    "pred_rank": 2,
+                    "model_win_prob": 0.4,
+                    "model_win_prob_pct": 40.0,
+                    "ai": {"ai_score": 0.2, "confidence": 0.5, "ai_combo": 0.1, "summary": ""},
+                },
+            ],
+        }
+        with patch(
+            "raceday_embed_payload.build_race_prediction", return_value=fake_base
+        ):
+            out = build_public_race_view("20260906ST01")
+        self.assertTrue(out["ok"])
+        self.assertIn("fused", out["picks"])
+        self.assertEqual(out["race"]["course_label"], "沙田")
+        self.assertEqual(len(out["runners"]), 2)
+        self.assertIn("fused_share_pct", out["runners"][0])
+
+
+if __name__ == "__main__":
+    unittest.main()

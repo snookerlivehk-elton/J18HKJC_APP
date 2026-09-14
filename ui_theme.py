@@ -314,6 +314,140 @@ html[data-theme="light"] [data-testid="stSidebarUserContent"] {
     inject_sidebar_solid_bg()
 
 
+def inject_raceday_embed_css():
+    """
+    j18.hk/pc 右手邊嵌入用：隱藏 Streamlit 殼、深色寛版、三欄出馬卡。
+    左欄固定 450px，本頁吃剩餘寛度（約 ≥640px）。
+    """
+    import streamlit as st
+
+    st.markdown(
+        """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap');
+html, body, [class*="css"], .stApp {
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif !important;
+  background: #1e1e1e !important;
+  color: #f2f2f2 !important;
+}
+/* 藏殼：頂欄／選單／footer／側欄 */
+#MainMenu, header, footer,
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+[data-testid="stHeader"],
+[data-testid="stSidebar"],
+section[data-testid="stSidebar"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+}
+.stApp > header { display: none !important; }
+.block-container {
+  padding: 1rem 1.25rem 2rem !important;
+  max-width: 1280px !important;
+}
+:root {
+  --accent: #f0c14b;
+  --good: #3ecf8e;
+  --bg-card: #262626;
+  --line: rgba(255,255,255,0.10);
+}
+.rd-hero {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.rd-hero .mark {
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--accent); text-transform: uppercase;
+}
+.rd-hero h1 {
+  font-size: 1.55rem; font-weight: 800; margin: 0.15rem 0 0;
+  letter-spacing: 0.02em; color: #f2f2f2;
+}
+.rd-hero p { margin: 0.25rem 0 0; opacity: 0.62; font-size: 0.86rem; color: #f2f2f2; }
+.rd-panel {
+  display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 0.85rem;
+  margin: 0.5rem 0 0.85rem;
+}
+@media (max-width: 980px) { .rd-panel { grid-template-columns: 1fr; } }
+.rd-meta, .rd-fuse, .rd-side {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.85rem 0.95rem;
+  color: #f2f2f2 !important;
+}
+.rd-meta .title { font-weight: 800; font-size: 1.08rem; margin-bottom: 0.45rem; }
+.rd-meta .grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0.28rem 0.7rem; font-size: 0.84rem; opacity: 0.88;
+}
+.rd-meta .grid b { opacity: 1; font-weight: 700; }
+.rd-fuse .col-title, .rd-side .col-title {
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em;
+  opacity: 0.7; margin-bottom: 0.35rem; text-transform: uppercase;
+}
+.rd-fuse .note { font-size: 0.68rem; opacity: 0.65; margin-top: 0.45rem; }
+.rd-pick-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.4rem; padding: 0.28rem 0; font-size: 0.9rem;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+}
+.rd-pick-row:last-child { border-bottom: none; }
+.rd-pick-row .tag {
+  display: inline-block; font-size: 0.65rem; font-weight: 800;
+  color: var(--good); background: rgba(62,207,142,0.16);
+  border-radius: 999px; padding: 0.05rem 0.4rem; margin-right: 0.3rem;
+}
+.rd-pick-row .tag.pos {
+  color: var(--accent); background: rgba(240,193,75,0.16);
+}
+.rd-pick-row .nm { font-weight: 700; }
+.rd-pick-row .right { font-weight: 800; color: var(--good); }
+.rd-pick-empty { font-size: 0.82rem; opacity: 0.55; padding: 0.25rem 0; }
+.horse-card {
+  background: var(--bg-card) !important;
+  color: #f2f2f2 !important;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8rem 0.85rem;
+  margin-bottom: 0.55rem;
+}
+.horse-card.top1 { border-color: var(--accent); }
+.horse-card.pick { border-color: rgba(62,207,142,0.55); }
+.hc-top { display: flex; justify-content: space-between; gap: 0.5rem; }
+.hc-rank {
+  display: inline-block; font-size: 0.68rem; font-weight: 800;
+  color: var(--accent); background: rgba(240,193,75,0.16);
+  border-radius: 999px; padding: 0.08rem 0.45rem; margin-bottom: 0.2rem;
+}
+.hc-name { font-size: 1.02rem; font-weight: 800; line-height: 1.25; }
+.hc-no { opacity: 0.65; font-weight: 700; font-size: 0.86rem; }
+.hc-prob { text-align: right; flex-shrink: 0; }
+.hc-prob .pct { font-size: 1.28rem; font-weight: 800; color: var(--good); line-height: 1; }
+.hc-prob .lbl { font-size: 0.66rem; opacity: 0.65; margin-top: 0.12rem; }
+.hc-sub { margin-top: 0.45rem; font-size: 0.78rem; opacity: 0.85; line-height: 1.45; }
+.hc-sub b { font-weight: 600; opacity: 1; }
+.hc-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
+  margin-top: 0.5rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--line); font-size: 0.78rem;
+}
+.hc-metrics .m-lbl { opacity: 0.65; font-size: 0.66rem; }
+.hc-metrics .m-val { font-weight: 800; margin-top: 0.1rem; }
+div[data-testid="stPills"] button {
+  min-width: 2.5rem !important; min-height: 2.5rem !important;
+  border-radius: 999px !important; font-weight: 800 !important;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_user_css():
     import streamlit as st
     st.markdown(

@@ -194,6 +194,24 @@ PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 
 本地 `.env` 同上；**勿 commit**。`J18_API_BASE_URL` 可填 `https://api.j18.hk`（自動接 path）或完整 `…/historyResult`。密碼若曾貼在聊天室請輪替。
 
+### 2.3b 賽日速覽公開嵌入（j18.hk/pc 右手邊）
+
+給 `https://j18.hk/pc` 右手邊 `<iframe>` 用，**無需登入**。頁面寛度按左欄 450px 後剩餘空間設計（深色）。
+
+| 項目 | 說明 |
+|------|------|
+| 輕量 HTML | `GET /embed/raceday`（`static/raceday_embed.html` + `/embed/api/*`） |
+| 程式 | `raceday_embed_api.py`、`raceday_embed_payload.py`；已掛入 `ad_api`／`prediction_api` |
+| 獨立啟動 | `bash start-raceday-embed.sh` |
+| Streamlit 後備 | `/?embed=raceday`（`views/raceday_embed.py`，同 host 隨 main 更新） |
+| iframe 例 | 把右手邊 `src` 改成下方連結之一 |
+
+嵌入連結（部署後）：
+
+- **Ad API（建議）**：`https://YOUR-AD-API.up.railway.app/embed/raceday`（生產 host 見 `AD_API_PUBLIC_BASE`）
+- **阿里雲 Streamlit**：`http://47.83.164.64/?embed=raceday`
+- **Railway Streamlit**：`https://j18hkjc-app.up.railway.app/?embed=raceday`
+
 ### 2.4 賽前預測 API（外部平台）
 
 給另一平台拉**展示用預測**，並用本系統 `model_win_prob` + **對方即時獨贏小數賠率**算凱利／值搏指數。

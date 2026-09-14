@@ -56,7 +56,8 @@ app = FastAPI(
     version=get_version(),
     description=(
         "賽前預測廣告包：結構化 JSON + 海報 + webhook；"
-        "另提供留言機械人用綜合推介＋AI 評價上下文 /v1/reply-context"
+        "另提供留言機械人用綜合推介＋AI 評價上下文 /v1/reply-context；"
+        "另提供公開賽日速覽嵌入 /embed/raceday（無需登入）"
     ),
 )
 
@@ -68,6 +69,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 公開賽日速覽（j18.hk/pc 右手邊 iframe；無需 API key）
+try:
+    from raceday_embed_api import mount_raceday_embed
+
+    mount_raceday_embed(app)
+except Exception as _embed_exc:  # pragma: no cover - 啟動時記錄即可
+    print(f"⚠️ raceday embed mount skipped: {_embed_exc}")
 
 
 def _expected_api_key() -> str:
