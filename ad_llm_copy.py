@@ -104,6 +104,9 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "1) 精選馬必須來自各場 candidates（以綜合分析名單為主）；不可另選名單外的馬。\n"
     "2) comment 只能引用該馬的官方近績文字（form_text）事實，不可虛構，亦不要用勝率％湊字數；\n"
     "   只可寫成研究觀察／統計傾向，不可寫成投注指令。\n"
+    "2b) 這是「賽前」研究貼文：近績跑法（出閘／直路／領放／走位）必須標明係「近績／上仗／過往」，\n"
+    "   禁止用「本場」指今晚未跑場次；禁止整段寫到似賽事進行中或已經完賽。\n"
+    "   建議句式：「近績：…，賽前可對照其步速／走位會否延續。」三場 comment 收尾句要唔同，唔好抄同一句。\n"
     "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
     "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
@@ -242,10 +245,52 @@ def _is_system_subtitle(text: str) -> bool:
     return any(m in s for m in _PUBLIC_SYSTEM_MARKERS)
 
 
-def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
-    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚。"""
-    import re
+# 近績跑法用詞：出現時若無「近績／上仗」前綴，易被讀成今晚已經開跑
+_RACE_RUNNING_MARKERS = (
+    "出閘",
+    "直路上",
+    "直路",
+    "領放",
+    "二疊",
+    "沿欄",
+    "仍居第",
+    "居最後",
+    "保持同速",
+    "進一步落後",
+    "進展不大",
+    "走二疊",
+)
+_PAST_FORM_PREFIX_RE = re.compile(r"^(近績|上仗|往績|過往|歷史)")
+_GENERIC_CHALLENGE_TAIL = "值得留意其是否能夠挑戰領放馬"
 
+
+def _needs_prerace_form_frame(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s or _PAST_FORM_PREFIX_RE.match(s):
+        return False
+    return any(m in s for m in _RACE_RUNNING_MARKERS)
+
+
+def _frame_as_prerace_form_comment(text: str) -> str:
+    """把易被誤讀成「本場賽況」的近績句，改成明確賽前／近績語氣。"""
+    s = str(text or "").strip()
+    if not s:
+        return s
+    # 弱化重複罐頭收尾（高互動模型常抄同一句）
+    if s.endswith(_GENERIC_CHALLENGE_TAIL):
+        s = s[: -len(_GENERIC_CHALLENGE_TAIL)].rstrip("，,；; ")
+        s = f"{s}，賽前可對照步速走位會否延續" if s else "近績步速走位，賽前可對照會否延續"
+    if not _needs_prerace_form_frame(s):
+        return s
+    if s.startswith("本場"):
+        s = "近績顯示" + s[2:]
+    elif not _PAST_FORM_PREFIX_RE.match(s):
+        s = "近績：" + s
+    return s
+
+
+def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
+    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚，並標明近績時間線。"""
     body = str(text or "").strip().replace("\n", " ")
     body = re.sub(r"能量\s*[：:]\s*[\d.]+%?", "", body)
     body = re.sub(r"\b\d+W\d+P\d+S\b", "", body, flags=re.I)
@@ -258,6 +303,7 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
             body = body.replace("今日", "聽日")
     if not body or len(body) < 4:
         return f"{daypart}數據走勢值得留意，有得傾"
+    body = _frame_as_prerace_form_comment(body)
     return body[:COMMENT_MAX_CHARS]
 
 
@@ -297,17 +343,22 @@ def _publish_hashtags_for_copy(copy_data: Optional[Dict[str, Any]], extra: Optio
         tags.append("#沙田")
     elif course == "HV" or "跑馬地" in session or "谷" in session:
         tags.append("#跑馬地")
-    if "夜" in session:
-        tags.append("#夜馬")
-    else:
-        tags.append("#日馬")
+    # HV 預設夜；明確「日」先當日馬（對齊 _meeting_daypart_from_copy）
+    is_night = (
+        "夜" in session
+        or session.lower() == "night"
+        or (course == "HV" and "日" not in session)
+    )
+    session_tag = "#夜馬" if is_night else "#日馬"
+    tags.append(session_tag)
+    conflict = {"#日馬", "#夜馬"}
     for t in list(extra or []):
         s = str(t or "").strip()
         if not s:
             continue
         if not s.startswith("#"):
             s = "#" + s.lstrip("#")
-        if s in noise:
+        if s in noise or s in conflict:
             continue
         if s not in tags:
             tags.append(s)
@@ -493,6 +544,10 @@ class AdSocialCopywriter:
                 "comment_source": "form_text_only",
                 "comment_max_chars": COMMENT_MAX_CHARS,
                 "must_be_factual": True,
+                "prerace_copy": True,
+                "form_comments_must_mark_past_runs": True,
+                "forbid_benchang_for_tonight": True,
+                "vary_featured_endings": True,
                 "writing_locale": "hong_kong_social",
                 "avoid_mandarin_translation_tone": True,
                 "do_not_include_footer": True,
@@ -632,6 +687,7 @@ class AdSocialCopywriter:
         featured = raw.get("featured") if isinstance(raw.get("featured"), list) else []
         clean_rows = []
         seen_races: set[str] = set()
+        seen_comments: set[str] = set()
         for item in featured:
             if not isinstance(item, dict):
                 continue
@@ -641,6 +697,11 @@ class AdSocialCopywriter:
             seen_races.add(race_id)
             daypart = _meeting_daypart_from_copy(copy_data)
             comment = _humanize_comment(str(item.get("comment") or "").strip(), daypart=daypart)
+            # 避免三場精選完全相同／高度重複收尾
+            if comment in seen_comments:
+                alt = f"{comment.rstrip('。！! ')}，模型觀察值一睇"[:COMMENT_MAX_CHARS]
+                comment = alt if alt not in seen_comments else comment
+            seen_comments.add(comment)
             clean_rows.append(
                 {
                     "race_no": item.get("race_no"),

@@ -102,7 +102,30 @@ def test_build_system_prompt_uses_hk_and_tone():
     assert "研究" in prompt or "統計" in prompt
     assert "#賽事數據" in prompt or "#模型分析" in prompt
     assert str(COMMENT_MAX_CHARS) in prompt
+    assert "近績" in prompt and "本場" in prompt  # 賽前時間線規則
     assert "{{" not in prompt
+
+
+def test_frame_prerace_comment_marks_past_form():
+    from ad_llm_copy import _frame_as_prerace_form_comment, _humanize_comment
+
+    raw = "本場銀亮濠俠以中等步速出閘，走二疊第二位，直路上進展不大，值得留意其走勢是否會有改變。"
+    framed = _frame_as_prerace_form_comment(raw)
+    assert framed.startswith("近績")
+    assert "本場" not in framed[:4]
+    assert "出閘" in framed
+
+    canned = (
+        "棒棒糖以極快步速出閘，領放馬稍後位置，直路上仍居第三位，"
+        "但進一步落後領放馬，值得留意其是否能夠挑戰領放馬"
+    )
+    out = _humanize_comment(canned, daypart="今晚")
+    assert out.startswith("近績")
+    assert "值得留意其是否能夠挑戰領放馬" not in out
+    assert len(out) <= COMMENT_MAX_CHARS
+
+    already = "近績：直路望空後追回，走勢續進。"
+    assert _frame_as_prerace_form_comment(already) == already
 
 
 def test_parse_llm_json_from_fence():
@@ -128,6 +151,8 @@ def test_build_llm_payload_uses_fused_primary_pool():
     assert '"candidates_from_fused_primary": true' in payload
     assert f'"comment_max_chars": {COMMENT_MAX_CHARS}' in payload
     assert '"comment_source": "form_text_only"' in payload
+    assert '"prerace_copy": true' in payload
+    assert '"form_comments_must_mark_past_runs": true' in payload
     assert '"custom_prompt": "偏高互動"' in payload
     assert '"tone": "high_interaction"' in payload
     assert '"writing_locale": "hong_kong_social"' in payload
@@ -206,6 +231,62 @@ def test_normalize_fills_missing_featured_from_fallback():
     )
     assert len(data["featured"]) == 3
     assert "不構成投注建議" in format_social_post_text(data)
+
+
+def test_normalize_frames_live_sounding_comments():
+    writer = DummyWriter()
+    data = writer._normalize_result(
+        {
+            "title": "今晚邊場數據差異最值得一齊睇？",
+            "subtitle": "以下三場數據評述，哪一個你覺得最吸引？",
+            "featured": [
+                {
+                    "race_no": 1,
+                    "race_id": "R1",
+                    "horse_no": 1,
+                    "horse_name": "金光飛馳",
+                    "comment": "本場金光飛馳以中等步速出閘，直路上進展不大。",
+                },
+                {
+                    "race_no": 2,
+                    "race_id": "R2",
+                    "horse_no": 5,
+                    "horse_name": "銀河之星",
+                    "comment": (
+                        "銀河之星以極快步速出閘，領放馬稍後位置，"
+                        "值得留意其是否能夠挑戰領放馬"
+                    ),
+                },
+                {
+                    "race_no": 3,
+                    "race_id": "R3",
+                    "horse_no": 8,
+                    "horse_name": "疾風少年",
+                    "comment": (
+                        "疾風少年以極快步速出閘，居最後數位之內，"
+                        "值得留意其是否能夠挑戰領放馬"
+                    ),
+                },
+            ],
+            "hashtags": ["#J18"],
+        },
+        "",
+        tone="高互動型",
+        copy_data={
+            "meeting": {
+                "racing_date": "2026-09-16",
+                "course": "HV",
+                "session": "夜",
+            },
+            "races": _sample_copy()["races"],
+        },
+    )
+    comments = [r["comment"] for r in data["featured"]]
+    assert all(c.startswith("近績") for c in comments)
+    assert all("本場" not in c[:6] for c in comments)
+    assert "值得留意其是否能夠挑戰領放馬" not in "".join(comments)
+    # 兩場原本同一罐頭收尾，normalize 後唔應完全相同
+    assert len(set(comments)) == 3
 
 
 def test_fallback_prefers_fused_pool():
