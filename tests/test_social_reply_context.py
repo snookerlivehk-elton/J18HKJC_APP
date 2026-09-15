@@ -299,7 +299,7 @@ class ApiRouteSmokeTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("reply_webhook_configured", data)
-
+        self.assertIn("store", data)
     def test_latest_endpoint(self):
         from fastapi.testclient import TestClient
 

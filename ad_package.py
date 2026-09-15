@@ -173,6 +173,14 @@ def remote_ad_api_base() -> str:
     否則生產 latest 永遠留住舊手動 ingest。
     例：https://j18hkjcapp-production.up.railway.app
     """
+    # 明確開關：測試／dry-run 可 AD_DISABLE_REMOTE_PUSH=1
+    if (os.getenv("AD_DISABLE_REMOTE_PUSH") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return ""
     return _normalize_https_base(
         os.getenv("AD_API_BASE_URL")
         or os.getenv("AD_API_PUSH_URL")
@@ -447,7 +455,15 @@ def _publish_hashtags(meeting: Dict[str, Any], extra: Sequence[str] = ()) -> Lis
         tags.append(v)
     if s:
         tags.append(s)
-    tags.extend(list(extra or []))
+    # 唔好讓 AI／額外 tag 覆寫場次日夜（曾出現夜馬包夾 #日馬）
+    conflict = {"#日馬", "#夜馬"}
+    for t in list(extra or []):
+        ts = str(t or "").strip()
+        if not ts:
+            continue
+        if ts in conflict and s and ts != s:
+            continue
+        tags.append(ts)
     return _cap_hashtags(tags, limit=PACKAGE_HASHTAG_LIMIT)
 
 
@@ -479,6 +495,12 @@ def _sanitize_public_copy_text(text: str, *, meeting: Optional[Dict[str, Any]] =
     elif daypart == "今日":
         body = body.replace("今晚", "今日")
         body = body.replace("今夜", "今日")
+    # 文案內 hashtag 對齊場次（防 AI 夜馬寫 #日馬）
+    session_tag = _session_hashtag(meeting)
+    if session_tag == "#夜馬":
+        body = body.replace("#日馬", "#夜馬")
+    elif session_tag == "#日馬":
+        body = body.replace("#夜馬", "#日馬")
     return body.strip()
 
 

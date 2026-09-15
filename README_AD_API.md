@@ -169,11 +169,19 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
   "$BASE/v1/ads/2026-07-15-hv-night/notify"
 ```
 
-## 測試
+## 空庫急救（production ids=[]）
+
+常見原因：Railway **redeploy 清咗 ephemeral `ad_output/`**，而共用 DB 亦無 dual-write／上游未再 `POST /v1/ads/ingest`。  
+`GET /health` 會帶 `store`（disk／db count、latest ready）方便核對。
+
+由 JJJC 排位補推（有 `OPENAI_API_KEY` + `AD_API_BASE_URL` + `AD_API_KEY`）：
 
 ```bash
-pytest tests/test_ad_package_api.py -q
+python ad_push_prod.py --date 2026-09-16 --course HV
 ```
+
+成功後 `GET /v1/ads/latest` 應回 `status=ready` 新 id（例如 `2026-09-16-hv-night`）。
+
 
 ## Sample JSON（schema）
 
