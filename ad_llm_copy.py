@@ -24,6 +24,27 @@ SOCIAL_COPY_FILE = "social_copy.json"
 # 精選評述字數上限（繁體字元）
 COMMENT_MAX_CHARS = 60
 
+# 精選馬只准綜合（fused）頭 N 名，減少「tip 第3但文案當焦點」落差
+def featured_fused_top_n() -> int:
+    try:
+        n = int(os.getenv("AD_FEATURED_FUSED_TOP_N", "2") or 2)
+    except (TypeError, ValueError):
+        n = 2
+    return max(1, min(int(n), 4))
+
+
+# 三場精選必須用唔同觀察角度（P2-7）
+OBSERVATION_ANGLES: List[Tuple[str, str, str]] = [
+    ("pace", "步速", "賽前可對照出閘步速會否延續"),
+    ("position", "走位", "賽前可對照走位路線會否重現"),
+    ("recovery", "恢復", "賽前可對照恢復節奏會否改善"),
+    ("distance", "路程", "賽前可對照路程適性會否發揮"),
+]
+_ANGLE_BY_LABEL = {label: (key, label, tail) for key, label, tail in OBSERVATION_ANGLES}
+_ANGLE_TAIL_RE = re.compile(
+    r"(，)?(賽前可對照[^。]{0,24}|值得留意其是否能夠挑戰領放馬|值得留意其走勢是否會有改變。?)$"
+)
+
 # UI / API 用的語氣預設鍵值（預設高互動型；選項順序以預設為先）
 TONE_HIGH_INTERACTION = "high_interaction"
 TONE_PROFESSIONAL = "professional"
@@ -102,12 +123,18 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "\n"
     "你必須遵守：\n"
     "1) 精選馬必須來自各場 candidates（以綜合分析名單為主）；不可另選名單外的馬。\n"
+    "1b) candidates 已限綜合頭名（fused top-N）；只能從中揀，唔好跳去名單更後嘅馬。\n"
     "2) comment 只能引用該馬的官方近績文字（form_text）事實，不可虛構，亦不要用勝率％湊字數；\n"
     "   只可寫成研究觀察／統計傾向，不可寫成投注指令。\n"
+    "2b) 這是「賽前」研究貼文：近績跑法（出閘／直路／領放／走位）必須標明係「近績／上仗／過往」，\n"
+    "   禁止用「本場」指今晚未跑場次；禁止整段寫到似賽事進行中或已經完賽。\n"
+    "   建議句式：「近績：…，賽前可對照其步速／走位會否延續。」\n"
+    "2c) 三場 featured 必須用唔同觀察角度：步速／走位／恢復／路程；每場 JSON 加 "
+    '"angle"（四選一），收尾句要對應該角度，禁止三場抄同一收尾。\n'
     "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
     "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
-    "6) hashtag 要適合「賽事數據研究」與社交平台搜尋，8 至 15 個，避免重覆；禁止貼士向標籤。\n"
+    "6) hashtag 要適合「賽事數據研究」與社交平台搜尋；日夜／場地交系統校正，你可少寫。\n"
     "7) " + HK_WRITING_RULES + "\n"
     "\n"
     "嚴格輸出 JSON（不要 markdown 代碼塊）：\n"
@@ -121,6 +148,7 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     '      "horse_no": 3,\n'
     '      "horse_name": "馬名",\n'
     f'      "comment": "{COMMENT_MAX_CHARS}字內研究評述（忠於近績）",\n'
+    '      "angle": "步速",\n'
     '      "basis": "簡短說明為何揀這場作研究分享"\n'
     "    }\n"
     "  ],\n"
@@ -242,10 +270,220 @@ def _is_system_subtitle(text: str) -> bool:
     return any(m in s for m in _PUBLIC_SYSTEM_MARKERS)
 
 
-def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
-    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚。"""
-    import re
+# 近績跑法用詞：出現時若無「近績／上仗」前綴，易被讀成今晚已經開跑
+_RACE_RUNNING_MARKERS = (
+    "出閘",
+    "直路上",
+    "直路",
+    "領放",
+    "二疊",
+    "沿欄",
+    "仍居第",
+    "居最後",
+    "保持同速",
+    "進一步落後",
+    "進展不大",
+    "走二疊",
+)
+_PAST_FORM_PREFIX_RE = re.compile(r"^(近績|上仗|往績|過往|歷史)")
+_GENERIC_CHALLENGE_TAIL = "值得留意其是否能夠挑戰領放馬"
 
+
+def _needs_prerace_form_frame(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s or _PAST_FORM_PREFIX_RE.match(s):
+        return False
+    return any(m in s for m in _RACE_RUNNING_MARKERS)
+
+
+def _frame_as_prerace_form_comment(text: str) -> str:
+    """把易被誤讀成「本場賽況」的近績句，改成明確賽前／近績語氣。"""
+    s = str(text or "").strip()
+    if not s:
+        return s
+    # 弱化重複罐頭收尾（高互動模型常抄同一句）
+    if s.endswith(_GENERIC_CHALLENGE_TAIL):
+        s = s[: -len(_GENERIC_CHALLENGE_TAIL)].rstrip("，,；; ")
+        s = f"{s}，賽前可對照步速走位會否延續" if s else "近績步速走位，賽前可對照會否延續"
+    if not _needs_prerace_form_frame(s):
+        return s
+    if s.startswith("本場"):
+        s = "近績顯示" + s[2:]
+    elif not _PAST_FORM_PREFIX_RE.match(s):
+        s = "近績：" + s
+    return s
+
+
+def _detect_observation_angle(text: str, preferred: Optional[str] = None) -> str:
+    if preferred and preferred in _ANGLE_BY_LABEL:
+        return preferred
+    s = str(text or "")
+    if any(k in s for k in ("出閘", "步速", "快步", "中等步")):
+        return "步速"
+    if any(k in s for k in ("走位", "二疊", "沿欄", "領放", "直路")):
+        return "走位"
+    if any(k in s for k in ("恢復", "追回", "續進", "末段")):
+        return "恢復"
+    if any(k in s for k in ("路程", "適性", "距離", "米")):
+        return "路程"
+    return preferred or "步速"
+
+
+def _apply_angle_ending(comment: str, angle_label: str) -> str:
+    """確保 comment 收尾對應指定觀察角度，並截斷字數。"""
+    s = str(comment or "").strip()
+    meta = _ANGLE_BY_LABEL.get(angle_label) or OBSERVATION_ANGLES[0]
+    tail = meta[2]
+    s = _ANGLE_TAIL_RE.sub("", s).rstrip("，,；; ")
+    # 預留尾句空間
+    budget = max(8, COMMENT_MAX_CHARS - len(tail) - 1)
+    if len(s) > budget:
+        s = s[:budget].rstrip("，,；; ")
+    out = f"{s}，{tail}" if s else tail
+    return out[:COMMENT_MAX_CHARS]
+
+
+def _assign_distinct_angles(rows: List[Dict[str, Any]]) -> None:
+    """就地為 featured 分配互唔重複嘅觀察角度，並改寫收尾。"""
+    used: set[str] = set()
+    for i, row in enumerate(rows):
+        preferred = str(row.get("angle") or "").strip()
+        if preferred not in _ANGLE_BY_LABEL:
+            preferred = _detect_observation_angle(str(row.get("comment") or ""), None)
+        if preferred in used:
+            preferred = ""
+            for _key, label, _tail in OBSERVATION_ANGLES:
+                if label not in used:
+                    preferred = label
+                    break
+            if not preferred:
+                preferred = OBSERVATION_ANGLES[i % len(OBSERVATION_ANGLES)][1]
+        used.add(preferred)
+        row["angle"] = preferred
+        row["comment"] = _apply_angle_ending(str(row.get("comment") or ""), preferred)
+
+
+def _primary_picks_for_race(race: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
+    fused = list(race.get("fused_picks") or [])
+    model = list(race.get("model_picks") or [])
+    ai = list(race.get("ai_picks") or [])
+    if fused:
+        return fused, "fused"
+    if model:
+        return model, "model"
+    return ai, "ai"
+
+
+def _race_pick_index(copy_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[int, Dict[str, Any]]]:
+    """race_id → horse_no → meta（fused_rank / dual_track / score…），只含 top-N。"""
+    top_n = featured_fused_top_n()
+    out: Dict[str, Dict[int, Dict[str, Any]]] = {}
+    for race in list((copy_data or {}).get("races") or []):
+        race_id = str(race.get("race_id") or "").strip()
+        if not race_id:
+            continue
+        primary, pool = _primary_picks_for_race(race)
+        model_hnos = {
+            int(p.get("horse_no"))
+            for p in list(race.get("model_picks") or [])
+            if p.get("horse_no") is not None
+        }
+        ai_hnos = {
+            int(p.get("horse_no"))
+            for p in list(race.get("ai_picks") or [])
+            if p.get("horse_no") is not None
+        }
+        fused_list = list(race.get("fused_picks") or [])
+        fused_rank_map = {}
+        for idx, p in enumerate(fused_list):
+            try:
+                fused_rank_map[int(p.get("horse_no"))] = idx + 1
+            except Exception:
+                continue
+        bucket: Dict[int, Dict[str, Any]] = {}
+        for idx, p in enumerate(primary[:top_n]):
+            try:
+                horse_no = int(p.get("horse_no"))
+            except Exception:
+                continue
+            sources = {pool}
+            if pool == "fused":
+                if horse_no in model_hnos:
+                    sources.add("model")
+                if horse_no in ai_hnos:
+                    sources.add("ai")
+            dual = "model" in sources and "ai" in sources
+            try:
+                share = float(p.get("share_pct") or 0.0)
+            except Exception:
+                share = 0.0
+            in_fused = 1 if pool == "fused" or horse_no in fused_rank_map else 0
+            score = (in_fused, 1 if dual else 0, 1, share)
+            bucket[horse_no] = {
+                "horse_no": horse_no,
+                "horse_name": str(p.get("horse_name") or "").strip(),
+                "tag": str(p.get("tag") or ""),
+                "share_pct": p.get("share_pct"),
+                "pool": pool,
+                "sources": sorted(sources),
+                "dual_track": dual,
+                "fused_rank": fused_rank_map.get(horse_no),
+                "pool_rank": idx + 1,
+                "score": list(score),
+            }
+        out[race_id] = bucket
+    return out
+
+
+def _format_pick_reason_label(reason: Dict[str, Any]) -> str:
+    parts: List[str] = []
+    fr = reason.get("fused_rank")
+    if fr:
+        parts.append(f"綜合第{fr}")
+    else:
+        parts.append(f"{reason.get('pool') or '名單'}第{reason.get('pool_rank') or '?'}")
+    if reason.get("dual_track"):
+        parts.append("雙軌")
+    score = reason.get("score")
+    if isinstance(score, (list, tuple)) and score:
+        parts.append(f"score={tuple(score)}")
+    by = str(reason.get("selected_by") or "")
+    if by.startswith("fallback"):
+        parts.append("Fallback揀")
+    elif by == "remapped":
+        parts.append("已校正至頭N")
+    else:
+        parts.append("LLM揀")
+    angle = reason.get("angle")
+    if angle:
+        parts.append(f"角度:{angle}")
+    return "｜".join(parts)
+
+
+def _build_pick_reason(
+    *,
+    meta: Optional[Dict[str, Any]],
+    selected_by: str,
+    angle: str = "",
+) -> Dict[str, Any]:
+    meta = dict(meta or {})
+    reason = {
+        "selected_by": selected_by,
+        "pool": meta.get("pool"),
+        "fused_rank": meta.get("fused_rank"),
+        "pool_rank": meta.get("pool_rank"),
+        "dual_track": bool(meta.get("dual_track")),
+        "score": list(meta.get("score") or []),
+        "share_pct": meta.get("share_pct"),
+        "sources": list(meta.get("sources") or []),
+        "angle": angle or "",
+    }
+    reason["label"] = _format_pick_reason_label(reason)
+    return reason
+
+
+def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
+    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚，並標明近績時間線。"""
     body = str(text or "").strip().replace("\n", " ")
     body = re.sub(r"能量\s*[：:]\s*[\d.]+%?", "", body)
     body = re.sub(r"\b\d+W\d+P\d+S\b", "", body, flags=re.I)
@@ -258,6 +496,7 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
             body = body.replace("今日", "聽日")
     if not body or len(body) < 4:
         return f"{daypart}數據走勢值得留意，有得傾"
+    body = _frame_as_prerace_form_comment(body)
     return body[:COMMENT_MAX_CHARS]
 
 
@@ -289,29 +528,60 @@ def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
 
 def _publish_hashtags_for_copy(copy_data: Optional[Dict[str, Any]], extra: Optional[List[str]] = None) -> List[str]:
     meeting = (copy_data or {}).get("meeting") or {}
-    course = str(meeting.get("course") or "").upper()
+    course = str(meeting.get("course") or meeting.get("venue_code") or "").upper()
     session = str(meeting.get("session") or "")
     noise = {"#賽馬", "#賽馬貼士", "#賽前預測", "#心水", "#J18HK", "#j18hk", "#HKJC", "#hkjc"}
     tags = ["#J18", "#賽事數據", "#模型分析"]
-    if course == "ST" or "沙田" in session:
-        tags.append("#沙田")
-    elif course == "HV" or "跑馬地" in session or "谷" in session:
-        tags.append("#跑馬地")
-    if "夜" in session:
-        tags.append("#夜馬")
+    if course in {"ST", "沙田"} or "沙田" in session:
+        venue_tag = "#沙田"
+    elif course in {"HV", "跑馬地", "谷"} or "跑馬地" in session or "谷" in session:
+        venue_tag = "#跑馬地"
     else:
-        tags.append("#日馬")
+        venue_tag = ""
+    if venue_tag:
+        tags.append(venue_tag)
+    # HV 預設夜；明確「日」先當日馬（對齊 _meeting_daypart_from_copy）
+    is_night = (
+        "夜" in session
+        or session.lower() == "night"
+        or (course == "HV" and "日" not in session)
+    )
+    session_tag = "#夜馬" if is_night else "#日馬"
+    tags.append(session_tag)
+    conflict = {"#日馬", "#夜馬", "#沙田", "#跑馬地"}
     for t in list(extra or []):
         s = str(t or "").strip()
         if not s:
             continue
         if not s.startswith("#"):
             s = "#" + s.lstrip("#")
-        if s in noise:
+        if s in noise or s in conflict:
             continue
         if s not in tags:
             tags.append(s)
     return tags[:6]
+
+
+def _correct_hashtags_in_text(body: str, copy_data: Optional[Dict[str, Any]]) -> str:
+    """貼文正文內日夜／場地 hashtag 強制校正（P2-8）。"""
+    text = str(body or "")
+    meeting = (copy_data or {}).get("meeting") or {}
+    course = str(meeting.get("course") or meeting.get("venue_code") or "").upper()
+    session = str(meeting.get("session") or "")
+    is_night = (
+        "夜" in session
+        or session.lower() == "night"
+        or (course == "HV" and "日" not in session)
+    )
+    if is_night:
+        text = text.replace("#日馬", "#夜馬")
+    else:
+        text = text.replace("#夜馬", "#日馬")
+    if course in {"ST", "沙田"} or "沙田" in session:
+        text = text.replace("#跑馬地", "#沙田")
+    elif course in {"HV", "跑馬地", "谷"} or "跑馬地" in session or "谷" in session:
+        text = text.replace("#沙田", "#跑馬地")
+    return text
 
 
 def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[Dict[str, Any]] = None) -> str:
@@ -356,7 +626,8 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
 
     footer = str((social_data or {}).get("footer") or "").strip() or post_footer_text()
     lines.append(footer)
-    return "\n".join(lines).strip() + "\n"
+    text = "\n".join(lines).strip() + "\n"
+    return _correct_hashtags_in_text(text, copy_data or {"meeting": (social_data or {}).get("meeting") or {}})
 
 
 class AdSocialCopywriter:
@@ -408,6 +679,7 @@ class AdSocialCopywriter:
         races = list((copy_data or {}).get("races") or [])
         form_map = self.load_formguide_map([str(r.get("race_id") or "") for r in races])
         tone_key = normalize_tone(tone)
+        top_n = featured_fused_top_n()
 
         packed_races: List[Dict[str, Any]] = []
         for race in races:
@@ -426,15 +698,18 @@ class AdSocialCopywriter:
                 if p.get("horse_no") is not None
             }
 
-            # 主池：綜合；無綜合時退回模型 → AI（與海報對齊）
-            primary = fused_picks or model_picks or ai_picks
-            pool_source = (
-                "fused" if fused_picks else ("model" if model_picks else "ai")
-            )
+            # 主池：綜合；無綜合時退回模型 → AI（與海報對齊）；一律只取頭 N
+            primary, pool_source = _primary_picks_for_race(race)
+            fused_rank_map = {}
+            for idx, p in enumerate(fused_picks):
+                try:
+                    fused_rank_map[int(p.get("horse_no"))] = idx + 1
+                except Exception:
+                    continue
 
             candidates: List[Dict[str, Any]] = []
             seen: set[int] = set()
-            for p in primary[:4]:
+            for pool_rank, p in enumerate(primary[:top_n], start=1):
                 try:
                     horse_no = int(p.get("horse_no"))
                 except Exception:
@@ -460,6 +735,8 @@ class AdSocialCopywriter:
                             and horse_no in model_hnos
                             and horse_no in ai_hnos
                         ),
+                        "fused_rank": fused_rank_map.get(horse_no),
+                        "pool_rank": pool_rank,
                         "horse_no": horse_no,
                         "horse_name": str(p.get("horse_name") or "").strip(),
                         "tag": str(p.get("tag") or ""),
@@ -490,9 +767,15 @@ class AdSocialCopywriter:
                 "pick_three_races": True,
                 "one_horse_per_race": True,
                 "candidates_from_fused_primary": True,
+                "featured_fused_top_n": top_n,
                 "comment_source": "form_text_only",
                 "comment_max_chars": COMMENT_MAX_CHARS,
                 "must_be_factual": True,
+                "prerace_copy": True,
+                "form_comments_must_mark_past_runs": True,
+                "forbid_benchang_for_tonight": True,
+                "vary_featured_endings": True,
+                "distinct_observation_angles": ["步速", "走位", "恢復", "路程"],
                 "writing_locale": "hong_kong_social",
                 "avoid_mandarin_translation_tone": True,
                 "do_not_include_footer": True,
@@ -521,32 +804,28 @@ class AdSocialCopywriter:
         self, copy_data: Dict[str, Any], *, limit: int = 3
     ) -> List[Dict[str, Any]]:
         """當 LLM 失敗／不足 3 場時，用綜合推介（退回模型／AI）+ 近績自動補齊。"""
+        top_n = featured_fused_top_n()
         race_rows: List[Dict[str, Any]] = []
+        pick_index = _race_pick_index(copy_data)
         for race in list((copy_data or {}).get("races") or []):
             race_id = str(race.get("race_id") or "").strip()
             if not race_id:
                 continue
-            fused_picks = list(race.get("fused_picks") or [])
-            model_picks = list(race.get("model_picks") or [])
-            ai_picks = list(race.get("ai_picks") or [])
-            primary = fused_picks or model_picks or ai_picks
-            pool_source = (
-                "fused" if fused_picks else ("model" if model_picks else "ai")
-            )
+            primary, pool_source = _primary_picks_for_race(race)
             model_hnos = {
                 int(p.get("horse_no"))
-                for p in model_picks
+                for p in list(race.get("model_picks") or [])
                 if p.get("horse_no") is not None
             }
             ai_hnos = {
                 int(p.get("horse_no"))
-                for p in ai_picks
+                for p in list(race.get("ai_picks") or [])
                 if p.get("horse_no") is not None
             }
 
             by_horse: Dict[int, Dict[str, Any]] = {}
             sources_map: Dict[int, set[str]] = {}
-            for p in primary[:4]:
+            for p in primary[:top_n]:
                 try:
                     horse_no = int(p.get("horse_no"))
                 except Exception:
@@ -600,6 +879,8 @@ class AdSocialCopywriter:
             elif dual:
                 basis = "自動補齊：綜合推介（雙軌共識）"
 
+            meta = (pick_index.get(race_id) or {}).get(int(best["horse_no"]))
+            reason = _build_pick_reason(meta=meta, selected_by="fallback", angle="")
             race_rows.append(
                 {
                     "race_no": race.get("race_no"),
@@ -608,6 +889,7 @@ class AdSocialCopywriter:
                     "horse_name": best.get("horse_name"),
                     "comment": comment,
                     "basis": basis,
+                    "pick_reason": reason,
                     "_score": best_score,
                 }
             )
@@ -618,6 +900,12 @@ class AdSocialCopywriter:
             row = dict(row)
             row.pop("_score", None)
             out.append(row)
+        _assign_distinct_angles(out)
+        for row in out:
+            pr = dict(row.get("pick_reason") or {})
+            pr["angle"] = row.get("angle") or pr.get("angle") or ""
+            pr["label"] = _format_pick_reason_label(pr)
+            row["pick_reason"] = pr
         return out
 
     def _normalize_result(
@@ -630,27 +918,73 @@ class AdSocialCopywriter:
         source: str = "llm",
     ) -> Dict[str, Any]:
         featured = raw.get("featured") if isinstance(raw.get("featured"), list) else []
-        clean_rows = []
+        clean_rows: List[Dict[str, Any]] = []
         seen_races: set[str] = set()
+        pick_index = _race_pick_index(copy_data)
+        form_maps: Dict[str, Dict[int, str]] = {}
+        selected_by_default = (
+            "fallback" if str(source or "").startswith("fallback") else "llm"
+        )
+
         for item in featured:
             if not isinstance(item, dict):
                 continue
             race_id = str(item.get("race_id") or "").strip()
             if not race_id or race_id in seen_races:
                 continue
-            seen_races.add(race_id)
             daypart = _meeting_daypart_from_copy(copy_data)
             comment = _humanize_comment(str(item.get("comment") or "").strip(), daypart=daypart)
-            clean_rows.append(
-                {
-                    "race_no": item.get("race_no"),
-                    "race_id": race_id,
-                    "horse_no": item.get("horse_no"),
-                    "horse_name": str(item.get("horse_name") or "").strip(),
-                    "comment": comment[:COMMENT_MAX_CHARS],
-                    "basis": str(item.get("basis") or "").strip(),
-                }
-            )
+            try:
+                horse_no = int(item.get("horse_no"))
+            except Exception:
+                horse_no = None
+            horse_name = str(item.get("horse_name") or "").strip()
+            allowed = pick_index.get(race_id) or {}
+            selected_by = selected_by_default
+            meta = allowed.get(horse_no) if horse_no is not None else None
+
+            # P1-6：精選馬必須喺 fused top-N；否則校正去頭名並重寫近績 comment
+            if allowed and (horse_no is None or horse_no not in allowed):
+                # 優先揀 dual_track，否則 pool_rank 最小
+                replacement = sorted(
+                    allowed.values(),
+                    key=lambda m: (
+                        0 if m.get("dual_track") else 1,
+                        int(m.get("pool_rank") or 99),
+                    ),
+                )[0]
+                horse_no = int(replacement["horse_no"])
+                horse_name = str(replacement.get("horse_name") or horse_name)
+                meta = replacement
+                selected_by = "remapped"
+                if race_id not in form_maps:
+                    form_maps[race_id] = self.load_formguide_map([race_id]).get(race_id, {})
+                form = str(form_maps[race_id].get(horse_no) or "").strip()
+                if form:
+                    comment = _humanize_comment(form, daypart=daypart)
+                else:
+                    comment = _humanize_comment(
+                        f"{replacement.get('tag') or '推介'}走勢值得留意",
+                        daypart=daypart,
+                    )
+
+            if horse_no is None:
+                continue
+            seen_races.add(race_id)
+            angle_hint = str(item.get("angle") or "").strip()
+            row = {
+                "race_no": item.get("race_no"),
+                "race_id": race_id,
+                "horse_no": horse_no,
+                "horse_name": horse_name,
+                "comment": comment[:COMMENT_MAX_CHARS],
+                "basis": str(item.get("basis") or "").strip(),
+                "angle": angle_hint if angle_hint in _ANGLE_BY_LABEL else "",
+                "pick_reason": _build_pick_reason(
+                    meta=meta, selected_by=selected_by, angle=angle_hint
+                ),
+            }
+            clean_rows.append(row)
 
         # 不足 3 場時用本地推介補齊
         if len(clean_rows) < 3 and copy_data:
@@ -662,6 +996,14 @@ class AdSocialCopywriter:
                 clean_rows.append(fb)
                 if len(clean_rows) >= 3:
                     break
+
+        _assign_distinct_angles(clean_rows[:3] if len(clean_rows) >= 3 else clean_rows)
+        for row in clean_rows:
+            pr = dict(row.get("pick_reason") or {})
+            pr["angle"] = row.get("angle") or pr.get("angle") or ""
+            pr["selected_by"] = pr.get("selected_by") or selected_by_default
+            pr["label"] = _format_pick_reason_label(pr)
+            row["pick_reason"] = pr
 
         hashtags = raw.get("hashtags") if isinstance(raw.get("hashtags"), list) else []
         clean_tags: List[str] = []
@@ -681,7 +1023,7 @@ class AdSocialCopywriter:
         if _is_system_subtitle(subtitle):
             subtitle = ""
         if daypart in {"今日", "聽日"}:
-            title = title.replace("今晚", daypart).replace("今夜", daypart)
+            title = title.replace("今晚", daypart).replace("昨夜", daypart).replace("今夜", daypart)
             subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
             if daypart == "聽日":
                 title = title.replace("今日", "聽日")
@@ -705,11 +1047,15 @@ class AdSocialCopywriter:
             "tone_label": tone_label(tone_key),
             "custom_prompt": str(custom_prompt or "").strip(),
             "source": source,
+            "featured_fused_top_n": featured_fused_top_n(),
             "raw": raw,
         }
         result["post_text"] = format_social_post_text(result, copy_data=copy_data)
         result["hashtags"] = _publish_hashtags_for_copy(
             copy_data, extra=list(result.get("hashtags") or [])
+        )
+        result["post_text"] = _correct_hashtags_in_text(
+            str(result.get("post_text") or ""), copy_data
         )
         return result
 

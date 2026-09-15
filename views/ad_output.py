@@ -195,6 +195,8 @@ def _render_social_copy(
         "標題帶提問或叫人留言討論模型觀察；"
         f"優先挑選{PRIMARY_TRACK_LABEL}分析名單內、模型與 AI 都有支持的場次；"
         f"每匹馬評述不超過{COMMENT_MAX_CHARS}字；"
+        "近績跑法要用「近績／上仗」開首，唔好用「本場」寫到似今晚已經跑完；"
+        "三場 comment 收尾句要唔同；"
         "只講公開數據／統計傾向／模型推演，禁止心水、貼士、投注誘導；"
         "唔好用國語翻譯腔。"
     )
@@ -301,6 +303,9 @@ def _render_social_copy(
 
     featured = list(social_data.get("featured") or [])
     if featured:
+        top_n = social_data.get("featured_fused_top_n")
+        if top_n:
+            st.caption(f"精選馬限制：綜合／名單頭 {top_n} 名內")
         cols = st.columns(min(3, len(featured)))
         for col, item in zip(cols, featured):
             with col:
@@ -309,6 +314,15 @@ def _render_social_copy(
                     f"{item.get('horse_no', '?')} {item.get('horse_name', '')}**"
                 )
                 st.write(item.get("comment") or "")
+                reason = item.get("pick_reason") if isinstance(item.get("pick_reason"), dict) else {}
+                label = str((reason or {}).get("label") or "").strip()
+                if not label and item.get("basis"):
+                    label = str(item.get("basis"))
+                if label:
+                    st.caption(f"揀因：{label}")
+                angle = item.get("angle") or (reason or {}).get("angle")
+                if angle and (not label or f"角度:{angle}" not in label):
+                    st.caption(f"觀察角度：{angle}")
 
     hashtags = list(social_data.get("hashtags") or [])
     if hashtags:
