@@ -10,10 +10,10 @@
 | `GET /v1/reply-context/latest` | **留言答覆**：每場最多 4 匹綜合推介 + 推介馬嘅 Form AI（From AI）評述 | ✅ **請用呢條** |
 | `GET /v1/reply-context/latest/prompt` | 同上資料編成一段可直接注入 LLM 嘅繁中參考文本 | ✅ 可選（省解析） |
 
-Base URL（生產）：與現有 Ad API 相同（Railway `j18hkjcapp-production` 服務），路徑前綴 `/v1/reply-context`。
+Base URL（生產）：與現有 Ad API 相同（環境變量 `AD_API_PUBLIC_BASE`），路徑前綴 `/v1/reply-context`。
 
 ```text
-https://<AD_API_HOST>/v1/reply-context/latest
+$AD_API_PUBLIC_BASE/v1/reply-context/latest
 ```
 
 認證（與 Ad API 相同）：
