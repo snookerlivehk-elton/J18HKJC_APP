@@ -133,5 +133,37 @@ class AdStoreRoundtripTest(unittest.TestCase):
         self.assertTrue((disk / "packages" / "2026-09-13-st-day.png").is_file())
 
 
+class AdStorePreferPostgresTest(unittest.TestCase):
+    def test_postgres_url_overrides_use_sqlite_default(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "USE_SQLITE": "true",
+                "DATABASE_URL": "postgresql://u:p@example.com:5432/db",
+                "DATABASE_URL_SYNC": "",
+                "RAILWAY_DATABASE_URL": "",
+            },
+            clear=False,
+        ):
+            import importlib
+            import ad_store
+
+            importlib.reload(ad_store)
+            self.assertFalse(ad_store.USE_SQLITE)
+            self.assertTrue(ad_store._has_postgres_url())
+            # restore sqlite-friendly defaults for other tests that import ad_store
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "USE_SQLITE": "true",
+                    "DATABASE_URL": "",
+                    "DATABASE_URL_SYNC": "",
+                    "RAILWAY_DATABASE_URL": "",
+                },
+                clear=False,
+            ):
+                importlib.reload(ad_store)
+
+
 if __name__ == "__main__":
     unittest.main()
