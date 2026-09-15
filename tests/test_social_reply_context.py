@@ -300,6 +300,7 @@ class ApiRouteSmokeTest(unittest.TestCase):
         data = resp.json()
         self.assertIn("reply_webhook_configured", data)
         self.assertIn("store", data)
+
     def test_latest_endpoint(self):
         from fastapi.testclient import TestClient
 
@@ -335,6 +336,60 @@ class ApiRouteSmokeTest(unittest.TestCase):
                 )
                 self.assertEqual(prompt_resp.status_code, 200)
                 self.assertIn("多利神駒", prompt_resp.json()["prompt"])
+
+    def test_latest_rebuilds_from_ad_when_reply_missing(self):
+        """碟上冇 reply_context 時，應由最新廣告包＋Form AI 即時重建。"""
+        from fastapi.testclient import TestClient
+
+        from ad_api import app
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rebuilt = build_reply_context(
+                _sample_ad_pkg(),
+                copy_data=_sample_copy(),
+                output_root=root,
+                form_ai_loader=_ai_loader,
+            )
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "AD_API_KEY": "test-key",
+                    "AD_OUTPUT_DIR": str(root),
+                    "AD_DISABLE_REMOTE_PUSH": "1",
+                },
+                clear=False,
+            ):
+                with mock.patch(
+                    "ad_api.load_latest_reply_context", return_value=None
+                ), mock.patch(
+                    "ad_api.publish_reply_context_from_latest_ad",
+                    return_value={
+                        "ok": True,
+                        "id": rebuilt["id"],
+                        "status": "ready",
+                        "package": rebuilt,
+                    },
+                ) as pub:
+                    client = TestClient(app)
+                    resp = client.get(
+                        "/v1/reply-context/latest",
+                        headers={"Authorization": "Bearer test-key"},
+                    )
+                    self.assertEqual(resp.status_code, 200)
+                    body = resp.json()
+                    self.assertEqual(body["purpose"], "social_reply")
+                    self.assertEqual(body["tips"][0]["horses"][0]["name"], "多利神駒")
+                    self.assertIsNotNone(body["tips"][0]["horses"][0]["ai"])
+                    pub.assert_called()
+
+                    prompt_resp = client.get(
+                        "/v1/reply-context/latest/prompt",
+                        headers={"X-API-Key": "test-key"},
+                    )
+                    self.assertEqual(prompt_resp.status_code, 200)
+                    self.assertIn("多利神駒", prompt_resp.json()["prompt"])
+                    self.assertGreaterEqual(pub.call_count, 2)
 
 
 class BotCliTest(unittest.TestCase):

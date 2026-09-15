@@ -4,6 +4,9 @@
 
 **唔會**直接發 Facebook；發佈由外部助手／人手處理。
 
+> **同留言答覆 API 嘅分別：** `GET /v1/ads/latest` 係**廣告發佈**用（海報＋Facebook 文案）。  
+> 負責**回覆社交媒體留言**嘅 AI 請改用 `GET /v1/reply-context/latest`（綜合推介每場最多 4 匹 + Form AI 評述），見 [`SOCIAL_REPLY_AI_USAGE.md`](SOCIAL_REPLY_AI_USAGE.md)。
+
 ## 啟動
 
 ```bash
@@ -276,9 +279,10 @@ python ad_push_prod.py --date 2026-09-16 --course HV
 
 ## 留言答覆上下文（綜合推介 + Form AI）
 
-負責回覆社交媒體留言嘅機械人，請用 **`/v1/reply-context`**（唔好只用 `tips` 馬名）：
+負責回覆社交媒體留言嘅機械人，請用 **`/v1/reply-context`**（**唔好**用 `/v1/ads/latest`）：
 
-- 文件：[`README_REPLY_CONTEXT_API.md`](README_REPLY_CONTEXT_API.md)
+- **下游 AI 使用說明：** [`SOCIAL_REPLY_AI_USAGE.md`](SOCIAL_REPLY_AI_USAGE.md)
+- 運維文件：[`README_REPLY_CONTEXT_API.md`](README_REPLY_CONTEXT_API.md)
 - CLI：`python social_reply_bot.py push`
 - Webhook：`SOCIAL_REPLY_BOT_WEBHOOK_URL`
 
