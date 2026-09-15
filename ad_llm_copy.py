@@ -1023,7 +1023,7 @@ class AdSocialCopywriter:
         if _is_system_subtitle(subtitle):
             subtitle = ""
         if daypart in {"今日", "聽日"}:
-            title = title.replace("今晚", daypart).replace("昨夜", daypart).replace("今夜", daypart)
+            title = title.replace("今晚", daypart).replace("今夜", daypart)
             subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
             if daypart == "聽日":
                 title = title.replace("今日", "聽日")
