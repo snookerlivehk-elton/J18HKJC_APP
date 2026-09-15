@@ -168,22 +168,45 @@ class SchemaAndBuildTest(unittest.TestCase):
                         {
                             "AD_API_PUBLIC_BASE": "https://ads.example.com",
                             "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                            "USE_SQLITE": "true",
+                            "AD_STORE_ENABLED": "true",
+                            "DATABASE_URL": "",
+                            "DATABASE_URL_SYNC": "",
+                            "RAILWAY_DATABASE_URL": "",
                         },
                         clear=False,
                     ):
-                        pkg1 = build_ad_package_from_copy(
-                            _sample_copy(),
-                            output_root=root,
-                            poster_src=fused,
-                            notify=False,
-                        )
-                        created = pkg1["created_at"]
-                        pkg2 = build_ad_package_from_copy(
-                            _sample_copy(),
-                            output_root=root,
-                            poster_src=fused,
-                            notify=False,
-                        )
+                        import ad_store
+
+                        old_engine = ad_store._ENGINE
+                        old_ensured = ad_store._ENSURED
+                        old_use = ad_store.USE_SQLITE
+                        ad_store._ENGINE = None
+                        ad_store._ENSURED = False
+                        ad_store.USE_SQLITE = True
+                        try:
+                            pkg1 = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                            created = pkg1["created_at"]
+                            pkg2 = build_ad_package_from_copy(
+                                _sample_copy(),
+                                output_root=root,
+                                poster_src=fused,
+                                notify=False,
+                            )
+                        finally:
+                            if ad_store._ENGINE is not None:
+                                try:
+                                    ad_store._ENGINE.dispose()
+                                except Exception:
+                                    pass
+                            ad_store._ENGINE = old_engine
+                            ad_store._ENSURED = old_ensured
+                            ad_store.USE_SQLITE = old_use
 
             self.assertEqual(pkg1["id"], "2026-07-15-hv-night")
             self.assertEqual(pkg2["id"], pkg1["id"])
@@ -678,6 +701,7 @@ class RemotePushAndCopySanitizeTest(unittest.TestCase):
                 "AD_API_PUBLIC_BASE": "https://j18hkjcapp-production.up.railway.app",
                 "AD_API_KEY": "secret-key",
                 "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                "AD_DISABLE_REMOTE_PUSH": "",
             },
             clear=False,
         ):
@@ -785,6 +809,7 @@ class RemotePushAndCopySanitizeTest(unittest.TestCase):
                 "AD_API_PUBLIC_BASE": "j18hkjcapp-production.up.railway.app",
                 "AD_API_KEY": "secret-key",
                 "AD_PACKAGE_REQUIRE_AI_SOCIAL": "true",
+                "AD_DISABLE_REMOTE_PUSH": "",
             },
             clear=False,
         ):

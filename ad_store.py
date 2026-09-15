@@ -406,16 +406,35 @@ def load_latest_ad_package_db(
     try:
         ensure_ad_tables(engine)
         eng = engine or get_engine()
-        sql = "SELECT package_json FROM ad_packages"
+        # 用賽日優先，再先 updated_at——避免測試／舊賽日包因剛 upsert 就搶走 /latest
+        sql = "SELECT package_json, length(poster_png) AS poster_len FROM ad_packages"
         if ready_only:
             sql += " WHERE status = 'ready'"
-        sql += " ORDER BY updated_at DESC LIMIT 1"
+        if USE_SQLITE:
+            sql += " ORDER BY racing_date DESC, updated_at DESC LIMIT 8"
+        else:
+            sql += " ORDER BY racing_date DESC NULLS LAST, updated_at DESC LIMIT 8"
         with eng.connect() as conn:
-            row = conn.execute(text(sql)).mappings().first()
-        if not row:
-            return None
-        pkg = _json_load(row["package_json"])
-        return pkg if isinstance(pkg, dict) else None
+            rows = conn.execute(text(sql)).mappings().all()
+        fallback: Optional[Dict[str, Any]] = None
+        for row in rows:
+            pkg = _json_load(row["package_json"])
+            if not isinstance(pkg, dict):
+                continue
+            tips = pkg.get("tips") or []
+            if isinstance(tips, list) and len(tips) == 0:
+                continue
+            try:
+                plen = int(row.get("poster_len") or 0)
+            except Exception:
+                plen = 0
+            if fallback is None:
+                fallback = pkg
+            # 略過明顯測試污染（極短假 PNG），但若冇更好候選仍回退
+            if plen and plen < 1024:
+                continue
+            return pkg
+        return fallback
     except Exception as exc:
         logger.warning("load_latest_ad_package_db failed: %s", exc)
         return None
