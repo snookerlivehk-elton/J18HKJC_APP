@@ -171,10 +171,37 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
 
 ## 空庫急救（production ids=[]）
 
-常見原因：Railway **redeploy 清咗 ephemeral `ad_output/`**，而共用 DB 亦無 dual-write／上游未再 `POST /v1/ads/ingest`。  
-`GET /health` 會帶 `store`（disk／db count、latest ready）方便核對。
+常見原因：
+1. Railway **redeploy 清咗 ephemeral `ad_output/`**，而 Ad API **未設 `DATABASE_URL`**（讀唔到 dual-write）
+2. GitHub Actions `meeting_tick` 失敗：secret 用咗 `postgres.railway.internal` 或根本未設 → **無快照／無 ingest**
+3. Tick 有快照但漏設 `AD_API_BASE_URL` + `AD_API_KEY` → 只寫 DB，production HTTP API 仍空
 
-由 JJJC 排位補推（有 `OPENAI_API_KEY` + `AD_API_BASE_URL` + `AD_API_KEY`）：
+`GET /health` 會帶 `store`（disk／db count、`database_url_configured`、`use_sqlite`、latest ready）。
+
+**Ad API Railway Variables（必填）：** `USE_SQLITE=false`、`DATABASE_URL`（可與 Streamlit 同一 Postgres）、`AD_API_KEY`、`AD_API_PUBLIC_BASE`
+
+**GHA Secrets（Meeting Tick → Railway）：** `RAILWAY_DATABASE_URL` = **Public proxy URL**（`*.proxy.rlwy.net`），另加 `AD_API_BASE_URL`／`AD_API_KEY`／`OPENAI_*`／`JJJC_API_BASE`
+
+由已有快照重產＋推送：
+
+```bash
+# 用共用 DB 的 snapshot batch 重畫海報 → AI 文案 → ingest
+python - <<'PY'
+from pathlib import Path
+from ad_poster import generate_ads_from_snapshot_batch
+from ad_llm_copy import AdSocialCopywriter, save_social_copy
+from ad_package import build_ad_package_from_copy
+from ad_poster import load_copy_json
+out = Path("ad_output")
+generate_ads_from_snapshot_batch("20260916HV_xxxxxxxx", output_root=out)
+copy = load_copy_json(out)
+social = AdSocialCopywriter().generate_social_copy(copy)
+save_social_copy(out, social)
+print(build_ad_package_from_copy(copy, output_root=out, force_save=True).get("remote_push"))
+PY
+```
+
+無快照時先急救（排位評分，非完整模型）：
 
 ```bash
 python ad_push_prod.py --date 2026-09-16 --course HV

@@ -195,6 +195,18 @@ def _store_health() -> Dict[str, Any]:
     except Exception as exc:
         db_error = str(exc)[:200]
     latest = load_latest_ad_package(root)
+    db_url = (
+        os.getenv("DATABASE_URL_SYNC")
+        or os.getenv("DATABASE_URL")
+        or os.getenv("RAILWAY_DATABASE_URL")
+        or ""
+    ).strip()
+    use_sqlite = (os.getenv("USE_SQLITE", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     return {
         "disk_count": len(disk_ids),
         "disk_ids_sample": disk_ids[:5],
@@ -202,8 +214,18 @@ def _store_health() -> Dict[str, Any]:
         "db_count": len(db_ids),
         "db_ids_sample": db_ids[:5],
         "db_error": db_error,
+        "database_url_configured": bool(db_url),
+        "use_sqlite": use_sqlite,
         "latest_ready_id": (latest or {}).get("id") if latest else None,
         "latest_ready_status": (latest or {}).get("status") if latest else None,
+        "hint": (
+            None
+            if (disk_ids or db_ids)
+            else (
+                "empty store: set USE_SQLITE=false + DATABASE_URL on Ad API service; "
+                "ensure meeting_tick POSTs /v1/ads/ingest (AD_API_BASE_URL+AD_API_KEY)"
+            )
+        ),
     }
 
 
