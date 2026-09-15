@@ -2,14 +2,19 @@
 
 給**負責回覆社交媒體留言**嘅下游機械人，提供：
 
-1. **最新賽事綜合推介**（fused tips，與廣告海報同一套）
+1. **最新賽事綜合推介**（fused tips，與廣告海報同一套；每場最多 4 匹）
 2. **推介馬匹嘅 Form AI 評價**（`summary`／`ai_score`／`confidence`／`tags`／`risks`／`evidence`）
 
 同現有 [Ad Package API](README_AD_API.md)（發佈用海報＋Facebook 文案）分開：Ad API 服務發佈；本上下文專供**留言答覆**。
 
+> **下游答覆 AI 請直接讀：** [`SOCIAL_REPLY_AI_USAGE.md`](SOCIAL_REPLY_AI_USAGE.md)（呼叫方式、欄位、回答硬規則）。  
+> **唔好**用 `GET /v1/ads/latest` 做留言答覆——嗰條冇完整 Form AI，係發佈用。
+
 詳見下游用法：留言機械人應輪詢／接收 webhook 後用 `tips[].horses[].ai` 回答，唔好捏造未提供嘅評價。
 
 掛喺同一 `ad_api` 服務（`bash start-ad-api.sh`），路徑前綴 `/v1/reply-context`。
+
+`GET /v1/reply-context/latest` 若本機 `reply_context/` 空白（例如 Railway redeploy），會自動由最新 ready 廣告包＋DB Form AI **即時重建**（唔推 webhook），避免下游 404。
 
 ## 機械人（本倉）
 

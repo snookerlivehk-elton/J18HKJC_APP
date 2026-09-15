@@ -424,10 +424,33 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
 # ─── 留言機械人：綜合推介 + 推介馬 AI 評價 ───────────────────────────
 
 
+def _resolve_latest_reply_context(*, rebuild: bool = True) -> Optional[Dict[str, Any]]:
+    """讀最新 reply context；碟上空或未 ready 時可由最新廣告包＋Form AI 即時重建。
+
+    Railway 重佈後 ephemeral 碟可能冇 reply_context/，但 ads 已 dual-write 喺 DB，
+    重建可保證下游留言機械人唔會 404。
+    """
+    root = _output_root()
+    pkg = load_latest_reply_context(root)
+    if pkg and pkg.get("status") == "ready":
+        return pkg
+    if not rebuild:
+        return pkg if pkg and pkg.get("status") == "ready" else None
+    result = publish_reply_context_from_latest_ad(output_root=root, notify=False)
+    if result.get("ok"):
+        rebuilt = result.get("package")
+        if rebuilt and rebuilt.get("status") == "ready":
+            return rebuilt
+    return None
+
+
 @app.get("/v1/reply-context/latest", dependencies=[Depends(require_ad_api_key)])
 def get_latest_reply_context():
-    """最新一期留言答覆上下文（綜合推介 + Form AI 評價）。"""
-    pkg = load_latest_reply_context(_output_root())
+    """最新一期留言答覆上下文（綜合推介 + Form AI 評價）。
+
+    與 /v1/ads/latest（發佈用海報＋Facebook 文案）分開；本端點專供社交留言答覆。
+    """
+    pkg = _resolve_latest_reply_context(rebuild=True)
     if not pkg or pkg.get("status") != "ready":
         raise HTTPException(status_code=404, detail="No ready reply context")
     return public_reply_payload(pkg)
@@ -439,13 +462,7 @@ def get_latest_reply_context():
 )
 def get_latest_reply_prompt():
     """LLM 可直接注入嘅參考文本（繁中）。"""
-    pkg = load_latest_reply_context(_output_root())
-    if not pkg or pkg.get("status") != "ready":
-        # 嘗試由最新廣告包即時重建（唔推 webhook）
-        result = publish_reply_context_from_latest_ad(
-            output_root=_output_root(), notify=False
-        )
-        pkg = result.get("package") if result.get("ok") else None
+    pkg = _resolve_latest_reply_context(rebuild=True)
     if not pkg or pkg.get("status") != "ready":
         raise HTTPException(status_code=404, detail="No ready reply context")
     return {

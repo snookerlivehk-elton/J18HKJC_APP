@@ -239,9 +239,9 @@ PREDICTION_API_CORS=*     # 可選；逗號分隔 origin
 |------|------|
 | 程式 | `social_reply_context.py` + `social_reply_bot.py`；路由掛喺 `ad_api.py` |
 | 啟動 | 同 Ad API：`bash start-ad-api.sh` |
-| 文件 | `README_REPLY_CONTEXT_API.md` |
+| 文件 | `README_REPLY_CONTEXT_API.md`；下游 AI：`SOCIAL_REPLY_AI_USAGE.md` |
 | 變量 | `SOCIAL_REPLY_BOT_WEBHOOK_URL`、`SOCIAL_REPLY_BOT_WEBHOOK_SECRET`、`SOCIAL_REPLY_AUTO_PUBLISH` |
-| 行為 | `GET /v1/reply-context/latest`（綜合推介＋推介馬 Form AI）；廣告包有 tips 時自動 publish＋webhook；CLI `python social_reply_bot.py push` |
+| 行為 | `GET /v1/reply-context/latest`（綜合推介＋推介馬 Form AI；缺檔時由最新 ads 即時重建）；廣告包有 tips 時自動 publish＋webhook；CLI `python social_reply_bot.py push` |
 
 | Method | Path | 用途 |
 |--------|------|------|
