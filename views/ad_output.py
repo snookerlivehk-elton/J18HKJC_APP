@@ -303,6 +303,9 @@ def _render_social_copy(
 
     featured = list(social_data.get("featured") or [])
     if featured:
+        top_n = social_data.get("featured_fused_top_n")
+        if top_n:
+            st.caption(f"精選馬限制：綜合／名單頭 {top_n} 名內")
         cols = st.columns(min(3, len(featured)))
         for col, item in zip(cols, featured):
             with col:
@@ -311,6 +314,15 @@ def _render_social_copy(
                     f"{item.get('horse_no', '?')} {item.get('horse_name', '')}**"
                 )
                 st.write(item.get("comment") or "")
+                reason = item.get("pick_reason") if isinstance(item.get("pick_reason"), dict) else {}
+                label = str((reason or {}).get("label") or "").strip()
+                if not label and item.get("basis"):
+                    label = str(item.get("basis"))
+                if label:
+                    st.caption(f"揀因：{label}")
+                angle = item.get("angle") or (reason or {}).get("angle")
+                if angle and (not label or f"角度:{angle}" not in label):
+                    st.caption(f"觀察角度：{angle}")
 
     hashtags = list(social_data.get("hashtags") or [])
     if hashtags:

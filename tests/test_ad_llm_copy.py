@@ -153,6 +153,10 @@ def test_build_llm_payload_uses_fused_primary_pool():
     assert '"comment_source": "form_text_only"' in payload
     assert '"prerace_copy": true' in payload
     assert '"form_comments_must_mark_past_runs": true' in payload
+    assert '"featured_fused_top_n": 2' in payload
+    assert '"distinct_observation_angles"' in payload
+    # top-N=2：R1 fused 只有頭兩匹進入 candidates（唔含第三）
+    assert payload.count('"horse_no": 1') >= 1
     assert '"custom_prompt": "偏高互動"' in payload
     assert '"tone": "high_interaction"' in payload
     assert '"writing_locale": "hong_kong_social"' in payload
@@ -231,6 +235,72 @@ def test_normalize_fills_missing_featured_from_fallback():
     )
     assert len(data["featured"]) == 3
     assert "不構成投注建議" in format_social_post_text(data)
+
+
+def test_normalize_remaps_outside_fused_top_n_and_adds_pick_reason(monkeypatch):
+    monkeypatch.setenv("AD_FEATURED_FUSED_TOP_N", "2")
+    writer = DummyWriter()
+    copy = _sample_copy()
+    # R1 加第 3 匹 fused，模擬 LLM 誤揀 tip #3
+    copy["races"][0]["fused_picks"].append(
+        {"horse_no": 9, "horse_name": "後備駒", "tag": "觀察", "share_pct": 10.0}
+    )
+    data = writer._normalize_result(
+        {
+            "title": "今晚邊場？",
+            "featured": [
+                {
+                    "race_no": 1,
+                    "race_id": "R1",
+                    "horse_no": 9,
+                    "horse_name": "後備駒",
+                    "comment": "本場後備駒以極快步速出閘，直路上進展不大。",
+                    "angle": "步速",
+                },
+                {
+                    "race_no": 2,
+                    "race_id": "R2",
+                    "horse_no": 5,
+                    "horse_name": "銀河之星",
+                    "comment": "沿欄省位，末段保持走勢。",
+                    "angle": "走位",
+                },
+                {
+                    "race_no": 3,
+                    "race_id": "R3",
+                    "horse_no": 8,
+                    "horse_name": "疾風少年",
+                    "comment": "形勢配合，值得留意。",
+                    "angle": "恢復",
+                },
+            ],
+            "hashtags": ["#日馬", "#沙田", "#J18"],
+        },
+        "",
+        tone="高互動型",
+        copy_data={
+            "meeting": {
+                "racing_date": "2026-09-16",
+                "course": "HV",
+                "session": "夜",
+            },
+            "races": copy["races"],
+        },
+    )
+    f0 = data["featured"][0]
+    assert f0["horse_no"] != 9
+    assert f0["horse_no"] in {1, 5}  # top-2 of R1 fused
+    assert f0["pick_reason"]["selected_by"] == "remapped"
+    assert "綜合第" in f0["pick_reason"]["label"] or "已校正" in f0["pick_reason"]["label"]
+    angles = [r.get("angle") for r in data["featured"]]
+    assert len(set(angles)) == 3
+    endings = [r["comment"] for r in data["featured"]]
+    assert len(set(endings)) == 3
+    assert "#夜馬" in data["hashtags"]
+    assert "#日馬" not in data["hashtags"]
+    assert "#跑馬地" in data["hashtags"]
+    assert "#沙田" not in data["hashtags"]
+    assert "#日馬" not in data["post_text"]
 
 
 def test_normalize_frames_live_sounding_comments():
