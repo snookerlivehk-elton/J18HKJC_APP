@@ -370,5 +370,62 @@ class CrawlSpeedguideCmsFallbackTest(unittest.TestCase):
         run.assert_not_called()
 
 
+class CrawlFormguideCmsFallbackTest(unittest.TestCase):
+    def test_waiting_empty_text_triggers_cms_by_default(self):
+        from unittest.mock import MagicMock, patch
+
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        os.environ.pop("MEETING_TICK_FG_CMS_ON_WAITING", None)
+
+        jjjc_waiting = {
+            "ok": True,
+            "waiting": True,
+            "phase": "waiting",
+            "runner_upserted": 96,
+            "runners_with_text": 0,
+            "detail": "全部 form_text 空／placeholder（waiting）",
+        }
+        cms = MagicMock(returncode=0, stdout="cms ok", stderr="")
+        with patch("jjjc_formguide_sync.sync_meeting", return_value=jjjc_waiting), patch(
+            "subprocess.run", return_value=cms
+        ) as run:
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-16", "HV", "crawl_formguide"
+            )
+        self.assertEqual(out.get("source"), "hkjc_cms_fallback")
+        self.assertTrue(out.get("ok"))
+        self.assertTrue(run.called)
+        self.assertIn("formguide_crawler.py", run.call_args[0][0])
+
+    def test_fg_cms_on_waiting_can_be_disabled(self):
+        from unittest.mock import MagicMock, patch
+
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        os.environ["MEETING_TICK_FG_CMS_ON_WAITING"] = "false"
+        self.addCleanup(lambda: os.environ.pop("MEETING_TICK_FG_CMS_ON_WAITING", None))
+
+        jjjc_waiting = {
+            "ok": True,
+            "waiting": True,
+            "runner_upserted": 10,
+            "runners_with_text": 0,
+        }
+        with patch("jjjc_formguide_sync.sync_meeting", return_value=jjjc_waiting), patch(
+            "subprocess.run"
+        ) as run:
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-16", "HV", "crawl_formguide"
+            )
+        self.assertEqual(out.get("fallback_skipped"), "waiting")
+        self.assertEqual(out.get("source"), "jjjc")
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

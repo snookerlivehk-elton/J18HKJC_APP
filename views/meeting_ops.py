@@ -287,15 +287,24 @@ for stage, label in STAGES:
                 )
                 st.rerun()
         elif stage == "FORMGUIDE":
-            if a2.button("重抓 Form Guide", key=f"act_fg_{stage}", help=help_txt):
-                with st.spinner("formguide…"):
-                    r = pipe.run_action(racing_date, course, "crawl_formguide")
+            if a2.button(
+                "重抓 Form Guide",
+                key=f"act_fg_{stage}",
+                help="JJJC 主路徑；空殼／waiting 會打 CMS 備援",
+            ):
+                with st.spinner("formguide（JJJC→CMS）…"):
+                    r = pipe.run_action(
+                        racing_date,
+                        course,
+                        "crawl_formguide",
+                        force_fallback=True,
+                    )
                 _rec("crawl_formguide", stage, str(r.get("error") or ""))
                 st.session_state.pop("ops_ready", None)
                 st.json(
                     {
                         k: r.get(k)
-                        for k in ("ok", "error", "stdout", "stderr", "source")
+                        for k in ("ok", "error", "stdout", "stderr", "source", "jjjc")
                         if r.get(k) is not None
                     }
                 )
