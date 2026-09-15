@@ -334,11 +334,11 @@ def _apply_angle_ending(comment: str, angle_label: str) -> str:
     s = str(comment or "").strip()
     meta = _ANGLE_BY_LABEL.get(angle_label) or OBSERVATION_ANGLES[0]
     tail = meta[2]
-    s = _ANGLE_TAIL_RE.sub("", s).rstrip("，,；; ")
+    s = _ANGLE_TAIL_RE.sub("", s).rstrip("，,；;。.!！ ")
     # 預留尾句空間
     budget = max(8, COMMENT_MAX_CHARS - len(tail) - 1)
     if len(s) > budget:
-        s = s[:budget].rstrip("，,；; ")
+        s = s[:budget].rstrip("，,；;。.!！ ")
     out = f"{s}，{tail}" if s else tail
     return out[:COMMENT_MAX_CHARS]
 
