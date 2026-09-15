@@ -201,12 +201,17 @@ def _store_health() -> Dict[str, Any]:
         or os.getenv("RAILWAY_DATABASE_URL")
         or ""
     ).strip()
-    use_sqlite = (os.getenv("USE_SQLITE", "true") or "true").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    try:
+        from ad_store import USE_SQLITE as store_use_sqlite
+
+        use_sqlite = bool(store_use_sqlite)
+    except Exception:
+        use_sqlite = (os.getenv("USE_SQLITE", "true") or "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
     return {
         "disk_count": len(disk_ids),
         "disk_ids_sample": disk_ids[:5],

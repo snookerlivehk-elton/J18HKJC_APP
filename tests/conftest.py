@@ -14,6 +14,8 @@ def pytest_configure(config) -> None:  # noqa: ARG001
         "GROK_BOT_WEBHOOK_URL",
         "SOCIAL_REPLY_BOT_WEBHOOK_URL",
         "REPLY_BOT_WEBHOOK_URL",
+        # Allow unit tests to exercise push_ad_package_remote with patched httpx.
+        "AD_DISABLE_REMOTE_PUSH",
     ):
         os.environ[key] = ""
     # Keep AUTH keys as test doubles unless a test overrides them.

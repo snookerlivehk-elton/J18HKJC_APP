@@ -178,7 +178,7 @@ curl -sS -X POST -H "Authorization: Bearer $KEY" \
 
 `GET /health` 會帶 `store`（disk／db count、`database_url_configured`、`use_sqlite`、latest ready）。
 
-**Ad API Railway Variables（必填）：** `USE_SQLITE=false`、`DATABASE_URL`（可與 Streamlit 同一 Postgres）、`AD_API_KEY`、`AD_API_PUBLIC_BASE`
+**Ad API Railway Variables（必填）：** `DATABASE_URL`（可與 Streamlit 同一 Postgres）、`AD_API_KEY`、`AD_API_PUBLIC_BASE`。有 Postgres URL 時會自動用 PG（即使 `USE_SQLITE` 仍係預設 true）；建議仍顯式設 `USE_SQLITE=false`。
 
 **GHA Secrets（Meeting Tick → Railway）：** `RAILWAY_DATABASE_URL` = **Public proxy URL**（`*.proxy.rlwy.net`），另加 `AD_API_BASE_URL`／`AD_API_KEY`／`OPENAI_*`／`JJJC_API_BASE`
 

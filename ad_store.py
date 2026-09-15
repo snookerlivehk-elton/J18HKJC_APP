@@ -49,6 +49,20 @@ def _resolve_database_url() -> str:
 USE_SQLITE = _env_use_sqlite()
 SQLITE_DB_PATH = _sqlite_path()
 
+
+def _has_postgres_url() -> bool:
+    for key in ("DATABASE_URL_SYNC", "DATABASE_URL", "RAILWAY_DATABASE_URL"):
+        v = (os.getenv(key) or "").strip().lower()
+        if v.startswith("postgres://") or v.startswith("postgresql://"):
+            return True
+    return False
+
+
+# Railway Ad API 常留住預設 USE_SQLITE=true，但同時有共用 Postgres。
+# 有 Postgres URL 時一律用 PG，否則 redeploy 清空 ephemeral 碟後 hydrate 會讀空 sqlite。
+if _has_postgres_url():
+    USE_SQLITE = False
+
 _ENGINE: Optional[Engine] = None
 _ENSURED = False
 
