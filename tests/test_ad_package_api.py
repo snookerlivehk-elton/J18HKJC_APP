@@ -398,8 +398,22 @@ class ApiAuthSmokeTest(unittest.TestCase):
         client = TestClient(app)
         r = client.get("/health")
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json().get("service"), "j18-ad-api")
+        body = r.json()
+        self.assertEqual(body.get("service"), "j18-ad-api")
+        self.assertIn("store", body)
+        self.assertIn("disk_count", body.get("store") or {})
+        self.assertIn("db_ok", body.get("store") or {})
 
+    def test_publish_hashtags_drop_conflicting_session(self):
+        from ad_package import _publish_hashtags
+
+        tags = _publish_hashtags(
+            {"venue_code": "HV", "session": "夜"},
+            extra=["#日馬", "#香港賽馬"],
+        )
+        self.assertIn("#夜馬", tags)
+        self.assertNotIn("#日馬", tags)
+        self.assertIn("#香港賽馬", tags)
     def test_latest_requires_key(self):
         from fastapi.testclient import TestClient
 

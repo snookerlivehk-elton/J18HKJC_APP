@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -36,6 +37,7 @@ from ad_package import (
     load_ad_package,
     load_latest_ad_package,
     package_paths,
+    packages_dir,
     public_payload,
 )
 from ad_poster import default_output_dir, latest_paths, load_copy_json
@@ -51,6 +53,47 @@ from social_reply_context import (
     publish_reply_context_from_latest_ad,
 )
 
+
+def _output_root() -> Path:
+    custom = (os.getenv("AD_OUTPUT_DIR") or "").strip()
+    return Path(custom) if custom else default_output_dir()
+
+
+def _hydrate_packages_from_db() -> Dict[str, Any]:
+    """Redeploy 後 ephemeral 碟會空；由共用 DB 還原 packages／海報。"""
+    root = _output_root()
+    out: Dict[str, Any] = {"ok": False, "hydrated": [], "error": None}
+    try:
+        from ad_store import hydrate_package_to_disk, list_ad_package_ids_db
+
+        ids = list(list_ad_package_ids_db() or [])
+        for ad_id in ids[:50]:
+            try:
+                result = hydrate_package_to_disk(str(ad_id), root)
+                if isinstance(result, dict) and result.get("ok"):
+                    out["hydrated"].append(str(ad_id))
+            except Exception:
+                continue
+        out["ok"] = True
+        out["db_ids"] = len(ids)
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    info = _hydrate_packages_from_db()
+    n = len(info.get("hydrated") or [])
+    if info.get("ok"):
+        print(
+            f"ad_api startup hydrate: restored {n}/{info.get('db_ids', 0)} packages from DB"
+        )
+    else:
+        print(f"ad_api startup hydrate skipped: {info.get('error') or 'unknown'}")
+    yield
+
+
 app = FastAPI(
     title="J18 Ad Package API",
     version=get_version(),
@@ -59,6 +102,7 @@ app = FastAPI(
         "另提供留言機械人用綜合推介＋AI 評價上下文 /v1/reply-context；"
         "另提供公開賽日速覽嵌入 /embed/raceday（無需登入）"
     ),
+    lifespan=_lifespan,
 )
 
 _cors = os.getenv("AD_API_CORS") or os.getenv("PREDICTION_API_CORS") or "*"
@@ -102,11 +146,6 @@ def require_ad_api_key(
     return True
 
 
-def _output_root() -> Path:
-    custom = (os.getenv("AD_OUTPUT_DIR") or "").strip()
-    return Path(custom) if custom else default_output_dir()
-
-
 class GenerateBody(BaseModel):
     batch_id: Optional[str] = Field(None, description="預測快照 batch_id；可選")
     racing_date: str = Field("", description="YYYY-MM-DD；可從 copy.json 推斷")
@@ -135,6 +174,61 @@ class ReplyRebuildBody(BaseModel):
     notify: bool = Field(True, description="是否 webhook 推去留言機械人")
 
 
+def _store_health() -> Dict[str, Any]:
+    """診斷 empty store：碟／DB 分別有幾多包、latest ready 有冇。"""
+    root = _output_root()
+    disk_ids: list[str] = []
+    try:
+        disk_ids = sorted(
+            (p.stem for p in packages_dir(root).glob("*.json")), reverse=True
+        )
+    except Exception:
+        disk_ids = []
+    db_ids: list[str] = []
+    db_ok = False
+    db_error: Optional[str] = None
+    try:
+        from ad_store import list_ad_package_ids_db
+
+        db_ids = list(list_ad_package_ids_db() or [])
+        db_ok = True
+    except Exception as exc:
+        db_error = str(exc)[:200]
+    latest = load_latest_ad_package(root)
+    db_url = (
+        os.getenv("DATABASE_URL_SYNC")
+        or os.getenv("DATABASE_URL")
+        or os.getenv("RAILWAY_DATABASE_URL")
+        or ""
+    ).strip()
+    use_sqlite = (os.getenv("USE_SQLITE", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    return {
+        "disk_count": len(disk_ids),
+        "disk_ids_sample": disk_ids[:5],
+        "db_ok": db_ok,
+        "db_count": len(db_ids),
+        "db_ids_sample": db_ids[:5],
+        "db_error": db_error,
+        "database_url_configured": bool(db_url),
+        "use_sqlite": use_sqlite,
+        "latest_ready_id": (latest or {}).get("id") if latest else None,
+        "latest_ready_status": (latest or {}).get("status") if latest else None,
+        "hint": (
+            None
+            if (disk_ids or db_ids)
+            else (
+                "empty store: set USE_SQLITE=false + DATABASE_URL on Ad API service; "
+                "ensure meeting_tick POSTs /v1/ads/ingest (AD_API_BASE_URL+AD_API_KEY)"
+            )
+        ),
+    }
+
+
 @app.get("/health")
 def health():
     return {
@@ -150,6 +244,7 @@ def health():
                 or ""
             ).strip()
         ),
+        "store": _store_health(),
     }
 
 

@@ -1,10 +1,19 @@
 name: Meeting Tick (pre + post race)
 
 # 阿里雲／Railway 雙邊並行：
-#   Secrets: RAILWAY_DATABASE_URL（或沿用 DATABASE_URL）、ALIYUN_DATABASE_URL、JJJC_API_BASE
-#   未設定該邊 DB secret → 該 job 失敗（exit 1；避免假綠燈）。若刻意停用設 Vars ENABLE_MEETING_TICK_RAILWAY/ALIYUN=false
-#   Vars（可選）: ENABLE_MEETING_TICK_RAILWAY / ENABLE_MEETING_TICK_ALIYUN = false 可關閉
-#   預設 mode=all（賽前＋賽後）；可用 workflow_dispatch mode 覆寫
+#   Secrets（Railway job）:
+#     RAILWAY_DATABASE_URL = Postgres *Public* URL（*.proxy.rlwy.net），唔好用 postgres.railway.internal
+#     （或沿用 DATABASE_URL 作 fallback）
+#     可選：RAILWAY_DATABASE_URL_SYNC、JJJC_API_BASE、JJJC_RESULTS_API_BASE
+#     可選廣告推送：AD_API_BASE_URL、AD_API_KEY、AD_API_PUBLIC_BASE、OPENAI_API_KEY、OPENAI_BASE_URL、OPENAI_MODEL
+#   Secrets（Aliyun job）: ALIYUN_DATABASE_URL（可選 SYNC）
+#   未設定該邊 DB secret → 該 job 失敗（exit 1；避免假綠燈）
+#   Vars: ENABLE_MEETING_TICK_RAILWAY / ENABLE_MEETING_TICK_ALIYUN = false 可關閉
+#   預設 mode=all；可用 workflow_dispatch mode 覆寫
+#
+# 為何 GHA 必須用 Public URL：
+#   GitHub-hosted runner 喺 Railway 外面，連唔到 *.railway.internal。
+#   用 internal URL 會令 tick 永遠失敗 → 無快照／無 ingest → Ad API empty store。
 
 on:
   schedule:
@@ -45,12 +54,20 @@ jobs:
       - name: Run meeting_tick (Railway)
         env:
           USE_SQLITE: "false"
+          # Prefer explicit public proxy secret; fall back to DATABASE_URL
           DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
           DATABASE_URL_FALLBACK: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_SYNC: ${{ secrets.RAILWAY_DATABASE_URL_SYNC }}
           DATABASE_URL_SYNC_FALLBACK: ${{ secrets.DATABASE_URL_SYNC }}
           JJJC_API_BASE: ${{ secrets.JJJC_API_BASE }}
           JJJC_RESULTS_API_BASE: ${{ secrets.JJJC_RESULTS_API_BASE }}
+          # Snapshot→poster→AI→ingest（漏設則只寫 DB／本機，production Ad API 仍會空）
+          AD_API_BASE_URL: ${{ secrets.AD_API_BASE_URL }}
+          AD_API_PUBLIC_BASE: ${{ secrets.AD_API_PUBLIC_BASE }}
+          AD_API_KEY: ${{ secrets.AD_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           MEETING_TICK_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
           MEETING_TICK_LOOKAHEAD_DAYS: ${{ github.event.inputs.lookahead_days || '3' }}
           MEETING_TICK_MODE: ${{ github.event.inputs.mode || 'all' }}
@@ -58,8 +75,19 @@ jobs:
           export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "::error::FATAL: set RAILWAY_DATABASE_URL or DATABASE_URL secret (refusing silent skip)"
+            echo "::error::FATAL: set RAILWAY_DATABASE_URL (Public proxy URL) or DATABASE_URL secret"
+            echo "::error::Do NOT use postgres.railway.internal — GitHub runners cannot resolve it."
             exit 1
+          fi
+          # Guard: refuse obvious internal-only hosts on GHA
+          case "${DATABASE_URL}" in
+            *railway.internal*)
+              echo "::error::FATAL: DATABASE_URL uses railway.internal; set the Public TCP proxy URL instead"
+              exit 1
+              ;;
+          esac
+          if [ -z "${AD_API_BASE_URL:-}" ] || [ -z "${AD_API_KEY:-}" ]; then
+            echo "::warning::AD_API_BASE_URL / AD_API_KEY not set — tick will not POST /v1/ads/ingest to production"
           fi
           EXTRA=""
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then
@@ -90,6 +118,12 @@ jobs:
           DATABASE_URL_SYNC: ${{ secrets.ALIYUN_DATABASE_URL_SYNC }}
           JJJC_API_BASE: ${{ secrets.JJJC_API_BASE }}
           JJJC_RESULTS_API_BASE: ${{ secrets.JJJC_RESULTS_API_BASE }}
+          AD_API_BASE_URL: ${{ secrets.AD_API_BASE_URL }}
+          AD_API_PUBLIC_BASE: ${{ secrets.AD_API_PUBLIC_BASE }}
+          AD_API_KEY: ${{ secrets.AD_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           MEETING_TICK_LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '3' }}
           MEETING_TICK_LOOKAHEAD_DAYS: ${{ github.event.inputs.lookahead_days || '3' }}
           MEETING_TICK_MODE: ${{ github.event.inputs.mode || 'all' }}

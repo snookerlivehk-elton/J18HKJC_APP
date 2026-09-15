@@ -1135,14 +1135,24 @@ def _write_primary_meeting_outputs(
         copy_archive = {"ok": False, "error": str(exc)}
 
     # 統計／海報完成後：產出廣告包 JSON，並 webhook 通知外部助手
+    # AD_SKIP_AUTO_PUBLISH=1：僅寫 fused／copy（供 ad_push_prod 先產 AI 再推，避免 pending 包搶先 ingest）
     ad_pkg: Dict[str, Any] = {}
-    try:
-        from ad_package import publish_ad_package_after_outputs
+    skip_pub = (os.getenv("AD_SKIP_AUTO_PUBLISH") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if skip_pub:
+        ad_pkg = {"ok": True, "skipped": True, "reason": "AD_SKIP_AUTO_PUBLISH"}
+    else:
+        try:
+            from ad_package import publish_ad_package_after_outputs
 
-        ad_pkg = publish_ad_package_after_outputs(output_root=out_root, notify=True)
-    except Exception as exc:
-        print(f"[ad_poster] ad package publish failed: {exc}")
-        ad_pkg = {"ok": False, "error": str(exc)}
+            ad_pkg = publish_ad_package_after_outputs(output_root=out_root, notify=True)
+        except Exception as exc:
+            print(f"[ad_poster] ad package publish failed: {exc}")
+            ad_pkg = {"ok": False, "error": str(exc)}
 
     return {
         "ok": len(err_list) == 0,

@@ -18,12 +18,20 @@ class NLPProcessor:
             os.getenv("OPENAI_API_KEY", "")
             or os.getenv("OPENROUTER_API_KEY", "")
         ).strip()
-        # 官方 OpenAI 預設 gpt-4o-mini；OpenRouter 請設 OPENAI_MODEL=openai/gpt-4o-mini 與 OPENAI_BASE_URL
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        default_base = "https://api.openai.com/v1/chat/completions"
-        if not os.getenv("OPENAI_BASE_URL") and os.getenv("OPENROUTER_API_KEY") and not os.getenv("OPENAI_API_KEY"):
-            default_base = "https://openrouter.ai/api/v1/chat/completions"
-        self.base_url = os.getenv("OPENAI_BASE_URL", default_base)
+        looks_openrouter = self.api_key.startswith("sk-or-") or bool(
+            (os.getenv("OPENROUTER_API_KEY") or "").strip()
+        )
+        # 官方 OpenAI 預設 gpt-4o-mini；OpenRouter key 自動走 openrouter.ai
+        default_model = (
+            "deepseek/deepseek-chat" if looks_openrouter else "gpt-4o-mini"
+        )
+        self.model = os.getenv("OPENAI_MODEL", default_model)
+        if os.getenv("OPENAI_BASE_URL"):
+            self.base_url = os.getenv("OPENAI_BASE_URL")
+        elif looks_openrouter:
+            self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        else:
+            self.base_url = "https://api.openai.com/v1/chat/completions"
 
     def is_ready(self) -> bool:
         return bool(self.api_key)
