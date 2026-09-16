@@ -243,6 +243,35 @@ def stable_ad_id(
     return f"{d}-{venue}-{session_key}"
 
 
+def stable_post_race_ad_id(
+    racing_date: str,
+    course: str,
+    *,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
+) -> str:
+    """賽後命中廣告幂等 id，例如 2026-09-16-hv-night-post。"""
+    return (
+        stable_ad_id(
+            racing_date,
+            course,
+            session=session,
+            is_day_meeting=is_day_meeting,
+        )
+        + "-post"
+    )
+
+
+def auto_post_race_ingest_enabled() -> bool:
+    """SETTLED 產文後是否 ingest 到 Ad API（預設開）。"""
+    return (os.getenv("MEETING_TICK_AUTO_POST_RACE_INGEST", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _session_zh(theme: str) -> str:
     return "日" if theme == "day" else "夜"
 
@@ -964,6 +993,7 @@ def public_payload(pkg: Dict[str, Any]) -> Dict[str, Any]:
         "id",
         "created_at",
         "status",
+        "purpose",
         "meeting",
         "intro",
         "tips",
@@ -1228,6 +1258,286 @@ def publish_ad_package_after_outputs(
     except Exception as e:
         logger.exception("publish_ad_package_after_outputs failed")
         return {"ok": False, "error": str(e)}
+
+
+def _tips_from_post_race_featured(featured: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """由賽後 featured／promo picks_detail 組成 tips（下游 FB 用）。"""
+    tips: List[Dict[str, Any]] = []
+    for item in featured or []:
+        if not isinstance(item, dict):
+            continue
+        race_no = item.get("race_no")
+        try:
+            race_i = int(race_no) if race_no is not None else None
+        except (TypeError, ValueError):
+            race_i = None
+        horses: List[Dict[str, Any]] = []
+        for p in list(item.get("picks_detail") or []):
+            if not isinstance(p, dict):
+                continue
+            try:
+                no = int(p.get("no"))
+            except (TypeError, ValueError):
+                continue
+            name = str(p.get("name") or "").strip()
+            horses.append({"no": no, "name": name} if name else {"no": no})
+        if not horses and item.get("horse_name"):
+            name = str(item.get("horse_name") or "").strip()
+            if name:
+                horses = [{"name": name}]
+        if race_i is None or not horses:
+            continue
+        tip: Dict[str, Any] = {"race": race_i, "horses": horses[:4]}
+        if item.get("race_id"):
+            tip["race_id"] = str(item.get("race_id"))
+        tips.append(tip)
+    return tips
+
+
+def _resolve_pre_race_poster_bytes(
+    *,
+    racing_date: str,
+    course: str,
+    output_root: Path,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
+) -> Tuple[Optional[bytes], str]:
+    """賽後包重用當日賽前海報。回傳 (bytes, source_label)。"""
+    out_root = Path(output_root)
+    pre_id = stable_ad_id(
+        racing_date, course, session=session, is_day_meeting=is_day_meeting
+    )
+    pre_paths = package_paths(pre_id, out_root)
+    if pre_paths["poster"].is_file():
+        return pre_paths["poster"].read_bytes(), f"disk:{pre_paths['poster'].name}"
+    fused = latest_paths(out_root)["fused"]
+    if fused.is_file():
+        return fused.read_bytes(), "disk:fused.png"
+    try:
+        from ad_store import get_poster_bytes_db
+
+        blob = get_poster_bytes_db(pre_id)
+        if blob:
+            return bytes(blob), f"db:{pre_id}"
+    except Exception as exc:
+        logger.warning("load pre-race poster from db failed: %s", exc)
+    return None, ""
+
+
+def build_post_race_ad_package(
+    post_race: Dict[str, Any],
+    *,
+    output_root: Optional[Path] = None,
+    session: Optional[str] = None,
+    is_day_meeting: Optional[bool] = None,
+    notify: bool = True,
+    force_save: bool = True,
+) -> Dict[str, Any]:
+    """
+    由賽後文案組 ready 廣告包並可 ingest 到 Ad API（id 帶 -post）。
+    海報暫重用當日賽前 fused／packages PNG。
+    """
+    out_root = Path(output_root) if output_root else default_output_dir()
+    meeting_meta = dict((post_race or {}).get("meeting") or {})
+    racing_date = str(meeting_meta.get("racing_date") or "")[:10]
+    course = str(meeting_meta.get("course") or "").upper()
+    if not racing_date or not course:
+        raise ValueError("post_race missing meeting.racing_date / course")
+
+    fx = lookup_meeting_session(racing_date, course)
+    if session is None:
+        session = fx.get("session")
+    if is_day_meeting is None and "is_day_meeting" in fx:
+        is_day_meeting = fx.get("is_day_meeting")
+
+    theme = resolve_poster_theme(
+        course=course, session=session, is_day_meeting=is_day_meeting
+    )
+    ad_id = stable_post_race_ad_id(
+        racing_date, course, session=session, is_day_meeting=is_day_meeting
+    )
+    venue = _venue_label(course)
+    session_zh = _session_zh(theme)
+    meeting = {
+        "date": racing_date,
+        "weekday": _weekday_zh(racing_date),
+        "venue": venue,
+        "venue_code": course,
+        "session": session_zh,
+        "purpose": "post_race",
+        "batch_id": str(meeting_meta.get("batch_id") or ""),
+    }
+
+    featured = list((post_race or {}).get("featured") or [])
+    tips = _tips_from_post_race_featured(featured)
+    n_promo = int((post_race or {}).get("n_promo_races") or len(featured) or 0)
+    intro = str((post_race or {}).get("subtitle") or "").strip() or (
+        f"{racing_date} {venue}{session_zh}賽後回顧：共 {n_promo} 場達宣傳門檻"
+    )
+    post_text = str((post_race or {}).get("post_text") or "").strip()
+    if not post_text:
+        raise ValueError("post_race missing post_text")
+
+    hashtags = _publish_hashtags(
+        meeting, extra=list((post_race or {}).get("hashtags") or DEFAULT_HASHTAGS)
+    )
+    facebook = _ensure_facebook_publish_ready(
+        post_text, meeting=meeting, cta=DEFAULT_CTA, hashtags=hashtags
+    )
+    hashtags = _publish_hashtags(meeting, extra=hashtags)
+
+    ai_block = {
+        "title": str((post_race or {}).get("title") or "").strip(),
+        "subtitle": str((post_race or {}).get("subtitle") or "").strip(),
+        "post_text": post_text,
+        "featured": featured,
+        "hashtags": list((post_race or {}).get("hashtags") or []),
+        "footer": str((post_race or {}).get("footer") or "").strip(),
+        "source": str((post_race or {}).get("source") or ""),
+        "purpose": "post_race",
+        "n_promo_races": n_promo,
+    }
+
+    poster_bytes, poster_src = _resolve_pre_race_poster_bytes(
+        racing_date=racing_date,
+        course=course,
+        output_root=out_root,
+        session=session,
+        is_day_meeting=is_day_meeting,
+    )
+    paths = package_paths(ad_id, out_root)
+    has_poster = False
+    poster_url = ""
+    if poster_bytes:
+        paths["poster"].parent.mkdir(parents=True, exist_ok=True)
+        paths["poster"].write_bytes(poster_bytes)
+        has_poster = paths["poster"].is_file()
+        poster_url = absolute_poster_url(ad_id)
+
+    if not has_poster:
+        status = "pending_poster"
+    else:
+        status = "ready"
+
+    existing = load_ad_package(ad_id, out_root)
+    created_at = (
+        existing.get("created_at")
+        if existing and existing.get("created_at")
+        else _hk_now_iso()
+    )
+    payload: Dict[str, Any] = {
+        "id": ad_id,
+        "created_at": created_at,
+        "status": status,
+        "purpose": "post_race",
+        "meeting": meeting,
+        "intro": intro,
+        "tips": tips,
+        "copy": {
+            "facebook": facebook,
+            "cta": DEFAULT_CTA,
+            "hashtags": hashtags,
+            "ai": ai_block,
+            "short": str((post_race or {}).get("title") or intro)[:80],
+        },
+        "assets": {
+            "poster_url": poster_url,
+            "poster_alt": f"J18 賽後命中回顧 {racing_date} {venue}{session_zh}",
+        },
+        "publish": {
+            "channels": ["facebook"],
+            "page": DEFAULT_FB_PAGE,
+            "when": "immediate",
+        },
+        "links": {"site": DEFAULT_SITE, "detail": ""},
+        "meta": {
+            "purpose": "post_race",
+            "has_poster": has_poster,
+            "poster_source": poster_src,
+            "n_promo_races": n_promo,
+            "n_tips": len(tips),
+            "batch_id": meeting.get("batch_id"),
+        },
+    }
+
+    save_ad_package(payload, out_root, force=force_save, push_remote=False)
+    if status == "ready" and poster_bytes:
+        remote = push_ad_package_remote(
+            payload, poster_png=poster_bytes, notify=bool(notify)
+        )
+        payload["remote_push"] = {
+            "ok": bool(remote.get("ok")),
+            "skipped": bool(remote.get("skipped")),
+            "error": remote.get("error") or remote.get("reason"),
+            "reason": remote.get("reason"),
+            "id": remote.get("id"),
+            "url": remote.get("url"),
+            "notify": bool(notify),
+        }
+        if remote.get("ok"):
+            try:
+                package_paths(ad_id, out_root)["latest_id"].write_text(
+                    ad_id, encoding="utf-8"
+                )
+            except Exception:
+                pass
+            save_ad_package(payload, out_root, force=True, push_remote=False)
+    else:
+        payload["remote_push"] = {
+            "ok": False,
+            "skipped": True,
+            "reason": f"status not ready ({status})" if status != "ready" else "no poster",
+        }
+
+    if notify and status == "ready" and not (payload.get("remote_push") or {}).get("ok"):
+        wh = dispatch_ad_webhook(payload)
+        payload["webhook"] = wh
+        save_ad_package(payload, out_root, force=True, push_remote=False)
+
+    return payload
+
+
+def publish_post_race_ad_package(
+    post_race: Dict[str, Any],
+    *,
+    output_root: Optional[Path] = None,
+    notify: bool = True,
+) -> Dict[str, Any]:
+    """賽後文案 → Ad API ingest（供 tick／UI 呼叫）。"""
+    if not auto_post_race_ingest_enabled():
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "MEETING_TICK_AUTO_POST_RACE_INGEST disabled",
+        }
+    try:
+        pkg = build_post_race_ad_package(
+            post_race,
+            output_root=output_root,
+            notify=notify,
+            force_save=True,
+        )
+        remote = (pkg or {}).get("remote_push") or {}
+        ready = str(pkg.get("status") or "") == "ready"
+        return {
+            "ok": ready,
+            "id": pkg.get("id"),
+            "status": pkg.get("status"),
+            "purpose": "post_race",
+            "remote_push": remote,
+            "webhook": pkg.get("webhook"),
+            "package": pkg,
+            "waiting": not ready,
+            "error": None
+            if ready
+            else (
+                (remote.get("error") or remote.get("reason"))
+                or "post-race package not ready (need pre-race poster)"
+            ),
+        }
+    except Exception as exc:
+        logger.exception("publish_post_race_ad_package failed")
+        return {"ok": False, "error": str(exc)}
 
 
 def generate_ad_package(

@@ -847,5 +847,150 @@ class RemotePushAndCopySanitizeTest(unittest.TestCase):
         self.assertIn("#日馬", tags)
 
 
+class PostRacePackageTest(unittest.TestCase):
+    def test_stable_post_race_id(self):
+        from ad_package import stable_post_race_ad_id
+
+        with mock.patch("ad_package.resolve_poster_theme", return_value="night"):
+            self.assertEqual(
+                stable_post_race_ad_id("2026-09-16", "HV", is_day_meeting=False),
+                "2026-09-16-hv-night-post",
+            )
+
+    def test_build_post_race_package_ingests(self):
+        from ad_package import (
+            build_post_race_ad_package,
+            public_payload,
+            stable_post_race_ad_id,
+        )
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fused = root / "fused.png"
+            fused.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+            post = {
+                "meeting": {
+                    "racing_date": "2026-09-16",
+                    "course": "HV",
+                    "batch_id": "20260916HV_x",
+                },
+                "title": "2026-09-16 HV 賽後回顧",
+                "subtitle": "共 1 場達宣傳門檻",
+                "post_text": "第5場｜競駿非凡\n命中：覆蓋冠亞季\n\n#J18",
+                "featured": [
+                    {
+                        "race_no": 5,
+                        "race_id": "20260916HV05",
+                        "horse_name": "競駿非凡",
+                        "picks_detail": [
+                            {"rank": 1, "no": 4, "name": "幸運愉快", "finish": 2},
+                            {"rank": 2, "no": 6, "name": "競駿非凡", "finish": 1},
+                            {"rank": 3, "no": 7, "name": "紅錢到", "finish": 3},
+                        ],
+                        "rules": ["覆蓋冠亞季"],
+                        "comment": "T3",
+                    }
+                ],
+                "hashtags": ["#J18", "#賽後回顧"],
+                "n_promo_races": 1,
+                "source": "fallback",
+            }
+            pushed: Dict[str, Any] = {}
+
+            def fake_push(payload, *, poster_png=None, notify=False):
+                pushed["payload"] = payload
+                pushed["notify"] = notify
+                pushed["has_poster"] = bool(poster_png)
+                return {"ok": True, "id": payload.get("id"), "url": "http://x/ingest"}
+
+            with mock.patch("ad_package.resolve_poster_theme", return_value="night"), mock.patch(
+                "ad_package.lookup_meeting_session",
+                return_value={"session": "夜", "is_day_meeting": False},
+            ), mock.patch("ad_package.push_ad_package_remote", side_effect=fake_push), mock.patch(
+                "ad_package.require_ai_social", return_value=True
+            ), mock.patch.dict(
+                "os.environ",
+                {"MEETING_TICK_AUTO_POST_RACE_INGEST": "true", "USE_SQLITE": "true"},
+                clear=False,
+            ):
+                pkg = build_post_race_ad_package(
+                    post, output_root=root, notify=True, force_save=True
+                )
+
+            self.assertEqual(pkg["id"], "2026-09-16-hv-night-post")
+            self.assertEqual(pkg["purpose"], "post_race")
+            self.assertEqual(pkg["status"], "ready")
+            self.assertTrue((pkg.get("remote_push") or {}).get("ok"))
+            self.assertTrue(pushed.get("notify"))
+            self.assertTrue(pushed.get("has_poster"))
+            tips = pkg.get("tips") or []
+            self.assertEqual(tips[0]["race"], 5)
+            self.assertEqual(len(tips[0]["horses"]), 3)
+            pub = public_payload(pkg)
+            self.assertEqual(pub.get("purpose"), "post_race")
+            fb = (pub.get("copy") or {}).get("facebook") or ""
+            self.assertIn("第5場", fb)
+            self.assertIn("J18.hk", fb)
+            self.assertEqual(
+                stable_post_race_ad_id("2026-09-16", "HV", is_day_meeting=False),
+                "2026-09-16-hv-night-post",
+            )
+
+    def test_run_auto_post_race_copy_triggers_publish(self):
+        from ad_copy_jobs import run_auto_post_race_copy
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            promo = {
+                "meeting": {"batch_id": "b1", "racing_date": "2026-09-16", "course": "HV"},
+                "n_promo_races": 1,
+                "promo_races": [
+                    {
+                        "race_id": "20260916HV05",
+                        "picks": "1:4 幸運愉快 / 2:6 競駿非凡 / 3:7 紅錢到",
+                        "picks_detail": [
+                            {"rank": 1, "no": 4, "name": "幸運愉快", "finish": 2},
+                            {"rank": 2, "no": 6, "name": "競駿非凡", "finish": 1},
+                            {"rank": 3, "no": 7, "name": "紅錢到", "finish": 3},
+                        ],
+                        "win_odds7": False,
+                        "qin_odds10": False,
+                        "t3_cover": True,
+                        "t4_cover": False,
+                        "any_promo": True,
+                    }
+                ],
+            }
+            with mock.patch(
+                "ad_package.publish_post_race_ad_package",
+                return_value={"ok": True, "id": "2026-09-16-hv-night-post"},
+            ) as pub, mock.patch(
+                "ad_copy_jobs.generate_post_race_copy",
+                return_value={
+                    "title": "t",
+                    "subtitle": "s",
+                    "post_text": "正文",
+                    "featured": promo["promo_races"],
+                    "hashtags": ["#J18"],
+                    "source": "fallback",
+                    "n_promo_races": 1,
+                },
+            ):
+                # promote race_no for featured tip builder if needed
+                out = run_auto_post_race_copy(
+                    racing_date="2026-09-16",
+                    course="HV",
+                    promo=promo,
+                    batch_id="b1",
+                    output_root=root,
+                    force=True,
+                )
+            self.assertTrue(out.get("ok"))
+            self.assertEqual(
+                (out.get("ad_package") or {}).get("id"), "2026-09-16-hv-night-post"
+            )
+            pub.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

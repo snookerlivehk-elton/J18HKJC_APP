@@ -1616,6 +1616,7 @@ class MeetingTickRunner:
                             "archive",
                             "promo_hits",
                             "post_race_copy",
+                            "ad_package",
                         )
                         if k in step
                     }

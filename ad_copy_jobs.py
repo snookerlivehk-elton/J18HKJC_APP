@@ -845,6 +845,18 @@ def run_auto_post_race_copy(
     path = out_root / POST_RACE_COPY_FILE
     path.write_text(json.dumps(copy_data, ensure_ascii=False, indent=2), encoding="utf-8")
     archived = write_archive_version(out_root, d, c, "post_race", copy_data)
+
+    # 推去 Ad API，令下游 /v1/ads/latest 可攞賽後文案發佈
+    ad_pkg: Dict[str, Any] = {}
+    try:
+        from ad_package import publish_post_race_ad_package
+
+        ad_pkg = publish_post_race_ad_package(
+            copy_data, output_root=out_root, notify=True
+        )
+    except Exception as exc:
+        ad_pkg = {"ok": False, "error": str(exc)}
+
     return {
         "ok": True,
         "batch_id": bid,
@@ -856,6 +868,7 @@ def run_auto_post_race_copy(
         "n_promo_races": n_promo or len(promo_races),
         "post_race_copy": str(path),
         "archive": archived,
+        "ad_package": ad_pkg,
     }
 
 

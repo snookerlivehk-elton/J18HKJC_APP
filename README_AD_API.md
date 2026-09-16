@@ -275,7 +275,7 @@ python ad_push_prod.py --date 2026-09-16 --course HV
 }
 ```
 
-> 賽後命中廣告目前只得邏輯／文案 job，未有海報同呢條 API；本服務只涵蓋賽前預測包。
+> 賽後命中廣告：settle／tick 產 `post_race` 文案後，會組 id `{date}-{hv|st}-{day|night}-post` 並 `POST /v1/ads/ingest`（重用當日賽前海報；`purpose=post_race`）。下游 `GET /v1/ads/latest` 會睇到呢個包。可用 `MEETING_TICK_AUTO_POST_RACE_INGEST=false` 關閉。
 
 ## 留言答覆上下文（綜合推介 + Form AI）
 
