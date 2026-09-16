@@ -341,3 +341,35 @@ def test_picks_detail_enriches_post_race_and_archive(tmp_path: Path):
         kind="copy", racing_date="2026-09-06", course="ST", output_root=tmp_path
     )
     assert denied.get("ok") is False
+
+
+def test_list_archive_meetings_includes_db_only(tmp_path: Path, monkeypatch):
+    """無本機 archive 目錄時，仍應列出 DB ad_archives。"""
+    from ad_copy_jobs import list_archive_meetings
+
+    db_rows = [
+        {
+            "racing_date": "2026-09-16",
+            "course": "HV",
+            "label": "2026-09-16 HV",
+            "kinds": {
+                "promo_hits": {
+                    "batch_id": "20260916HV_fed6523d",
+                    "n_promo_races": 1,
+                    "source": "db",
+                }
+            },
+            "dir": "db://ad_archives/2026-09-16_HV",
+        }
+    ]
+    monkeypatch.setattr(
+        "ad_store.list_archive_meetings_db", lambda: db_rows, raising=False
+    )
+    # Ensure import path used inside list_archive_meetings
+    import ad_store
+
+    monkeypatch.setattr(ad_store, "list_archive_meetings_db", lambda: db_rows)
+    rows = list_archive_meetings(tmp_path)
+    assert any(r.get("racing_date") == "2026-09-16" for r in rows)
+    hv = next(r for r in rows if r.get("course") == "HV")
+    assert "promo_hits" in (hv.get("kinds") or {})

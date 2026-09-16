@@ -94,6 +94,27 @@ class AdStoreRoundtripTest(unittest.TestCase):
             ad_store.job_done_for_batch_db("2026-09-13", "ST", "social", "B2")
         )
 
+    def test_list_archive_meetings_db(self):
+        ad_store = self.ad_store
+        ad_store.upsert_archive(
+            "2026-09-16",
+            "HV",
+            "promo_hits",
+            {
+                "meeting": {"batch_id": "20260916HV_x", "generated_at": "t"},
+                "n_promo_races": 1,
+                "promo_races": [{"race_id": "20260916HV05"}],
+            },
+            batch_id="20260916HV_x",
+        )
+        rows = ad_store.list_archive_meetings_db()
+        self.assertTrue(any(r.get("racing_date") == "2026-09-16" for r in rows))
+        hv = next(r for r in rows if r.get("course") == "HV")
+        self.assertIn("promo_hits", hv.get("kinds") or {})
+        self.assertEqual(
+            (hv["kinds"]["promo_hits"]).get("batch_id"), "20260916HV_x"
+        )
+
     def test_social_json_and_hydrate(self):
         ad_store = self.ad_store
         pkg = {

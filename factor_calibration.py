@@ -1169,15 +1169,42 @@ class FactorCalibration:
         if snaps.empty:
             return pd.DataFrame(), pd.DataFrame(), {"error": "快照尚未回填名次"}
 
-        # 舊快照無 ad_pick_rank：用 fused_share 即時重建（不寫回）
-        if "ad_pick_rank" not in snaps.columns or snaps["ad_pick_rank"].isna().all():
+        # 舊快照無 ad_pick_rank（或個別場次全空）：用 fused 即時重建（不寫回）
+        if "ad_pick_rank" not in snaps.columns:
+            snaps["ad_pick_rank"] = None
+        race_all_null = snaps.groupby("race_id")["ad_pick_rank"].transform(
+            lambda s: bool(s.isna().all())
+        )
+        if bool(race_all_null.any()):
             rows = snaps.to_dict(orient="records")
-            if "fused_share" not in snaps.columns or snaps["fused_share"].isna().all():
-                from form_ai_picks import attach_fused_shares_to_snapshot_rows
+            rebuild_rows = [
+                r for r, miss in zip(rows, race_all_null.tolist()) if miss
+            ]
+            if rebuild_rows:
+                need_fused = all(
+                    r.get("fused_share") is None
+                    or (
+                        isinstance(r.get("fused_share"), float)
+                        and pd.isna(r.get("fused_share"))
+                    )
+                    for r in rebuild_rows
+                )
+                if need_fused:
+                    from form_ai_picks import attach_fused_shares_to_snapshot_rows
 
-                attach_fused_shares_to_snapshot_rows(rows)
-            attach_ad_pick_ranks_to_snapshot_rows(rows)
-            snaps = pd.DataFrame(rows)
+                    attach_fused_shares_to_snapshot_rows(rebuild_rows)
+                attach_ad_pick_ranks_to_snapshot_rows(rebuild_rows)
+                rebuilt = {
+                    (r.get("race_id"), r.get("horse_no")): r for r in rebuild_rows
+                }
+                for r in rows:
+                    hit = rebuilt.get((r.get("race_id"), r.get("horse_no")))
+                    if hit is None:
+                        continue
+                    r["ad_pick_rank"] = hit.get("ad_pick_rank")
+                    if hit.get("fused_share") is not None:
+                        r["fused_share"] = hit.get("fused_share")
+                snaps = pd.DataFrame(rows)
 
         # 補賠率（已有名次但缺 settle_win_odds）
         if "settle_win_odds" not in snaps.columns:

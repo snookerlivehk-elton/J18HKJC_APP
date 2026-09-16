@@ -72,8 +72,8 @@ STAGE_HELP: Dict[str, str] = {
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
     "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 才出正式快照。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；否則可 provisional／revision。",
-    "RESULTS": "賽後同步 jjjc results（名次／派彩）；快照各場齊名次後才標 ok，並會自動觸發結算。",
-    "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle。",
+    "RESULTS": "賽後同步 jjjc results（名次／派彩）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。",
+    "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
 }
 
 
@@ -1139,6 +1139,9 @@ class MeetingPipeline:
                 if auto is not None:
                     out["auto_settle"] = auto
                     self.refresh_readiness(racing_date, course)
+                    ads = auto.get("auto_post_race_ads") if isinstance(auto, dict) else None
+                    if ads:
+                        out["auto_post_race_ads"] = ads
                 return out
 
             if action == "sync_jjjc_speedguide":
@@ -1468,6 +1471,12 @@ class MeetingPipeline:
                 from factor_calibration import FactorCalibration
                 out = FactorCalibration().settle_pending()
                 self.refresh_readiness(racing_date, course)
+                # 結算後立刻產賽後命中／文案（補 tick 缺口；已結算再按亦會補跑）
+                ads = self._maybe_run_post_race_ads_after_settle(
+                    racing_date, course, out
+                )
+                if ads is not None:
+                    out["auto_post_race_ads"] = ads
                 return out
 
             if action == "mark_ok":
@@ -1484,6 +1493,7 @@ class MeetingPipeline:
         """
         賽果同步後：SNAPSHOT ok、RESULTS ok、SETTLED 未 ok → 立刻 settle_pending。
         避免 RESULTS 已綠但仍要等 hourly tick 才結算。
+        結算成功後立刻跑 promo_hits → post_race（唔依賴下一輪 tick）。
         """
         try:
             results_st, _ = self.check_results(racing_date, course)
@@ -1497,6 +1507,68 @@ class MeetingPipeline:
                 return None
             from factor_calibration import FactorCalibration
 
-            return FactorCalibration().settle_pending()
+            out = FactorCalibration().settle_pending()
+            if isinstance(out, dict):
+                ads = self._maybe_run_post_race_ads_after_settle(
+                    racing_date, course, out
+                )
+                if ads is not None:
+                    out = dict(out)
+                    out["auto_post_race_ads"] = ads
+            return out
+        except Exception as e:
+            return {"ok": False, "error": str(e), "skipped": True}
+
+    @staticmethod
+    def _env_flag(name: str, default: str = "true") -> bool:
+        return (os.getenv(name, default) or default).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    def _maybe_run_post_race_ads_after_settle(
+        self,
+        racing_date: str,
+        course: str,
+        settle_out: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        SETTLED 後立刻跑宣傳評估＋賽後文案。
+
+        觸發條件：本輪 settle 有 settled_batches，或該 meeting 已 SETTLED=ok。
+        失敗不回滾結算；由 MEETING_TICK_AUTO_PROMO_HITS／AUTO_POST_RACE_COPY 控制。
+        """
+        auto_promo = self._env_flag("MEETING_TICK_AUTO_PROMO_HITS", "true")
+        auto_copy = self._env_flag("MEETING_TICK_AUTO_POST_RACE_COPY", "true")
+        if not auto_promo and not auto_copy:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "PROMO/POST_COPY disabled by env",
+            }
+
+        settled_batches = list((settle_out or {}).get("settled_batches") or [])
+        try:
+            settled_st, _ = self.check_settled(racing_date, course)
+        except Exception:
+            settled_st = STATUS_PENDING
+        if not settled_batches and settled_st != STATUS_OK:
+            return None
+
+        try:
+            from ad_copy_jobs import run_post_race_ad_cascade
+
+            cascade = run_post_race_ad_cascade(
+                racing_date=str(racing_date)[:10],
+                course=str(course or "").upper(),
+                batch_ids=settled_batches or None,
+                force=False,
+                dry_run=False,
+                auto_promo=auto_promo,
+                auto_copy=auto_copy,
+            )
+            return cascade
         except Exception as e:
             return {"ok": False, "error": str(e), "skipped": True}

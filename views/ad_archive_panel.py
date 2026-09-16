@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -32,12 +33,71 @@ def _allowed_kinds(*, show_pre_race: bool, show_post_race: bool) -> List[str]:
     return allowed
 
 
+
+
+def _render_empty_post_race_generate(
+    *,
+    out_root: Path,
+    key_prefix: str,
+    default_racing_date: Optional[str] = None,
+    default_course: Optional[str] = None,
+) -> None:
+    """無歸檔時仍可人手補跑（SETTLED 後 tick 漏跑嘅救援路徑）。"""
+    st.caption("SETTLED 後應自動產出；若自動化漏咗，可喺下面人手重跑命中＋文案。")
+    c1, c2, c3 = st.columns([2, 1, 2])
+    with c1:
+        d_default = date.fromisoformat(
+            (default_racing_date or date.today().isoformat())[:10]
+        )
+        d_pick = st.date_input(
+            "賽日",
+            value=d_default,
+            key=f"{key_prefix}_empty_date",
+        )
+    with c2:
+        courses = ["HV", "ST"]
+        c_default = (default_course or "HV").upper()
+        c_idx = courses.index(c_default) if c_default in courses else 0
+        c_pick = st.selectbox(
+            "場地",
+            courses,
+            index=c_idx,
+            key=f"{key_prefix}_empty_course",
+        )
+    with c3:
+        st.write("")
+        do_gen = st.button(
+            "立即產出賽後命中＋文案",
+            type="primary",
+            key=f"{key_prefix}_empty_cascade",
+            use_container_width=True,
+        )
+    if not do_gen:
+        return
+    with st.spinner("promo_hits → post_race…"):
+        result = redo_archive_job(
+            kind="cascade",
+            racing_date=d_pick.isoformat(),
+            course=str(c_pick),
+            output_root=out_root,
+        )
+    st.session_state[f"{key_prefix}_last_redo"] = result
+    if result.get("ok"):
+        promo = result.get("promo_hits") or {}
+        st.success(f"完成：可宣傳 {promo.get('n_promo_races', '—')} 場")
+    else:
+        st.error(result.get("error") or str(result))
+    st.rerun()
+
+
 def render_ad_archive_panel(
     *,
     output_root: Optional[Path] = None,
     key_prefix: str = "ad_arch",
     show_pre_race: bool = True,
     show_post_race: bool = True,
+    default_racing_date: Optional[str] = None,
+    default_course: Optional[str] = None,
 ) -> None:
     """
     共用歸檔面板（精簡版）。
@@ -49,7 +109,17 @@ def render_ad_archive_panel(
 
     rows = list_archive_meetings(out_root)
     if not rows:
-        st.info(f"尚未有歸檔。目錄：`{out_root / 'archive'}`")
+        st.info(
+            f"尚未有歸檔。目錄：`{out_root / 'archive'}`"
+            "（亦會讀共用 DB `ad_archives`）"
+        )
+        if show_post_race:
+            _render_empty_post_race_generate(
+                out_root=out_root,
+                key_prefix=key_prefix,
+                default_racing_date=default_racing_date,
+                default_course=default_course,
+            )
         return
 
     labels = [r["label"] for r in rows]
@@ -62,6 +132,24 @@ def render_ad_archive_panel(
     present = [k for k in ARCHIVE_KINDS if k in kinds and k in allowed]
     if not present:
         st.warning("此賽日尚未有符合本區的歸檔。")
+        if show_post_race and st.button(
+            "立即產出賽後命中＋文案",
+            type="primary",
+            key=f"{key_prefix}_missing_cascade",
+        ):
+            with st.spinner("promo_hits → post_race…"):
+                result = redo_archive_job(
+                    kind="cascade",
+                    racing_date=d,
+                    course=c,
+                    output_root=out_root,
+                )
+            st.session_state[f"{key_prefix}_last_redo"] = result
+            if result.get("ok"):
+                st.success("已產出")
+            else:
+                st.error(result.get("error") or str(result))
+            st.rerun()
         return
 
     status_bits = [

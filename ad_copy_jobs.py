@@ -898,52 +898,87 @@ def archive_copy_payload(
 
 
 def list_archive_meetings(output_root: Optional[Path] = None) -> List[Dict[str, Any]]:
-    """掃描 archive/ 下各賽日，回傳可瀏覽摘要（唔含 PNG）。"""
+    """
+    掃描 archive/ 下各賽日，並合併共用 DB ad_archives（跨服務無共碟）。
+    回傳可瀏覽摘要（唔含 PNG）。
+    """
     root = Path(output_root) if output_root else default_output_dir()
     base = root / "archive"
-    if not base.is_dir():
-        return []
-    rows: List[Dict[str, Any]] = []
-    for meeting_dir in sorted(base.iterdir(), reverse=True):
-        if not meeting_dir.is_dir():
-            continue
-        name = meeting_dir.name  # YYYY-MM-DD_COURSE
-        if "_" not in name:
-            continue
-        d, c = name.rsplit("_", 1)
-        kinds: Dict[str, Any] = {}
-        for kind in ARCHIVE_KINDS:
-            latest = load_archive_latest(root, d, c, kind)
-            if not latest:
+    by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    if base.is_dir():
+        for meeting_dir in sorted(base.iterdir(), reverse=True):
+            if not meeting_dir.is_dir():
                 continue
-            meeting = latest.get("meeting") if isinstance(latest.get("meeting"), dict) else {}
-            kinds[kind] = {
-                "batch_id": _meeting_batch_id(latest),
-                "generated_at": meeting.get("generated_at")
-                or meeting.get("archived_at")
-                or latest.get("archived_at")
-                or "",
-                "n_promo_races": latest.get("n_promo_races"),
-                "n_featured": len(list(latest.get("featured") or [])),
-                "n_races": len(list(latest.get("races") or [])),
-                "path": str(archive_latest_path(root, d, c, kind)),
-                "poster_archived": bool(
-                    ((latest.get("assets") or {}) if isinstance(latest.get("assets"), dict) else {}).get(
-                        "poster_archived"
-                    )
-                ),
-            }
-        if not kinds:
-            continue
-        rows.append(
-            {
+            name = meeting_dir.name  # YYYY-MM-DD_COURSE
+            if "_" not in name:
+                continue
+            d, c = name.rsplit("_", 1)
+            c = str(c).upper()
+            kinds: Dict[str, Any] = {}
+            for kind in ARCHIVE_KINDS:
+                latest = load_archive_latest(root, d, c, kind)
+                if not latest:
+                    continue
+                meeting = (
+                    latest.get("meeting")
+                    if isinstance(latest.get("meeting"), dict)
+                    else {}
+                )
+                kinds[kind] = {
+                    "batch_id": _meeting_batch_id(latest),
+                    "generated_at": meeting.get("generated_at")
+                    or meeting.get("archived_at")
+                    or latest.get("archived_at")
+                    or "",
+                    "n_promo_races": latest.get("n_promo_races"),
+                    "n_featured": len(list(latest.get("featured") or [])),
+                    "n_races": len(list(latest.get("races") or [])),
+                    "path": str(archive_latest_path(root, d, c, kind)),
+                    "poster_archived": bool(
+                        (
+                            (latest.get("assets") or {})
+                            if isinstance(latest.get("assets"), dict)
+                            else {}
+                        ).get("poster_archived")
+                    ),
+                    "source": "disk",
+                }
+            if not kinds:
+                continue
+            by_key[(d, c)] = {
                 "racing_date": d,
                 "course": c,
                 "label": f"{d} {c}",
                 "kinds": kinds,
                 "dir": str(meeting_dir),
             }
-        )
+
+    try:
+        from ad_store import list_archive_meetings_db
+
+        for db_row in list_archive_meetings_db():
+            d = str(db_row.get("racing_date") or "")[:10]
+            c = str(db_row.get("course") or "").upper()
+            if not d or not c:
+                continue
+            existing = by_key.get((d, c))
+            if existing is None:
+                by_key[(d, c)] = dict(db_row)
+                continue
+            # disk 優先；缺 kind 時用 DB 補
+            disk_kinds = existing.setdefault("kinds", {})
+            for kind, meta in (db_row.get("kinds") or {}).items():
+                if kind not in disk_kinds:
+                    disk_kinds[kind] = meta
+    except Exception:
+        pass
+
+    rows = list(by_key.values())
+    rows.sort(
+        key=lambda r: (str(r.get("racing_date") or ""), str(r.get("course") or "")),
+        reverse=True,
+    )
     return rows
 
 

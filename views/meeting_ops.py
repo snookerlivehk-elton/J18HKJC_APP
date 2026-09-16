@@ -599,6 +599,22 @@ for stage, label in STAGES:
                     st.info(msg)
                 if last.get("match_stats"):
                     st.caption(f"配對細節：{last.get('match_stats')}")
+                ads = last.get("auto_post_race_ads") or {}
+                if ads:
+                    if ads.get("ok"):
+                        st.success(
+                            "已觸發賽後命中／文案："
+                            + str(
+                                [
+                                    a.get("action")
+                                    for a in (ads.get("actions") or [])
+                                ]
+                            )
+                        )
+                    elif ads.get("skipped"):
+                        st.info(f"賽後文案略過：{ads.get('reason') or ads}")
+                    else:
+                        st.warning(ads.get("error") or ads)
 
         if a5.button(
             "人工放行 OK",

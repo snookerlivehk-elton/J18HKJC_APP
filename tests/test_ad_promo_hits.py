@@ -72,6 +72,21 @@ class AdRaceHitsTest(unittest.TestCase):
         self.assertFalse(hits["win_odds7"])
         self.assertFalse(hits["qin_odds10"])
 
+    def test_today_race5_tierce_cover_matches_ad_picks(self):
+        """2026-09-16 HV R5：推介 4/6/7/10，賽果 6-4-7 → T3 應可宣傳。"""
+        # ad package tips order: 4,6,7,10；finish: 4→2, 6→1, 7→3, 10→?
+        hits = evaluate_ad_race_hits(
+            pick_finishes=[2, 1, 3, 8],
+            pick_odds=[9.5, 3.1, 5.4, 20.0],
+            top2_mask=[True, True, False, False],
+        )
+        self.assertTrue(hits["t3_cover"])
+        self.assertFalse(hits["t4_cover"])
+        # 冠軍 3.1 < 7；冠亞最高 9.5 未 >10 → 只有 T3
+        self.assertFalse(hits["win_odds7"])
+        self.assertFalse(hits["qin_odds10"])
+        self.assertTrue(hits["any_promo"])
+
 
 class AttachAdPickRankTest(unittest.TestCase):
     def test_assigns_up_to_four(self):

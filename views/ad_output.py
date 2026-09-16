@@ -1,6 +1,7 @@
 """廣告輸出 — 賽前海報／文案、賽後歸檔、重產（精簡工作流）。"""
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -453,12 +454,16 @@ if section == "今日輸出":
 
 elif section == "賽後管理":
     st.subheader("賽後命中／文案")
-    st.caption("SETTLED 後由 tick 自動產出；呢度用嚟翻查進度同人手重做。")
+    st.caption(
+        "SETTLED 後由 tick／賽果自動結算觸發產出；呢度用嚟翻查進度同人手重做。"
+    )
     render_ad_archive_panel(
         output_root=out_root,
         key_prefix="ad_post",
         show_pre_race=False,
         show_post_race=True,
+        default_racing_date=date.today().isoformat(),
+        default_course="HV",
     )
     with st.expander("賽前歸檔（較少用）", expanded=False):
         render_ad_archive_panel(

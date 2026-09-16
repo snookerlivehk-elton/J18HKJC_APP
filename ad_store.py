@@ -646,6 +646,84 @@ def load_archive_latest_db(
         return {}
 
 
+def list_archive_meetings_db(
+    *, engine: Optional[Engine] = None
+) -> List[Dict[str, Any]]:
+    """
+    列出 ad_archives 中各賽日／場地摘要（跨服務無共碟時用）。
+    回傳 [{racing_date, course, kinds: {kind: {batch_id, generated_at, ...}}}]
+    """
+    if not ad_store_enabled():
+        return []
+    try:
+        ensure_ad_tables(engine)
+        eng = engine or get_engine()
+        with eng.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT racing_date, course, kind, batch_id, payload_json, updated_at
+                    FROM ad_archives
+                    ORDER BY racing_date DESC, course, kind
+                    """
+                )
+            ).mappings().all()
+    except Exception as exc:
+        logger.warning("list_archive_meetings_db failed: %s", exc)
+        return []
+
+    by_meeting: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for row in rows:
+        d = str(row.get("racing_date") or "")[:10]
+        c = str(row.get("course") or "").upper()
+        k = str(row.get("kind") or "").strip()
+        if not d or not c or not k:
+            continue
+        key = (d, c)
+        meeting = by_meeting.get(key)
+        if meeting is None:
+            meeting = {
+                "racing_date": d,
+                "course": c,
+                "label": f"{d} {c}",
+                "kinds": {},
+                "dir": f"db://ad_archives/{d}_{c}",
+            }
+            by_meeting[key] = meeting
+        payload = _json_load(row.get("payload_json"))
+        payload = payload if isinstance(payload, dict) else {}
+        meet_meta = (
+            payload.get("meeting") if isinstance(payload.get("meeting"), dict) else {}
+        )
+        bid = (
+            str(row.get("batch_id") or "")
+            or str(meet_meta.get("batch_id") or payload.get("batch_id") or "")
+        )
+        meeting["kinds"][k] = {
+            "batch_id": bid,
+            "generated_at": str(
+                meet_meta.get("generated_at")
+                or meet_meta.get("archived_at")
+                or payload.get("archived_at")
+                or row.get("updated_at")
+                or ""
+            ),
+            "n_promo_races": payload.get("n_promo_races"),
+            "n_featured": len(list(payload.get("featured") or [])),
+            "n_races": len(list(payload.get("races") or [])),
+            "path": f"db://ad_archives/{d}_{c}/{k}",
+            "poster_archived": bool(
+                (
+                    (payload.get("assets") or {})
+                    if isinstance(payload.get("assets"), dict)
+                    else {}
+                ).get("poster_archived")
+            ),
+            "source": "db",
+        }
+    return list(by_meeting.values())
+
+
 def job_done_for_batch_db(
     racing_date: str,
     course: str,
