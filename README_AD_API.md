@@ -4,6 +4,7 @@
 
 **唔會**直接發 Facebook；發佈由外部助手／人手處理。
 
+> **下游發佈機械人使用說明：** [`SOCIAL_PUBLISH_AI_USAGE.md`](SOCIAL_PUBLISH_AI_USAGE.md)（賽前＋賽後 `*-post`）。  
 > **同留言答覆 API 嘅分別：** `GET /v1/ads/latest` 係**廣告發佈**用（海報＋Facebook 文案）。  
 > 負責**回覆社交媒體留言**嘅 AI 請改用 `GET /v1/reply-context/latest`（綜合推介每場最多 4 匹 + Form AI 評述），見 [`SOCIAL_REPLY_AI_USAGE.md`](SOCIAL_REPLY_AI_USAGE.md)。
 

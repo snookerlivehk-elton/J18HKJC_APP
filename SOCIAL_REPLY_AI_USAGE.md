@@ -6,7 +6,7 @@
 
 | API | 用途 | 下游應否使用 |
 |-----|------|--------------|
-| `GET /v1/ads/latest` | **廣告產出**：海報 PNG + Facebook 發佈文案（`copy.facebook`／`copy.ai`） | ❌ 發佈 bot 用；**留言答覆唔夠用**（冇完整 Form AI 評述） |
+| `GET /v1/ads/latest` | **廣告產出**：海報 PNG + Facebook 發佈文案（`copy.facebook`／`copy.ai`；含賽後 `*-post`） | ❌ 發佈 bot 用（見 [`SOCIAL_PUBLISH_AI_USAGE.md`](SOCIAL_PUBLISH_AI_USAGE.md)）；**留言答覆唔夠用** |
 | `GET /v1/reply-context/latest` | **留言答覆**：每場最多 4 匹綜合推介 + 推介馬嘅 Form AI（From AI）評述 | ✅ **請用呢條** |
 | `GET /v1/reply-context/latest/prompt` | 同上資料編成一段可直接注入 LLM 嘅繁中參考文本 | ✅ 可選（省解析） |
 
