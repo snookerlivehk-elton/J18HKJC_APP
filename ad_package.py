@@ -1,9 +1,11 @@
 """
-賽前預測廣告包：結構化 JSON + 海報資產 + webhook 通知。
+賽前／賽後預測廣告包：結構化 JSON + 海報資產 + webhook 通知。
 
-幂等 id：{YYYY-MM-DD}-{hv|st}-{day|night}
+幂等 id：
+  賽前 {YYYY-MM-DD}-{hv|st}-{day|night}
+  賽後 {YYYY-MM-DD}-{hv|st}-{day|night}-post（purpose=post_race）
 寫入 ad_output/packages/{id}.json 與 {id}.png
-status=ready（海報 PNG + AI 精選文案）後 POST 去 GROK_BOT_WEBHOOK_URL（指數退避重試 ≥3 次）
+status=ready 後 POST /v1/ads/ingest（可選 webhook GROK_BOT_WEBHOOK_URL）
 """
 from __future__ import annotations
 
