@@ -353,6 +353,79 @@ class FactorCalculator:
             df = df[~df["report_text"].apply(self.is_trivial_report)].copy()
         return df.head(limit).reset_index(drop=True)
 
+    def load_unprocessed_reports_for_meeting(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        limit: int = 200,
+        skip_trivial: bool = True,
+    ) -> pd.DataFrame:
+        """
+        讀取指定賽日／場地尚未 NLP 的 runner 評述（沿路走勢／事故）。
+        entity_id 前綴對齊 runners.race_id（YYYYMMDD + course）。
+        """
+        self.ensure_nlp_result_column()
+        d = str(racing_date).replace("-", "")[:8]
+        c = str(course or "").upper()
+        if not d or not c:
+            return pd.DataFrame()
+        prefix = f"{d}{c}"
+        fetch_n = max(limit * 5, limit + 50) if skip_trivial else limit
+        q = text(
+            """
+            SELECT id, entity_type, entity_id, report_type, report_text
+            FROM text_reports
+            WHERE nlp_result IS NULL
+              AND entity_type = 'runner'
+              AND entity_id LIKE :pfx || '%'
+              AND report_text IS NOT NULL
+              AND LENGTH(TRIM(report_text)) > 0
+            ORDER BY id
+            LIMIT :lim
+            """
+        )
+        try:
+            df = pd.read_sql(
+                q, self.engine, params={"pfx": prefix, "lim": int(fetch_n)}
+            )
+        except Exception as e:
+            print(f"load_unprocessed_reports_for_meeting failed: {e}")
+            return pd.DataFrame()
+        if df.empty:
+            return df
+        if skip_trivial:
+            df = df[~df["report_text"].apply(self.is_trivial_report)].copy()
+        return df.head(limit).reset_index(drop=True)
+
+    def meeting_nlp_pending_count(self, racing_date: str, course: str) -> int:
+        """指定賽日尚有多少 runner 評述未寫 nlp_result（含 trivial，僅計有正文）。"""
+        self.ensure_nlp_result_column()
+        d = str(racing_date).replace("-", "")[:8]
+        c = str(course or "").upper()
+        if not d or not c:
+            return 0
+        prefix = f"{d}{c}"
+        try:
+            row = pd.read_sql(
+                text(
+                    """
+                    SELECT COUNT(*) AS n
+                    FROM text_reports
+                    WHERE nlp_result IS NULL
+                      AND entity_type = 'runner'
+                      AND entity_id LIKE :pfx || '%'
+                      AND report_text IS NOT NULL
+                      AND LENGTH(TRIM(report_text)) > 0
+                    """
+                ),
+                self.engine,
+                params={"pfx": prefix},
+            ).iloc[0]
+            return int(row["n"] or 0)
+        except Exception:
+            return 0
+
     def mark_trivial_reports_skipped(self, report_ids=None, limit: int = 500) -> int:
         """把空白／無特別報告直接寫入 skipped nlp_result，不呼叫 LLM。"""
         self.ensure_nlp_result_column()

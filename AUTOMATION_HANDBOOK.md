@@ -223,12 +223,18 @@ NLP／沿路走勢：賽後／遺留鏈（§11.4），不擋賽前 Form AI／正
     → sync_jjjc_results
     → check RESULTS
          → 無／不足 → waiting（信任 JJJC 重試）
-         → 齊 → settle_pending
+         → 齊 → sync_jjjc_text_reports（沿路走勢）
+              → run_nlp_meeting_chain（整日 NLP→可選因子；不擋 settle）
+              → settle_pending
               → SETTLED ok？
               → 是 → 命中率可讀；evaluate_ad_promo_hits
                    → 有可宣傳場次 →（可選）賽後文案
               → 否 → 部分名次：保留 waiting，下輪再 settle
 ```
+
+> **賽後 NLP vs 重算快照：** NLP／干擾因子更新是為**之後未開跑賽日**的查表與可選 revision。  
+> **不要**為補歷史評述而改寫當日已 `settled_at` 的 `prediction_snapshots`。  
+> 賽前「後台整日 NLP」（upcoming 排位馬歷史評述）屬 enrichment；與本節賽後當日評述 NLP 用途不同，見 §11.4。
 
 ### 4.2 每步
 
@@ -236,10 +242,11 @@ NLP／沿路走勢：賽後／遺留鏈（§11.4），不擋賽前 Form AI／正
 |------|----------|------|------|
 | R1 探賽果 | 輕探 export results | race_count>0、generated_at 新 | 空→waiting（尤其未到 +12h） |
 | R2 同步 | `sync_jjjc_results` | runners 有 finish_order_num | 空 export→waiting；HTTP 錯→failed |
+| R2b 評述 | `sync_jjjc_text_reports` | text_reports 入庫 | 分場補齊→waiting 重探 |
+| R2c 整日 NLP | `run_nlp_meeting_chain` | 本賽日 `nlp_result`；可選 `apply_nlp` 因子 | 無待解析→ok；缺 API key→waiting；**不擋 R3** |
 | R3 結算 | `settle`（`settle_pending`） | batch `settled_at` | 無名次／未達 50%→waiting；無快照→跳過並記 detail |
 | R4 宣傳評估 | `evaluate_ad_promo_hits` | 可宣傳列表 | **無正式已結算快照 → 不跑／不廣告** |
 | R5 賽後文案 | 自動 `generate_post_race_copy`＋歸檔 | JSON＋可貼文 | 無命中或不滿足 R4 → 不觸發 |
-| R6 可選 | 重算因子／NLP batch | 模型資料更新 | 不擋 SETTLED |
 
 ### 4.3 與 JJJC +12h 對齊
 
@@ -697,8 +704,9 @@ Railway Cron ──► meeting_tick ──► Railway DB ──► Railway 網�
 | B1 | `data_backlog` 表 + 缺文字／名次入列 | ✅ `data_backlog.py` |
 | B2 | tick 順路：**JJJC 文字主路徑**＋退避；UI 遺留清單 | ✅ post_race／all 掛載；`views/data_backlog.py`＋作戰室③ |
 | B3 | ✅ 與 JJJC 對齊三支 export：`jjjc_speedguide_sync`／`jjjc_formguide_sync`／`jjjc_text_reports_sync`（見 §1.3） |
-| B4 | 新評述 → NLP batch（limit） | ✅ `MEETING_TICK_BACKLOG_AUTO_NLP`（預設 true） |
-| B5 | NLP 完成 → 因子重算（每輪一次） | ✅ `MEETING_TICK_BACKLOG_AUTO_FACTORS`（預設 **false**，可開） |
+| B4 | 新評述 → NLP batch（limit） | ✅ `MEETING_TICK_BACKLOG_AUTO_NLP`（預設 true；pending>0 亦會抽） |
+| B4b | 賽後整日 NLP（對齊 UI 後台整日 NLP） | ✅ `MEETING_TICK_AUTO_NLP_MEETING`（預設 true）→ `run_nlp_meeting_chain` |
+| B5 | NLP 完成 → 因子重算（每輪一次） | ✅ `MEETING_TICK_BACKLOG_AUTO_FACTORS`／`MEETING_TICK_AUTO_NLP_MEETING_FACTORS`（預設 true） |
 | B6 | 可選：未來賽日 auto-revise | 未做 |
 
 ---

@@ -22,9 +22,10 @@
 賽後（lookback）：
   1) sync_jjjc_results
   2) sync_jjjc_text_reports
-  3) settle_pending
-  4) promo_hits → post_race_copy（SETTLED 後；可開關）
-  5) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
+  3) run_nlp_meeting_chain（整日 NLP→可選因子；不擋 SETTLED、不改已結算快照）
+  4) settle_pending
+  5) promo_hits → post_race_copy（SETTLED 後；可開關）
+  6) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -126,6 +127,22 @@ AUTO_SNAPSHOT = (os.getenv("MEETING_TICK_AUTO_SNAPSHOT", "true") or "true").lowe
     "true",
     "yes",
 )
+# 賽後整日 NLP（對齊 UI「後台整日 NLP」）；不擋 settle／不重算已結算快照
+AUTO_NLP_MEETING = (
+    os.getenv("MEETING_TICK_AUTO_NLP_MEETING", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+AUTO_NLP_MEETING_FACTORS = (
+    os.getenv("MEETING_TICK_AUTO_NLP_MEETING_FACTORS", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+NLP_MEETING_LIMIT = int(os.getenv("MEETING_TICK_NLP_MEETING_LIMIT", "200") or 200)
 
 POST_RACE_MODE = "post_race"
 PRE_RACE_MODE = "pre_race"
@@ -204,6 +221,7 @@ class MeetingActionPlan:
     course: str
     sync_results: bool = False
     sync_text_reports: bool = False
+    nlp_meeting: bool = False
     settle: bool = False
     promo_hits: bool = False
     post_race_copy: bool = False
@@ -1262,6 +1280,28 @@ class MeetingTickRunner:
             else:
                 plan.sync_text_reports = True
 
+        # --- NLP_MEETING（整日 NLP→可選因子；賽後；不擋 settle）---
+        if not AUTO_NLP_MEETING:
+            plan.skip_reasons.append("NLP_MEETING disabled by env")
+        elif is_manual_blocked(stages.get("NLP")):
+            plan.skip_reasons.append("NLP_MEETING manual block")
+        elif results_st != STATUS_OK and not plan.sync_results:
+            plan.skip_reasons.append("NLP_MEETING wait: RESULTS not ready")
+        else:
+            st_row = self.get_tick_state(d, c, "NLP_MEETING")
+            last_st = str((st_row or {}).get("last_status") or STATUS_PENDING)
+            # 本輪會 sync 評述 → 一律開閘；否則用冷卻重試抽積壓
+            if plan.sync_text_reports:
+                plan.nlp_meeting = True
+            else:
+                allowed, why = self._attempt_allowed(
+                    d, c, "NLP_MEETING", last_st or STATUS_WAITING, now=now
+                )
+                if not allowed:
+                    plan.skip_reasons.append(f"NLP_MEETING skip: {why}")
+                else:
+                    plan.nlp_meeting = True
+
         # --- SETTLED ---
         if is_manual_blocked(stages.get("SETTLED")):
             plan.skip_reasons.append("SETTLED manual block")
@@ -1360,6 +1400,7 @@ class MeetingTickRunner:
             "plan": {
                 "sync_results": plan.sync_results,
                 "sync_text_reports": plan.sync_text_reports,
+                "nlp_meeting": plan.nlp_meeting,
                 "settle": plan.settle,
                 "promo_hits": plan.promo_hits,
                 "post_race_copy": plan.post_race_copy,
@@ -1462,6 +1503,61 @@ class MeetingTickRunner:
                 out["readiness_after_text_reports"] = self.pipe.refresh_readiness(d, c)
             out["actions"].append(action_rec)
 
+        if plan.nlp_meeting:
+            action_rec = {"action": "run_nlp_meeting_chain"}
+            if dry_run:
+                action_rec["ok"] = True
+                action_rec["dry_run"] = True
+            else:
+                result = self.pipe.run_action(
+                    d,
+                    c,
+                    "run_nlp_meeting_chain",
+                    meeting_limit=NLP_MEETING_LIMIT,
+                    run_factors=AUTO_NLP_MEETING_FACTORS,
+                )
+                nlp_part = dict(result.get("nlp") or {})
+                parsed = int(nlp_part.get("parsed") or 0)
+                total = int(nlp_part.get("total") or 0)
+                err = str(result.get("error") or nlp_part.get("error") or "")
+                ok = bool(result.get("ok"))
+                if ok and parsed == 0 and total == 0:
+                    status = STATUS_OK
+                    detail = nlp_part.get("detail") or "無待解析報告"
+                    count_as_success = True
+                elif ok and (nlp_part.get("errors") or 0) > 0:
+                    status = STATUS_OK
+                    detail = f"parsed={parsed} errors={nlp_part.get('errors')}"
+                    count_as_success = True
+                elif ok:
+                    status = STATUS_OK
+                    detail = f"parsed={parsed}/{total} mode={nlp_part.get('mode')}"
+                    count_as_success = True
+                elif "OPENAI" in err.upper() or "API_KEY" in err.upper():
+                    status = STATUS_WAITING
+                    detail = err
+                    count_as_success = True
+                else:
+                    status = STATUS_FAILED
+                    detail = err or "nlp_meeting failed"
+                    count_as_success = False
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "NLP_MEETING",
+                    ok=count_as_success,
+                    status=status,
+                    detail=str(detail)[:500],
+                )
+                action_rec["ok"] = ok
+                action_rec["result"] = {
+                    k: result.get(k)
+                    for k in ("ok", "error", "nlp", "factors")
+                    if k in result
+                } or result
+                out["readiness_after_nlp"] = self.pipe.refresh_readiness(d, c)
+            out["actions"].append(action_rec)
+
         if plan.settle:
             action_rec = {"action": "settle"}
             if dry_run:
@@ -1547,6 +1643,7 @@ class MeetingTickRunner:
         if (
             not plan.sync_results
             and not plan.sync_text_reports
+            and not plan.nlp_meeting
             and not plan.settle
             and not plan.promo_hits
             and not plan.post_race_copy

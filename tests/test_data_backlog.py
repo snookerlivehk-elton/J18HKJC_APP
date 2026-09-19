@@ -234,6 +234,104 @@ class DataBacklogTest(unittest.TestCase):
             "open",
         )
 
+    def test_maybe_run_nlp_runs_when_pending_even_if_no_upserts(self):
+        """賽後已 sync 後 backlog re-sync upsert=0 時，仍應抽 pending NLP。"""
+        import pandas as pd
+
+        saved = []
+
+        class _Calc:
+            def nlp_status(self):
+                return {"total": 2, "done": 1, "pending": 1}
+
+            def load_unprocessed_reports(self, limit=10, skip_trivial=True):
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": 99,
+                            "entity_type": "runner",
+                            "entity_id": "20260916HV01_1",
+                            "report_type": "running_comment",
+                            "report_text": "沿途受阻於彎位",
+                        }
+                    ]
+                )
+
+            def save_nlp_result(self, rid, parsed):
+                saved.append((rid, parsed))
+
+            def run_all_factors(self, persist=True, apply_nlp=True):
+                return ("ok",)
+
+        class _NLP:
+            def is_ready(self):
+                return True
+
+            def analyze_report_sync(self, _text):
+                return {"has_excuse": True, "severity": 0.4}
+
+        with patch("factor_calculator.FactorCalculator", _Calc):
+            with patch("nlp_processor.NLPProcessor", _NLP):
+                out = self.svc.maybe_run_nlp_pipeline(new_upserts=0, dry_run=False)
+        self.assertNotIn("skipped", out)
+        self.assertEqual((out.get("nlp") or {}).get("parsed"), 1)
+        self.assertEqual(saved[0][0], 99)
+
+    def test_maybe_run_nlp_skips_when_no_upserts_and_no_pending(self):
+        class _Calc:
+            def nlp_status(self):
+                return {"total": 0, "done": 0, "pending": 0}
+
+        with patch("factor_calculator.FactorCalculator", _Calc):
+            out = self.svc.maybe_run_nlp_pipeline(new_upserts=0, dry_run=False)
+        self.assertEqual(out.get("skipped"), "no new upserts and no pending")
+
+
+class MeetingNlpLoadTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        self.engine = create_engine(f"sqlite:///{self._tmp.name}")
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE text_reports (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        entity_type TEXT,
+                        entity_id TEXT,
+                        report_type TEXT,
+                        report_text TEXT,
+                        nlp_result TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO text_reports "
+                    "(entity_type, entity_id, report_type, report_text, nlp_result) VALUES "
+                    "('runner','20260916HV01_1','running_comment','受阻於直路',NULL),"
+                    "('runner','20260916ST01_1','running_comment','他場不應撈到',NULL),"
+                    "('runner','20260916HV02_3','incident_report','無特別報告',NULL)"
+                )
+            )
+
+    def test_load_unprocessed_reports_for_meeting_filters_prefix(self):
+        from factor_calculator import FactorCalculator
+
+        calc = FactorCalculator.__new__(FactorCalculator)
+        calc.engine = self.engine
+        calc.ensure_nlp_result_column = lambda: None
+        df = calc.load_unprocessed_reports_for_meeting(
+            "2026-09-16", "HV", limit=50, skip_trivial=True
+        )
+        ids = set(df["entity_id"].tolist())
+        self.assertIn("20260916HV01_1", ids)
+        self.assertNotIn("20260916ST01_1", ids)
+        # trivial skipped
+        self.assertNotIn("20260916HV02_3", ids)
+
 
 if __name__ == "__main__":
     unittest.main()
