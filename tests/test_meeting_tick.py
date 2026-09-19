@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 from datetime import date, datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pandas as pd
 
@@ -362,6 +362,7 @@ class PlanPostRaceTest(unittest.TestCase):
         )
         self.assertTrue(plan.sync_results)
         self.assertTrue(plan.sync_text_reports)
+        self.assertTrue(plan.nlp_meeting)
         self.assertTrue(plan.settle)
 
     def test_skips_when_already_settled(self):
@@ -384,6 +385,7 @@ class PlanPostRaceTest(unittest.TestCase):
         self.assertFalse(plan.settle)
         # 賽後評述仍可週期補拉（RESULTS 已 ok）
         self.assertTrue(plan.sync_text_reports)
+        self.assertTrue(plan.nlp_meeting)
         # 已結算 → 可跑宣傳評估／賽後文案
         self.assertTrue(plan.promo_hits)
         self.assertTrue(plan.post_race_copy)
@@ -556,6 +558,56 @@ class DryRunCliTest(unittest.TestCase):
         pipe.run_action.assert_not_called()
         self.assertEqual(len(out["actions"]), 2)
         self.assertTrue(all(a.get("dry_run") for a in out["actions"]))
+
+    def test_execute_runs_nlp_meeting_chain_after_text_sync(self):
+        from meeting_tick import MeetingActionPlan, MeetingTickRunner, TickGuards
+
+        pipe = MagicMock()
+        pipe.run_action = MagicMock(
+            side_effect=lambda d, c, action, **kw: {
+                "ok": True,
+                "action": action,
+                "nlp": {"ok": True, "parsed": 3, "total": 3, "mode": "meeting_day"},
+                "factors": {"ok": True},
+            }
+            if action == "run_nlp_meeting_chain"
+            else {"ok": True, "runner_upserted": 5}
+        )
+        pipe.refresh_readiness = MagicMock(
+            return_value={
+                "RESULTS": {"status": "ok"},
+                "SETTLED": {"status": "pending"},
+                "NLP": {"status": "ok"},
+            }
+        )
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards()
+        runner.record_tick_attempt = MagicMock()
+        plan = MeetingActionPlan(
+            racing_date="2026-09-16",
+            course="HV",
+            sync_text_reports=True,
+            nlp_meeting=True,
+        )
+        out = runner.execute_post_race_meeting(plan, dry_run=False)
+        actions = [a["action"] for a in out["actions"]]
+        self.assertEqual(actions, ["sync_jjjc_text_reports", "run_nlp_meeting_chain"])
+        pipe.run_action.assert_any_call(
+            "2026-09-16",
+            "HV",
+            "run_nlp_meeting_chain",
+            meeting_limit=ANY,
+            run_factors=ANY,
+        )
+        runner.record_tick_attempt.assert_any_call(
+            "2026-09-16",
+            "HV",
+            "NLP_MEETING",
+            ok=True,
+            status="ok",
+            detail=ANY,
+        )
 
 
 class HelpersTest(unittest.TestCase):

@@ -1053,9 +1053,14 @@ class MeetingPipeline:
                 out["nlp"] = {"ok": False, "error": "OPENAI_API_KEY 未設定"}
                 return out
             rows = calc.load_unprocessed_reports(limit=50, skip_trivial=True)
+            records = (
+                rows.to_dict(orient="records")
+                if rows is not None and hasattr(rows, "to_dict") and not rows.empty
+                else []
+            )
             done = 0
             errors = 0
-            for r in rows:
+            for r in records:
                 try:
                     parsed = nlp.analyze_report_sync(str(r.get("report_text") or ""))
                     calc.save_nlp_result(int(r["id"]), parsed)
@@ -1334,6 +1339,54 @@ class MeetingPipeline:
                     return {"ok": False, "error": "無歷史數據或計算失敗"}
                 self.refresh_readiness(racing_date, course)
                 return {"ok": True, "msg": "已重算 factor_scores（含干擾持份者／legacy NLP）"}
+
+            if action == "run_nlp_meeting":
+                # 同步整日 NLP（tick／CLI；與 start_nlp_meeting_background 同邏輯）
+                from ops_jobs import run_nlp_meeting_sync
+
+                limit = int(kwargs.get("meeting_limit") or 200)
+                out = run_nlp_meeting_sync(
+                    racing_date,
+                    course,
+                    lookback_days=int(kwargs.get("lookback_days") or 360),
+                    meeting_limit=limit,
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
+            if action == "run_nlp_meeting_chain":
+                # 評述 NLP →（可選）因子含干擾；不改已結算快照
+                from ops_jobs import run_nlp_meeting_sync
+
+                nlp_out = run_nlp_meeting_sync(
+                    racing_date,
+                    course,
+                    lookback_days=int(kwargs.get("lookback_days") or 360),
+                    meeting_limit=int(kwargs.get("meeting_limit") or 200),
+                )
+                fac_out = None
+                run_fac = bool(kwargs.get("run_factors", True))
+                parsed = int(nlp_out.get("parsed") or 0)
+                if run_fac and nlp_out.get("ok") and parsed > 0:
+                    try:
+                        from factor_calculator import FactorCalculator
+
+                        fac = FactorCalculator().run_all_factors(
+                            persist=True, apply_nlp=True
+                        )
+                        fac_out = {
+                            "ok": fac is not None,
+                            "result": str(fac)[:200] if fac is not None else None,
+                        }
+                    except Exception as e:
+                        fac_out = {"ok": False, "error": str(e)}
+                self.refresh_readiness(racing_date, course)
+                return {
+                    "ok": bool(nlp_out.get("ok")),
+                    "nlp": nlp_out,
+                    "factors": fac_out,
+                    "error": nlp_out.get("error"),
+                }
 
             if action == "run_form_ai":
                 from form_ai_analyst import FormAIAnalyst

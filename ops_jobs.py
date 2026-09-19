@@ -256,7 +256,20 @@ def _run_ad_regen(eng, job_id: str, batch_id: str) -> Dict[str, Any]:
     return result
 
 
-def _run_nlp_meeting(eng, job_id: str, racing_date: str, course: str) -> Dict[str, Any]:
+def run_nlp_meeting_sync(
+    racing_date: str,
+    course: str,
+    *,
+    lookback_days: int = 360,
+    meeting_limit: int = 200,
+    progress_cb=None,
+) -> Dict[str, Any]:
+    """
+    整個賽日 NLP（與 UI「後台整日 NLP」同邏輯，可同步呼叫）。
+
+    - 有 upcoming 排位：解析該日出馬在 lookback 內的歷史評述（賽前 enrichment）
+    - 否則（賽後／歷史）：解析該日 runner 前綴下尚未寫 nlp_result 的評述
+    """
     from factor_calculator import FactorCalculator
     from nlp_processor import NLPProcessor
     from inference_engine import InferenceEngine
@@ -264,39 +277,47 @@ def _run_nlp_meeting(eng, job_id: str, racing_date: str, course: str) -> Dict[st
     calc = FactorCalculator()
     nlp = NLPProcessor()
     if not nlp.is_ready():
-        out = {"ok": False, "error": "OPENAI_API_KEY 未設定"}
-        faj.update_job(eng, job_id, status="failed", detail=out["error"], finished=True)
-        return out
+        return {"ok": False, "error": "OPENAI_API_KEY 未設定", "parsed": 0, "skipped": 0}
 
-    races = InferenceEngine().get_upcoming_races()
-    if races is None or races.empty:
-        # 歷史賽日：用 race_id 前綴掃 text_reports 待解析
+    d = (racing_date or "")[:10]
+    c = (course or "").upper()
+    mode = "meeting_day"
+    race_ids: list = []
+    try:
+        races = InferenceEngine().get_upcoming_races()
+        if races is not None and not races.empty:
+            races = races[
+                (races["racing_date"].astype(str).str[:10] == d)
+                & (races["course"].astype(str) == c)
+            ]
+            race_ids = [str(x) for x in races["race_id"].tolist()]
+    except Exception:
         race_ids = []
-    else:
-        races = races[
-            (races["racing_date"].astype(str).str[:10] == racing_date[:10])
-            & (races["course"].astype(str) == course.upper())
-        ]
-        race_ids = [str(x) for x in races["race_id"].tolist()]
 
-    faj.update_job(
-        eng,
-        job_id,
-        status="running",
-        progress={"phase": "load", "race_count": len(race_ids)},
-    )
+    if progress_cb:
+        progress_cb({"phase": "load", "race_count": len(race_ids), "mode": mode})
+
     if race_ids:
+        mode = "upcoming_lookback"
         related = calc.load_reports_for_upcoming_race(
-            race_ids, lookback_days=360, only_unprocessed=True
+            race_ids, lookback_days=lookback_days, only_unprocessed=True
         )
     else:
-        related = calc.load_unprocessed_reports(limit=80, skip_trivial=True)
+        # 賽後／歷史：勿退回全庫 limit=80（會漏本賽日評述）
+        mode = "meeting_day"
+        related = calc.load_unprocessed_reports_for_meeting(
+            d, c, limit=meeting_limit, skip_trivial=True
+        )
 
     if related is None or related.empty:
-        faj.update_job(
-            eng, job_id, status="ok", detail="無待解析報告", progress={"phase": "done", "parsed": 0}, finished=True
-        )
-        return {"ok": True, "parsed": 0, "skipped": 0}
+        return {
+            "ok": True,
+            "parsed": 0,
+            "skipped": 0,
+            "total": 0,
+            "mode": mode,
+            "detail": "無待解析報告",
+        }
 
     skipped = 0
     if "is_trivial" in related.columns:
@@ -314,27 +335,61 @@ def _run_nlp_meeting(eng, job_id: str, racing_date: str, course: str) -> Dict[st
     errors = 0
     total = len(to_llm)
     for i, (_, row) in enumerate(to_llm.iterrows(), start=1):
-        faj.update_job(
-            eng,
-            job_id,
-            progress={
-                "phase": "nlp",
-                "done": i - 1,
-                "total": total,
-                "report_id": int(row["id"]) if "id" in row else None,
-            },
-        )
+        if progress_cb:
+            progress_cb(
+                {
+                    "phase": "nlp",
+                    "done": i - 1,
+                    "total": total,
+                    "report_id": int(row["id"]) if "id" in row else None,
+                    "mode": mode,
+                }
+            )
         try:
             parsed = nlp.analyze_report_sync(str(row.get("report_text") or ""))
             calc.save_nlp_result(int(row["id"]), parsed)
             done += 1
         except Exception:
             errors += 1
-    out = {"ok": True, "parsed": done, "errors": errors, "skipped": skipped, "total": total}
+    return {
+        "ok": True,
+        "parsed": done,
+        "errors": errors,
+        "skipped": skipped,
+        "total": total,
+        "mode": mode,
+        "race_count": len(race_ids),
+    }
+
+
+def _run_nlp_meeting(eng, job_id: str, racing_date: str, course: str) -> Dict[str, Any]:
+    def _progress(p: Dict[str, Any]) -> None:
+        faj.update_job(eng, job_id, status="running", progress=p)
+
+    out = run_nlp_meeting_sync(racing_date, course, progress_cb=_progress)
+    if not out.get("ok"):
+        faj.update_job(
+            eng,
+            job_id,
+            status="failed",
+            detail=str(out.get("error") or "nlp_meeting failed"),
+            finished=True,
+        )
+        return out
+    if int(out.get("total") or 0) == 0 and int(out.get("parsed") or 0) == 0:
+        faj.update_job(
+            eng,
+            job_id,
+            status="ok",
+            detail=out.get("detail") or "無待解析報告",
+            progress={"phase": "done", **out},
+            finished=True,
+        )
+        return out
     faj.update_job(
         eng,
         job_id,
-        status="ok" if errors == 0 else "ok_with_errors",
+        status="ok" if int(out.get("errors") or 0) == 0 else "ok_with_errors",
         detail=json.dumps(out, ensure_ascii=False),
         progress={"phase": "done", **out},
         finished=True,

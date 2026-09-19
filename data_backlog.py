@@ -1049,18 +1049,38 @@ class DataBacklogService:
         return result
 
     def maybe_run_nlp_pipeline(
-        self, *, new_upserts: int, dry_run: bool = False
+        self, *, new_upserts: int, dry_run: bool = False, force: bool = False
     ) -> Dict[str, Any]:
-        """新評述入庫後：可選 NLP（再可選因子重算）。"""
-        out: Dict[str, Any] = {"new_upserts": new_upserts, "nlp": None, "factors": None}
-        if new_upserts <= 0:
-            out["skipped"] = "no new upserts"
+        """
+        新評述入庫後：可選 NLP（再可選因子重算）。
+        force／庫內仍有 pending 時即使 upsert=0 也會跑（避免賽後已 sync 後遺留鏈餓死）。
+        """
+        out: Dict[str, Any] = {
+            "new_upserts": new_upserts,
+            "nlp": None,
+            "factors": None,
+            "pending": None,
+        }
+        pending = 0
+        try:
+            from factor_calculator import FactorCalculator
+
+            pending = int(FactorCalculator().nlp_status().get("pending") or 0)
+            out["pending"] = pending
+        except Exception:
+            pending = 0
+
+        if new_upserts <= 0 and pending <= 0 and not force:
+            out["skipped"] = "no new upserts and no pending"
             return out
+        if new_upserts <= 0 and pending > 0 and not force:
+            # 有積壓就繼續抽；等同隱式 force
+            force = True
         if not AUTO_BACKLOG_NLP:
             out["skipped"] = "AUTO_BACKLOG_NLP disabled"
             return out
         if dry_run:
-            out["nlp"] = {"dry_run": True}
+            out["nlp"] = {"dry_run": True, "pending": pending}
             return out
         try:
             from factor_calculator import FactorCalculator
@@ -1071,21 +1091,33 @@ class DataBacklogService:
             if not nlp.is_ready():
                 out["nlp"] = {"ok": False, "error": "OPENAI_API_KEY 未設定"}
                 return out
-            limit = min(50, max(new_upserts * 2, 10))
+            base = max(new_upserts, pending if force or pending else 0, 1)
+            limit = min(50, max(base * 2 if new_upserts > 0 else base, 10))
             rows = calc.load_unprocessed_reports(limit=limit, skip_trivial=True)
+            records = (
+                rows.to_dict(orient="records")
+                if rows is not None and hasattr(rows, "to_dict") and not rows.empty
+                else []
+            )
             done = 0
             errors = 0
-            for r in rows:
+            for r in records:
                 try:
                     parsed = nlp.analyze_report_sync(str(r.get("report_text") or ""))
                     calc.save_nlp_result(int(r["id"]), parsed)
                     done += 1
                 except Exception:
                     errors += 1
-            out["nlp"] = {"ok": True, "parsed": done, "errors": errors, "limit": limit}
+            out["nlp"] = {
+                "ok": True,
+                "parsed": done,
+                "errors": errors,
+                "limit": limit,
+                "forced_pending": bool(force and new_upserts <= 0),
+            }
             if AUTO_BACKLOG_FACTORS and done > 0:
                 try:
-                    fac = calc.run_all_factors()
+                    fac = calc.run_all_factors(persist=True, apply_nlp=True)
                     out["factors"] = {"ok": True, "result": str(fac)[:200]}
                 except Exception as e:
                     out["factors"] = {"ok": False, "error": str(e)}
