@@ -1501,7 +1501,17 @@ class FactorCalculator:
         return final_df
 
     def extract_sectional_positions(self, df: pd.DataFrame) -> pd.DataFrame:
-        """從 raw_json 中提取分段走位數據 (早段位置與追回名次)"""
+        """
+        提取分段走位（早段位置與追回名次）。
+        優先讀 runner_sections 表；缺列時才回退 runners.raw_json。
+        """
+        out = df.copy()
+        sec_map = self._runner_sections_early_map(
+            out["runner_id"].dropna().astype(str).unique().tolist()
+            if "runner_id" in out.columns
+            else []
+        )
+
         def parse_positions(raw):
             try:
                 data = raw if isinstance(raw, dict) else json.loads(raw)
@@ -1519,7 +1529,15 @@ class FactorCalculator:
                         break
                     except (TypeError, ValueError):
                         continue
-                return early_pos if early_pos is not None else np.nan
+                if early_pos is not None:
+                    return early_pos
+                # jjjc：running_position「7 7 1」
+                from sectionals_store import parse_running_position
+
+                rp = parse_running_position(
+                    data.get("running_position") or data.get("runningPosition")
+                )
+                return rp[0] if rp else np.nan
             except Exception:
                 return np.nan
 
@@ -1536,9 +1554,22 @@ class FactorCalculator:
             except Exception:
                 return np.nan
 
-        out = df.copy()
-        out["early_position"] = out["raw_json"].apply(parse_positions)
-        out["early_sectional_sec"] = out["raw_json"].apply(parse_early_sectional_sec)
+        early_pos_list = []
+        early_sec_list = []
+        for _, row in out.iterrows():
+            rid = str(row.get("runner_id") or "")
+            mapped = sec_map.get(rid) if rid else None
+            if mapped and mapped.get("early_position") is not None:
+                early_pos_list.append(mapped["early_position"])
+            else:
+                early_pos_list.append(parse_positions(row.get("raw_json")))
+            if mapped and mapped.get("early_sectional_sec") is not None:
+                early_sec_list.append(mapped["early_sectional_sec"])
+            else:
+                early_sec_list.append(parse_early_sectional_sec(row.get("raw_json")))
+
+        out["early_position"] = early_pos_list
+        out["early_sectional_sec"] = early_sec_list
         # 追回名次 = 早段名次 - 最終名次（正數＝後追力強）
         out["positions_gained"] = out["early_position"] - out["finish_order_num"]
 
@@ -1550,6 +1581,91 @@ class FactorCalculator:
         choices = ["前領 (Front-Runner)", "居中 (Mid-Pack)", "後追 (Closer)"]
         out["running_style"] = np.select(conditions, choices, default="未知 (Unknown)")
         return out
+
+    def _runner_sections_early_map(self, runner_ids: list) -> dict:
+        """runner_id → {early_position, early_sectional_sec}（來自 runner_sections）。"""
+        ids = [str(x) for x in (runner_ids or []) if x]
+        if not ids:
+            return {}
+        # 分批避免超長 IN
+        out = {}
+        chunk = 400
+        for i in range(0, len(ids), chunk):
+            part = ids[i : i + chunk]
+            placeholders = ", ".join([f":id{j}" for j in range(len(part))])
+            params = {f"id{j}": part[j] for j in range(len(part))}
+            try:
+                df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT runner_id, stage_no, position_raw, sectional_time
+                        FROM runner_sections
+                        WHERE runner_id IN ({placeholders})
+                        ORDER BY runner_id, stage_no
+                        """
+                    ),
+                    self.engine,
+                    params=params,
+                )
+            except Exception:
+                return out
+            if df.empty:
+                continue
+            for rid, g in df.groupby("runner_id"):
+                early_pos = None
+                early_sec = None
+                for _, r in g.sort_values("stage_no").iterrows():
+                    if early_pos is None:
+                        try:
+                            if r["position_raw"] is not None and str(r["position_raw"]).strip() not in ("", "-"):
+                                early_pos = int(float(r["position_raw"]))
+                        except (TypeError, ValueError):
+                            pass
+                    if early_sec is None and r.get("sectional_time") is not None:
+                        try:
+                            early_sec = float(str(r["sectional_time"]).strip())
+                        except (TypeError, ValueError):
+                            pass
+                    if early_pos is not None:
+                        break
+                out[str(rid)] = {
+                    "early_position": early_pos,
+                    "early_sectional_sec": early_sec,
+                }
+        return out
+
+    def explain_pace_score(self, horse_name: str, limit: int = 12) -> pd.DataFrame:
+        """步速分原料：可對 runner_sections + finish_order_num。"""
+        from sectionals_store import explain_pace_inputs
+
+        rows = explain_pace_inputs(self.engine, horse_name, limit=limit)
+        return pd.DataFrame(rows)
+
+    def explain_horse_form(self, horse_name: str, limit: int = 12) -> pd.DataFrame:
+        """
+        近績分原料：名次 → raw_score（勝/入位權重），再經時間衰減＋貝葉斯寫入 factor_scores。
+        此處列出最近出賽名次列，方便對 DB。
+        """
+        name = str(horse_name or "").strip()
+        if not name:
+            return pd.DataFrame()
+        q = text(
+            """
+            SELECT
+              ru.runner_id, ru.race_id, ru.horse_name, ru.finish_order_num,
+              ru.final_time, ra.distance_m, ra.class, ra.meeting_id
+            FROM runners ru
+            LEFT JOIN races ra ON ra.race_id = ru.race_id
+            WHERE ru.horse_name = :name
+              AND ru.finish_order_num IS NOT NULL
+            ORDER BY ru.race_id DESC
+            LIMIT :lim
+            """
+        )
+        try:
+            return pd.read_sql(q, self.engine, params={"name": name, "lim": int(limit)})
+        except Exception:
+            return pd.DataFrame()
 
     def calculate_pace_factor(self, df: pd.DataFrame = None) -> pd.DataFrame:
         """

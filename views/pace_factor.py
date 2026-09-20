@@ -11,6 +11,27 @@ st.caption(
     "由歷史分段走位推跑法與追回指數（GLOBAL）；"
     "選排位後推算同場步速熱度，並給前領／後追形勢加權。"
 )
+with st.expander("📦 數據從哪裡來／怎樣算（可對 DB）", expanded=False):
+    st.markdown(
+        """
+**原料表（應可逐列對）**
+- `runners.finish_order_num`：最終名次（RESULTS 就緒條件）
+- `runner_sections`：各段走位／分段時間（`stage_no` + `position_raw` + `sectional_time`）
+- 同步來源：`jjjc_results_sync` 的 `running_position`（如 `7 7 1`）或 J18 `raw_json.sections`
+
+**步速分怎麼來**
+1. 早段名次 − 終點名次 = 追回名次（`positions_gained`）
+2. 按馬名聚合 → 貝葉斯平滑 → 全庫 Z-Score → 寫入 `factor_scores`（`factor_type=PACE`, `bucket_id=GLOBAL`）
+3. 早段時間另算 `early_speed_z`（預計步速熱度）
+
+**「已拿到數據」判定**
+- RESULTS／結算：只看有沒有 `finish_order_num`（不要求分段）
+- 步速可算：該馬在 `runner_sections` 至少有一段 `position_raw`
+- 作戰室 RESULTS 詳情會附「分段走位覆蓋率」
+
+回填舊資料：`python sectionals_store.py --backfill`；稽核：`--audit`；單馬原料：`--explain-pace 馬名`
+        """
+    )
 
 if not ui_utils.ensure_history_loaded():
     st.stop()
@@ -95,6 +116,23 @@ if pace_df is None or pace_df.empty:
 
 pace_df = st.session_state["pace_df"]
 name_col = "entity_name" if "entity_name" in pace_df.columns else "horse_name"
+
+st.subheader("🔍 單馬步速原料（對 DB）")
+probe = st.text_input("輸入馬名（與 factor_scores.entity_name 一致）", key="pace_explain_name")
+if probe:
+    calc_x = FactorCalculator()
+    src = calc_x.explain_pace_score(probe.strip(), limit=15)
+    if src.empty:
+        st.warning(
+            "無 runner_sections 原料。請確認已同步賽果（含 running_position），"
+            "或執行 `python sectionals_store.py --backfill`。"
+        )
+    else:
+        st.dataframe(src, use_container_width=True)
+        st.caption(
+            "positions_gained = early_position − finish_order_num；"
+            "這些列聚合後才寫入 PACE Z。"
+        )
 
 upcoming_options = ui_utils.get_upcoming_races_list()
 st.subheader("🔮 排位場次 × 步速形勢")

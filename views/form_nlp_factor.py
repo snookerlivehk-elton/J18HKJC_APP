@@ -12,6 +12,22 @@ st.caption(
     "預設 stakeholder：受阻為獨立干擾持份者（不烤進 raw）；缺沿路走勢只降覆蓋、不阻擋推論。"
     "legacy 模式才會把 NLP 補償寫回 raw_score。需先解析 text_reports。"
 )
+with st.expander("📦 數據從哪裡來／怎樣算（可對 DB）", expanded=False):
+    st.markdown(
+        """
+**原料表**
+- `runners.finish_order_num`（＋班次／評分／賠率欄）→ 近績 raw
+- `text_reports.nlp_result`（可選）→ 受阻補償／干擾持份者
+- 產出：`factor_scores` 其中 `factor_type='HORSE'`、`bucket_id`＝距離帶粗桶（如 `ST_SPRINT`）
+
+**近績分怎麼來**
+1. 名次 → 基礎分（冠軍／入位權重，見 `config.WIN_WEIGHT`／`PLACE_WEIGHT`）
+2. 時間衰減 + 貝葉斯平滑（同桶）→ `adjusted_score` → 桶內 Z-Score
+3. 推論時 UI「近績分」＝查該馬在本場距離帶粗桶的 HORSE Z
+
+**不要在 DB 找「近績分」欄**：分數只在 `factor_scores`；單場名次在 `runners`。
+        """
+    )
 
 if not ui_utils.ensure_history_loaded():
     st.stop()
