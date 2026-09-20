@@ -267,11 +267,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .dev-banner {
-      position: fixed; top: 8px; right: 12px; z-index: 30;
-      background: rgba(29,53,94,.9); color: #ffe08a; font-size: 11px; font-weight: 700;
-      padding: 5px 10px; border-radius: 8px; pointer-events: none;
-    }
+    .dev-banner { display: none; }
   </style>
 </head>
 <body>
@@ -577,18 +573,13 @@
     function forecastTable(runners) {
       const ranked = sortRunners(runners, "rank_asc").slice(0, 8);
       const nos = runners.map((h) => h.horse_no).filter(Boolean).sort((a, b) => a - b);
-      const byNo = {};
-      runners.forEach((h) => { byNo[h.horse_no] = h; });
       let max = 1;
       ranked.forEach((h) => { max = Math.max(max, num(h.fused_share_pct) || 0); });
       let head = "<th>第→</th>" + nos.map((n) => "<th>" + n + "</th>").join("");
       let body = ranked.map((rowH, i) => {
         const cells = nos.map((n) => {
-          const h = byNo[n];
-          if (!h) return "<td></td>";
-          const same = Number(h.pred_rank) === i + 1;
-          const v = num(h.fused_share_pct) || 0;
-          if (!same && v < max * 0.45) return "<td></td>";
+          if (Number(rowH.horse_no) !== Number(n)) return "<td></td>";
+          const v = num(rowH.fused_share_pct) || 0;
           return '<td class="' + heatClass(v, max) + '">' + v.toFixed(0) + "</td>";
         }).join("");
         return "<tr><th>" + (i + 1) + "</th>" + cells + "</tr>";
