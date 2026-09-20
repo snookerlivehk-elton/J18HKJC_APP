@@ -13,6 +13,7 @@
 5. `meeting_id`：`YYYY-MM-DD_ST` 或 `YYYY-MM-DD_HV`
 6. 排位 DB 可能叫 `runner_no`＝export 嘅 `horse_no`（`jjjc_export_common.horse_no_of`）
 7. placeholder／`energy_is_placeholder=true`／空殼唔當真值
+8. **場額**：HV `horse_no` ≤12；ST ≤14。J18 results sync 會拒寫超額馬號，並喺重同步時清同場幽靈馬（常見污染：ST Glenealy 14 匹誤寫入 HV `race_id`）
 
 ## 開工檢查
 
@@ -43,6 +44,7 @@ curl "$JJJC_API_BASE/api/export/catalog"
 | `racereport` / `race_report` | `incident_report` |
 | placeholder 當真評述／真速勢 | 略過／waiting |
 | Sha Tin／沙田／st | `ST` / `HV` |
+| HV 場寫入 #13/#14（ST 幽靈） | 拒寫＋重同步清幽靈；查 `field_warnings`／ops 場額警告 |
 
 ## 分段（R2）payload 要點
 
@@ -59,3 +61,31 @@ curl -sS "$JJJC_API_BASE/api/export/sectionals?date=2026-09-16&venue=HV" | jq '.
 python jjjc_sectionals_sync.py --date 2026-09-16 --course HV
 python jjjc_sectionals_sync.py --from-file fixtures/jjjc_sectionals_HV_20260916_R1.json
 ```
+
+## 修復 HV「14 匹」幽靈（ST→HV 污染）
+
+症狀：跑馬地場次顯示 14 名次／出現 #13（如 GOOD FORTUNE），但上游分段／排位只有 12 匹；部分馬分段時間 `None`。
+
+```bash
+# 用正確上游重寫該日 HV 賽果（拒寫 #13+#14，並刪同場唔喺 export 的馬）
+python jjjc_results_sync.py --date 2026-09-09 --course HV
+# 再補分段
+python jjjc_sectionals_sync.py --date 2026-09-09 --course HV
+```
+
+作戰室「③ 分段時間／走位」會顯示場額異常警告；覆蓋摘要 `gaps` 含「場額幽靈」。
+
+## 有走位但無分段秒數（ST 正常 14 匹）
+
+沙田場額 ≤14，**14 匹本身唔係 bug**。若作戰室顯示「有走位 14／有分段時間 0」，多數係：
+
+1. 只跑咗 RESULTS（`running_position` → 走位），**未同步 R2** `GET /api/export/sectionals`
+2. 舊 UI 誤寫「空秒數屬正常」——其實上游已有 `sectional_time` 時必須拉 R2
+
+```bash
+# 只補秒數（賽果已齊時）
+python jjjc_sectionals_sync.py --date 2026-09-06 --course ST
+# 或作戰室 RESULTS →「同步 R2 分段（jjjc）」／「重跑賽果＋回填分段」
+```
+
+未設 `JJJC_API_BASE` 時會預設 `https://apicc.up.railway.app`。

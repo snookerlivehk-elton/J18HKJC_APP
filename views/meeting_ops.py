@@ -708,7 +708,7 @@ st.divider()
 st.subheader(f"③ 分段時間／走位 — {racing_date} {course}")
 st.caption("選場次 → 直接睇各匹馬名次、走位、各段時間（`runner_sections`）。")
 try:
-    from data_audit import list_historical_races, race_sectionals_grid
+    from data_audit import list_historical_races, race_field_size_warning, race_sectionals_grid
 
     hist_races = list_historical_races(pipe.engine, racing_date, course)
     # 後備：排位場次（賽前可能仲未有歷史名次）
@@ -744,6 +744,14 @@ try:
         race_row = race_src.iloc[race_labels.index(race_pick)]
         race_id = str(race_row["race_id"])
 
+        field_warn = race_field_size_warning(pipe.engine, race_id)
+        if field_warn:
+            st.error(
+                f"⚠️ 場額異常：{field_warn}。"
+                "常見原因：沙田（ST）賽果被寫進跑馬地（HV）race_id（例 GOOD FORTUNE #13）。"
+                "處理：RESULTS 用正確上游重同步該日 HV（會拒寫 #13+#14 並清幽靈馬）。"
+            )
+
         grid = race_sectionals_grid(pipe.engine, race_id)
         if grid.empty:
             st.warning(
@@ -775,8 +783,10 @@ try:
             if not has_pos:
                 st.warning("未有走位資料 — 請重同步／回填分段。")
             elif not has_time:
-                st.info(
-                    "已有走位（如 7-7-1）；本場來源未提供各段秒數（`sectional_time` 空屬正常）。"
+                st.warning(
+                    "只有走位（多數來自賽果 `running_position`），**未有各段秒數**。"
+                    "上游 R2 `jjjc.sectionals.v1` 若已有時間，請撳 RESULTS「同步 R2 分段（jjjc）」"
+                    "或「重跑賽果＋回填分段」——唔好以為空時間係正常。"
                 )
             st.dataframe(grid, use_container_width=True, hide_index=True)
             race_secs = grid.attrs.get("race_sectionals") or []
@@ -829,22 +839,29 @@ try:
     i1, i2, i3, i4 = st.columns(4)
     i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
     i2.metric(
-        "有分段",
+        "有走位",
         inv.get("with_sections", 0),
         f"{float(inv.get('section_coverage') or 0):.0%}",
     )
     i3.metric(
+        "有分段秒數",
+        inv.get("with_sectional_times", 0),
+        f"{float(inv.get('sectional_time_coverage') or 0):.0%}",
+    )
+    i4.metric(
         "沿途評述",
         inv.get("running_comment_n", 0),
         f"{float(inv.get('running_comment_coverage') or 0):.0%}",
     )
-    i4.metric(
-        "事故評述",
-        inv.get("incident_n", 0),
-        f"{float(inv.get('incident_coverage') or 0):.0%}",
-    )
     if inv.get("gaps"):
         st.warning("缺口：" + "；".join(inv["gaps"]))
+    ghosts = inv.get("field_ghost_sample") or []
+    if ghosts:
+        st.error(
+            f"場額幽靈樣例（{inv.get('course')} 上限 {inv.get('field_cap')}）—"
+            "請 RESULTS 重同步正確上游以清走："
+        )
+        st.dataframe(pd.DataFrame(ghosts), use_container_width=True, hide_index=True)
     miss = inv.get("missing_sectionals_sample") or []
     if miss:
         st.caption("缺分段樣例：")

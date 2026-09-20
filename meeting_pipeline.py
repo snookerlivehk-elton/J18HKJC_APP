@@ -610,8 +610,9 @@ class MeetingPipeline:
 
             cov = coverage_for_prefix(self.engine, prefix)
             sec_note = (
-                f"；分段走位 {cov.get('with_sections', 0)}/{cov.get('with_finish', 0)} 匹"
-                f"（覆蓋 {cov.get('section_coverage', 0):.0%}）"
+                f"；走位 {cov.get('with_sections', 0)}/{cov.get('with_finish', 0)}"
+                f"／秒數 {cov.get('with_sectional_times', 0)}"
+                f"（時間覆蓋 {cov.get('sectional_time_coverage', 0):.0%}）"
             )
         except Exception:
             sec_note = ""
@@ -1151,6 +1152,23 @@ class MeetingPipeline:
                     from_file=kwargs.get("from_file"),
                     base_url=kwargs.get("base_url"),
                 )
+                # 賽果只有走位；立刻跟住拉 R2 分段秒數（上游 jjjc.sectionals.v1）
+                if out.get("ok") and not kwargs.get("skip_sectionals"):
+                    try:
+                        from jjjc_sectionals_sync import sync_meeting as sync_sec
+
+                        sec = sync_sec(
+                            racing_date=racing_date,
+                            course=course,
+                            race_no=kwargs.get("race_no"),
+                            base_url=kwargs.get("base_url"),
+                        )
+                        out["sectionals_export"] = sec
+                    except Exception as e:
+                        out["sectionals_export"] = {
+                            "ok": False,
+                            "error": str(e)[:200],
+                        }
                 self.refresh_readiness(racing_date, course)
                 # RESULTS 齊備且有快照時立刻 settle（唔使等下一輪 tick）
                 auto = self._maybe_auto_settle_after_results(racing_date, course)

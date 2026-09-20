@@ -230,6 +230,12 @@ class JjjcResultsSyncTest(unittest.TestCase):
                 race["venue_code"] = "HV"
                 race["race_id"] = f"20260909HV{rn:02d}"
                 race["race_no"] = rn
+                # HV 場額 ≤12：唔好把 ST 14 匹原樣寫入
+                race["runners"] = [
+                    ru
+                    for ru in (race.get("runners") or [])
+                    if int(ru.get("horse_no") or 0) <= 12
+                ][:12]
                 payload["races"].append(race)
             payload["race_count"] = 8
             sync.upsert_payload(payload)
@@ -245,7 +251,7 @@ class JjjcResultsSyncTest(unittest.TestCase):
                         ),
                         {"rid": rid, "mid": "2026-09-09", "rn": rn},
                     )
-                    for h in range(1, 15):
+                    for h in range(1, 13):
                         conn.execute(
                             text(
                                 "INSERT INTO runners "
@@ -279,6 +285,157 @@ class JjjcResultsSyncTest(unittest.TestCase):
                 [r[0] for r in races],
                 [f"20260909HV{n:02d}" for n in range(1, 9)],
             )
+
+    def test_hv_rejects_horse_no_over_12(self):
+        """HV 拒寫 #13/#14（ST Glenealy 污染防禦）。"""
+        root = Path(__file__).resolve().parents[1]
+        fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"
+        self.assertTrue(fixture.is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import copy
+            import etl_pipeline
+            import jjjc_results_sync as sync
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            payload = json.loads(fixture.read_text(encoding="utf-8"))
+            payload = copy.deepcopy(payload)
+            payload["race_date"] = "2026-09-09"
+            payload["venue_code"] = "HV"
+            race = payload["races"][0]
+            race["race_date"] = "2026-09-09"
+            race["venue_code"] = "HV"
+            race["race_id"] = "20260909HV01"
+            race["race_no"] = 1
+            # 保留 ST 14 匹（含 GOOD FORTUNE #13）→ 應拒寫超額
+            out = sync.upsert_payload(payload)
+            self.assertTrue(out["ok"])
+            self.assertGreaterEqual(out.get("rejected_runner_count") or 0, 1)
+            rejected_nos = {int(r["horse_no"]) for r in out.get("rejected_runners") or []}
+            self.assertIn(13, rejected_nos)
+
+            from sqlalchemy import create_engine, text
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            with eng.connect() as conn:
+                nos = [
+                    int(r[0])
+                    for r in conn.execute(
+                        text(
+                            "SELECT horse_no FROM runners WHERE race_id='20260909HV01' "
+                            "ORDER BY horse_no"
+                        )
+                    ).fetchall()
+                ]
+                n13 = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM runners "
+                        "WHERE race_id='20260909HV01' AND horse_no=13"
+                    )
+                ).scalar()
+            eng.dispose()
+            self.assertEqual(n13, 0)
+            self.assertTrue(all(n <= 12 for n in nos))
+            self.assertLessEqual(len(nos), 12)
+
+    def test_hv_resync_prunes_st_ghost_runners(self):
+        """已污染嘅 HV 場（14 匹含 #13）→ 正確 12 匹重同步後清幽靈。"""
+        root = Path(__file__).resolve().parents[1]
+        fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"
+        self.assertTrue(fixture.is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import copy
+            import etl_pipeline
+            import jjjc_results_sync as sync
+            from sqlalchemy import create_engine, text
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            # 先初始化 schema
+            sync._ensure_sqlite_schema()
+            with eng.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO races (race_id, meeting_id, race_num) "
+                        "VALUES ('20260909HV01', '2026-09-09', 1)"
+                    )
+                )
+                for h in range(1, 15):
+                    conn.execute(
+                        text(
+                            "INSERT INTO runners "
+                            "(runner_id, race_id, horse_id, horse_no, horse_name, "
+                            "finish_order_num, scratched) "
+                            "VALUES (:id, '20260909HV01', :hid, :hn, :name, :fo, 0)"
+                        ),
+                        {
+                            "id": f"20260909HV01H{h:02d}",
+                            "hid": f"UNK_20260909HV01_{h:02d}",
+                            "hn": h,
+                            "name": "GOOD FORTUNE" if h == 13 else f"HORSE{h}",
+                            "fo": h,
+                        },
+                    )
+
+            clean = json.loads(fixture.read_text(encoding="utf-8"))
+            clean = copy.deepcopy(clean)
+            clean["race_date"] = "2026-09-09"
+            clean["venue_code"] = "HV"
+            race = clean["races"][0]
+            race["race_date"] = "2026-09-09"
+            race["venue_code"] = "HV"
+            race["race_id"] = "20260909HV01"
+            race["race_no"] = 1
+            race["runners"] = [
+                {
+                    "horse_no": h,
+                    "horse_name": f"HV{h}",
+                    "horse_code": f"K{h:03d}",
+                    "finish_order_num": h,
+                    "finish_time": "1:10.00",
+                }
+                for h in range(1, 13)
+            ]
+            out = sync.upsert_payload(clean)
+            self.assertTrue(out["ok"])
+            self.assertGreaterEqual(out.get("pruned_ghost_runners") or 0, 2)
+
+            with eng.connect() as conn:
+                nos = [
+                    int(r[0])
+                    for r in conn.execute(
+                        text(
+                            "SELECT horse_no FROM runners WHERE race_id='20260909HV01' "
+                            "ORDER BY horse_no"
+                        )
+                    ).fetchall()
+                ]
+                ghost = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM runners "
+                        "WHERE race_id='20260909HV01' AND horse_no > 12"
+                    )
+                ).scalar()
+            eng.dispose()
+            self.assertEqual(nos, list(range(1, 13)))
+            self.assertEqual(ghost, 0)
 
 
 if __name__ == "__main__":

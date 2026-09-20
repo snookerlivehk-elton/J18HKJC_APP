@@ -23,6 +23,12 @@ from sectionals_store import (
     parse_running_position,
     stages_from_runner_payload,
 )
+from jjjc_export_common import (
+    field_size_issues,
+    max_horse_no_for_venue,
+    normalize_venue,
+    venue_from_race_id,
+)
 
 
 def _prefix(racing_date: str, course: str) -> str:
@@ -92,23 +98,59 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
             {"p": prefix},
         ).mappings().all()
 
+        # 場額幽靈：HV horse_no>12／ST>14（例如 ST Glenealy 誤寫入 HV race_id）
+        venue = normalize_venue(course) or ""
+        cap = max_horse_no_for_venue(venue)
+        field_ghosts: List[Dict[str, Any]] = []
+        if cap is not None:
+            field_ghosts = [
+                dict(r)
+                for r in conn.execute(
+                    text(
+                        """
+                        SELECT race_id, horse_no, horse_name, finish_order_num, runner_id
+                        FROM runners
+                        WHERE race_id LIKE :p || '%'
+                          AND horse_no > :cap
+                        ORDER BY race_id, horse_no
+                        LIMIT 40
+                        """
+                    ),
+                    {"p": prefix, "cap": int(cap)},
+                ).mappings().all()
+            ]
+
     finish_n = int((comment or {}).get("finish_n") or cov.get("with_finish") or 0)
     running_n = int((comment or {}).get("running_n") or 0)
     incident_n = int((comment or {}).get("incident_n") or 0)
     with_sec = int(cov.get("with_sections") or 0)
+    with_times = int(cov.get("with_sectional_times") or 0)
 
     finish_ok = finish_n > 0 and race_n > 0
     # 分段：有名次嘅馬 ≥80% 有走位先當齊（同 backlog 門檻風格）
     sec_cov = (with_sec / finish_n) if finish_n else 0.0
+    time_cov = (with_times / finish_n) if finish_n else 0.0
     sectionals_ok = finish_n > 0 and sec_cov >= 0.8
+    times_ok = finish_n > 0 and time_cov >= 0.8
     run_cov = (running_n / finish_n) if finish_n else 0.0
     inc_cov = (incident_n / finish_n) if finish_n else 0.0
 
     gaps: List[str] = []
+    if field_ghosts:
+        gaps.append(
+            f"場額幽靈 {len(field_ghosts)} 匹（{venue} 上限 {cap}；疑 ST 賽果誤入 HV）"
+            if venue == "HV"
+            else f"場額幽靈 {len(field_ghosts)} 匹（{venue} 上限 {cap}）"
+        )
     if not finish_ok:
         gaps.append("無名次（需重同步 RESULTS）")
     elif not sectionals_ok:
         gaps.append(f"分段走位不足 {with_sec}/{finish_n}（{sec_cov:.0%}）")
+    elif not times_ok:
+        gaps.append(
+            f"有走位但缺分段秒數 {with_times}/{finish_n}（{time_cov:.0%}）—"
+            "請 RESULTS「同步 R2 分段」拉 jjjc.sectionals.v1（上游已有時間時唔好只靠賽果回填）"
+        )
     if finish_ok and run_cov < 0.8:
         gaps.append(f"沿途評述不足 {running_n}/{finish_n}")
     if finish_ok and inc_cov < 0.8:
@@ -121,18 +163,24 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         "race_n": race_n,
         "finish_n": finish_n,
         "with_sections": with_sec,
+        "with_sectional_times": with_times,
         "section_rows": int(cov.get("section_rows") or 0),
         "section_coverage": round(sec_cov, 3),
+        "sectional_time_coverage": round(time_cov, 3),
         "running_comment_n": running_n,
         "running_comment_coverage": round(run_cov, 3),
         "incident_n": incident_n,
         "incident_coverage": round(inc_cov, 3),
         "finish_ok": finish_ok,
         "sectionals_ok": sectionals_ok,
+        "sectional_times_ok": times_ok,
         "running_comment_ok": run_cov >= 0.8 if finish_n else False,
         "incident_ok": inc_cov >= 0.8 if finish_n else False,
+        "field_cap": cap,
+        "field_ghost_n": len(field_ghosts),
+        "field_ghost_sample": field_ghosts,
         "gaps": gaps,
-        "status": "ok" if not gaps else ("partial" if finish_ok else "missing"),
+        "status": "ok" if not gaps else ("partial" if finish_ok and not field_ghosts else ("contaminated" if field_ghosts else "missing")),
         "missing_sectionals_sample": [dict(r) for r in missing_sec],
     }
 
@@ -357,6 +405,33 @@ def resync_results_and_sectionals(
         "backfill": bf_out,
         "inventory": inv,
     }
+
+
+def race_field_size_warning(engine, race_id: str) -> Optional[str]:
+    """
+    單場場額檢查。HV 出現 #13/#14 或 >12 匹 → 警告字串；正常回 None。
+    """
+    rid = str(race_id or "").strip()
+    if not rid:
+        return None
+    venue = venue_from_race_id(rid)
+    cap = max_horse_no_for_venue(venue)
+    if cap is None:
+        return None
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT horse_no FROM runners WHERE race_id = :rid
+                """
+            ),
+            {"rid": rid},
+        ).fetchall()
+    nos = [r[0] for r in rows if r and r[0] is not None]
+    issues = field_size_issues(venue, nos, race_id=rid)
+    if not issues:
+        return None
+    return "；".join(issues)
 
 
 def list_historical_races(engine, racing_date: str, course: str) -> pd.DataFrame:
