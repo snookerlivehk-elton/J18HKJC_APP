@@ -13,6 +13,42 @@ from prediction_export import build_race_prediction, list_upcoming_meeting
 from score_share import select_picks_by_share, win_pick_count_from_shares
 
 
+def _json_safe(obj: Any) -> Any:
+    """把 numpy／pandas 純量轉成原生 JSON 可序列化型別（避免 FastAPI 500）。"""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, float, str)):
+        return obj
+    # numpy / pandas scalars
+    item = getattr(obj, "item", None)
+    if callable(item):
+        try:
+            return _json_safe(item())
+        except Exception:
+            pass
+    try:
+        import numpy as np
+
+        if isinstance(obj, np.generic):
+            return _json_safe(obj.item())
+    except Exception:
+        pass
+    try:
+        import math
+
+        if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+            return None
+    except Exception:
+        pass
+    return str(obj)
+
+
 def _course_label(course: Any) -> str:
     c = str(course or "").upper()
     if c == "HV":
@@ -44,7 +80,7 @@ def build_public_meetings(
                 "class_display": format_class_display(r.get("class")),
             }
         )
-    return {"ok": True, "meetings": meetings, "races": races}
+    return _json_safe({"ok": True, "meetings": meetings, "races": races})
 
 
 def build_public_race_view(race_id: str) -> Dict[str, Any]:
@@ -187,7 +223,7 @@ def build_public_race_view(race_id: str) -> Dict[str, Any]:
     race["class_display"] = format_class_display(race.get("class"))
 
     meta = base.get("meta") or {}
-    return {
+    payload = {
         "ok": True,
         "race_id": race_id,
         "race": race,
@@ -223,6 +259,7 @@ def build_public_race_view(race_id: str) -> Dict[str, Any]:
         "runners": runners_out,
         "radar_axes": [{"key": k, "label": lab} for k, lab in radar_keys],
     }
+    return _json_safe(payload)
 
 
 def default_meeting_selection() -> Dict[str, Any]:
@@ -240,7 +277,7 @@ def default_meeting_selection() -> Dict[str, Any]:
         and str(r.get("course") or "").upper() == str(m.get("course") or "").upper()
     ]
     races.sort(key=lambda x: int(x.get("race_num") or 0))
-    return {"ok": True, "meeting": m, "races": races}
+    return _json_safe({"ok": True, "meeting": m, "races": races})
 
 
 def health_payload(version: str) -> Dict[str, Any]:

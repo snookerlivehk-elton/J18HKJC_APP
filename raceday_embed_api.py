@@ -57,8 +57,12 @@ def _read_html() -> str:
 
 def _read_pc_html() -> str:
     if _PC_HTML_PATH.is_file():
-        return _PC_HTML_PATH.read_text(encoding="utf-8")
-    return "<!DOCTYPE html><html><body><p>raceday_pc.html missing</p></body></html>"
+        html = _PC_HTML_PATH.read_text(encoding="utf-8")
+    else:
+        html = "<!DOCTYPE html><html><body><p>raceday_pc.html missing</p></body></html>"
+    # 同機部署時留空（相對路徑）。僅當明確設 RACEDAY_PC_API_BASE 才注入外站。
+    api_base = (os.getenv("RACEDAY_PC_API_BASE") or "").rstrip("/")
+    return html.replace("__API_BASE__", api_base)
 
 
 def mount_raceday_embed(app: FastAPI) -> None:
@@ -95,7 +99,15 @@ def mount_raceday_embed(app: FastAPI) -> None:
 
     @app.get("/embed/api/races/{race_id}")
     def embed_race(race_id: str):
-        payload = build_public_race_view(race_id)
+        try:
+            payload = build_public_race_view(race_id)
+        except Exception as exc:  # noqa: BLE001 — 公開頁勿 500 空白
+            payload = {
+                "ok": False,
+                "error": "race_view_failed",
+                "detail": str(exc)[:240],
+                "race_id": race_id,
+            }
         status = 200 if payload.get("ok") else 404
         return JSONResponse(payload, status_code=status, headers=_embed_headers())
 

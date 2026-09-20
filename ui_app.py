@@ -105,10 +105,14 @@ def _is_raceday_pc_preview() -> bool:
 
 
 if _is_raceday_pc_preview():
+    import os
+
     import streamlit.components.v1 as components
 
     _pc_html = (_ROOT / "static" / "raceday_pc.html").read_text(encoding="utf-8")
     _pc_html = _pc_html.replace("__APP_VERSION__", get_version())
+    _api_base = (os.getenv("RACEDAY_PC_API_BASE") or "").rstrip("/")
+    _pc_html = _pc_html.replace("__API_BASE__", _api_base)
     st.markdown(
         """
 <style>

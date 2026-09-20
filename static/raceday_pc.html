@@ -11,10 +11,8 @@
   <style>
     :root {
       --nav: #3d4f66;
-      --nav-2: #33455c;
       --page: #eef1f5;
       --cream: #f7f4ee;
-      --card: #fff;
       --line: #e4e7ec;
       --text: #2c3340;
       --muted: #8a93a3;
@@ -22,7 +20,6 @@
       --blue-2: #3b8fd4;
       --blue-deep: #2f7fbf;
       --coral: #ff6b5b;
-      --orange: #ff8a3d;
       --yellow: #ffc84a;
       --green: #2ecf7a;
       --red: #ef4d4d;
@@ -31,55 +28,30 @@
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); font-family: var(--font); }
-    body { display: flex; min-width: 1100px; overflow: hidden; }
+    body { display: flex; min-width: 980px; overflow: hidden; }
     button { font-family: inherit; }
 
-    /* —— 左欄導航 —— */
     .sidebar {
       width: var(--sidebar); flex: 0 0 var(--sidebar);
-      background: linear-gradient(180deg, #455872 0%, #3a4d64 40%, #33455c 100%);
+      background: linear-gradient(180deg, #455872 0%, #33455c 100%);
       color: #fff; display: flex; flex-direction: column; align-items: center;
-      padding: 10px 0 16px; z-index: 20;
+      padding: 12px 0 16px; z-index: 20;
     }
     .logo {
       width: 52px; height: 52px; border-radius: 12px;
-      background: #fff; display: grid; place-items: center; margin-bottom: 8px;
+      background: #fff; display: grid; place-items: center; margin-bottom: 14px;
       box-shadow: 0 2px 8px rgba(0,0,0,.18);
     }
-    .logo svg { width: 40px; height: 40px; }
-    .avatar {
-      width: 46px; height: 46px; border-radius: 50%; background: #f3d7b8;
-      display: grid; place-items: center; margin: 6px 0 4px; overflow: hidden;
-      border: 2px solid rgba(255,255,255,.35);
-    }
-    .login-link { color: var(--coral); font-size: 12px; font-weight: 700; text-decoration: none; margin-bottom: 8px; }
-    .dev-switch {
-      display: flex; background: #2c3e52; border-radius: 999px; padding: 2px; margin-bottom: 10px; gap: 0;
-    }
-    .dev-switch span {
-      font-size: 10px; padding: 3px 7px; border-radius: 999px; color: #c5d0dc; font-weight: 700;
-    }
-    .dev-switch .on { background: var(--coral); color: #fff; }
     .nav { width: 100%; display: flex; flex-direction: column; gap: 2px; }
-    .nav a {
+    .nav .item {
       display: flex; flex-direction: column; align-items: center; gap: 2px;
-      color: rgba(255,255,255,.82); text-decoration: none; padding: 8px 4px;
-      font-size: 10px; font-weight: 600; position: relative;
+      color: rgba(255,255,255,.9); padding: 10px 4px;
+      font-size: 10px; font-weight: 700;
+      background: rgba(255,255,255,.08);
+      box-shadow: inset 3px 0 0 #7ec8ff;
     }
-    .nav a.active, .nav a:hover { color: #fff; background: rgba(255,255,255,.08); }
-    .nav a.active { box-shadow: inset 3px 0 0 #7ec8ff; }
     .nav .ico { font-size: 16px; line-height: 1; }
-    .badge {
-      position: absolute; top: 4px; right: 10px;
-      background: var(--coral); color: #fff; font-size: 9px; min-width: 14px; height: 14px;
-      border-radius: 999px; display: grid; place-items: center; font-weight: 800;
-    }
-    .hot {
-      display: inline-block; background: var(--coral); color: #fff;
-      font-size: 8px; padding: 1px 4px; border-radius: 6px; margin-bottom: 2px; font-weight: 800;
-    }
 
-    /* —— 中欄 —— */
     .workspace { flex: 1 1 auto; display: flex; min-width: 0; height: 100vh; }
     .center {
       width: 520px; flex: 0 0 520px; background: var(--cream);
@@ -90,7 +62,7 @@
       padding: 0 12px; background: #fff; border-bottom: 1px solid var(--line);
       font-size: 12px; color: #5b6575; overflow: hidden; white-space: nowrap;
     }
-    .ticker .horn { color: var(--blue); font-size: 14px; }
+    .ticker .horn { color: var(--blue); }
     .ticker .txt { overflow: hidden; text-overflow: ellipsis; }
 
     .race-bar {
@@ -98,46 +70,25 @@
       padding: 8px 12px 6px; background: var(--cream);
     }
     .live-pill {
-      display: inline-flex; align-items: center; gap: 4px;
+      display: inline-flex; align-items: center;
       background: #5b4bdb; color: #fff; font-size: 11px; font-weight: 800;
       padding: 5px 8px; border-radius: 6px; white-space: nowrap;
     }
     .race-pills { display: flex; gap: 6px; flex-wrap: wrap; }
     .race-pills button {
       width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
-      font-weight: 800; font-size: 13px; color: #fff;
-      background: #9aa7b8;
+      font-weight: 800; font-size: 13px; color: #fff; background: #9aa7b8;
     }
     .race-pills button.active { background: var(--blue); box-shadow: 0 0 0 3px rgba(74,163,232,.28); }
-    .race-pills button.done { background: #62c36a; }
 
     .race-meta {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 2px 12px 8px; font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+      padding: 2px 12px 10px; font-size: 13px; font-weight: 700;
     }
-    .race-meta .dot { color: var(--coral); font-size: 11px; margin-right: 6px; font-weight: 800; }
-    .login-hkjc {
-      background: #1d355e; color: var(--yellow); border: 0; border-radius: 6px;
-      padding: 6px 10px; font-weight: 800; font-size: 12px; cursor: default;
-    }
-
-    .timeline { padding: 0 14px 6px; }
-    .timeline .labs {
-      display: flex; justify-content: space-between; font-size: 10px; color: #9aa3b0; margin-bottom: 4px;
-    }
-    .track {
-      height: 8px; border-radius: 999px;
-      background: linear-gradient(90deg, #ffe0c2, #ff9a4a 55%, #ff6b4a);
-      position: relative;
-    }
-    .track .knob {
-      position: absolute; right: 0; top: 50%; transform: translate(40%, -50%);
-      width: 16px; height: 16px; border-radius: 50%; background: var(--coral);
-      box-shadow: 0 0 0 3px #fff;
-    }
+    .race-meta .dot { color: var(--coral); font-size: 11px; font-weight: 800; }
 
     .chip-row {
-      display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 8px; padding: 4px 12px 8px; flex-wrap: wrap;
     }
     .dd {
       background: linear-gradient(90deg, #ff8a4a, #ff6b7a);
@@ -147,16 +98,14 @@
     .ychip {
       width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer;
       background: var(--yellow); color: #5a4308; font-weight: 800; font-size: 13px;
-      box-shadow: 0 1px 0 rgba(0,0,0,.08);
     }
-    .ychip:hover { filter: brightness(1.05); }
     .normal {
       margin-left: auto; background: var(--blue); color: #fff; border: 0;
       border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 13px; cursor: pointer;
     }
 
     .sort-row {
-      display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px; font-size: 12px;
+      display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; font-size: 12px;
     }
     .sort-row .lbl { color: #8b93a0; margin-right: 4px; }
     .sort-row button {
@@ -164,10 +113,6 @@
       padding: 5px 10px; font-weight: 700; cursor: pointer;
     }
     .sort-row button.on { background: #d7ecfb; color: #2b6fa3; }
-    .pro {
-      margin-left: auto; background: #eef6ff; color: var(--blue-2); border: 1px solid #cfe6fb;
-      border-radius: 8px; padding: 5px 10px; font-weight: 800; font-size: 12px; cursor: default;
-    }
 
     .horses { flex: 1; overflow: auto; background: #fff; }
     .horse {
@@ -194,7 +139,7 @@
     .tag.mid { background: #e7f1ff; color: #3b7ab8; }
     .tag.back { background: #eee; color: #6a7380; }
     .tag.fuse { background: #e8fbf1; color: #1ea35a; }
-    .odds { text-align: right; font-variant-numeric: tabular-nums; min-width: 48px; }
+    .odds { text-align: right; font-variant-numeric: tabular-nums; min-width: 52px; }
     .odds .big { font-size: 16px; font-weight: 800; }
     .odds .sml { font-size: 12px; color: #8b93a0; margin-top: 2px; }
     .wp { display: flex; flex-direction: column; gap: 4px; min-width: 92px; }
@@ -207,11 +152,8 @@
     .p { background: var(--green); }
     .wp .n { font-weight: 700; font-variant-numeric: tabular-nums; }
     .wp .d { color: #9aa3b0; font-size: 11px; margin-left: auto; }
-    .thumbs { font-size: 11px; color: #b7bec8; margin-top: 4px; }
-    .thumbs .on { color: #f0a020; }
-    .mkt { color: var(--blue); font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .mkt { color: var(--blue); font-size: 11px; font-weight: 700; white-space: nowrap; margin-top: 2px; }
 
-    /* —— 右欄 —— */
     .right {
       flex: 1 1 auto; min-width: 0; background: #f4f6f8;
       overflow: auto; padding: 10px 12px 24px;
@@ -243,7 +185,6 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 6px 10px; font-size: 13px; font-weight: 800; background: #f3f7fb; color: #3a4a5c;
     }
-    .mx-title .exp { font-size: 12px; color: var(--blue); font-weight: 700; }
     .gridwrap { overflow: auto; }
     table.mx-table { border-collapse: collapse; font-size: 10px; width: 100%; font-variant-numeric: tabular-nums; }
     table.mx-table th, table.mx-table td {
@@ -257,21 +198,18 @@
     .c-mid { background: #3ecf8a; color: #fff; }
     .c-cool { background: #7ec8f0; color: #16324a; }
     .c-low { background: #eef6fc; color: #5b6b7c; }
-
     .picks-note { font-size: 11px; color: #8a93a3; padding: 4px 2px 10px; }
 
     .status { padding: 40px 16px; text-align: center; color: #8a93a3; }
+    .status.error { color: #c0392b; }
     .spinner {
       width: 22px; height: 22px; border: 2px solid #e0e6ee; border-top-color: var(--blue);
       border-radius: 50%; margin: 0 auto 10px; animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .dev-banner { display: none; }
   </style>
 </head>
 <body>
-  <div class="dev-banner">開發頁 · 賽日速覽 PC 風格 v__APP_VERSION__</div>
   <aside class="sidebar">
     <div class="logo" title="J18">
       <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -280,24 +218,8 @@
         <text x="32" y="50" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="Arial Black, sans-serif">18</text>
       </svg>
     </div>
-    <div class="avatar" aria-hidden="true">
-      <svg viewBox="0 0 64 64"><circle cx="32" cy="24" r="12" fill="#e8b48a"/><ellipse cx="32" cy="52" rx="18" ry="14" fill="#6db3e8"/><circle cx="32" cy="24" r="12" fill="#f3c7a0"/></svg>
-    </div>
-    <a class="login-link" href="#" onclick="return false;">登錄</a>
-    <div class="dev-switch"><span class="on">電腦</span><span>手機</span></div>
     <nav class="nav">
-      <a href="#" onclick="return false;"><span class="ico">⌂</span>首頁</a>
-      <a class="active" href="#"><span class="ico">▣</span>賽日速覽</a>
-      <a href="#" onclick="return false;"><span class="ico">▤</span>倍率/指數</a>
-      <a href="#" onclick="return false;"><span class="ico">☺</span>名家</a>
-      <a href="#" onclick="return false;"><span class="ico">🏆</span>賽果</a>
-      <a href="#" onclick="return false;"><span class="ico">♞</span>騎練</a>
-      <a href="#" onclick="return false;"><span class="ico">📅</span>賽期表</a>
-      <a href="#" onclick="return false;"><span class="ico">↗</span>預測跑法</a>
-      <a href="#" onclick="return false;"><span class="ico">🐴</span>馬匹詳情</a>
-      <a href="#" onclick="return false;"><span class="ico">💧</span>水位詳情</a>
-      <a href="#" onclick="return false;"><span class="badge">1</span><span class="ico">🔔</span>通知</a>
-      <a href="#" onclick="return false;"><span class="ico">?</span>使用指南</a>
+      <div class="item"><span class="ico">▣</span>賽日速覽</div>
     </nav>
   </aside>
 
@@ -309,39 +231,35 @@
         <div class="race-pills" id="racePills"></div>
       </div>
       <div class="race-meta">
-        <div><span class="dot" id="statusDot">● 資料</span><span id="raceMetaLine">—</span></div>
-        <button type="button" class="login-hkjc" disabled>綜合分析</button>
-      </div>
-      <div class="timeline">
-        <div class="labs"><span>開始</span><span>30'</span><span>15'</span><span>10'</span><span>5'</span><span>4'</span><span>3'</span><span>2'</span><span>1'</span><span>0'</span></div>
-        <div class="track"><div class="knob"></div></div>
+        <span class="dot" id="statusDot">●</span>
+        <span id="raceMetaLine">—</span>
       </div>
       <div class="chip-row">
-        <button type="button" class="dd" id="modeBtn">綜合走勢 ▾</button>
+        <button type="button" class="dd" id="modeBtn">綜合走勢</button>
         <div id="hotChips"></div>
-        <button type="button" class="normal" id="resetSort">正常</button>
+        <button type="button" class="normal" id="resetSort">馬號序</button>
       </div>
       <div class="sort-row">
-        <span class="lbl">排序方式</span>
+        <span class="lbl">排序</span>
         <button type="button" data-sort="no_asc">馬號</button>
         <button type="button" class="on" data-sort="fused_desc">綜合</button>
         <button type="button" data-sort="model_desc">模型</button>
         <button type="button" data-sort="ai_desc">AI</button>
-        <span class="pro">推介版</span>
+        <button type="button" data-sort="rank_asc">排名</button>
       </div>
       <div class="horses" id="horseList">
         <div class="status"><div class="spinner"></div>正在載入…</div>
       </div>
     </section>
-
     <aside class="right" id="rightPane"></aside>
   </div>
 
   <script>
   (function () {
     const params = new URLSearchParams(location.search);
-    const API_BASE = (params.get("api") || "").replace(/\/$/, "") || "";
-    const FORCE_DEMO = params.get("demo") === "1";
+    // __API_BASE__ 由伺服器注入；亦可 ?api= 覆寫
+    const INJECTED = "__API_BASE__".replace(/\/$/, "");
+    const API_BASE = (params.get("api") || (INJECTED.indexOf("__") === 0 ? "" : INJECTED) || "").replace(/\/$/, "");
 
     const NO_COLORS = {
       1: "#e31c3d", 2: "#222", 3: "#1e5aa8", 4: "#f5c400",
@@ -355,7 +273,6 @@
     let currentId = null;
     let currentSort = "fused_desc";
     let currentData = null;
-    let demoMode = false;
 
     function api(path) {
       return fetch(API_BASE + path, { credentials: "omit" }).then(async (r) => {
@@ -381,69 +298,14 @@
     function color(no) { return NO_COLORS[Number(no)] || "#6a7380"; }
     function fg(no) { return NO_FG[Number(no)] || "#fff"; }
     function noHtml(no, cls) {
-      cls = cls || "no";
-      return '<span class="' + cls + '" style="background:' + color(no) + ';color:' + fg(no) + '">' + esc(no) + "</span>";
+      return '<span class="' + (cls || "no") + '" style="background:' + color(no) + ';color:' + fg(no) + '">' +
+        esc(no) + "</span>";
     }
-
-    const DEMO = {
-      meeting: { racing_date: "2026-09-16", course: "HV", course_label: "跑馬地", n_races: 3 },
-      races: [
-        { race_id: "demo-1", race_num: 1 },
-        { race_id: "demo-2", race_num: 2 },
-        { race_id: "demo-3", race_num: 3 }
-      ],
-      raceView: {
-        ok: true,
-        race: {
-          race_num: 1, race_name: "谷草示範", racing_date: "2026-09-16",
-          course: "HV", course_label: "跑馬地", track: "草地", distance_m: 1000,
-          class_display: "第五班", n_runners: 8, expected_pace: "快"
-        },
-        meta: { match_rate: 0.92, avg_model_coverage: 0.88, provisional: false, expected_pace: "快" },
-        picks: {
-          fused: {
-            available: true, alpha: 0.35,
-            win: [{ horse_no: 11, horse_name: "金風", fused_share_pct: 22 }],
-            place: [
-              { horse_no: 11, horse_name: "金風", fused_share_pct: 22 },
-              { horse_no: 9, horse_name: "銀月", fused_share_pct: 18 },
-              { horse_no: 4, horse_name: "青雲", fused_share_pct: 14 }
-            ]
-          },
-          model: {
-            win: [{ horse_no: 11, horse_name: "金風", model_win_prob_pct: 21.4 }],
-            place: [
-              { horse_no: 11, horse_name: "金風", model_win_prob_pct: 21.4 },
-              { horse_no: 7, horse_name: "翠影", model_win_prob_pct: 16.8 }
-            ]
-          },
-          ai: {
-            available: true,
-            win: [{ horse_no: 11, horse_name: "金風", ai_share_pct: 24 }],
-            place: [
-              { horse_no: 11, horse_name: "金風", ai_share_pct: 24 },
-              { horse_no: 9, horse_name: "銀月", ai_share_pct: 19 },
-              { horse_no: 8, horse_name: "晚霞", ai_share_pct: 13 }
-            ]
-          }
-        },
-        runners: [
-          { horse_no: 11, horse_name: "金風", draw: 3, jockey: "梁", trainer: "巫", handicap_weight: 123, horse_weight: 1111, pred_rank: 1, model_win_prob_pct: 21.4, fused_share_pct: 22, ai_share_pct: 24, ai_summary: "步速對路，近績穩定。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.9,0.7,0.8,0.4,0.85,0.9,0.7,0.6] } },
-          { horse_no: 9, horse_name: "銀月", draw: 4, jockey: "宏", trainer: "韋", handicap_weight: 124, horse_weight: 1119, pred_rank: 2, model_win_prob_pct: 15.6, fused_share_pct: 18, ai_share_pct: 19, ai_summary: "前領走勢，班次合適。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.6,0.8,0.7,0.5,0.7,0.8,0.75,0.5] } },
-          { horse_no: 4, horse_name: "青雲", draw: 1, jockey: "周", trainer: "文", handicap_weight: 130, horse_weight: 1193, pred_rank: 3, model_win_prob_pct: 12.2, fused_share_pct: 14, ai_share_pct: 11, ai_summary: "內檔有利。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.5,0.6,0.55,0.95,0.6,0.5,0.45,0.4] } },
-          { horse_no: 7, horse_name: "翠影", draw: 10, jockey: "田", trainer: "石", handicap_weight: 127, horse_weight: 1068, pred_rank: 4, model_win_prob_pct: 16.8, fused_share_pct: 12, ai_share_pct: 9, ai_summary: "模型看好，AI 較保守。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.8,0.4,0.5,0.2,0.5,0.4,0.85,0.7] } },
-          { horse_no: 8, horse_name: "晚霞", draw: 6, jockey: "艾", trainer: "葉", handicap_weight: 125, horse_weight: 1024, pred_rank: 5, model_win_prob_pct: 8.1, fused_share_pct: 10, ai_share_pct: 13, ai_summary: "後上馬，看流量。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.4,0.5,0.45,0.55,0.4,0.3,0.5,0.35] } },
-          { horse_no: 12, horse_name: "洛河", draw: 7, jockey: "金", trainer: "丁", handicap_weight: 122, horse_weight: 1170, pred_rank: 6, model_win_prob_pct: 9.4, fused_share_pct: 9, ai_share_pct: 8, ai_summary: "", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.3,0.7,0.4,0.4,0.35,0.5,0.4,0.3] } },
-          { horse_no: 6, horse_name: "蘭誌", draw: 2, jockey: "希", trainer: "黎", handicap_weight: 128, horse_weight: 1212, pred_rank: 7, model_win_prob_pct: 7.7, fused_share_pct: 8, ai_share_pct: 9, ai_summary: "前領，近績一般。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.55,0.5,0.5,0.8,0.45,0.7,0.4,0.4] } },
-          { horse_no: 3, horse_name: "雙子美麗", draw: 5, jockey: "鍾", trainer: "東", handicap_weight: 128, horse_weight: 1151, pred_rank: 8, model_win_prob_pct: 8.8, fused_share_pct: 7, ai_share_pct: 7, ai_summary: "", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.45,0.4,0.4,0.6,0.5,0.55,0.5,0.45] } }
-        ]
-      }
-    };
 
     function sortRunners(list, key) {
       const arr = list.slice();
       const byNo = (a, b) => (num(a.horse_no) || 99) - (num(b.horse_no) || 99);
-      const nv = (x, k) => num(x[k]) == null ? -1 : num(x[k]);
+      const nv = (x, k) => (num(x[k]) == null ? -1 : num(x[k]));
       if (key === "model_desc") return arr.sort((a, b) => nv(b, "model_win_prob_pct") - nv(a, "model_win_prob_pct") || byNo(a, b));
       if (key === "ai_desc") return arr.sort((a, b) => nv(b, "ai_share_pct") - nv(a, "ai_share_pct") || byNo(a, b));
       if (key === "no_asc") return arr.sort(byNo);
@@ -451,21 +313,11 @@
       return arr.sort((a, b) => nv(b, "fused_share_pct") - nv(a, "fused_share_pct") || byNo(a, b));
     }
 
-    function paceTag(h, i) {
+    function paceTag(h) {
       const r = num(h.pred_rank) || 99;
       if (r <= 2) return '<span class="tag front">熱門</span>';
-      if (String(h.ai_summary || "").indexOf("後上") >= 0) return '<span class="tag back">後上馬</span>';
-      if (String(h.ai_summary || "").indexOf("前領") >= 0) return '<span class="tag front">前領馬</span>';
-      if (r <= 5) return '<span class="tag mid">中置馬</span>';
+      if (r <= 5) return '<span class="tag mid">中置</span>';
       return '<span class="tag back">冷門</span>';
-    }
-
-    function thumbs(h) {
-      const s = num(h.ai_share_pct) || 0;
-      const n = s >= 18 ? 3 : s >= 12 ? 2 : s >= 8 ? 1 : 0;
-      let html = "馬評 ";
-      for (let i = 0; i < 3; i++) html += '<span class="' + (i < n ? "on" : "") + '">👍</span>';
-      return html;
     }
 
     function horseRow(h) {
@@ -475,6 +327,7 @@
       const model = fmt(h.model_win_prob_pct, 1);
       const ai = fmt(h.ai_share_pct, 0);
       const mkt = rank === 1 ? '<div class="mkt">綜合首選</div>' : (h.is_fused_pick ? '<div class="mkt">推介列</div>' : "");
+      const summary = (h.ai_summary || "").trim();
       return (
         '<article class="horse ' + cls + '">' +
           noHtml(h.horse_no) +
@@ -485,12 +338,13 @@
             '<div style="margin-top:4px">' + paceTag(h) +
               (h.is_fused_pick ? '<span class="tag fuse">綜合推介</span>' : "") +
             "</div>" +
+            (summary ? '<div class="sub" style="margin-top:4px">' + esc(summary) + "</div>" : "") +
           "</div>" +
-          '<div class="odds"><div class="big">' + esc(fuse) + '%</div><div class="sml">' + esc(model) + "%</div></div>" +
+          '<div class="odds"><div class="big">' + esc(fuse) + '%</div><div class="sml">模型 ' + esc(model) + "%</div></div>" +
           '<div class="wp">' +
-            '<div class="row"><span class="w">W</span><span class="n">' + esc(model) + '</span><span class="d">' + esc(fuse) + "</span></div>" +
+            '<div class="row"><span class="w">W</span><span class="n">' + esc(model) + '</span><span class="d">模型</span></div>' +
             '<div class="row"><span class="p">P</span><span class="n">' + esc(ai) + '</span><span class="d">AI</span></div>' +
-            '<div class="thumbs">' + thumbs(h) + "</div>" + mkt +
+            mkt +
           "</div>" +
         "</article>"
       );
@@ -520,8 +374,8 @@
           if (s > max) max = s;
         });
       });
-      let head = '<th class="corner"></th>' + nos.map((n) => "<th>" + n + "</th>").join("");
-      let body = nos.map((row) => {
+      const head = '<th class="corner"></th>' + nos.map((n) => "<th>" + n + "</th>").join("");
+      const body = nos.map((row) => {
         const cells = nos.map((col) => {
           if (row === col) return '<td class="diag">' + row + "</td>";
           if (row > col) return "<td></td>";
@@ -531,7 +385,7 @@
         return "<tr>" + cells + "</tr>";
       }).join("");
       return (
-        '<section class="mx"><div class="mx-title">' + esc(title) + '<span class="exp">展開 ▾</span></div>' +
+        '<section class="mx"><div class="mx-title">' + esc(title) + "</div>" +
         '<div class="gridwrap"><table class="mx-table"><thead><tr>' + head + "</tr></thead><tbody>" + body +
         "</tbody></table></div></section>"
       );
@@ -540,43 +394,32 @@
     function shareTable(runners, picks) {
       const fused = sortRunners(runners, "fused_desc").slice(0, 6);
       const model = sortRunners(runners, "model_desc").slice(0, 6);
-      function chipLine(list, key, digits) {
-        return '<div class="chips">' + list.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div>";
-      }
+      const aiPlace = ((picks.ai || {}).place || []).slice(0, 6);
       function valLine(list, key, digits) {
         return '<div class="chips">' + list.map((h) => '<span class="val">' + esc(fmt(h[key], digits)) + "</span>").join("") + "</div>";
       }
-      const fuseWin = ((picks.fused || {}).win || []).map((x) => x.horse_no);
-      const aiWin = ((picks.ai || {}).win || []).map((x) => x.horse_no);
-      const overlap = fused.map((h) => {
-        let n = 0;
-        if (h.is_fused_pick) n += 1;
-        if ((num(h.model_win_prob_pct) || 0) >= (num(model[0] && model[0].model_win_prob_pct) || 0) * 0.7) n += 1;
-        if ((num(h.ai_share_pct) || 0) >= 12) n += 1;
-        return n;
-      });
+      function chipLine(list) {
+        return '<div class="chips">' + list.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div>";
+      }
       return (
         '<section class="share-card">' +
-          '<div class="share-head"><div>活躍指數</div><div>綜合</div><div>模型 / AI</div></div>' +
-          '<div class="share-row"><div class="k">份額</div>' + valLine(fused, "fused_share_pct", 0) + valLine(model, "model_win_prob_pct", 0) + "</div>" +
+          '<div class="share-head"><div>指數</div><div>綜合</div><div>模型 / AI</div></div>' +
+          '<div class="share-row"><div class="k">份額%</div>' + valLine(fused, "fused_share_pct", 0) + valLine(model, "model_win_prob_pct", 0) + "</div>" +
           '<div class="share-row"><div class="k">馬號</div>' + chipLine(fused) + chipLine(model) + "</div>" +
-          '<div class="share-row"><div class="k">名家推介</div>' +
-            '<div class="chips">' + fused.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div>" +
-            '<div class="chips">' + (picks.ai && picks.ai.place || []).slice(0, 6).map((h) => noHtml(h.horse_no, "mini")).join("") + "</div></div>" +
-          '<div class="share-row"><div class="k">重疊軌數</div>' +
-            '<div class="chips">' + overlap.map((n) => '<span class="val">' + n + "</span>").join("") + "</div>" +
-            '<div class="chips">' + fuseWin.concat(aiWin).slice(0, 6).map((n) => noHtml(n, "mini")).join("") + "</div></div>" +
+          '<div class="share-row"><div class="k">AI 推介</div>' +
+            chipLine(fused.filter((h) => h.is_fused_pick)) +
+            '<div class="chips">' + aiPlace.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div></div>" +
         "</section>"
       );
     }
 
     function forecastTable(runners) {
-      const ranked = sortRunners(runners, "rank_asc").slice(0, 8);
+      const ranked = sortRunners(runners, "rank_asc");
       const nos = runners.map((h) => h.horse_no).filter(Boolean).sort((a, b) => a - b);
       let max = 1;
       ranked.forEach((h) => { max = Math.max(max, num(h.fused_share_pct) || 0); });
-      let head = "<th>第→</th>" + nos.map((n) => "<th>" + n + "</th>").join("");
-      let body = ranked.map((rowH, i) => {
+      const head = "<th>第→</th>" + nos.map((n) => "<th>" + n + "</th>").join("");
+      const body = ranked.map((rowH, i) => {
         const cells = nos.map((n) => {
           if (Number(rowH.horse_no) !== Number(n)) return "<td></td>";
           const v = num(rowH.fused_share_pct) || 0;
@@ -585,7 +428,7 @@
         return "<tr><th>" + (i + 1) + "</th>" + cells + "</tr>";
       }).join("");
       return (
-        '<section class="mx"><div class="mx-title">名次對照（綜合份額）<span class="exp">展開 ▾</span></div>' +
+        '<section class="mx"><div class="mx-title">名次對照（綜合份額）</div>' +
         '<div class="gridwrap"><table class="mx-table"><thead><tr>' + head + "</tr></thead><tbody>" + body +
         "</tbody></table></div></section>"
       );
@@ -594,7 +437,8 @@
     function renderPills() {
       document.getElementById("racePills").innerHTML = races.map((r) => {
         const active = String(r.race_id) === String(currentId) ? " active" : "";
-        return '<button type="button" class="' + active.trim() + '" data-id="' + esc(r.race_id) + '">' + esc(r.race_num) + "</button>";
+        return '<button type="button" class="' + active.trim() + '" data-id="' + esc(r.race_id) + '">' +
+          esc(r.race_num) + "</button>";
       }).join("");
       document.getElementById("racePills").querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () => selectRace(btn.getAttribute("data-id")));
@@ -617,6 +461,13 @@
       });
     }
 
+    function setSortButtons(key) {
+      currentSort = key;
+      document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-sort") === key);
+      });
+    }
+
     function renderRace(data) {
       currentData = data;
       const race = data.race || {};
@@ -626,106 +477,99 @@
       const date = String(race.racing_date || "");
       const md = date.length >= 10 ? (date.slice(8, 10) + "/" + date.slice(5, 7)) : date;
       document.getElementById("raceMetaLine").textContent =
-        md + "　" + (race.course_label || race.course || "") + "　" +
-        (race.track || "") + "　" + (race.distance_m || "-") + "　" +
-        (race.class_display || "") + "　" + (meta.expected_pace || race.expected_pace || "");
+        "第 " + (race.race_num || "?") + " 場　" + md + "　" +
+        (race.course_label || race.course || "") + "　" +
+        (race.track || "") + "　" + (race.distance_m || "-") + "米　" +
+        (race.class_display || race.class || "") +
+        (meta.expected_pace ? ("　步速 " + meta.expected_pace) : "");
       document.getElementById("statusDot").textContent = meta.provisional ? "● 暫定" : "● 已就緒";
+      document.getElementById("statusDot").style.color = meta.provisional ? "#e67e22" : "#2ecf7a";
       renderHotChips(picks);
-
-      function paintList() {
-        const sorted = sortRunners(runners, currentSort);
-        document.getElementById("horseList").innerHTML = sorted.map(horseRow).join("");
-      }
-      paintList();
-
+      document.getElementById("horseList").innerHTML = runners.length
+        ? sortRunners(runners, currentSort).map(horseRow).join("")
+        : '<div class="status">此場暫無出馬資料</div>';
       document.getElementById("rightPane").innerHTML =
         shareTable(runners, picks) +
         matrixHtml("推介指數（綜合份額交叉）", runners, "fused_share_pct") +
         matrixHtml("模型指數（勝率交叉）", runners, "model_win_prob_pct") +
         forecastTable(runners) +
-        '<div class="picks-note">右欄矩陣為賽日速覽分數視覺化（非投注賠率）。開發頁不改動原有 /embed/raceday。</div>';
+        '<div class="picks-note">右欄為賽日速覽分數視覺化（非投注賠率）。本場 ' +
+          esc(runners.length) + " 匹。</div>";
     }
 
     function selectRace(raceId) {
       currentId = raceId;
       renderPills();
-      document.getElementById("horseList").innerHTML = '<div class="status"><div class="spinner"></div>計算本場…</div>';
-      if (demoMode || String(raceId).indexOf("demo-") === 0) {
-        const view = JSON.parse(JSON.stringify(DEMO.raceView));
-        const n = Number(String(raceId).split("-")[1] || 1);
-        view.race.race_num = n;
-        view.race.race_name = "示範第" + n + "場";
-        renderRace(view);
-        return;
-      }
+      document.getElementById("horseList").innerHTML =
+        '<div class="status"><div class="spinner"></div>計算本場…</div>';
+      document.getElementById("rightPane").innerHTML = "";
       api("/embed/api/races/" + encodeURIComponent(raceId))
-        .then(renderRace)
+        .then((data) => {
+          if (!data.ok) throw new Error(data.error || "no_prediction");
+          renderRace(data);
+        })
         .catch((err) => {
           document.getElementById("horseList").innerHTML =
-            '<div class="status">載入失敗：' + esc(err.message) + "</div>";
+            '<div class="status error">載入失敗：' + esc(err.message) + "</div>";
+          document.getElementById("statusDot").textContent = "● 失敗";
+          document.getElementById("statusDot").style.color = "#c0392b";
         });
     }
 
-    function applyMeeting(m, raceList, isDemo) {
-      demoMode = !!isDemo;
+    function applyMeeting(m, raceList) {
       races = raceList || [];
       const label = m
-        ? ((m.racing_date || "") + "　" + (m.course_label || m.course || "") + "　共 " + (m.n_races || races.length) + " 場")
+        ? ((m.racing_date || "") + "　" + (m.course_label || m.course || "") + "　共 " +
+          (m.n_races || races.length) + " 場")
         : "尚無賽日排位";
-      document.getElementById("ticker").textContent =
-        (isDemo ? "【示範資料】" : "") +
-        "賽日速覽 PC 風格頁　" + label +
-        "　（原頁 /embed/raceday 不受影響）";
+      document.getElementById("ticker").textContent = "賽日速覽　" + label;
       if (!races.length) {
-        document.getElementById("horseList").innerHTML = '<div class="status">暫無即將舉行的賽事資料。</div>';
+        document.getElementById("horseList").innerHTML =
+          '<div class="status">暫無即將舉行的賽事資料。</div>';
         return;
       }
       currentId = String(races[0].race_id);
       const qRace = params.get("race");
-      if (qRace && races.some((r) => String(r.race_id) === String(qRace))) currentId = String(qRace);
+      if (qRace && races.some((r) => String(r.race_id) === String(qRace))) {
+        currentId = String(qRace);
+      }
       renderPills();
       selectRace(currentId);
     }
 
     document.querySelectorAll(".sort-row button[data-sort]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        currentSort = btn.getAttribute("data-sort");
-        document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => b.classList.remove("on"));
-        btn.classList.add("on");
+        setSortButtons(btn.getAttribute("data-sort"));
         if (currentData) renderRace(currentData);
       });
     });
     document.getElementById("resetSort").addEventListener("click", () => {
-      currentSort = "no_asc";
-      document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => {
-        b.classList.toggle("on", b.getAttribute("data-sort") === "no_asc");
-      });
+      setSortButtons("no_asc");
       if (currentData) renderRace(currentData);
     });
     document.getElementById("modeBtn").addEventListener("click", () => {
-      currentSort = "fused_desc";
-      document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => {
-        b.classList.toggle("on", b.getAttribute("data-sort") === "fused_desc");
-      });
+      setSortButtons("fused_desc");
       if (currentData) renderRace(currentData);
     });
 
     function boot() {
-      if (FORCE_DEMO) {
-        applyMeeting(DEMO.meeting, DEMO.races, true);
-        return;
-      }
       api("/embed/api/default")
         .then((data) => {
           const m = data.meeting;
           const list = data.races || [];
           if (!m || !list.length) {
-            applyMeeting(DEMO.meeting, DEMO.races, true);
+            document.getElementById("ticker").textContent = "尚無賽日排位";
+            document.getElementById("horseList").innerHTML =
+              '<div class="status">暫無即將舉行的賽事資料，請稍後再試。</div>';
             return;
           }
-          applyMeeting(m, list, false);
+          applyMeeting(m, list);
         })
-        .catch(() => applyMeeting(DEMO.meeting, DEMO.races, true));
+        .catch((err) => {
+          document.getElementById("ticker").textContent = "無法連線";
+          document.getElementById("horseList").innerHTML =
+            '<div class="status error">載入失敗：' + esc(err.message) + "</div>";
+        });
     }
     boot();
   })();
