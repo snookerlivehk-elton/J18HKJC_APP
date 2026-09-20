@@ -593,7 +593,7 @@ for stage, label in STAGES:
             if a2.button(
                 "同步 R2 分段（jjjc）",
                 key=f"act_sec_{stage}",
-                help="試 /api/export/sectionals；上游未開 export 會 waiting。有檔可用 CLI --from-file",
+                help="GET /api/export/sectionals → runner_sections（上游 jjjc.sectionals.v1）",
             ):
                 with st.spinner("jjjc sectionals…"):
                     r = pipe.run_action(racing_date, course, "sync_jjjc_sectionals")
@@ -601,7 +601,7 @@ for stage, label in STAGES:
                 st.session_state["ops_sectionals_sync"] = r
                 st.session_state.pop("ops_ready", None)
                 if r.get("waiting"):
-                    st.info(r.get("detail") or "上游暫無 sectionals HTTP export")
+                    st.info(r.get("detail") or "分段尚未 obtained（suspicious／empty／unpublished）")
                 elif r.get("ok"):
                     st.success(
                         f"分段列 {r.get('runner_sections_upserted')}／"

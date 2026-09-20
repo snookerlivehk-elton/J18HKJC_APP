@@ -126,7 +126,20 @@ class JjjcSectionalsSyncTest(unittest.TestCase):
             self.assertEqual(str(rows[0][1]), "2")
             self.assertEqual(str(rows[0][2]), "13.1")
             self.assertEqual(str(rows[2][1]), "1")
-            self.assertEqual([str(r[0]) for r in race_t], ["12.8", "23.5", "35.1"])
+            self.assertEqual([str(r[0]) for r in race_t], ["12.8", "10.7", "11.6"])
+            self.assertEqual(str(rows[0][2]), "13.1")
+            # margin 落庫
+            with eng.connect() as conn:
+                margin = conn.execute(
+                    text(
+                        """
+                        SELECT distance_behind_raw FROM runner_sections rs
+                        JOIN runners ru ON ru.runner_id = rs.runner_id
+                        WHERE ru.horse_no = 3 AND rs.stage_no = 1
+                        """
+                    )
+                ).scalar()
+            self.assertEqual(str(margin), "1")
 
             from data_audit import race_sectionals_grid
 
@@ -135,6 +148,7 @@ class JjjcSectionalsSyncTest(unittest.TestCase):
             one = grid[grid["馬號"] == 3].iloc[0]
             self.assertEqual(str(one["走位"]), "2-2-1")
             self.assertIn("13.1", str(one["分段時間串"]))
+            self.assertIn("10.9", str(one["分段時間串"]))
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ curl "$JJJC_API_BASE/api/export/catalog"
 | 速勢能量 | `/api/export/speedguide` | `jjjc.speedguide.v1` | `jjjc_speedguide_sync.py`（略過 `energy_is_placeholder`） |
 | 賽績指引 | `/api/export/formguide` | `jjjc.formguide.v1` | `jjjc_formguide_sync.py` |
 | 官方賽果 R1 | `/api/export/results` | `jjjc.results.v1` | `jjjc_results_sync.py` → `finish_order_num` |
-| 分段時間 R2 | **暫無獨立 HTTP**；上游 DB `race_cards.kind='sectional'` | 偏好 `jjjc.sectionals.v1` | `jjjc_sectionals_sync.py`（試 export／catalog；可 `--from-file`） |
+| 分段時間 R2 | `/api/export/sectionals`（別名 `/api/sectionals`、`/api/export/sectional`） | `jjjc.sectionals.v1` | `jjjc_sectionals_sync.py` → `runner_sections`／`race_sectionals` |
 | 競賽報告 R3 | `/api/export/text-reports?report_type=incident_report` | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py` |
 | 沿途走勢 R4 | `/api/export/text-reports?report_type=running_comment` | 同上 | 同上（query 別名 `corunning`→payload `running_comment`） |
 
@@ -44,17 +44,18 @@ curl "$JJJC_API_BASE/api/export/catalog"
 | placeholder 當真評述／真速勢 | 略過／waiting |
 | Sha Tin／沙田／st | `ST` / `HV` |
 
-## 分段（R2）現況
+## 分段（R2）payload 要點
 
-- 上游：**HTTP export 未齊**；真源係 `race_cards` JSONB。
-- J18：`jjjc_sectionals_sync` 會試 `/api/export/sectionals`（同 catalog 發現）；404 → `waiting`。
-- 過渡：`--from-file` 接受 `jjjc.sectionals.v1` 或 `kind=sectional` card dump；RESULTS 嘅 `running_position` 仍會寫走位（可能無秒數）。
-- 落庫：`runner_sections` / `race_sectionals`；作戰室選場次睇表。
+- catalog product id：`sectional`
+- 賽事層：`sectional_times`、`race_cumulative_times`
+- 每馬：`horse_no`（+`runner_no`）、`sections[]`（`section_index`／`position`／`sectional_time`／`margin`）、`positions[]`、`sectional_times[]`；備援 `running_position`
+- `status`／`content_updated_at`；`suspicious`｜`unpublished`｜`empty` 唔當 obtained
 
 ## CLI
 
 ```bash
-python jjjc_sectionals_sync.py --catalog
+curl -sS "$JJJC_API_BASE/api/export/catalog" | jq '.products[] | select(.id=="sectional")'
+curl -sS "$JJJC_API_BASE/api/export/sectionals?date=2026-09-16&venue=HV" | jq '.schema,.status,.race_count'
 python jjjc_sectionals_sync.py --date 2026-09-16 --course HV
 python jjjc_sectionals_sync.py --from-file fixtures/jjjc_sectionals_HV_20260916_R1.json
 ```

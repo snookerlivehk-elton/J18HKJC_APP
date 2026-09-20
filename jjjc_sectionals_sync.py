@@ -1,15 +1,18 @@
 """
 從 api_jjjc 同步 R2 分段時間 → runner_sections / race_sectionals。
 
-上游合約（2026-09）：
-  - 正式來源：race_cards WHERE kind='sectional'（card JSONB）
-  - HTTP：暫無獨立 export；若上游加咗 GET /api/export/sectionals 會自動用
-  - Join：race_id + horse_no（禁止 horse_name）
-  - Schema 偏好：jjjc.sectionals.v1；亦接受 race_cards dump／results 內嵌
+上游合約（已落地）：
+  - GET /api/export/sectionals?date=&venue=ST|HV（可選 &raceNo=）
+  - 別名：/api/sectionals、/api/export/sectional
+  - schema：jjjc.sectionals.v1
+  - 來源：race_cards WHERE kind='sectional'
+  - Join：race_id + horse_no（runner_no 別名）
+  - catalog product id：sectional
 
 CLI：
   python jjjc_sectionals_sync.py --date 2026-09-16 --course HV
   python jjjc_sectionals_sync.py --from-file fixtures/jjjc_sectionals_HV_20260916_R1.json
+  python jjjc_sectionals_sync.py --catalog
 """
 from __future__ import annotations
 
@@ -53,11 +56,10 @@ except ImportError:
 DATABASE_URL_SYNC = resolve_database_url()
 SCHEMA_NAME = "jjjc.sectionals.v1"
 EXPORT_PATH = "/api/export/sectionals"
-# 上游可能用嘅別名 path（catalog 未列時逐個試）
 EXPORT_PATH_CANDIDATES = (
     "/api/export/sectionals",
     "/api/export/sectional",
-    "/api/export/race-cards?kind=sectional",
+    "/api/sectionals",
 )
 
 
@@ -155,11 +157,16 @@ def _expand_race_row(row: Dict[str, Any], root: Dict[str, Any]) -> Dict[str, Any
         runners.append(
             {
                 "horse_no": hn,
+                "runner_no": ru.get("runner_no") or hn,
                 "horse_code": ru.get("horse_code") or ru.get("brand_num"),
                 "horse_name": ru.get("horse_name"),
                 "running_position": ru.get("running_position")
-                or ru.get("runningPosition")
-                or ru.get("positions"),
+                or ru.get("runningPosition"),
+                "positions": ru.get("positions")
+                if isinstance(ru.get("positions"), list)
+                else None,
+                "sectional_times": ru.get("sectional_times")
+                or ru.get("section_times"),
                 "sections": ru.get("sections") or ru.get("sectionals"),
                 "raw": ru,
             }
@@ -167,11 +174,18 @@ def _expand_race_row(row: Dict[str, Any], root: Dict[str, Any]) -> Dict[str, Any
 
     race_times = (
         row.get("sectional_times")
+        or row.get("race_sectional_times")
         or row.get("sectionals")
         or row.get("times")
         or card.get("sectional_times")
         or card.get("sectionals")
         or card.get("times")
+    )
+    # 累積時間另存；若無 split 秒數可用 cumulative 作備援顯示
+    race_cumulative = (
+        row.get("race_cumulative_times")
+        or card.get("race_cumulative_times")
+        or row.get("cumulative_times")
     )
     return {
         "race_id": race_id,
@@ -181,7 +195,8 @@ def _expand_race_row(row: Dict[str, Any], root: Dict[str, Any]) -> Dict[str, Any
         "meeting_id": row.get("meeting_id")
         or (make_meeting_id(race_date, venue) if race_date and venue else None),
         "runners": runners,
-        "race_sectionals": race_times,
+        "race_sectionals": race_times or race_cumulative,
+        "race_cumulative_times": race_cumulative,
         "card": card or None,
         "raw": row,
     }
@@ -268,7 +283,7 @@ def fetch_export(
         "race_date": normalize_date(race_date),
         "venue_code": normalize_venue(venue),
         "races": [],
-        "detail": "上游暫無 sectionals HTTP export（race_cards kind=sectional 需 DB 或 --from-file）",
+        "detail": "sectionals export 404（確認上游已部署／catalog product=sectional）",
         "last_error": str(last_err)[:200] if last_err else None,
     }
 

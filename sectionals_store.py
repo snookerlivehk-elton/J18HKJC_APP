@@ -77,10 +77,59 @@ def parse_running_position(raw: Any) -> List[int]:
 
 
 def stages_from_j18_sections(sections: Any) -> List[StageRow]:
-    """J18 horse.raw_json['sections']['stage_N'] → stage rows。"""
+    """
+    sections → stage rows。
+    接受：
+      - J18 dict：{"stage_1": {position, sectional_time}, ...}
+      - 上游 jjjc.sectionals.v1 list：
+        [{section_index, position, sectional_time, margin}, ...]
+    """
+    if isinstance(sections, list):
+        rows: List[StageRow] = []
+        for i, stage in enumerate(sections):
+            if not isinstance(stage, dict):
+                continue
+            stage_no = _safe_int(
+                stage.get("section_index")
+                or stage.get("stage_no")
+                or stage.get("stage")
+                or stage.get("index")
+                or (i + 1)
+            )
+            if stage_no is None:
+                continue
+            pos = stage.get("position")
+            if pos is None:
+                pos = stage.get("pos")
+            rows.append(
+                {
+                    "stage_no": int(stage_no),
+                    "position_raw": (
+                        str(pos).strip()
+                        if pos is not None and str(pos).strip() not in ("", "-", "None")
+                        else None
+                    ),
+                    "distance_behind_raw": _safe_time_str(
+                        stage.get("margin")
+                        or stage.get("distance_behind")
+                        or stage.get("lbw")
+                        or stage.get("lengths")
+                    ),
+                    "sectional_time": _safe_time_str(
+                        stage.get("sectional_time") or stage.get("time")
+                    ),
+                    "split_1": _safe_time_str(stage.get("split_1") or stage.get("split1")),
+                    "split_2": _safe_time_str(stage.get("split_2") or stage.get("split2")),
+                    "raw_json": stage,
+                    "source": "jjjc_sections_list",
+                }
+            )
+        rows.sort(key=lambda r: r["stage_no"])
+        return rows
+
     if not isinstance(sections, dict):
         return []
-    rows: List[StageRow] = []
+    rows = []
     for key, stage in sections.items():
         if not isinstance(stage, dict):
             continue
@@ -96,7 +145,7 @@ def stages_from_j18_sections(sections: Any) -> List[StageRow]:
                 "stage_no": int(stage_no),
                 "position_raw": str(pos).strip() if pos is not None and str(pos).strip() not in ("", "-", "None") else None,
                 "distance_behind_raw": _safe_time_str(
-                    stage.get("distance_behind") or stage.get("lbw") or stage.get("lengths")
+                    stage.get("distance_behind") or stage.get("lbw") or stage.get("lengths") or stage.get("margin")
                 ),
                 "sectional_time": _safe_time_str(stage.get("sectional_time") or stage.get("time")),
                 "split_1": _safe_time_str(stage.get("split_1") or stage.get("split1")),
@@ -126,15 +175,53 @@ def stages_from_running_position(raw: Any, *, source: str = "running_position") 
     ]
 
 
+def stages_from_parallel_arrays(
+    positions: Any = None, times: Any = None, *, source: str = "parallel_arrays"
+) -> List[StageRow]:
+    """positions[] + sectional_times[] 並行陣列 → stages。"""
+    pos_list: List[Any] = list(positions) if isinstance(positions, (list, tuple)) else []
+    time_list: List[Any] = list(times) if isinstance(times, (list, tuple)) else []
+    n = max(len(pos_list), len(time_list))
+    if n == 0:
+        return []
+    rows: List[StageRow] = []
+    for i in range(n):
+        pos = pos_list[i] if i < len(pos_list) else None
+        tm = time_list[i] if i < len(time_list) else None
+        pos_n = _safe_int(pos)
+        rows.append(
+            {
+                "stage_no": i + 1,
+                "position_raw": str(pos_n) if pos_n is not None else (
+                    str(pos).strip() if pos is not None and str(pos).strip() not in ("", "-", "None") else None
+                ),
+                "distance_behind_raw": None,
+                "sectional_time": _safe_time_str(tm),
+                "split_1": None,
+                "split_2": None,
+                "raw_json": {"position": pos, "sectional_time": tm, "index": i + 1},
+                "source": source,
+            }
+        )
+    return rows
+
+
 def stages_from_runner_payload(runner: Dict[str, Any]) -> List[StageRow]:
     """
-    優先 J18 sections；否則 running_position／沿途走位字串。
-    若兩者都有：sections 有時間優先；若 sections 缺位置而 running_position 有，合併位置。
+    優先 sections（dict 或 list）；其次 positions[]+sectional_times[]；
+    再 running_position。有多源時合併缺欄。
     """
     sections = runner.get("sections")
     if sections is None and isinstance(runner.get("raw_json"), dict):
         sections = runner["raw_json"].get("sections")
-    j18 = stages_from_j18_sections(sections)
+    primary = stages_from_j18_sections(sections)
+
+    parallel = stages_from_parallel_arrays(
+        runner.get("positions"),
+        runner.get("sectional_times") or runner.get("section_times"),
+        source="jjjc_parallel_arrays",
+    )
+
     rp_raw = (
         runner.get("running_position")
         or runner.get("runningPosition")
@@ -142,19 +229,22 @@ def stages_from_runner_payload(runner: Dict[str, Any]) -> List[StageRow]:
     )
     rp = stages_from_running_position(rp_raw) if rp_raw else []
 
-    if j18 and rp:
-        by_no = {r["stage_no"]: dict(r) for r in j18}
-        for r in rp:
-            cur = by_no.get(r["stage_no"])
+    by_no: Dict[int, Dict[str, Any]] = {}
+    for src in (primary, parallel, rp):
+        for r in src:
+            sn = int(r["stage_no"])
+            cur = by_no.get(sn)
             if cur is None:
-                by_no[r["stage_no"]] = r
-            elif not cur.get("position_raw") and r.get("position_raw"):
+                by_no[sn] = dict(r)
+                continue
+            if not cur.get("position_raw") and r.get("position_raw"):
                 cur["position_raw"] = r["position_raw"]
-                cur["source"] = "j18_sections+running_position"
-        return [by_no[k] for k in sorted(by_no)]
-    if j18:
-        return j18
-    return rp
+            if not cur.get("sectional_time") and r.get("sectional_time"):
+                cur["sectional_time"] = r["sectional_time"]
+            if not cur.get("distance_behind_raw") and r.get("distance_behind_raw"):
+                cur["distance_behind_raw"] = r["distance_behind_raw"]
+            cur["source"] = f"{cur.get('source')}+{r.get('source')}"
+    return [by_no[k] for k in sorted(by_no)]
 
 
 def stages_from_race_times(times: Any) -> List[StageRow]:
