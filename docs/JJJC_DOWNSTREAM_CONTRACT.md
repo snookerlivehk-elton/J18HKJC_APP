@@ -14,7 +14,7 @@
 6. 排位 DB 可能叫 `runner_no`＝export 嘅 `horse_no`（`jjjc_export_common.horse_no_of`）
 7. placeholder／`energy_is_placeholder=true`／空殼唔當真值
 8. **場額**：HV `horse_no` ≤12；ST ≤14。J18 results sync 會拒寫超額馬號，並喺重同步時清同場幽靈馬（常見污染：ST Glenealy 14 匹誤寫入 HV `race_id`）
-9. **顯示名**：馬／騎／練優先中文（`*_ch` 或 sectionals／racecard）；results 英文唔好覆蓋已有中文。統計近績用 **`horse_key`＝真 `horse_code`／`brand_num`（如 J446）**，冇碼先退回正規化馬名；`factor_scores.entity_name` 對 HORSE／PACE／SPEED 存馬碼以便 inference 對齊排位 `horse_code`
+9. **顯示名**：馬／騎／練優先中文（`*_ch` 或 sectionals／racecard）；results 英文唔好覆蓋已有中文。統計近績用 **`horse_key`＝真 `horse_code`／`brand_num`（如 J446）**，冇碼先退回正規化馬名；`factor_scores.entity_name` 對 HORSE／PACE／SPEED 存馬碼以便 inference 對齊排位 `horse_code`。騎／練因子靠中文名＋`name_aliases`（EN→ZH）；污染時跑 `name_remediator.py` 再重算因子。
 
 ## 開工檢查
 
@@ -90,3 +90,32 @@ python jjjc_sectionals_sync.py --date 2026-09-06 --course ST
 ```
 
 未設 `JJJC_API_BASE` 時會預設 `https://apicc.up.railway.app`。
+
+## 修復英文馬名／騎練名（統計污染）
+
+症狀：作戰室「馬名」係 `RUBY THRIVE`；騎師因子出現 `B Avdulla` 同「艾道拿」並存，近績被拆散。
+
+原因：`jjjc.results.v1` 常係英文；若當日未有排位中文／未跑修復，會寫入 `runners`；JOCKEY／TRAINER 因子再按字串 groupby → 中英當兩人。
+
+### 作戰室（建議）
+
+1. RACECARD → **同步 jjjc 排位**（寫 `upcoming_runners` 中文 + `name_aliases` EN→ZH）
+2. RESULTS → **修復中文名（馬／騎／練）**（全庫 runners 拉丁名改中文；可選改 factor_scores 顯示）
+3. 主頁／作戰室 → **重算因子**（合併已用中文鍵嘅 JOCKEY／TRAINER／人馬）
+
+可選：RESULTS「重跑賽果＋回填分段」——而家會優先保留／套用中文。
+
+### CLI
+
+```bash
+# 1) 有排位嘅賽日：收 EN/CH 別名（可多日重跑）
+python jjjc_racecard_sync.py --date 2026-09-13 --course ST
+
+# 2) 全庫修復 runners 顯示名
+python name_remediator.py --all
+
+# 3) 重算因子（主頁按鈕，或既有 batch）
+# 馬近績已用 horse_code；騎練靠中文名＋別名表
+```
+
+單日：`python name_remediator.py --date 2026-09-13 --course ST`

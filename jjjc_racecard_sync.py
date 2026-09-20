@@ -275,12 +275,52 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 )
 
                 for ru in race.get("runners") or []:
-                    from jjjc_export_common import horse_no_of
+                    from jjjc_export_common import (
+                        display_horse_name,
+                        display_jockey_name,
+                        display_trainer_name,
+                        horse_no_of,
+                        prefer_zh_text,
+                    )
+                    from name_aliases import harvest_aliases_from_row
 
                     horse_no = horse_no_of(ru)
                     if horse_no is None:
                         continue
                     runner_id = str(ru.get("runner_id") or "").strip() or f"{race_id}_{horse_no}"
+                    horse_name = display_horse_name(ru)
+                    jockey_name = display_jockey_name(ru)
+                    trainer_name = display_trainer_name(ru)
+                    # 收 EN→ZH 別名（之後修復賽果英文污染用）
+                    try:
+                        harvest_aliases_from_row(conn, ru, source="racecard")
+                    except Exception:
+                        pass
+                    # ON CONFLICT：唔好用英文覆蓋已有中文
+                    try:
+                        existing = (
+                            conn.execute(
+                                text(
+                                    "SELECT horse_name, jockey_name, trainer_name "
+                                    "FROM upcoming_runners WHERE runner_id = :rid"
+                                ),
+                                {"rid": runner_id},
+                            )
+                            .mappings()
+                            .first()
+                        )
+                    except Exception:
+                        existing = None
+                    if existing:
+                        horse_name = prefer_zh_text(
+                            horse_name, existing.get("horse_name")
+                        )
+                        jockey_name = prefer_zh_text(
+                            jockey_name, existing.get("jockey_name")
+                        )
+                        trainer_name = prefer_zh_text(
+                            trainer_name, existing.get("trainer_name")
+                        )
                     conn.execute(
                         text(
                             """
@@ -293,11 +333,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                                :jockey_name, :trainer_name, :handicap_weight, :horse_weight,
                                :rating, :rating_delta, :gear)
                             ON CONFLICT (runner_id) DO UPDATE SET
-                              horse_name = COALESCE(EXCLUDED.horse_name, upcoming_runners.horse_name),
+                              horse_name = EXCLUDED.horse_name,
                               horse_code = COALESCE(EXCLUDED.horse_code, upcoming_runners.horse_code),
                               draw = COALESCE(EXCLUDED.draw, upcoming_runners.draw),
-                              jockey_name = COALESCE(EXCLUDED.jockey_name, upcoming_runners.jockey_name),
-                              trainer_name = COALESCE(EXCLUDED.trainer_name, upcoming_runners.trainer_name),
+                              jockey_name = EXCLUDED.jockey_name,
+                              trainer_name = EXCLUDED.trainer_name,
                               handicap_weight = COALESCE(EXCLUDED.handicap_weight, upcoming_runners.handicap_weight),
                               horse_weight = COALESCE(EXCLUDED.horse_weight, upcoming_runners.horse_weight),
                               rating = COALESCE(EXCLUDED.rating, upcoming_runners.rating),
@@ -309,17 +349,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                             "runner_id": runner_id,
                             "race_id": race_id,
                             "horse_no": horse_no,
-                            "horse_name": ru.get("horse_name")
-                            or ru.get("horse_name_ch")
-                            or ru.get("horse_name_en"),
+                            "horse_name": horse_name,
                             "horse_code": ru.get("horse_code"),
                             "draw": _safe_int(ru.get("draw")),
-                            "jockey_name": ru.get("jockey_name")
-                            or ru.get("jockey_name_ch")
-                            or ru.get("jockey_name_en"),
-                            "trainer_name": ru.get("trainer_name")
-                            or ru.get("trainer_name_ch")
-                            or ru.get("trainer_name_en"),
+                            "jockey_name": jockey_name,
+                            "trainer_name": trainer_name,
                             "handicap_weight": _safe_float(ru.get("handicap_weight")),
                             "horse_weight": _safe_float(ru.get("horse_weight")),
                             "rating": _safe_int(ru.get("rating")),

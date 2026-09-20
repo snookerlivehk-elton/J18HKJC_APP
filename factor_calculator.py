@@ -80,6 +80,24 @@ class FactorCalculator:
         df['jockey_name'] = df['jockey_name'].apply(normalize_person_name)
         df['trainer_name'] = df['trainer_name'].apply(normalize_person_name)
         df['horse_name'] = df['horse_name'].apply(normalize_person_name)
+        # 騎／練／馬顯示名：拉丁 → 別名表中文（避免 JOCKEY 因子中英拆散）
+        try:
+            from name_aliases import load_alias_maps, resolve_via_alias
+
+            with self.engine.connect() as _ac:
+                _maps = load_alias_maps(_ac)
+            if any(_maps.values()):
+                df['jockey_name'] = df['jockey_name'].apply(
+                    lambda n: resolve_via_alias('jockey', n, _maps) or n
+                )
+                df['trainer_name'] = df['trainer_name'].apply(
+                    lambda n: resolve_via_alias('trainer', n, _maps) or n
+                )
+                df['horse_name'] = df['horse_name'].apply(
+                    lambda n: resolve_via_alias('horse', n, _maps) or n
+                )
+        except Exception:
+            pass
         # 穩定馬身份（真馬碼優先）；過濾場額非法馬號（HV 幽靈 #13+#14）
         df['horse_key'] = df.apply(
             lambda r: horse_identity_key(

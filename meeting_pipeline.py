@@ -1219,6 +1219,19 @@ class MeetingPipeline:
                     out["sectionals_export"] = {"ok": False, "error": str(e)[:200]}
                 return out
 
+            if action == "remediate_zh_names":
+                from name_remediator import remediate_meeting
+
+                out = remediate_meeting(
+                    racing_date,
+                    course,
+                    all_meetings=bool(kwargs.get("all_meetings", False)),
+                    also_factors=bool(kwargs.get("also_factors", True)),
+                    engine=self.engine,
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
             if action == "sync_jjjc_speedguide":
                 from jjjc_speedguide_sync import sync_meeting as sync_sg
 
