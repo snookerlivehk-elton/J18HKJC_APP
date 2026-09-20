@@ -68,6 +68,16 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | PACE | GLOBAL | 馬名 | 跑法／追回 Z；頁面另算同場步速熱度 |
 | SPEED | GLOBAL | 馬名 | Peak/EMA；Par＝venue+track+距離+班次**分位數**（樣本不足回退）；FSR；可選 NLP |
 
+**分段／走位落庫（重要）**：`race_sectionals`、`runner_sections` 由 `jjjc_results_sync`／J18 ETL 寫入（`sectionals_store.py`）。  
+步速因子**優先讀** `runner_sections`，缺列才回退 `runners.raw_json`。  
+RESULTS「已拿到」＝有 `finish_order_num`；步速可算＝有 `runner_sections.position_raw`。  
+舊資料回填：`python sectionals_store.py --backfill`；稽核：`--audit`。
+
+**營運 UI**  
+- **賽日作戰室 ③**：選場次 → 表列出各馬走位／各段名次／時間（`race_sectionals_grid`）  
+- **數據營運中心**：齊備矩陣＋批次重同步／回填；亦可揀賽日場次睇分段表  
+- 重跑舊賽日：RESULTS「重跑賽果＋回填分段」或營運中心批次／`sectionals_store.py --backfill`  
+
 推論加權見 `config.py`：`WEIGHT_*`（含 `WEIGHT_RECENT_FORM`、`WEIGHT_PACE`、`WEIGHT_SPEED_FIGURE`、Speed Guide 三項）。
 
 ### 1.4 關鍵檔案地圖
@@ -91,6 +101,7 @@ views/form_ai.py         # 賽績 AI
 views/*_factor.py         # 各因子診斷頁
 pages/                   # 留空（勿自動掛頁，避免用戶看到管理選單）
 bucket_utils.py / config.py / factor_calculator.py / inference_engine.py
+sectionals_store.py      # 分段走位正規化落庫／回填／稽核
 meeting_pipeline.py / meeting_tick.py / fixture_crawler.py / …
 prediction_api.py / prediction_export.py / start-api.sh   # 對外賽前預測 API
 schema.sql

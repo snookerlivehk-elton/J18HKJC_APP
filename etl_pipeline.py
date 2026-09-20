@@ -242,6 +242,12 @@ class J18ETLPipeline:
                      json.dumps(detail.get("times", [])), json.dumps(detail))
 
                 # 3.3 寫入 runners (馬匹成績)
+                from sectionals_store import (
+                    stages_from_race_times,
+                    stages_from_runner_payload,
+                    upsert_race_sectionals_asyncpg,
+                    upsert_runner_sections_asyncpg,
+                )
                 for h in horses:
                     runner_id = h.get("id")
                     if not runner_id:
@@ -275,6 +281,14 @@ class J18ETLPipeline:
                         h.get("gear"), h.get("lastSixRun"), self._safe_numeric(h.get("bonus")),
                         bool(h.get("scratched")), json.dumps(h)
                     )
+                    await upsert_runner_sections_asyncpg(
+                        conn, runner_id, stages_from_runner_payload(h)
+                    )
+
+                # 3.3b 賽事分段時間 → race_sectionals
+                await upsert_race_sectionals_asyncpg(
+                    conn, race_id, stages_from_race_times(detail.get("times"))
+                )
 
                 # 3.4 寫入 text_reports (AI 文字庫)
                 for tr in text_reports:
@@ -357,15 +371,45 @@ class J18ETLPipeline:
                     VALUES (?, ?, ?, ?, ?)
                 ''', (tr["entity_type"], tr["entity_id"], tr["report_type"], tr["report_text"], tr["raw_json"]))
 
+            # 先 commit runners／評述，再寫分段（FK runner_id）
             conn.commit()
+
+            from sectionals_store import (
+                stages_from_race_times,
+                stages_from_runner_payload,
+                upsert_race_sectionals,
+                upsert_runner_sections,
+            )
+            from sqlalchemy import create_engine
+            eng = create_engine(f"sqlite:///{SQLITE_DB_PATH}")
+            try:
+                with eng.begin() as sconn:
+                    for h in horses:
+                        brand_num = h.get("brandNum", "")
+                        rid = f"{race_id}{brand_num}" if brand_num else h.get("id")
+                        if not rid:
+                            continue
+                        upsert_runner_sections(sconn, rid, stages_from_runner_payload(h))
+                    upsert_race_sectionals(
+                        sconn, race_id, stages_from_race_times(detail.get("times"))
+                    )
+            finally:
+                eng.dispose()
+
             logger.info(f"[SQLite] Successfully processed and loaded race {date_str} - Race {race_num}")
             
         except Exception as e:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.error(f"[SQLite] Error saving to DB: {e}")
             raise
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
             
         return {
             "status": "success_sqlite",

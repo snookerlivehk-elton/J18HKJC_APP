@@ -72,7 +72,7 @@ STAGE_HELP: Dict[str, str] = {
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
     "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 才出正式快照。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；否則可 provisional／revision。",
-    "RESULTS": "賽後同步 jjjc results（名次／派彩）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。",
+    "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
 }
 
@@ -603,6 +603,19 @@ class MeetingPipeline:
         if races == 0:
             return STATUS_WAITING, "歷史庫尚無名次（待 jjjc 同步或 J18 賽後更新）"
 
+        # 分段覆蓋度（不擋 RESULTS；方便對照步速原料是否已入 runner_sections）
+        sec_note = ""
+        try:
+            from sectionals_store import coverage_for_prefix
+
+            cov = coverage_for_prefix(self.engine, prefix)
+            sec_note = (
+                f"；分段走位 {cov.get('with_sections', 0)}/{cov.get('with_finish', 0)} 匹"
+                f"（覆蓋 {cov.get('section_coverage', 0):.0%}）"
+            )
+        except Exception:
+            sec_note = ""
+
         expected = self._snapshot_race_ids(racing_date, course)
         if expected:
             placeholders = ", ".join([f":r{i}" for i in range(len(expected))])
@@ -634,10 +647,10 @@ class MeetingPipeline:
                 )
             return (
                 STATUS_OK,
-                f"{races} 場已有名次、{runners} 匹（快照 {len(expected)} 場齊）",
+                f"{races} 場已有名次、{runners} 匹（快照 {len(expected)} 場齊）{sec_note}",
             )
 
-        return STATUS_OK, f"{races} 場已有名次、{runners} 匹"
+        return STATUS_OK, f"{races} 場已有名次、{runners} 匹{sec_note}"
 
     def check_settled(self, racing_date: str, course: str) -> Tuple[str, str]:
         q = text(
@@ -1147,6 +1160,24 @@ class MeetingPipeline:
                     ads = auto.get("auto_post_race_ads") if isinstance(auto, dict) else None
                     if ads:
                         out["auto_post_race_ads"] = ads
+                return out
+
+            if action == "backfill_sectionals":
+                from data_audit import backfill_meeting_sectionals
+
+                out = backfill_meeting_sectionals(self.engine, racing_date, course)
+                self.refresh_readiness(racing_date, course)
+                return {"ok": True, **out}
+
+            if action == "resync_results_sectionals":
+                from data_audit import resync_results_and_sectionals
+
+                out = resync_results_and_sectionals(
+                    self,
+                    racing_date,
+                    course,
+                    also_backfill=bool(kwargs.get("also_backfill", True)),
+                )
                 return out
 
             if action == "sync_jjjc_speedguide":

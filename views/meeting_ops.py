@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from meeting_pipeline import (
@@ -556,20 +557,50 @@ for stage, label in STAGES:
             if a2.button(
                 "同步 jjjc 賽果",
                 key=f"act_res_{stage}",
-                help="名次／派彩入庫；快照各場齊名次後會自動觸發結算",
+                help="名次／派彩／分段走位入庫；快照各場齊名次後會自動觸發結算",
             ):
-                with st.spinner("jjjc results export → runners…"):
+                with st.spinner("jjjc results export → runners + runner_sections…"):
                     r = pipe.run_action(racing_date, course, "sync_jjjc_results")
                 _rec("sync_jjjc_results", stage, str(r.get("error") or ""))
                 st.session_state["ops_results_result"] = r
                 st.session_state.pop("ops_ready", None)
                 st.rerun()
+            if a2.button(
+                "重跑賽果＋回填分段",
+                key=f"act_res_sec_{stage}",
+                help="再打 jjjc results（寫分段表）+ 從 raw_json 回填保險",
+            ):
+                with st.spinner("resync results + sectionals…"):
+                    r = pipe.run_action(racing_date, course, "resync_results_sectionals")
+                _rec("resync_results_sectionals", stage, str(r.get("ok")))
+                st.session_state["ops_results_result"] = r.get("sync") or r
+                st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state.pop("ops_ready", None)
+                st.rerun()
+            if a2.button(
+                "只回填本賽日分段",
+                key=f"act_bf_sec_{stage}",
+                help="唔打 API；從 runners.raw_json 寫 runner_sections",
+            ):
+                with st.spinner("backfill sectionals…"):
+                    r = pipe.run_action(racing_date, course, "backfill_sectionals")
+                _rec("backfill_sectionals", stage, str(r.get("section_rows_upserted")))
+                st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state.pop("ops_ready", None)
+                st.success(
+                    f"回填馬 {r.get('runners_written')}／段列 {r.get('section_rows_upserted')}"
+                )
             last_res = st.session_state.get("ops_results_result")
             if last_res:
                 if last_res.get("ok"):
                     st.success(
                         f"寫入 {last_res.get('runner_upserted')} 匹／"
                         f"{last_res.get('race_count')} 場"
+                        + (
+                            f"；分段列 {last_res.get('runner_sections_upserted')}"
+                            if last_res.get("runner_sections_upserted") is not None
+                            else ""
+                        )
                     )
                     auto = last_res.get("auto_settle") or {}
                     if auto.get("settled_batches"):
@@ -649,43 +680,152 @@ for stage, label in STAGES:
             st.rerun()
 
 st.divider()
-st.subheader(f"③ 爬取資料 drill-down — {racing_date} {course}")
-st.caption("選場次 → 看馬匹列（檔位／騎練／SG）。用來核對錯位或覆蓋缺口。")
-races = pipe.list_meeting_races(racing_date, course)
-if races is None or races.empty:
-    st.info("尚無排位場次。請先完成 RACECARD 同步。")
-else:
-    race_labels = [
-        f"R{int(r.race_num):02d} · {r.race_id}（{int(r.runner_n or 0)} 匹）"
-        for r in races.itertuples()
-    ]
-    race_pick = st.selectbox("選擇場次", race_labels, key="ops_race_pick")
-    race_row = races.iloc[race_labels.index(race_pick)]
-    runners = pipe.list_race_runners(str(race_row["race_id"]))
-    if runners is None or runners.empty:
-        st.warning("此場無馬匹列。")
+st.subheader(f"③ 分段時間／走位 — {racing_date} {course}")
+st.caption("選場次 → 直接睇各匹馬名次、走位、各段時間（`runner_sections`）。")
+try:
+    from data_audit import list_historical_races, race_sectionals_grid
+
+    hist_races = list_historical_races(pipe.engine, racing_date, course)
+    # 後備：排位場次（賽前可能仲未有歷史名次）
+    up_races = pipe.list_meeting_races(racing_date, course)
+    if hist_races is not None and not hist_races.empty:
+        race_src = hist_races
+        src_label = "歷史賽果"
+    elif up_races is not None and not up_races.empty:
+        race_src = up_races
+        src_label = "排位表（尚未有歷史分段時可先揀場）"
     else:
-        show_cols = [
-            c
-            for c in (
-                "horse_no",
-                "horse_name",
-                "draw",
-                "jockey_name",
-                "trainer_name",
-                "handicap_weight",
-                "rating",
-                "speed_energy",
-                "speed_energy_delta",
-                "form_rating",
+        race_src = pd.DataFrame()
+        src_label = ""
+
+    if race_src.empty:
+        st.info("尚無場次。請先同步 RACECARD 或 RESULTS。")
+    else:
+        st.caption(f"場次來源：{src_label}")
+        race_labels = []
+        for r in race_src.itertuples():
+            rn = int(getattr(r, "race_num", 0) or 0)
+            rid = str(getattr(r, "race_id", ""))
+            sec_n = getattr(r, "section_runner_n", None)
+            fin_n = getattr(r, "finish_n", None)
+            runner_n = int(getattr(r, "runner_n", 0) or 0)
+            extra = f"{runner_n} 匹"
+            if fin_n is not None:
+                extra += f" · 名次 {int(fin_n or 0)}"
+            if sec_n is not None:
+                extra += f" · 分段 {int(sec_n or 0)}"
+            race_labels.append(f"R{rn:02d} · {rid}（{extra}）")
+        race_pick = st.selectbox("選擇場次", race_labels, key="ops_race_pick")
+        race_row = race_src.iloc[race_labels.index(race_pick)]
+        race_id = str(race_row["race_id"])
+
+        grid = race_sectionals_grid(pipe.engine, race_id)
+        if grid.empty:
+            st.warning(
+                "此場尚無 runners／分段列。請 RESULTS「重跑賽果＋回填分段」或營運中心批次回填。"
             )
-            if c in runners.columns
-        ]
-        st.dataframe(
-            runners[show_cols],
-            use_container_width=True,
-            hide_index=True,
+        else:
+            has_pos = (
+                "走位" in grid.columns
+                and grid["走位"].fillna("").astype(str).str.len().gt(0).any()
+            )
+            has_time = (
+                "分段時間串" in grid.columns
+                and grid["分段時間串"].fillna("").astype(str).str.len().gt(0).any()
+            )
+            m1, m2, m3 = st.columns(3)
+            m1.metric("馬匹", len(grid))
+            m2.metric(
+                "有走位",
+                int(grid["走位"].fillna("").astype(str).str.len().gt(0).sum())
+                if "走位" in grid.columns
+                else 0,
+            )
+            m3.metric(
+                "有分段時間",
+                int(grid["分段時間串"].fillna("").astype(str).str.len().gt(0).sum())
+                if "分段時間串" in grid.columns
+                else 0,
+            )
+            if not has_pos:
+                st.warning("未有走位資料 — 請重同步／回填分段。")
+            elif not has_time:
+                st.info(
+                    "已有走位（如 7-7-1）；本場來源未提供各段秒數（`sectional_time` 空屬正常）。"
+                )
+            st.dataframe(grid, use_container_width=True, hide_index=True)
+            race_secs = grid.attrs.get("race_sectionals") or []
+            if race_secs:
+                st.caption("賽事層分段時間（race_sectionals）")
+                st.dataframe(pd.DataFrame(race_secs), use_container_width=True, hide_index=True)
+
+        # 同場排位／SG 仍可展開睇
+        with st.expander("排位／SG 馬匹列（非分段）", expanded=False):
+            runners = pipe.list_race_runners(race_id)
+            if runners is None or runners.empty:
+                st.caption("無排位列。")
+            else:
+                show_cols = [
+                    c
+                    for c in (
+                        "horse_no",
+                        "horse_name",
+                        "draw",
+                        "jockey_name",
+                        "trainer_name",
+                        "handicap_weight",
+                        "rating",
+                        "speed_energy",
+                        "speed_energy_delta",
+                        "form_rating",
+                    )
+                    if c in runners.columns
+                ]
+                st.dataframe(runners[show_cols], use_container_width=True, hide_index=True)
+except Exception as e:
+    st.warning(f"分段查閱暫不可用：{e}")
+
+st.divider()
+st.subheader(f"③b 本賽日覆蓋摘要 — {racing_date} {course}")
+st.caption("邊樣齊／唔齊（名次、分段、評述）。重跑：RESULTS「重跑賽果＋回填分段」。")
+try:
+    from data_audit import meeting_inventory
+
+    if st.button("刷新覆蓋摘要", key="ops_day_inv_btn"):
+        st.session_state["ops_sectionals_inv"] = meeting_inventory(
+            pipe.engine, racing_date, course
         )
+
+    inv = st.session_state.get("ops_sectionals_inv")
+    if inv is None:
+        inv = meeting_inventory(pipe.engine, racing_date, course)
+        st.session_state["ops_sectionals_inv"] = inv
+
+    i1, i2, i3, i4 = st.columns(4)
+    i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
+    i2.metric(
+        "有分段",
+        inv.get("with_sections", 0),
+        f"{float(inv.get('section_coverage') or 0):.0%}",
+    )
+    i3.metric(
+        "沿途評述",
+        inv.get("running_comment_n", 0),
+        f"{float(inv.get('running_comment_coverage') or 0):.0%}",
+    )
+    i4.metric(
+        "事故評述",
+        inv.get("incident_n", 0),
+        f"{float(inv.get('incident_coverage') or 0):.0%}",
+    )
+    if inv.get("gaps"):
+        st.warning("缺口：" + "；".join(inv["gaps"]))
+    miss = inv.get("missing_sectionals_sample") or []
+    if miss:
+        st.caption("缺分段樣例：")
+        st.dataframe(pd.DataFrame(miss), use_container_width=True, hide_index=True)
+except Exception as e:
+    st.warning(f"覆蓋摘要暫不可用：{e}")
 
 st.divider()
 st.subheader(f"④ 數據遺留 — {racing_date} {course}")
@@ -757,5 +897,6 @@ st.caption(
     "【重要】NLP／沿路走勢＝可選強化，**不必人工放行**，也不阻擋「建立快照」或「結算快照」。"
     "無評述時干擾通道自動降覆蓋；有評述後再解析→重算干擾→修訂快照即可。"
     "結算只依賴：賽前快照 × 賽果名次（finish_order），與當日走勢評述無關。"
-    "多日總覽／開放介入報告 →「數據營運中心」。"
+    "原料齊備／分段內容：本頁「③ 分段時間／走位」選場次即睇；"
+    "舊賽日重跑：RESULTS「重跑賽果＋回填分段」或營運中心批次。"
 )

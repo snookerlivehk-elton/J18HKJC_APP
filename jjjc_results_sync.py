@@ -27,6 +27,12 @@ import httpx
 from sqlalchemy import create_engine, text
 
 from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
+from sectionals_store import (
+    stages_from_race_times,
+    stages_from_runner_payload,
+    upsert_race_sectionals,
+    upsert_runner_sections,
+)
 
 try:
     from dotenv import load_dotenv
@@ -336,6 +342,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     runner_n = 0
     payout_n = 0
+    section_n = 0
+    race_section_n = 0
     race_ids: List[str] = []
 
     try:
@@ -502,6 +510,20 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         },
                     )
                     runner_n += 1
+                    # 結構化分段走位（running_position / sections）→ runner_sections
+                    section_n += upsert_runner_sections(
+                        conn, runner_id, stages_from_runner_payload(raw_meta)
+                    )
+
+                # 賽事層分段時間（若 export 有提供）
+                race_times = (
+                    race.get("sectional_times")
+                    or race.get("sectionals")
+                    or race.get("times")
+                )
+                race_section_n += upsert_race_sectionals(
+                    conn, race_id, stages_from_race_times(race_times)
+                )
 
                 for div in race.get("dividends") or []:
                     amount = _safe_float(div.get("amount"))
@@ -556,6 +578,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "race_ids": race_ids,
         "runner_upserted": runner_n,
         "payout_upserted": payout_n,
+        "runner_sections_upserted": section_n,
+        "race_sectionals_upserted": race_section_n,
         "pruned_orphan_races": pruned.get("race_ids") if isinstance(pruned, dict) else [],
         "pruned_runners": int((pruned or {}).get("runners") or 0),
         "source_preference": payload.get("source_preference"),
