@@ -41,6 +41,10 @@ VENUE_ALIASES = {
     "跑馬地": "HV",
 }
 
+# 香港馬場法定／慣例最大出馬數（馬號上限＝場額）
+# HV 跑馬地 ≤12；ST 沙田 ≤14。超過即屬幽靈污染（例如 ST 賽果誤寫入 HV race_id）。
+VENUE_MAX_HORSE_NO = {"ST": 14, "HV": 12}
+
 
 def api_base(explicit: Optional[str] = None) -> str:
     return (
@@ -86,6 +90,67 @@ def make_race_id(race_date: str, venue: str, race_no: int) -> str:
     d = normalize_date(race_date).replace("-", "")[:8]
     v = normalize_venue(venue) or "ST"
     return f"{d}{v}{int(race_no):02d}"
+
+
+def venue_from_race_id(race_id: Any) -> Optional[str]:
+    """從 race_id（YYYYMMDDST|HV##）抽出場地。"""
+    s = str(race_id or "").strip().upper()
+    if len(s) < 10:
+        return None
+    return normalize_venue(s[8:10])
+
+
+def max_horse_no_for_venue(venue: Any) -> Optional[int]:
+    """場地最大馬號；未知場地回 None。"""
+    v = normalize_venue(venue)
+    if not v:
+        return None
+    return VENUE_MAX_HORSE_NO.get(v)
+
+
+def horse_no_allowed_for_venue(horse_no: Any, venue: Any) -> bool:
+    """馬號是否符合場地上限（HV≤12、ST≤14）。"""
+    hn = safe_int(horse_no)
+    if hn is None or hn < 1:
+        return False
+    cap = max_horse_no_for_venue(venue)
+    if cap is None:
+        return True
+    return hn <= cap
+
+
+def field_size_issues(
+    venue: Any,
+    horse_nos: Any,
+    *,
+    race_id: Any = None,
+) -> List[str]:
+    """
+    回傳場額異常說明（空＝OK）。
+    用於 sync 拒寫／ops 警告：場地馬數／馬號超過上限。
+    """
+    v = normalize_venue(venue) or venue_from_race_id(race_id)
+    cap = max_horse_no_for_venue(v)
+    if cap is None:
+        return []
+    nos: List[int] = []
+    for x in horse_nos or []:
+        n = safe_int(x)
+        if n is not None:
+            nos.append(n)
+    if not nos:
+        return []
+    issues: List[str] = []
+    over = sorted({n for n in nos if n > cap})
+    if over:
+        issues.append(
+            f"{v} 場額上限 {cap}，出現非法馬號 {over}（疑 ST 賽果誤寫入 HV race_id）"
+            if v == "HV"
+            else f"{v} 場額上限 {cap}，出現非法馬號 {over}"
+        )
+    if len(nos) > cap:
+        issues.append(f"{v} 本場 {len(nos)} 匹超過場額上限 {cap}")
+    return issues
 
 
 def safe_int(v: Any) -> Optional[int]:

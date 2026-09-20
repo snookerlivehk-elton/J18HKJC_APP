@@ -27,6 +27,12 @@ import httpx
 from sqlalchemy import create_engine, text
 
 from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
+from jjjc_export_common import (
+    horse_no_allowed_for_venue,
+    max_horse_no_for_venue,
+    normalize_venue,
+    venue_from_race_id,
+)
 from sectionals_store import (
     stages_from_race_times,
     stages_from_runner_payload,
@@ -266,13 +272,7 @@ def _prune_orphan_meeting_races(
     races_n = 0
     payouts_n = 0
     for rid in deletable:
-        runners_n += int(
-            conn.execute(
-                text("DELETE FROM runners WHERE race_id = :rid"),
-                {"rid": rid},
-            ).rowcount
-            or 0
-        )
+        runners_n += _delete_runners_for_race(conn, rid)
         try:
             payouts_n += int(
                 conn.execute(
@@ -303,6 +303,79 @@ def _prune_orphan_meeting_races(
         "skipped_protected_race_ids": skipped_protected,
         "allow_prune_finished": allow_prune_finished,
     }
+
+
+def _delete_runners_for_race(
+    conn, race_id: str, *, keep_horse_nos: Optional[set] = None,
+    keep_runner_ids: Optional[set] = None,
+) -> int:
+    """
+    刪某場 runners（及 runner_sections）。
+    - keep_runner_ids：只留呢啲 runner_id（重同步清幽靈／舊 id）
+    - keep_horse_nos：只留呢啲馬號（無 runner_id 清單時用）
+    """
+    rid = str(race_id or "").strip()
+    if not rid:
+        return 0
+    params: Dict[str, Any] = {"rid": rid}
+
+    if keep_runner_ids is not None:
+        keep_ids = sorted({str(x).strip() for x in keep_runner_ids if str(x).strip()})
+        if not keep_ids:
+            return 0
+        # 逐個綁定避免 SQL injection；場額 ≤14 所以列表短
+        id_ph = ", ".join(f":kid{i}" for i in range(len(keep_ids)))
+        for i, kid in enumerate(keep_ids):
+            params[f"kid{i}"] = kid
+        where = f"race_id = :rid AND runner_id NOT IN ({id_ph})"
+    elif keep_horse_nos is not None:
+        keep = sorted({int(n) for n in keep_horse_nos if n is not None})
+        if not keep:
+            # 空 keep 唔刪（避免 partial／空 runners 誤清）
+            return 0
+        placeholders = ", ".join(str(int(n)) for n in keep)
+        where = f"race_id = :rid AND horse_no NOT IN ({placeholders})"
+    else:
+        where = "race_id = :rid"
+
+    # 先刪分段，再刪 runners
+    try:
+        conn.execute(
+            text(
+                f"""
+                DELETE FROM runner_sections
+                WHERE runner_id IN (
+                  SELECT runner_id FROM runners WHERE {where}
+                )
+                """
+            ),
+            params,
+        )
+    except Exception:
+        pass
+    return int(
+        conn.execute(
+            text(f"DELETE FROM runners WHERE {where}"),
+            params,
+        ).rowcount
+        or 0
+    )
+
+
+def _prune_orphan_runners_in_race(
+    conn,
+    race_id: str,
+    *,
+    keep_runner_ids: Optional[List[str]] = None,
+    keep_horse_nos: Optional[List[int]] = None,
+) -> int:
+    """同步後刪同場但不在本次 export 的馬（例如 HV 殘留 #13/#14 或舊 runner_id）。"""
+    return _delete_runners_for_race(
+        conn,
+        race_id,
+        keep_runner_ids=set(keep_runner_ids) if keep_runner_ids is not None else None,
+        keep_horse_nos=set(keep_horse_nos) if keep_horse_nos is not None else None,
+    )
 
 
 def _ensure_sqlite_schema() -> None:
@@ -345,6 +418,10 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     section_n = 0
     race_section_n = 0
     race_ids: List[str] = []
+    rejected_runners: List[Dict[str, Any]] = []
+    pruned_ghost_runners = 0
+    field_warnings: List[str] = []
+    pruned: Dict[str, Any] = {}
 
     try:
         with engine.begin() as conn:
@@ -388,6 +465,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 distance_m = _safe_int(race.get("distance_m"))
                 going = race.get("going")
                 course_text = race.get("course")  # 草地／泥地等，非 ST/HV
+                venue = (
+                    normalize_venue(race.get("venue_code"))
+                    or normalize_venue(payload.get("venue_code"))
+                    or venue_from_race_id(race_id)
+                )
                 race_ids.append(race_id)
 
                 conn.execute(
@@ -429,7 +511,32 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     },
                 )
 
+                keep_runner_ids: List[str] = []
+                # 先收集今次會寫入嘅合法馬；清掉舊列（唔同 runner_id／#13+#14 幽靈），
+                # 避免 UNIQUE(race_id, horse_no) 擋住重同步。
+                pending_runners: List[Dict[str, Any]] = []
                 for ru in race.get("runners") or []:
+                    horse_no = _safe_int(ru.get("horse_no"))
+                    if horse_no is None:
+                        continue
+                    if not horse_no_allowed_for_venue(horse_no, venue):
+                        cap = max_horse_no_for_venue(venue)
+                        rejected_runners.append(
+                            {
+                                "race_id": race_id,
+                                "horse_no": horse_no,
+                                "horse_name": ru.get("horse_name"),
+                                "reason": f"{venue or '?'} 場額上限 {cap}，拒寫馬號 {horse_no}",
+                            }
+                        )
+                        continue
+                    pending_runners.append(ru)
+
+                if pending_runners:
+                    # 整場換血：刪本場全部舊 runners（含場額幽靈），再按 export 插入
+                    pruned_ghost_runners += _delete_runners_for_race(conn, race_id)
+
+                for ru in pending_runners:
                     horse_no = _safe_int(ru.get("horse_no"))
                     if horse_no is None:
                         continue
@@ -510,9 +617,16 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         },
                     )
                     runner_n += 1
+                    keep_runner_ids.append(runner_id)
                     # 結構化分段走位（running_position / sections）→ runner_sections
                     section_n += upsert_runner_sections(
                         conn, runner_id, stages_from_runner_payload(raw_meta)
+                    )
+
+                # 清同場幽靈馬（唔喺今次 upsert 嘅 runner_id；含 #13/#14 同舊 id）
+                if keep_runner_ids:
+                    pruned_ghost_runners += _prune_orphan_runners_in_race(
+                        conn, race_id, keep_runner_ids=keep_runner_ids
                     )
 
                 # 賽事層分段時間（若 export 有提供）
@@ -569,6 +683,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     finally:
         engine.dispose()
 
+    if rejected_runners:
+        # 去重原因字串做摘要
+        reasons = sorted({str(r.get("reason") or "") for r in rejected_runners})
+        field_warnings.extend(reasons)
+
     return {
         "ok": True,
         "schema": schema,
@@ -581,7 +700,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "runner_sections_upserted": section_n,
         "race_sectionals_upserted": race_section_n,
         "pruned_orphan_races": pruned.get("race_ids") if isinstance(pruned, dict) else [],
-        "pruned_runners": int((pruned or {}).get("runners") or 0),
+        "pruned_runners": int((pruned or {}).get("runners") or 0) + pruned_ghost_runners,
+        "pruned_ghost_runners": pruned_ghost_runners,
+        "rejected_runners": rejected_runners,
+        "rejected_runner_count": len(rejected_runners),
+        "field_warnings": field_warnings,
         "source_preference": payload.get("source_preference"),
     }
 

@@ -708,7 +708,7 @@ st.divider()
 st.subheader(f"③ 分段時間／走位 — {racing_date} {course}")
 st.caption("選場次 → 直接睇各匹馬名次、走位、各段時間（`runner_sections`）。")
 try:
-    from data_audit import list_historical_races, race_sectionals_grid
+    from data_audit import list_historical_races, race_field_size_warning, race_sectionals_grid
 
     hist_races = list_historical_races(pipe.engine, racing_date, course)
     # 後備：排位場次（賽前可能仲未有歷史名次）
@@ -743,6 +743,14 @@ try:
         race_pick = st.selectbox("選擇場次", race_labels, key="ops_race_pick")
         race_row = race_src.iloc[race_labels.index(race_pick)]
         race_id = str(race_row["race_id"])
+
+        field_warn = race_field_size_warning(pipe.engine, race_id)
+        if field_warn:
+            st.error(
+                f"⚠️ 場額異常：{field_warn}。"
+                "常見原因：沙田（ST）賽果被寫進跑馬地（HV）race_id（例 GOOD FORTUNE #13）。"
+                "處理：RESULTS 用正確上游重同步該日 HV（會拒寫 #13+#14 並清幽靈馬）。"
+            )
 
         grid = race_sectionals_grid(pipe.engine, race_id)
         if grid.empty:
@@ -845,6 +853,13 @@ try:
     )
     if inv.get("gaps"):
         st.warning("缺口：" + "；".join(inv["gaps"]))
+    ghosts = inv.get("field_ghost_sample") or []
+    if ghosts:
+        st.error(
+            f"場額幽靈樣例（{inv.get('course')} 上限 {inv.get('field_cap')}）—"
+            "請 RESULTS 重同步正確上游以清走："
+        )
+        st.dataframe(pd.DataFrame(ghosts), use_container_width=True, hide_index=True)
     miss = inv.get("missing_sectionals_sample") or []
     if miss:
         st.caption("缺分段樣例：")
