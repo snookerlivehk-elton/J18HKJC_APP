@@ -29,14 +29,17 @@ from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE, resolve_database_url
 from jjjc_export_common import (
     classify_payload_status,
     content_meta,
+    display_horse_name,
     fetch_catalog,
     fetch_export_get,
     horse_no_of,
     load_payload_file,
+    looks_latin_name,
     make_race_id,
     meeting_id as make_meeting_id,
     normalize_date,
     normalize_venue,
+    prefer_zh_text,
     safe_int,
 )
 from sectionals_store import (
@@ -335,6 +338,34 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                             race_id, int(hn), (ru.get("horse_code") if isinstance(ru, dict) else None)
                         )
                         missing_runner += 1
+                    # R2 常有中文馬名：補返 results 寫入嘅英文名（統計／UI 用）
+                    if isinstance(ru, dict):
+                        zh = display_horse_name(ru)
+                        code = (ru.get("horse_code") or "").strip().upper() or None
+                        if zh and not looks_latin_name(zh):
+                            try:
+                                row = conn.execute(
+                                    text(
+                                        "SELECT horse_name, brand_num FROM runners WHERE runner_id = :rid"
+                                    ),
+                                    {"rid": rid},
+                                ).mappings().first()
+                                if row:
+                                    new_name = prefer_zh_text(zh, row.get("horse_name"))
+                                    updates = {"rid": rid, "name": new_name}
+                                    set_sql = "horse_name = :name"
+                                    if code and not (row.get("brand_num") or "").strip():
+                                        set_sql += ", brand_num = :brand"
+                                        updates["brand"] = code
+                                    if new_name and new_name != row.get("horse_name"):
+                                        conn.execute(
+                                            text(
+                                                f"UPDATE runners SET {set_sql} WHERE runner_id = :rid"
+                                            ),
+                                            updates,
+                                        )
+                            except Exception:
+                                pass
                     stages = stages_from_runner_payload(ru if isinstance(ru, dict) else {})
                     if not stages:
                         continue

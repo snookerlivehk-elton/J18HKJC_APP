@@ -187,6 +187,75 @@ def horse_no_of(row: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+def looks_latin_name(s: Any) -> bool:
+    """純英文／拉丁顯示名（官方 results 常見）；有中日韓字則否。"""
+    t = str(s or "").strip()
+    if not t:
+        return False
+    if re.search(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]", t):
+        return False
+    return bool(re.search(r"[A-Za-z]", t))
+
+
+def prefer_zh_text(*candidates: Any, fallback: Any = None) -> Optional[str]:
+    """
+    顯示名優先中文：先搵有中日韓字嘅候選，再非空，再 fallback。
+    用於 horse／jockey／trainer（results 常係英文；racecard／sectionals 有中文）。
+    """
+    nonempty: List[str] = []
+    for c in candidates:
+        if c is None:
+            continue
+        t = str(c).strip()
+        if not t or t.lower() in ("none", "null", "-"):
+            continue
+        nonempty.append(t)
+        if not looks_latin_name(t):
+            return t
+    if nonempty:
+        # 全係拉丁：仍回第一個非空（總好過空）
+        return nonempty[0]
+    if fallback is None:
+        return None
+    fb = str(fallback).strip()
+    return fb or None
+
+
+def display_horse_name(row: Dict[str, Any], *extra: Any) -> Optional[str]:
+    return prefer_zh_text(
+        row.get("horse_name_ch"),
+        row.get("horse_name"),
+        row.get("horseNameCh"),
+        row.get("horse_name_en"),
+        *extra,
+    )
+
+
+def display_jockey_name(row: Dict[str, Any], *extra: Any) -> Optional[str]:
+    return prefer_zh_text(
+        row.get("jockey_name_ch"),
+        row.get("jockey_name"),
+        row.get("jockeyNameCh"),
+        row.get("jockey_name_en"),
+        *extra,
+    )
+
+
+def display_trainer_name(row: Dict[str, Any], *extra: Any) -> Optional[str]:
+    return prefer_zh_text(
+        row.get("trainer_name_ch"),
+        row.get("trainer_name"),
+        row.get("trainerNameCh"),
+        row.get("trainer_name_en"),
+        *extra,
+    )
+
+
+def merge_prefer_zh(new: Any, existing: Any) -> Optional[str]:
+    """UPDATE 時：新值係英文、庫內已係中文 → 保留中文。"""
+    return prefer_zh_text(new, existing)
+
+
 def load_payload_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
