@@ -136,7 +136,14 @@ if selected_race_id != "None":
         st.warning("此場無排位馬匹")
         display_df = pace_df.sort_values("z_score", ascending=False).head(50)
     else:
-        proj = calc.project_race_pace(pace_df, runners["horse_name"].tolist())
+        codes = (
+            runners["horse_code"].tolist()
+            if "horse_code" in runners.columns
+            else [None] * len(runners)
+        )
+        proj = calc.project_race_pace(
+            pace_df, runners["horse_name"].tolist(), horse_codes=codes
+        )
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("步速熱度 Pace Heat", f"{proj['heat']:.2f}")
         c2.metric("預計步速", proj["scenario"])
@@ -172,8 +179,14 @@ if selected_race_id != "None":
         rows = []
         for _, row in runners.iterrows():
             hn = normalize_person_name(row["horse_name"])
-            info = proj["by_horse"].get(hn, {})
-            base = pace_df[pace_df[name_col] == hn]
+            from jjjc_export_common import horse_identity_key
+
+            hk = horse_identity_key(row.get("horse_code"), row.get("horse_name"))
+            info = proj["by_horse"].get(hk) or proj["by_horse"].get(hn, {})
+            base = pace_df[
+                (pace_df[name_col].astype(str) == str(hk))
+                | (pace_df[name_col].map(normalize_person_name) == hn)
+            ]
             hit = not base.empty or bool(info)
             rec = base.iloc[0] if not base.empty else None
             rows.append({

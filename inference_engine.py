@@ -13,6 +13,7 @@ from bucket_utils import (
     is_valid_bucket,
     is_valid_band_bucket,
 )
+from jjjc_export_common import horse_identity_key, is_real_horse_code
 
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
 from score_compose import (
@@ -103,7 +104,7 @@ class InferenceEngine:
             queries = [
                 """
                 SELECT 
-                    r.horse_no, r.horse_name, r.draw, r.jockey_name, r.trainer_name, 
+                    r.horse_no, r.horse_name, r.horse_code, r.draw, r.jockey_name, r.trainer_name, 
                     r.handicap_weight, r.horse_weight, r.gear, r.rating, r.rating_delta,
                     s.form_rating, s.speed_energy, s.speed_energy_delta
                 FROM upcoming_runners r
@@ -222,18 +223,26 @@ class InferenceEngine:
             lookup[key] = {"z": float(row['z_score']), "coverage": cov}
         return lookup
 
-    def _lookup_z(self, lookup: dict, factor_type: str, bucket_id: str, entity_name: str):
-        """回傳 (z_score, hit: bool, coverage: float)。查不到明確標 miss。"""
-        key = (factor_type, bucket_id, entity_name)
-        if key in lookup:
-            entry = lookup[key]
-            if isinstance(entry, dict):
-                z = float(entry.get("z", 0.0))
-                cov = entry.get("coverage")
-                if cov is None:
-                    cov = hit_coverage()
-                return z, True, float(cov)
-            return float(entry), True, hit_coverage()
+    def _lookup_z(self, lookup: dict, factor_type: str, bucket_id: str, entity_name: str, *alt_keys):
+        """回傳 (z_score, hit: bool, coverage: float)。查不到明確標 miss。可附馬碼等別名。"""
+        candidates = []
+        for n in (entity_name, *alt_keys):
+            if n is None:
+                continue
+            s = str(n).strip()
+            if s and s not in candidates:
+                candidates.append(s)
+        for name in candidates:
+            key = (factor_type, bucket_id, name)
+            if key in lookup:
+                entry = lookup[key]
+                if isinstance(entry, dict):
+                    z = float(entry.get("z", 0.0))
+                    cov = entry.get("coverage")
+                    if cov is None:
+                        cov = hit_coverage()
+                    return z, True, float(cov)
+                return float(entry), True, hit_coverage()
         return 0.0, False, miss_coverage()
 
     def predict_race(self, race_id: str, df_hist: pd.DataFrame = None) -> tuple:
@@ -290,6 +299,10 @@ class InferenceEngine:
             j_name = normalize_person_name(row['jockey_name'])
             t_name = normalize_person_name(row['trainer_name'])
             h_name = normalize_person_name(row['horse_name'])
+            h_code = horse_identity_key(
+                row.get('horse_code') or row.get('brand_num'),
+                h_name,
+            )
             syn_name = synergy_name(j_name, t_name)
             draw_group = self.calc._assign_draw_group(row['draw'])
 
@@ -297,9 +310,12 @@ class InferenceEngine:
             z_trainer, hit_t, c_t = self._lookup_z(lookup, 'TRAINER', band_bucket, t_name)
             z_synergy, hit_s, c_s = self._lookup_z(lookup, 'SYNERGY', band_bucket, syn_name)
             z_draw, hit_d, c_d = self._lookup_z(lookup, 'DRAW', fine_bucket, draw_group)
-            z_horse, hit_h, c_h = self._lookup_z(lookup, 'HORSE', band_bucket, h_name)
-            z_pace, hit_p, c_p = self._lookup_z(lookup, 'PACE', 'GLOBAL', h_name)
-            z_speed, hit_sp, c_sp = self._lookup_z(lookup, 'SPEED', 'GLOBAL', h_name)
+            # 馬因子：先馬碼（factor entity_name=horse_key），再中／英馬名
+            z_horse, hit_h, c_h = self._lookup_z(
+                lookup, 'HORSE', band_bucket, h_code, h_name
+            )
+            z_pace, hit_p, c_p = self._lookup_z(lookup, 'PACE', 'GLOBAL', h_code, h_name)
+            z_speed, hit_sp, c_sp = self._lookup_z(lookup, 'SPEED', 'GLOBAL', h_code, h_name)
 
             for ft, hit in (
                 ('JOCKEY', hit_j), ('TRAINER', hit_t),
@@ -511,7 +527,14 @@ class InferenceEngine:
                 'pace_contenders': None,
                 'pace_scenario_note': '請重算步速因子以寫入早段速度',
             }
-        proj = self.calc.project_race_pace(pace, runners_df['horse_name'].tolist())
+        codes = (
+            runners_df["horse_code"].tolist()
+            if "horse_code" in runners_df.columns
+            else None
+        )
+        proj = self.calc.project_race_pace(
+            pace, runners_df["horse_name"].tolist(), horse_codes=codes
+        )
         return {
             'pace_scenario': proj.get('scenario') or '未知',
             'pace_heat': proj.get('heat'),

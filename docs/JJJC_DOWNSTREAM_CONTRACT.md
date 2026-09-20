@@ -14,7 +14,7 @@
 6. 排位 DB 可能叫 `runner_no`＝export 嘅 `horse_no`（`jjjc_export_common.horse_no_of`）
 7. placeholder／`energy_is_placeholder=true`／空殼唔當真值
 8. **場額**：HV `horse_no` ≤12；ST ≤14。J18 results sync 會拒寫超額馬號，並喺重同步時清同場幽靈馬（常見污染：ST Glenealy 14 匹誤寫入 HV `race_id`）
-9. **顯示名**：馬／騎／練優先中文（`*_ch` 或 sectionals／racecard）；results 英文唔好覆蓋已有中文。統計近績多數用 `horse_name`，中英混用會拆散同一匹馬——身份以 `brand_num` 為準，顯示應統一中文
+9. **顯示名**：馬／騎／練優先中文（`*_ch` 或 sectionals／racecard）；results 英文唔好覆蓋已有中文。統計近績用 **`horse_key`＝真 `horse_code`／`brand_num`（如 J446）**，冇碼先退回正規化馬名；`factor_scores.entity_name` 對 HORSE／PACE／SPEED 存馬碼以便 inference 對齊排位 `horse_code`
 
 ## 開工檢查
 

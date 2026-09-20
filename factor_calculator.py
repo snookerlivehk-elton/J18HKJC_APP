@@ -24,6 +24,14 @@ from bucket_utils import (
     extract_venue,
     normalize_track,
 )
+from jjjc_export_common import (
+    canonical_horse_label,
+    horse_identity_key,
+    is_real_horse_code,
+    max_horse_no_for_venue,
+    prefer_zh_text,
+    venue_from_race_id,
+)
 
 # 為了讓 Pandas 方便讀寫，我們使用 SQLAlchemy
 from etl_pipeline import USE_SQLITE, SQLITE_DB_PATH, resolve_database_url
@@ -50,7 +58,8 @@ class FactorCalculator:
             SELECT 
                 m.racing_date,
                 r.race_id, r.course, r.track, r.distance_m, r.ground, r.class as race_class,
-                ru.runner_id, ru.jockey_name, ru.trainer_name, ru.horse_name,
+                ru.runner_id, ru.horse_no, ru.brand_num, ru.horse_id,
+                ru.jockey_name, ru.trainer_name, ru.horse_name,
                 ru.finish_order_num, ru.bar_draw as draw,
                 ru.runner_rating, ru.win_probability_raw,
                 ru.final_time, ru.raw_json
@@ -71,6 +80,21 @@ class FactorCalculator:
         df['jockey_name'] = df['jockey_name'].apply(normalize_person_name)
         df['trainer_name'] = df['trainer_name'].apply(normalize_person_name)
         df['horse_name'] = df['horse_name'].apply(normalize_person_name)
+        # 穩定馬身份（真馬碼優先）；過濾場額非法馬號（HV 幽靈 #13+#14）
+        df['horse_key'] = df.apply(
+            lambda r: horse_identity_key(
+                r.get('brand_num'),
+                r.get('horse_name'),
+                horse_id=r.get('horse_id'),
+            ),
+            axis=1,
+        )
+        venue_series = df['race_id'].map(venue_from_race_id)
+        caps = venue_series.map(lambda v: max_horse_no_for_venue(v) if v else None)
+        hnos = pd.to_numeric(df.get('horse_no'), errors='coerce')
+        illegal = caps.notna() & hnos.notna() & (hnos > caps)
+        if illegal.any():
+            df = df.loc[~illegal].copy()
         df['class_num'] = df['race_class'].apply(self._parse_class_num)
         df['win_odds'] = df.apply(
             lambda r: self._parse_win_odds(r.get('raw_json'), r.get('win_probability_raw')),
@@ -100,6 +124,30 @@ class FactorCalculator:
         df = df[df['bucket_id'].apply(is_valid_bucket) | df['band_bucket_id'].apply(is_valid_band_bucket)].copy()
         
         return df
+
+    @staticmethod
+    def _horse_entity_frames(work: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+        """
+        用 horse_key 做聚合鍵；回傳附 _horse_entity 欄嘅 frame + key→顯示名。
+        顯示名優先中文；factor_scores.entity_name 存 horse_key（有馬碼）以便 inference 對齊。
+        """
+        out = work.copy()
+        if "horse_key" not in out.columns:
+            out["horse_key"] = out.apply(
+                lambda r: horse_identity_key(
+                    r.get("brand_num"),
+                    r.get("horse_name"),
+                    horse_id=r.get("horse_id"),
+                ),
+                axis=1,
+            )
+        out = out[out["horse_key"].astype(str).str.len() > 0].copy()
+        labels = {}
+        for key, g in out.groupby("horse_key"):
+            labels[key] = canonical_horse_label(key, *g["horse_name"].tolist())
+        # entity_name for storage: real brand key when available, else display label
+        out["_horse_entity"] = out["horse_key"]
+        return out, labels
 
     @staticmethod
     def _parse_class_num(race_class) -> Optional[int]:
@@ -261,10 +309,10 @@ class FactorCalculator:
         return final_df
 
     def calculate_horse_jockey_factor(self, df: pd.DataFrame) -> pd.DataFrame:
-        """人馬合作：全域 bucket=GLOBAL，不分賽道距離。"""
-        temp = df.copy()
+        """人馬合作：全域 bucket=GLOBAL，不分賽道距離。鍵用 horse_key＋騎師名。"""
+        temp, _labels = self._horse_entity_frames(df)
         temp['horse_jockey_name'] = temp.apply(
-            lambda r: horse_jockey_name(r['horse_name'], r['jockey_name']), axis=1
+            lambda r: horse_jockey_name(r['_horse_entity'], r['jockey_name']), axis=1
         )
         out = self.calculate_entity_factor(
             temp,
@@ -487,7 +535,7 @@ class FactorCalculator:
             try:
                 upcoming_frames.append(pd.read_sql(
                     text("""
-                        SELECT race_id, horse_no, horse_name, brand_num
+                        SELECT race_id, horse_no, horse_name, horse_code AS brand_num
                         FROM upcoming_runners
                         WHERE race_id = :rid
                         ORDER BY horse_no
@@ -496,16 +544,28 @@ class FactorCalculator:
                     params={"rid": rid},
                 ))
             except Exception:
-                upcoming_frames.append(pd.read_sql(
-                    text("""
-                        SELECT race_id, horse_no, horse_name
-                        FROM upcoming_runners
-                        WHERE race_id = :rid
-                        ORDER BY horse_no
-                    """),
-                    self.engine,
-                    params={"rid": rid},
-                ))
+                try:
+                    upcoming_frames.append(pd.read_sql(
+                        text("""
+                            SELECT race_id, horse_no, horse_name, brand_num
+                            FROM upcoming_runners
+                            WHERE race_id = :rid
+                            ORDER BY horse_no
+                        """),
+                        self.engine,
+                        params={"rid": rid},
+                    ))
+                except Exception:
+                    upcoming_frames.append(pd.read_sql(
+                        text("""
+                            SELECT race_id, horse_no, horse_name
+                            FROM upcoming_runners
+                            WHERE race_id = :rid
+                            ORDER BY horse_no
+                        """),
+                        self.engine,
+                        params={"rid": rid},
+                    ))
         upcoming = pd.concat(upcoming_frames, ignore_index=True) if upcoming_frames else pd.DataFrame()
         if upcoming.empty:
             return pd.DataFrame()
@@ -515,10 +575,10 @@ class FactorCalculator:
         for _, row in upcoming.iterrows():
             hn = str(row.get("horse_name") or "")
             bn = row.get("brand_num")
-            if bn is not None and str(bn).strip() and str(bn).strip().lower() not in ("none", "nan"):
+            if is_real_horse_code(bn):
                 brands.add(str(bn).strip().upper())
             m = re.search(r"\(([A-Z]\d+)\)", hn.upper())
-            if m:
+            if m and is_real_horse_code(m.group(1)):
                 brands.add(m.group(1))
             names.add(normalize_person_name(hn))
 
@@ -1033,15 +1093,15 @@ class FactorCalculator:
         work = self._attach_runner_ids(work)
         if "horse_name" not in work.columns:
             return pd.DataFrame(), pd.DataFrame()
-        work["horse_name"] = work["horse_name"].apply(normalize_person_name)
-        work = work.sort_values(["horse_name", "racing_date"], ascending=[True, False])
+        work, _labels = self._horse_entity_frames(work)
+        work = work.sort_values(["_horse_entity", "racing_date"], ascending=[True, False])
 
         status_map = self.load_nlp_status_map()
         excuse_map = self.load_excuse_map()
 
         form_rows = []
         speed_rows = []
-        for horse, group in work.groupby("horse_name"):
+        for horse, group in work.groupby("_horse_entity"):
             window = group.head(lb)
             if window.empty:
                 continue
@@ -1076,7 +1136,7 @@ class FactorCalculator:
             i_form = float(np.mean(form_vals)) if form_vals else 0.0
             i_speed = float(np.mean(speed_vals)) if speed_vals else 0.0
             base = {
-                "entity_name": normalize_person_name(horse),
+                "entity_name": str(horse),
                 "actual_runs": int(n),
                 "weighted_runs": float(parsed),
                 "coverage": float(cov),
@@ -1123,7 +1183,8 @@ class FactorCalculator:
         place_w = float(ModelConfig.PLACE_WEIGHT)
 
         pieces = []
-        for horse, g in out.groupby("horse_name", sort=False):
+        out, _labels = self._horse_entity_frames(out)
+        for horse, g in out.groupby("_horse_entity", sort=False):
             g = g.sort_values("racing_date").copy()
             drop_flags = []
             for i in range(len(g)):
@@ -1196,10 +1257,10 @@ class FactorCalculator:
             work = self.apply_nlp_excuse_boost(work)
         work = self.apply_class_drop_boost(work)
 
-        work["horse_name_clean"] = work["horse_name"].fillna("未知馬匹").astype(str)
+        work, _labels = self._horse_entity_frames(work)
         out = self.calculate_entity_factor(
             work,
-            "horse_name_clean",
+            "_horse_entity",
             ModelConfig.HORSE_DECAY,
             ModelConfig.HORSE_SMOOTH_C,
             use_distance_band=True,
@@ -1207,7 +1268,7 @@ class FactorCalculator:
         if out.empty:
             return out
         out["factor_type"] = "HORSE"
-        return out.rename(columns={"horse_name_clean": "entity_name"})
+        return out.rename(columns={"_horse_entity": "entity_name"})
 
     def calculate_interference_factors(self, df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """獨立干擾持份者（僅 stakeholder 模式需要落庫）。"""
@@ -1683,7 +1744,7 @@ class FactorCalculator:
         if work.empty:
             return pd.DataFrame()
 
-        work["horse_name_clean"] = work["horse_name"].fillna("未知馬匹").astype(str)
+        work, _labels = self._horse_entity_frames(work)
 
         # 早段速度：同距離內，首段時間愈短 → 分數愈高
         work["early_speed_raw"] = np.nan
@@ -1696,7 +1757,7 @@ class FactorCalculator:
             if sd and sd > 0:
                 work.loc[g.index, "early_speed_raw"] = -(times - mu) / sd
 
-        grouped = work.groupby("horse_name_clean").agg(
+        grouped = work.groupby("_horse_entity").agg(
             actual_runs=("positions_gained", "count"),
             avg_early_pos=("early_position", "mean"),
             avg_positions_gained=("positions_gained", "mean"),
@@ -1731,13 +1792,15 @@ class FactorCalculator:
             default="未知 (Unknown)",
         )
 
-        out = grouped.rename(columns={"horse_name_clean": "entity_name"})
+        out = grouped.rename(columns={"_horse_entity": "entity_name"})
         out["factor_type"] = "PACE"
         out["bucket_id"] = GLOBAL_BUCKET
         # factor_scores：標準欄 + early_speed_z／running_style（預計步速）
         return out
 
-    def project_race_pace(self, pace_df: pd.DataFrame, horse_names: list) -> dict:
+    def project_race_pace(
+        self, pace_df: pd.DataFrame, horse_names: list, horse_codes: list = None
+    ) -> dict:
         """
         同場步速形勢：
         - heat：前 N 名 early_speed_z 加總（顯示用）
@@ -1750,6 +1813,13 @@ class FactorCalculator:
         cold_max = int(getattr(ModelConfig, "PACE_COLD_MAX_CONTENDERS", 1))
 
         names = [normalize_person_name(n) for n in horse_names]
+        code_list = list(horse_codes or []) if horse_codes is not None else []
+        keys = set(n for n in names if n)
+        for i, n in enumerate(horse_names or []):
+            code = code_list[i] if i < len(code_list) else None
+            hk = horse_identity_key(code, n)
+            if hk:
+                keys.add(hk)
         if pace_df is None or pace_df.empty:
             return {
                 "heat": 0.0, "scenario": "未知", "by_horse": {},
@@ -1761,10 +1831,13 @@ class FactorCalculator:
         speed_col = "early_speed_z" if "early_speed_z" in pace_df.columns else None
         z_col = "z_score" if "z_score" in pace_df.columns else None
 
-        # 名稱對齊：兩邊都 normalize，避免排位與因子表空白／全半形差
+        # 名稱／馬碼對齊：entity_name 可能係品牌號（J446）或正規化馬名
         work = pace_df.copy()
-        work["_match_name"] = work[name_col].map(normalize_person_name)
-        sub = work[work["_match_name"].isin(names)].copy()
+        work["_entity_raw"] = work[name_col].astype(str)
+        work["_match_name"] = work["_entity_raw"].map(normalize_person_name)
+        sub = work[
+            work["_entity_raw"].isin(keys) | work["_match_name"].isin(keys)
+        ].copy()
         if sub.empty:
             return {
                 "heat": 0.0, "scenario": "未知", "by_horse": {},
@@ -1781,7 +1854,9 @@ class FactorCalculator:
             # 後備：平均早段位置愈前 → 視為爭搶；熱度用位置換算
             if "avg_early_pos" in sub.columns:
                 pos = pd.to_numeric(sub["avg_early_pos"], errors="coerce").fillna(8.0)
-                heat = float((14.0 - pos).nlargest(top_n).sum() / 10.0)
+                # 場額後備：用子場最大早段位／14（ST）；唔好寫死 14 令 HV 偏高
+                field_cap = float(max(14.0, float(pos.max() or 14.0)))
+                heat = float((field_cap - pos).nlargest(top_n).sum() / 10.0)
                 # 平均早段 ≤4.5 約等同前領意圖
                 n_contenders = int((pos <= 4.5).sum())
             else:
@@ -1800,7 +1875,8 @@ class FactorCalculator:
         closer_w = float(ModelConfig.CLOSER_BONUS_WEIGHT)
         front_w = float(ModelConfig.FRONT_RUNNER_BONUS_WEIGHT)
         for _, row in sub.iterrows():
-            hn = row["_match_name"] if "_match_name" in row.index else row[name_col]
+            ent = str(row.get("_entity_raw") or row[name_col])
+            hn = str(row.get("_match_name") or "")
             style = str(row[style_col]) if style_col else ""
             base_z = float(row[z_col]) if z_col and pd.notna(row.get(z_col)) else 0.0
             bonus = 0.0
@@ -1812,13 +1888,17 @@ class FactorCalculator:
                 bonus = -0.25
             elif scenario == "偏慢步速" and "後追" in style:
                 bonus = -0.25
-            by_horse[hn] = {
+            info = {
                 "running_style": style,
                 "pace_z": base_z,
                 "scenario_bonus": bonus,
                 "pace_score": base_z + bonus,
                 "early_speed_z": float(row[speed_col]) if speed_col and pd.notna(row.get(speed_col)) else None,
             }
+            if ent:
+                by_horse[ent] = info
+            if hn:
+                by_horse[hn] = info
         return {
             "heat": heat,
             "scenario": scenario,
@@ -1991,10 +2071,11 @@ class FactorCalculator:
         else:
             work["nlp_time_boost"] = 0.0
 
-        work = work.sort_values(["horse_name", "racing_date"], ascending=[True, False])
+        work, _labels = self._horse_entity_frames(work)
+        work = work.sort_values(["_horse_entity", "racing_date"], ascending=[True, False])
         alpha = float(ModelConfig.TIME_EMA_ALPHA)
         rows = []
-        for horse, group in work.groupby("horse_name"):
+        for horse, group in work.groupby("_horse_entity"):
             recent = group.head(3)["sf_used"].astype(float).values
             if len(recent) == 0:
                 continue
@@ -2003,7 +2084,7 @@ class FactorCalculator:
             avg_fsr = float(group["fsr_clipped"].mean())
             nlp_hits = int((group["nlp_time_boost"] > 0).sum()) if "nlp_time_boost" in group.columns else 0
             rows.append({
-                "entity_name": normalize_person_name(horse),
+                "entity_name": str(horse),
                 "actual_runs": int(len(group)),
                 "weighted_runs": float(len(group)),
                 "peak_speed": peak,
