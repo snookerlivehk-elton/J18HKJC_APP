@@ -1169,6 +1169,19 @@ class MeetingPipeline:
                 self.refresh_readiness(racing_date, course)
                 return {"ok": True, **out}
 
+            if action == "sync_jjjc_sectionals":
+                from jjjc_sectionals_sync import sync_meeting as sync_sec
+
+                out = sync_sec(
+                    racing_date=racing_date,
+                    course=course,
+                    race_no=kwargs.get("race_no"),
+                    from_file=kwargs.get("from_file"),
+                    base_url=kwargs.get("base_url"),
+                )
+                self.refresh_readiness(racing_date, course)
+                return out
+
             if action == "resync_results_sectionals":
                 from data_audit import resync_results_and_sectionals
 
@@ -1178,6 +1191,14 @@ class MeetingPipeline:
                     course,
                     also_backfill=bool(kwargs.get("also_backfill", True)),
                 )
+                # 再試正式 R2 sectionals export（有就寫時間；無就 waiting）
+                try:
+                    from jjjc_sectionals_sync import sync_meeting as sync_sec
+
+                    sec = sync_sec(racing_date=racing_date, course=course)
+                    out["sectionals_export"] = sec
+                except Exception as e:
+                    out["sectionals_export"] = {"ok": False, "error": str(e)[:200]}
                 return out
 
             if action == "sync_jjjc_speedguide":

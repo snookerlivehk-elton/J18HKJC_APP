@@ -275,7 +275,9 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 )
 
                 for ru in race.get("runners") or []:
-                    horse_no = _safe_int(ru.get("horse_no"))
+                    from jjjc_export_common import horse_no_of
+
+                    horse_no = horse_no_of(ru)
                     if horse_no is None:
                         continue
                     runner_id = str(ru.get("runner_id") or "").strip() or f"{race_id}_{horse_no}"

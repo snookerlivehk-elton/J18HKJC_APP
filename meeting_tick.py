@@ -1444,11 +1444,41 @@ class MeetingTickRunner:
                 action_rec["ok"] = ok
                 action_rec["result"] = {
                     k: result.get(k)
-                    for k in ("ok", "error", "n_races", "n_runners", "msg")
+                    for k in ("ok", "error", "n_races", "n_runners", "msg", "runner_sections_upserted")
                     if k in result
                 } or result
                 # 刷新 readiness
                 out["readiness_after_sync"] = self.pipe.refresh_readiness(d, c)
+                # R2 分段：試 jjjc sectionals export（暫無則 waiting，唔 fail）
+                try:
+                    sec = self.pipe.run_action(d, c, "sync_jjjc_sectionals")
+                    out["actions"].append(
+                        {
+                            "action": "sync_jjjc_sectionals",
+                            "ok": bool(sec.get("ok")),
+                            "waiting": bool(sec.get("waiting")),
+                            "result": {
+                                k: sec.get(k)
+                                for k in (
+                                    "ok",
+                                    "waiting",
+                                    "detail",
+                                    "runner_sections_upserted",
+                                    "race_sectionals_upserted",
+                                    "status",
+                                )
+                                if k in sec
+                            },
+                        }
+                    )
+                except Exception as e:
+                    out["actions"].append(
+                        {
+                            "action": "sync_jjjc_sectionals",
+                            "ok": False,
+                            "error": str(e)[:200],
+                        }
+                    )
             out["actions"].append(action_rec)
 
         if plan.sync_text_reports:

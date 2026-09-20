@@ -32,6 +32,7 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 | **api_jjjc 速勢能量** | `upcoming_speedguide` | `jjjc_speedguide_sync.py` ← `GET /api/export/speedguide`（`jjjc.speedguide.v1`）；CMS 備援 |
 | **api_jjjc 賽事指引** | `upcoming_formguide.form_text` | `jjjc_formguide_sync.py` ← `GET /api/export/formguide`（`jjjc.formguide.v1`）；CMS 備援 |
 | **api_jjjc 沿途／事故** | `text_reports` | `jjjc_text_reports_sync.py` ← `GET /api/export/text-reports`（`jjjc.text_reports.v1`） |
+| **api_jjjc 分段 R2** | `runner_sections` / `race_sectionals` | `jjjc_sectionals_sync.py`（合約：上游暫無 HTTP；試 export／`--from-file`；見 `docs/JJJC_DOWNSTREAM_CONTRACT.md`） |
 | HKJC 排位（備援） | 同上 upcoming_* | `racecard_crawler` HTML；作戰室保留「備援重抓」 |
 | HKJC Speed Guide（備援） | `upcoming_speedguide` | CMS JSON：`sg_*`；JJJC 無貨時用 |
 | 因子落庫 | `factor_scores` | **推論只讀這張表**（查表，不每次現算） |

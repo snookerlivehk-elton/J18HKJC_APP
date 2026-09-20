@@ -590,6 +590,31 @@ for stage, label in STAGES:
                 st.success(
                     f"回填馬 {r.get('runners_written')}／段列 {r.get('section_rows_upserted')}"
                 )
+            if a2.button(
+                "同步 R2 分段（jjjc）",
+                key=f"act_sec_{stage}",
+                help="試 /api/export/sectionals；上游未開 export 會 waiting。有檔可用 CLI --from-file",
+            ):
+                with st.spinner("jjjc sectionals…"):
+                    r = pipe.run_action(racing_date, course, "sync_jjjc_sectionals")
+                _rec("sync_jjjc_sectionals", stage, str(r.get("detail") or r.get("ok")))
+                st.session_state["ops_sectionals_sync"] = r
+                st.session_state.pop("ops_ready", None)
+                if r.get("waiting"):
+                    st.info(r.get("detail") or "上游暫無 sectionals HTTP export")
+                elif r.get("ok"):
+                    st.success(
+                        f"分段列 {r.get('runner_sections_upserted')}／"
+                        f"賽事分段 {r.get('race_sectionals_upserted')}"
+                    )
+                else:
+                    st.error(r.get("error") or r)
+            last_sec = st.session_state.get("ops_sectionals_sync")
+            if last_sec and last_sec.get("ok") and not last_sec.get("waiting"):
+                st.caption(
+                    f"上次 R2：馬 {last_sec.get('runners_with_sections')}／"
+                    f"段列 {last_sec.get('runner_sections_upserted')}"
+                )
             last_res = st.session_state.get("ops_results_result")
             if last_res:
                 if last_res.get("ok"):
