@@ -117,23 +117,6 @@ if pace_df is None or pace_df.empty:
 pace_df = st.session_state["pace_df"]
 name_col = "entity_name" if "entity_name" in pace_df.columns else "horse_name"
 
-st.subheader("🔍 單馬步速原料（對 DB）")
-probe = st.text_input("輸入馬名（與 factor_scores.entity_name 一致）", key="pace_explain_name")
-if probe:
-    calc_x = FactorCalculator()
-    src = calc_x.explain_pace_score(probe.strip(), limit=15)
-    if src.empty:
-        st.warning(
-            "無 runner_sections 原料。請確認已同步賽果（含 running_position），"
-            "或執行 `python sectionals_store.py --backfill`。"
-        )
-    else:
-        st.dataframe(src, use_container_width=True)
-        st.caption(
-            "positions_gained = early_position − finish_order_num；"
-            "這些列聚合後才寫入 PACE Z。"
-        )
-
 upcoming_options = ui_utils.get_upcoming_races_list()
 st.subheader("🔮 排位場次 × 步速形勢")
 

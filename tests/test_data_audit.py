@@ -64,13 +64,30 @@ class DataAuditTest(unittest.TestCase):
         self.assertEqual(lin["pace_races"][0]["positions_gained"], 6)
         eng.dispose()
 
-    def test_backfill_meeting_action_shape(self):
-        from data_audit import backfill_meeting_sectionals
+    def test_race_sectionals_grid(self):
+        from data_audit import list_historical_races, race_sectionals_grid
 
         eng, _ = self._load_fixture_db()
-        # wipe sections then backfill
+        races = list_historical_races(eng, "2026-09-06", "ST")
+        self.assertFalse(races.empty)
+        rid = str(races.iloc[0]["race_id"])
+        grid = race_sectionals_grid(eng, rid)
+        self.assertEqual(len(grid), 14)
+        self.assertIn("走位", grid.columns)
+        self.assertIn("S1名次", grid.columns)
+        # GOOD FORTUNE finish 1 → 走位 7-7-1
+        gf = grid[grid["馬名"] == "GOOD FORTUNE"].iloc[0]
+        self.assertEqual(str(gf["走位"]), "7-7-1")
+        self.assertEqual(int(gf["名次"]), 1)
+        self.assertEqual(int(races.iloc[0]["runner_n"]), 14)
+        self.assertEqual(int(races.iloc[0]["finish_n"]), 14)
+        eng.dispose()
+
+    def test_backfill_meeting_action_shape(self):
+        from data_audit import backfill_meeting_sectionals
         from sqlalchemy import text
 
+        eng, _ = self._load_fixture_db()
         with eng.begin() as conn:
             conn.execute(text("DELETE FROM runner_sections"))
         out = backfill_meeting_sectionals(eng, "2026-09-06", "ST")

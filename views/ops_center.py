@@ -219,8 +219,8 @@ st.caption(
     "評述＝`text_reports`。覆蓋 <80% 會標 partial／列缺口。"
 )
 from data_audit import (
-    factor_lineage,
-    sectional_correctness_sample,
+    list_historical_races,
+    race_sectionals_grid,
     window_inventory,
 )
 
@@ -318,47 +318,28 @@ else:
         st.dataframe(pd.DataFrame(logs), use_container_width=True, hide_index=True)
         st.rerun()
 
-    st.markdown("#### 單日正確性抽樣（分段 vs raw）")
+    st.markdown("#### 揀賽日／場次睇分段內容")
+    st.caption("唔解釋計算；直接列出該場各馬走位同各段時間。")
     pick_opts = [f"{d} {c}" for d, c in meetings[:24]]
     if pick_opts:
-        pick = st.selectbox("抽樣 meeting", pick_opts, key="ops_corr_pick")
+        pick = st.selectbox("賽日", pick_opts, key="ops_sec_meet_pick")
         pd_, pc_ = pick.split()[0], pick.split()[1]
-        if st.button("檢查分段是否同 raw 一致", key="ops_corr_btn"):
-            corr = sectional_correctness_sample(pipe.engine, pd_, pc_, limit=40)
-            st.session_state["ops_corr_df"] = corr
-        corr_df = st.session_state.get("ops_corr_df")
-        if corr_df is not None and not corr_df.empty:
-            bad_c = corr_df[(corr_df["missing_in_table"]) | (corr_df["mismatch"])]
-            st.caption(
-                f"抽樣 {len(corr_df)} 匹；問題 {len(bad_c)} 匹"
-                "（missing＝表無列；mismatch＝表同 raw 解析唔同）"
-            )
-            st.dataframe(corr_df, use_container_width=True, hide_index=True)
-
-    st.markdown("#### 因子原料血緣（唔係快照）")
-    st.caption(
-        "輸入馬名 → 睇歷史名次列（近績原料）、`runner_sections`（步速原料）、"
-        "同而家 `factor_scores` 嘅 HORSE／PACE／SPEED。快照只係答案。"
-    )
-    horse_q = st.text_input("馬名（同 factor_scores.entity_name）", key="ops_lineage_horse")
-    if horse_q and st.button("查詢血緣", key="ops_lineage_btn"):
-        st.session_state["ops_lineage"] = factor_lineage(pipe.engine, horse_q.strip(), limit=20)
-    lin = st.session_state.get("ops_lineage")
-    if lin:
-        st.write(lin.get("notes") or {})
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**近績原料（runners）**")
-            st.dataframe(pd.DataFrame(lin.get("form_races") or []), use_container_width=True, hide_index=True)
-        with c2:
-            st.markdown("**步速原料（runner_sections）**")
-            st.dataframe(pd.DataFrame(lin.get("pace_races") or []), use_container_width=True, hide_index=True)
-        st.markdown("**而家落庫分數（factor_scores）**")
-        scores_df = pd.DataFrame(lin.get("factor_scores") or [])
-        if scores_df.empty:
-            st.warning("未有 HORSE／PACE／SPEED 分數 — 請去主頁重算因子。")
+        hist = list_historical_races(pipe.engine, pd_, pc_)
+        if hist is None or hist.empty:
+            st.info("此日歷史庫尚無場次（請先重同步 RESULTS）。")
         else:
-            st.dataframe(scores_df, use_container_width=True, hide_index=True)
+            labels = [
+                f"R{int(r.race_num):02d} · {r.race_id}"
+                f"（名次 {int(r.finish_n or 0)}／分段 {int(r.section_runner_n or 0)}）"
+                for r in hist.itertuples()
+            ]
+            rp = st.selectbox("場次", labels, key="ops_sec_race_pick")
+            rid = hist.iloc[labels.index(rp)]["race_id"]
+            grid = race_sectionals_grid(pipe.engine, str(rid))
+            if grid.empty:
+                st.warning("無分段列 — 請用上面批次回填／重同步。")
+            else:
+                st.dataframe(grid, use_container_width=True, hide_index=True)
 
 # —— C. 介入報告 ——
 st.subheader("開放介入報告")

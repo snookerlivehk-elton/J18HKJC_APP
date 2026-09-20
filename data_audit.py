@@ -357,3 +357,167 @@ def resync_results_and_sectionals(
         "backfill": bf_out,
         "inventory": inv,
     }
+
+
+def list_historical_races(engine, racing_date: str, course: str) -> pd.DataFrame:
+    """歷史庫場次（race_id 前綴），供選賽日後揀場睇分段。"""
+    prefix = _prefix(racing_date, course)
+    q = text(
+        """
+        SELECT
+          r.race_id,
+          r.race_num,
+          r.distance_m,
+          r.class AS race_class,
+          COUNT(DISTINCT ru.runner_id) AS runner_n,
+          COUNT(DISTINCT CASE WHEN ru.finish_order_num IS NOT NULL THEN ru.runner_id END) AS finish_n,
+          COUNT(DISTINCT rs.runner_id) AS section_runner_n
+        FROM races r
+        LEFT JOIN runners ru ON ru.race_id = r.race_id
+        LEFT JOIN runner_sections rs ON rs.runner_id = ru.runner_id
+        WHERE r.race_id LIKE :p || '%'
+        GROUP BY r.race_id, r.race_num, r.distance_m, r.class
+        ORDER BY r.race_num
+        """
+    )
+    try:
+        df = pd.read_sql(q, engine, params={"p": prefix})
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    q2 = text(
+        """
+        SELECT
+          ru.race_id,
+          CAST(SUBSTR(ru.race_id, 11, 2) AS INTEGER) AS race_num,
+          COUNT(DISTINCT ru.runner_id) AS runner_n,
+          COUNT(DISTINCT CASE WHEN ru.finish_order_num IS NOT NULL THEN ru.runner_id END) AS finish_n,
+          COUNT(DISTINCT rs.runner_id) AS section_runner_n
+        FROM runners ru
+        LEFT JOIN runner_sections rs ON rs.runner_id = ru.runner_id
+        WHERE ru.race_id LIKE :p || '%'
+        GROUP BY ru.race_id
+        ORDER BY race_num
+        """
+    )
+    try:
+        return pd.read_sql(q2, engine, params={"p": prefix})
+    except Exception:
+        return pd.DataFrame()
+
+
+def race_sectionals_grid(engine, race_id: str) -> pd.DataFrame:
+    """
+    單場各馬分段內容（選賽日／場次後直接睇）。
+    欄：馬號、馬名、名次、完成時間、走位、各段名次／時間。
+    """
+    rid = str(race_id or "").strip()
+    if not rid:
+        return pd.DataFrame()
+
+    with engine.connect() as conn:
+        runners = [
+            dict(r)
+            for r in conn.execute(
+                text(
+                    """
+                    SELECT runner_id, horse_no, horse_name, finish_order_num, final_time
+                    FROM runners
+                    WHERE race_id = :rid
+                    ORDER BY
+                      CASE WHEN finish_order_num IS NULL THEN 999 ELSE finish_order_num END,
+                      horse_no
+                    """
+                ),
+                {"rid": rid},
+            ).mappings().all()
+        ]
+        secs = [
+            dict(r)
+            for r in conn.execute(
+                text(
+                    """
+                    SELECT runner_id, stage_no, position_raw, sectional_time,
+                           split_1, split_2, distance_behind_raw
+                    FROM runner_sections
+                    WHERE runner_id IN (
+                      SELECT runner_id FROM runners WHERE race_id = :rid
+                    )
+                    ORDER BY runner_id, stage_no
+                    """
+                ),
+                {"rid": rid},
+            ).mappings().all()
+        ]
+        race_secs = [
+            dict(r)
+            for r in conn.execute(
+                text(
+                    """
+                    SELECT stage_no, sectional_time, split_1, split_2
+                    FROM race_sectionals
+                    WHERE race_id = :rid
+                    ORDER BY stage_no
+                    """
+                ),
+                {"rid": rid},
+            ).mappings().all()
+        ]
+
+    by_runner: Dict[str, List[Dict[str, Any]]] = {}
+    max_stage = 0
+    for s in secs:
+        by_runner.setdefault(str(s["runner_id"]), []).append(s)
+        try:
+            max_stage = max(max_stage, int(s["stage_no"] or 0))
+        except (TypeError, ValueError):
+            pass
+
+    rows: List[Dict[str, Any]] = []
+    for ru in runners:
+        rid_u = str(ru["runner_id"])
+        stages = sorted(
+            by_runner.get(rid_u) or [], key=lambda x: int(x.get("stage_no") or 0)
+        )
+        pos_parts: List[str] = []
+        time_parts: List[str] = []
+        row: Dict[str, Any] = {
+            "馬號": ru.get("horse_no"),
+            "馬名": ru.get("horse_name"),
+            "名次": ru.get("finish_order_num"),
+            "完成時間": ru.get("final_time"),
+        }
+        for stg in stages:
+            sn = int(stg.get("stage_no") or 0)
+            pos = stg.get("position_raw")
+            tm = stg.get("sectional_time")
+            if pos is not None and str(pos).strip() != "":
+                pos_parts.append(str(pos).strip())
+            if tm is not None and str(tm).strip() != "":
+                time_parts.append(str(tm).strip())
+            row[f"S{sn}名次"] = pos
+            row[f"S{sn}時間"] = tm
+            if stg.get("distance_behind_raw"):
+                row[f"S{sn}距離"] = stg.get("distance_behind_raw")
+        for sn in range(1, max_stage + 1):
+            row.setdefault(f"S{sn}名次", None)
+            row.setdefault(f"S{sn}時間", None)
+        row["走位"] = "-".join(pos_parts) if pos_parts else ""
+        row["分段時間串"] = " / ".join(time_parts) if time_parts else ""
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    if not df.empty and max_stage:
+        front = ["馬號", "馬名", "名次", "完成時間", "走位", "分段時間串"]
+        mid: List[str] = []
+        for sn in range(1, max_stage + 1):
+            mid.extend([f"S{sn}名次", f"S{sn}時間"])
+            if f"S{sn}距離" in df.columns:
+                mid.append(f"S{sn}距離")
+        cols = [c for c in front + mid if c in df.columns]
+        df = df[cols]
+    df.attrs["race_sectionals"] = race_secs
+    df.attrs["race_id"] = rid
+    df.attrs["max_stage"] = max_stage
+    return df
