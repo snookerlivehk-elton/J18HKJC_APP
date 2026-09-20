@@ -97,6 +97,22 @@ def normalize_person_name(name: Any) -> str:
     return s
 
 
+def valid_factor_entity(name: Any) -> bool:
+    """
+    因子 entity_name 是否可用。
+    拒絕空字串、以及騎練／人馬組合缺一邊（如「& 巫偉傑」「K478 &」）。
+    """
+    s = str(name if name is not None else "").strip()
+    if not s or s.lower() in ("none", "nan", "null", "-"):
+        return False
+    if "&" in s:
+        parts = [p.strip() for p in s.split("&")]
+        if len(parts) < 2:
+            return False
+        return all(bool(normalize_person_name(p)) for p in parts[:2])
+    return bool(normalize_person_name(s))
+
+
 def synergy_name(jockey: Any, trainer: Any) -> str:
     return f"{normalize_person_name(jockey)} & {normalize_person_name(trainer)}"
 

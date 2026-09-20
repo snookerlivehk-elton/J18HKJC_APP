@@ -190,12 +190,22 @@ def ensure_history_loaded() -> bool:
 
 def load_factor_from_db_or_session(session_key: str, factor_type: str) -> pd.DataFrame:
     """優先用 session 計算結果；沒有則嘗試從 factor_scores 讀取。"""
+    def _drop_blank(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame is None or frame.empty or 'entity_name' not in frame.columns:
+            return frame
+        try:
+            from bucket_utils import valid_factor_entity
+
+            return frame[frame['entity_name'].map(valid_factor_entity)].copy()
+        except Exception:
+            return frame[frame['entity_name'].astype(str).str.strip().ne('')].copy()
+
     if session_key in st.session_state and isinstance(st.session_state[session_key], pd.DataFrame):
-        df = st.session_state[session_key]
+        df = _drop_blank(st.session_state[session_key])
         if not df.empty:
             return df
     calc = FactorCalculator()
-    df = calc.load_factor_scores(factor_types=[factor_type])
+    df = _drop_blank(calc.load_factor_scores(factor_types=[factor_type]))
     if not df.empty:
         st.caption(f"已從資料庫載入 `{factor_type}`（{len(df)} 筆）。若要調參重算，請按本頁計算按鈕。")
     return df
@@ -210,6 +220,19 @@ def display_factor_details(df, selected_bucket, entity_col_name, filter_entities
     filtered = df[df['bucket_id'] == selected_bucket].copy()
     if filtered.empty:
         st.info(f"此分桶尚無數據：`{selected_bucket}`")
+        return
+
+    # 隱藏無名／半截騎練・人馬組合（舊 factor_scores 殘留）
+    try:
+        from bucket_utils import valid_factor_entity
+
+        filtered = filtered[filtered['entity_name'].map(valid_factor_entity)]
+    except Exception:
+        filtered = filtered[
+            filtered['entity_name'].astype(str).str.strip().ne('')
+        ]
+    if filtered.empty:
+        st.info(f"此分桶尚無有效實體：`{selected_bucket}`")
         return
 
     if filter_entities is not None:

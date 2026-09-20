@@ -23,6 +23,7 @@ from bucket_utils import (
     parse_class_num,
     extract_venue,
     normalize_track,
+    valid_factor_entity,
 )
 from jjjc_export_common import (
     canonical_horse_label,
@@ -296,6 +297,12 @@ class FactorCalculator:
                     axis=1,
                 )
             temp_df['bucket_id'] = temp_df['band_bucket_id']
+        # 拒絕空騎師／半截「& 練」「馬碼 &」等無名實體（否則 UI 出現空白列）
+        if entity_col in temp_df.columns:
+            ok = temp_df[entity_col].map(valid_factor_entity)
+            temp_df = temp_df.loc[ok].copy()
+        if temp_df.empty:
+            return pd.DataFrame()
         temp_df = self.apply_time_decay(temp_df, decay_rates)
 
         grouped = temp_df.groupby(['bucket_id', entity_col]).agg({
@@ -2164,6 +2171,10 @@ class FactorCalculator:
         optional = [c for c in ('early_speed_z', 'running_style', 'coverage') if c in combined.columns]
         out = combined[required + optional].copy()
         out['entity_name'] = out['entity_name'].astype(str)
+        # 落庫前再擋無名／半截組合（舊 session 重算、獨立頁計算）
+        out = out[out['entity_name'].map(valid_factor_entity)].copy()
+        if out.empty:
+            return 0
         out['calculated_at'] = datetime.utcnow().isoformat(sep=' ', timespec='seconds')
 
         with self.engine.begin() as conn:
@@ -2176,6 +2187,21 @@ class FactorCalculator:
                 conn.execute(
                     text(f"DELETE FROM factor_scores WHERE factor_type IN {types}")
                 )
+            # 清走殘留無名列（上次寫入、今次同 type 已 delete 覆蓋；跨 type 保險）
+            try:
+                conn.execute(
+                    text(
+                        """
+                        DELETE FROM factor_scores
+                        WHERE TRIM(COALESCE(entity_name, '')) = ''
+                           OR entity_name LIKE ' &%'
+                           OR entity_name LIKE '%& '
+                           OR entity_name = '&'
+                        """
+                    )
+                )
+            except Exception:
+                pass
             out.to_sql('factor_scores', conn, if_exists='append', index=False)
 
         return len(out)
