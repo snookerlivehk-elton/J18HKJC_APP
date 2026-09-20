@@ -120,16 +120,6 @@ class JjjcSectionalsSyncTest(unittest.TestCase):
                         "SELECT sectional_time FROM race_sectionals WHERE race_id='20260916HV01' ORDER BY stage_no"
                     )
                 ).fetchall()
-            eng.dispose()
-
-            self.assertEqual(len(rows), 3)
-            self.assertEqual(str(rows[0][1]), "2")
-            self.assertEqual(str(rows[0][2]), "13.1")
-            self.assertEqual(str(rows[2][1]), "1")
-            self.assertEqual([str(r[0]) for r in race_t], ["12.8", "10.7", "11.6"])
-            self.assertEqual(str(rows[0][2]), "13.1")
-            # margin 落庫
-            with eng.connect() as conn:
                 margin = conn.execute(
                     text(
                         """
@@ -139,16 +129,23 @@ class JjjcSectionalsSyncTest(unittest.TestCase):
                         """
                     )
                 ).scalar()
+
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(str(rows[0][1]), "2")
+            self.assertEqual(str(rows[0][2]), "13.1")
+            self.assertEqual(str(rows[2][1]), "1")
+            self.assertEqual([str(r[0]) for r in race_t], ["12.8", "10.7", "11.6"])
             self.assertEqual(str(margin), "1")
 
             from data_audit import race_sectionals_grid
 
-            grid = race_sectionals_grid(create_engine(f"sqlite:///{db_path}"), "20260916HV01")
+            grid = race_sectionals_grid(eng, "20260916HV01")
             self.assertEqual(len(grid), 2)
             one = grid[grid["馬號"] == 3].iloc[0]
             self.assertEqual(str(one["走位"]), "2-2-1")
             self.assertIn("13.1", str(one["分段時間串"]))
             self.assertIn("10.9", str(one["分段時間串"]))
+            eng.dispose()
 
 
 if __name__ == "__main__":
