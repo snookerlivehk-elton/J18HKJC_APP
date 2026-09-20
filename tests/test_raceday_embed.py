@@ -25,6 +25,29 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("AI 評價", r.text)
         self.assertIn("radarSvg", r.text)
 
+    def test_pc_style_dev_page_is_separate_from_embed(self):
+        from raceday_embed_api import create_app
+
+        client = TestClient(create_app())
+        pc = client.get("/embed/raceday-pc")
+        self.assertEqual(pc.status_code, 200)
+        self.assertIn("text/html", pc.headers.get("content-type", ""))
+        self.assertIn("賽日速覽", pc.text)
+        self.assertIn("綜合走勢", pc.text)
+        self.assertIn("推介指數", pc.text)
+        self.assertIn('class="sidebar"', pc.text)
+        self.assertIn("/embed/api/default", pc.text)
+        # 已移除暫不適用的導航／登錄／賠率時間軸
+        self.assertNotIn("倍率/指數", pc.text)
+        self.assertNotIn("開始賠率", pc.text)
+        self.assertNotIn(">登錄<", pc.text)
+        # 原嵌入頁未改：仍是右手邊深色卡，不含 PC 整頁側欄
+        old = client.get("/embed/raceday")
+        self.assertEqual(old.status_code, 200)
+        self.assertIn("horse-radar", old.text)
+        self.assertNotIn('class="sidebar"', old.text)
+        self.assertNotIn("綜合走勢", old.text)
+
     def test_health_and_default_empty(self):
         from raceday_embed_api import create_app
 
@@ -147,6 +170,25 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertEqual(r0["ai_combo"], 0.72)
         self.assertEqual(r0["ai_summary"], "穩")
         self.assertIn("radar_axes", out)
+
+    def test_json_safe_handles_numpy(self):
+        import numpy as np
+
+        from raceday_embed_payload import _json_safe
+
+        raw = {
+            "a": np.float64(1.25),
+            "b": np.int64(3),
+            "c": [np.float32(0.5), {"d": np.bool_(True)}],
+        }
+        out = _json_safe(raw)
+        self.assertEqual(out["a"], 1.25)
+        self.assertEqual(out["b"], 3)
+        self.assertEqual(out["c"][0], 0.5)
+        self.assertIs(out["c"][1]["d"], True)
+        import json
+
+        json.dumps(out)  # must not raise
 
 
 if __name__ == "__main__":
