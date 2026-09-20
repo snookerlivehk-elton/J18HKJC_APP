@@ -783,8 +783,10 @@ try:
             if not has_pos:
                 st.warning("未有走位資料 — 請重同步／回填分段。")
             elif not has_time:
-                st.info(
-                    "已有走位（如 7-7-1）；本場來源未提供各段秒數（`sectional_time` 空屬正常）。"
+                st.warning(
+                    "只有走位（多數來自賽果 `running_position`），**未有各段秒數**。"
+                    "上游 R2 `jjjc.sectionals.v1` 若已有時間，請撳 RESULTS「同步 R2 分段（jjjc）」"
+                    "或「重跑賽果＋回填分段」——唔好以為空時間係正常。"
                 )
             st.dataframe(grid, use_container_width=True, hide_index=True)
             race_secs = grid.attrs.get("race_sectionals") or []
@@ -837,19 +839,19 @@ try:
     i1, i2, i3, i4 = st.columns(4)
     i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
     i2.metric(
-        "有分段",
+        "有走位",
         inv.get("with_sections", 0),
         f"{float(inv.get('section_coverage') or 0):.0%}",
     )
     i3.metric(
+        "有分段秒數",
+        inv.get("with_sectional_times", 0),
+        f"{float(inv.get('sectional_time_coverage') or 0):.0%}",
+    )
+    i4.metric(
         "沿途評述",
         inv.get("running_comment_n", 0),
         f"{float(inv.get('running_comment_coverage') or 0):.0%}",
-    )
-    i4.metric(
-        "事故評述",
-        inv.get("incident_n", 0),
-        f"{float(inv.get('incident_coverage') or 0):.0%}",
     )
     if inv.get("gaps"):
         st.warning("缺口：" + "；".join(inv["gaps"]))

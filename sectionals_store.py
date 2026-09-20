@@ -520,8 +520,13 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
         sec = conn.execute(
             text(
                 """
-                SELECT COUNT(DISTINCT rs.runner_id) AS with_sections,
-                       COUNT(*) AS section_rows
+                SELECT
+                  COUNT(DISTINCT rs.runner_id) AS with_sections,
+                  COUNT(DISTINCT CASE
+                    WHEN rs.sectional_time IS NOT NULL
+                     AND TRIM(CAST(rs.sectional_time AS TEXT)) != ''
+                    THEN rs.runner_id END) AS with_sectional_times,
+                  COUNT(*) AS section_rows
                 FROM runner_sections rs
                 JOIN runners ru ON ru.runner_id = rs.runner_id
                 WHERE ru.race_id LIKE :p || '%'
@@ -532,6 +537,7 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
     n = int((runners or {}).get("n") or 0)
     with_finish = int((runners or {}).get("with_finish") or 0)
     with_sections = int((sec or {}).get("with_sections") or 0)
+    with_sectional_times = int((sec or {}).get("with_sectional_times") or 0)
     section_rows = int((sec or {}).get("section_rows") or 0)
     denom = with_finish or n or 1
     return {
@@ -539,10 +545,13 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
         "runners": n,
         "with_finish": with_finish,
         "with_sections": with_sections,
+        "with_sectional_times": with_sectional_times,
         "section_rows": section_rows,
         "section_coverage": round(with_sections / denom, 3) if denom else 0.0,
+        "sectional_time_coverage": round(with_sectional_times / denom, 3) if denom else 0.0,
         "results_ready_rule": "finish_order_num IS NOT NULL（結算不要求分段）",
         "pace_ready_rule": "runner_sections 有至少一段 position_raw（步速／跑法）",
+        "time_ready_rule": "runner_sections.sectional_time 非空（要 sync R2 jjjc.sectionals.v1）",
     }
 
 

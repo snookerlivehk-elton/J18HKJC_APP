@@ -124,11 +124,14 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
     running_n = int((comment or {}).get("running_n") or 0)
     incident_n = int((comment or {}).get("incident_n") or 0)
     with_sec = int(cov.get("with_sections") or 0)
+    with_times = int(cov.get("with_sectional_times") or 0)
 
     finish_ok = finish_n > 0 and race_n > 0
     # 分段：有名次嘅馬 ≥80% 有走位先當齊（同 backlog 門檻風格）
     sec_cov = (with_sec / finish_n) if finish_n else 0.0
+    time_cov = (with_times / finish_n) if finish_n else 0.0
     sectionals_ok = finish_n > 0 and sec_cov >= 0.8
+    times_ok = finish_n > 0 and time_cov >= 0.8
     run_cov = (running_n / finish_n) if finish_n else 0.0
     inc_cov = (incident_n / finish_n) if finish_n else 0.0
 
@@ -143,6 +146,11 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         gaps.append("無名次（需重同步 RESULTS）")
     elif not sectionals_ok:
         gaps.append(f"分段走位不足 {with_sec}/{finish_n}（{sec_cov:.0%}）")
+    elif not times_ok:
+        gaps.append(
+            f"有走位但缺分段秒數 {with_times}/{finish_n}（{time_cov:.0%}）—"
+            "請 RESULTS「同步 R2 分段」拉 jjjc.sectionals.v1（上游已有時間時唔好只靠賽果回填）"
+        )
     if finish_ok and run_cov < 0.8:
         gaps.append(f"沿途評述不足 {running_n}/{finish_n}")
     if finish_ok and inc_cov < 0.8:
@@ -155,14 +163,17 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         "race_n": race_n,
         "finish_n": finish_n,
         "with_sections": with_sec,
+        "with_sectional_times": with_times,
         "section_rows": int(cov.get("section_rows") or 0),
         "section_coverage": round(sec_cov, 3),
+        "sectional_time_coverage": round(time_cov, 3),
         "running_comment_n": running_n,
         "running_comment_coverage": round(run_cov, 3),
         "incident_n": incident_n,
         "incident_coverage": round(inc_cov, 3),
         "finish_ok": finish_ok,
         "sectionals_ok": sectionals_ok,
+        "sectional_times_ok": times_ok,
         "running_comment_ok": run_cov >= 0.8 if finish_n else False,
         "incident_ok": inc_cov >= 0.8 if finish_n else False,
         "field_cap": cap,

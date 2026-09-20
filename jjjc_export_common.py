@@ -51,7 +51,8 @@ def api_base(explicit: Optional[str] = None) -> str:
         explicit
         or os.getenv("JJJC_API_BASE")
         or os.getenv("JJJC_RESULTS_API_BASE")
-        or ""
+        # 與 ad_push_prod／手冊預設一致；未設 env 時仍可拉 R2 分段
+        or "https://apicc.up.railway.app"
     ).strip().rstrip("/")
 
 

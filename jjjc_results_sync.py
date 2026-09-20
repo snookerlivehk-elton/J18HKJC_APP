@@ -58,12 +58,9 @@ else:
 
 
 def _api_base(explicit: Optional[str] = None) -> str:
-    return (
-        explicit
-        or os.getenv("JJJC_API_BASE")
-        or os.getenv("JJJC_RESULTS_API_BASE")
-        or ""
-    ).strip().rstrip("/")
+    from jjjc_export_common import api_base
+
+    return api_base(explicit)
 
 
 def _normalize_date(d: str) -> str:

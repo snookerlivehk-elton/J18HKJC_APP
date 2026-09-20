@@ -74,3 +74,18 @@ python jjjc_sectionals_sync.py --date 2026-09-09 --course HV
 ```
 
 作戰室「③ 分段時間／走位」會顯示場額異常警告；覆蓋摘要 `gaps` 含「場額幽靈」。
+
+## 有走位但無分段秒數（ST 正常 14 匹）
+
+沙田場額 ≤14，**14 匹本身唔係 bug**。若作戰室顯示「有走位 14／有分段時間 0」，多數係：
+
+1. 只跑咗 RESULTS（`running_position` → 走位），**未同步 R2** `GET /api/export/sectionals`
+2. 舊 UI 誤寫「空秒數屬正常」——其實上游已有 `sectional_time` 時必須拉 R2
+
+```bash
+# 只補秒數（賽果已齊時）
+python jjjc_sectionals_sync.py --date 2026-09-06 --course ST
+# 或作戰室 RESULTS →「同步 R2 分段（jjjc）」／「重跑賽果＋回填分段」
+```
+
+未設 `JJJC_API_BASE` 時會預設 `https://apicc.up.railway.app`。
