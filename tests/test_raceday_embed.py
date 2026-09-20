@@ -25,6 +25,25 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("AI 評價", r.text)
         self.assertIn("radarSvg", r.text)
 
+    def test_pc_style_dev_page_is_separate_from_embed(self):
+        from raceday_embed_api import create_app
+
+        client = TestClient(create_app())
+        pc = client.get("/embed/raceday-pc")
+        self.assertEqual(pc.status_code, 200)
+        self.assertIn("text/html", pc.headers.get("content-type", ""))
+        self.assertIn("賽日速覽", pc.text)
+        self.assertIn("綜合走勢", pc.text)
+        self.assertIn("推介指數", pc.text)
+        self.assertIn('class="sidebar"', pc.text)
+        self.assertIn("/embed/api/default", pc.text)
+        # 原嵌入頁未改：仍是右手邊深色卡，不含 PC 整頁側欄
+        old = client.get("/embed/raceday")
+        self.assertEqual(old.status_code, 200)
+        self.assertIn("horse-radar", old.text)
+        self.assertNotIn('class="sidebar"', old.text)
+        self.assertNotIn("綜合走勢", old.text)
+
     def test_health_and_default_empty(self):
         from raceday_embed_api import create_app
 

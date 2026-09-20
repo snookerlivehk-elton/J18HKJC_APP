@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="robots" content="noindex" />
+  <title>賽日速覽 · J18 PC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --nav: #3d4f66;
+      --nav-2: #33455c;
+      --page: #eef1f5;
+      --cream: #f7f4ee;
+      --card: #fff;
+      --line: #e4e7ec;
+      --text: #2c3340;
+      --muted: #8a93a3;
+      --blue: #4aa3e8;
+      --blue-2: #3b8fd4;
+      --blue-deep: #2f7fbf;
+      --coral: #ff6b5b;
+      --orange: #ff8a3d;
+      --yellow: #ffc84a;
+      --green: #2ecf7a;
+      --red: #ef4d4d;
+      --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      --sidebar: 76px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); font-family: var(--font); }
+    body { display: flex; min-width: 1100px; overflow: hidden; }
+    button { font-family: inherit; }
+
+    /* —— 左欄導航 —— */
+    .sidebar {
+      width: var(--sidebar); flex: 0 0 var(--sidebar);
+      background: linear-gradient(180deg, #455872 0%, #3a4d64 40%, #33455c 100%);
+      color: #fff; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0 16px; z-index: 20;
+    }
+    .logo {
+      width: 52px; height: 52px; border-radius: 12px;
+      background: #fff; display: grid; place-items: center; margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+    .logo svg { width: 40px; height: 40px; }
+    .avatar {
+      width: 46px; height: 46px; border-radius: 50%; background: #f3d7b8;
+      display: grid; place-items: center; margin: 6px 0 4px; overflow: hidden;
+      border: 2px solid rgba(255,255,255,.35);
+    }
+    .login-link { color: var(--coral); font-size: 12px; font-weight: 700; text-decoration: none; margin-bottom: 8px; }
+    .dev-switch {
+      display: flex; background: #2c3e52; border-radius: 999px; padding: 2px; margin-bottom: 10px; gap: 0;
+    }
+    .dev-switch span {
+      font-size: 10px; padding: 3px 7px; border-radius: 999px; color: #c5d0dc; font-weight: 700;
+    }
+    .dev-switch .on { background: var(--coral); color: #fff; }
+    .nav { width: 100%; display: flex; flex-direction: column; gap: 2px; }
+    .nav a {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      color: rgba(255,255,255,.82); text-decoration: none; padding: 8px 4px;
+      font-size: 10px; font-weight: 600; position: relative;
+    }
+    .nav a.active, .nav a:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .nav a.active { box-shadow: inset 3px 0 0 #7ec8ff; }
+    .nav .ico { font-size: 16px; line-height: 1; }
+    .badge {
+      position: absolute; top: 4px; right: 10px;
+      background: var(--coral); color: #fff; font-size: 9px; min-width: 14px; height: 14px;
+      border-radius: 999px; display: grid; place-items: center; font-weight: 800;
+    }
+    .hot {
+      display: inline-block; background: var(--coral); color: #fff;
+      font-size: 8px; padding: 1px 4px; border-radius: 6px; margin-bottom: 2px; font-weight: 800;
+    }
+
+    /* —— 中欄 —— */
+    .workspace { flex: 1 1 auto; display: flex; min-width: 0; height: 100vh; }
+    .center {
+      width: 520px; flex: 0 0 520px; background: var(--cream);
+      display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #e6e0d6;
+    }
+    .ticker {
+      height: 34px; display: flex; align-items: center; gap: 8px;
+      padding: 0 12px; background: #fff; border-bottom: 1px solid var(--line);
+      font-size: 12px; color: #5b6575; overflow: hidden; white-space: nowrap;
+    }
+    .ticker .horn { color: var(--blue); font-size: 14px; }
+    .ticker .txt { overflow: hidden; text-overflow: ellipsis; }
+
+    .race-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px 6px; background: var(--cream);
+    }
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #5b4bdb; color: #fff; font-size: 11px; font-weight: 800;
+      padding: 5px 8px; border-radius: 6px; white-space: nowrap;
+    }
+    .race-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .race-pills button {
+      width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
+      font-weight: 800; font-size: 13px; color: #fff;
+      background: #9aa7b8;
+    }
+    .race-pills button.active { background: var(--blue); box-shadow: 0 0 0 3px rgba(74,163,232,.28); }
+    .race-pills button.done { background: #62c36a; }
+
+    .race-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 2px 12px 8px; font-size: 13px; font-weight: 700;
+    }
+    .race-meta .dot { color: var(--coral); font-size: 11px; margin-right: 6px; font-weight: 800; }
+    .login-hkjc {
+      background: #1d355e; color: var(--yellow); border: 0; border-radius: 6px;
+      padding: 6px 10px; font-weight: 800; font-size: 12px; cursor: default;
+    }
+
+    .timeline { padding: 0 14px 6px; }
+    .timeline .labs {
+      display: flex; justify-content: space-between; font-size: 10px; color: #9aa3b0; margin-bottom: 4px;
+    }
+    .track {
+      height: 8px; border-radius: 999px;
+      background: linear-gradient(90deg, #ffe0c2, #ff9a4a 55%, #ff6b4a);
+      position: relative;
+    }
+    .track .knob {
+      position: absolute; right: 0; top: 50%; transform: translate(40%, -50%);
+      width: 16px; height: 16px; border-radius: 50%; background: var(--coral);
+      box-shadow: 0 0 0 3px #fff;
+    }
+
+    .chip-row {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap;
+    }
+    .dd {
+      background: linear-gradient(90deg, #ff8a4a, #ff6b7a);
+      color: #fff; border: 0; border-radius: 999px; padding: 7px 14px;
+      font-weight: 800; font-size: 13px; cursor: pointer;
+    }
+    .ychip {
+      width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer;
+      background: var(--yellow); color: #5a4308; font-weight: 800; font-size: 13px;
+      box-shadow: 0 1px 0 rgba(0,0,0,.08);
+    }
+    .ychip:hover { filter: brightness(1.05); }
+    .normal {
+      margin-left: auto; background: var(--blue); color: #fff; border: 0;
+      border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 13px; cursor: pointer;
+    }
+
+    .sort-row {
+      display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px; font-size: 12px;
+    }
+    .sort-row .lbl { color: #8b93a0; margin-right: 4px; }
+    .sort-row button {
+      border: 0; background: #eceff3; color: #5d6673; border-radius: 6px;
+      padding: 5px 10px; font-weight: 700; cursor: pointer;
+    }
+    .sort-row button.on { background: #d7ecfb; color: #2b6fa3; }
+    .pro {
+      margin-left: auto; background: #eef6ff; color: var(--blue-2); border: 1px solid #cfe6fb;
+      border-radius: 8px; padding: 5px 10px; font-weight: 800; font-size: 12px; cursor: default;
+    }
+
+    .horses { flex: 1; overflow: auto; background: #fff; }
+    .horse {
+      display: grid; grid-template-columns: 42px 1fr auto auto;
+      gap: 8px; align-items: center;
+      padding: 10px 12px; border-bottom: 1px solid #f0f2f5;
+      min-height: 86px;
+    }
+    .horse:hover { background: #fafbfd; }
+    .horse.pick { background: #fffdf6; }
+    .horse.top1 { box-shadow: inset 3px 0 0 var(--yellow); }
+    .no {
+      width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      color: #fff; font-weight: 800; font-size: 15px;
+    }
+    .hname { font-size: 16px; font-weight: 800; line-height: 1.2; }
+    .draw { font-size: 11px; color: #9aa3b0; font-weight: 600; margin-left: 4px; }
+    .sub { font-size: 12px; color: #6d7787; margin-top: 3px; line-height: 1.45; }
+    .tag {
+      display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 5px;
+      border-radius: 4px; margin-right: 4px;
+    }
+    .tag.front { background: #ffe3e0; color: #d4534a; }
+    .tag.mid { background: #e7f1ff; color: #3b7ab8; }
+    .tag.back { background: #eee; color: #6a7380; }
+    .tag.fuse { background: #e8fbf1; color: #1ea35a; }
+    .odds { text-align: right; font-variant-numeric: tabular-nums; min-width: 48px; }
+    .odds .big { font-size: 16px; font-weight: 800; }
+    .odds .sml { font-size: 12px; color: #8b93a0; margin-top: 2px; }
+    .wp { display: flex; flex-direction: column; gap: 4px; min-width: 92px; }
+    .wp .row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .w, .p {
+      width: 18px; height: 18px; border-radius: 4px; color: #fff; font-size: 11px;
+      font-weight: 800; display: grid; place-items: center;
+    }
+    .w { background: var(--red); }
+    .p { background: var(--green); }
+    .wp .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .wp .d { color: #9aa3b0; font-size: 11px; margin-left: auto; }
+    .thumbs { font-size: 11px; color: #b7bec8; margin-top: 4px; }
+    .thumbs .on { color: #f0a020; }
+    .mkt { color: var(--blue); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+    /* —— 右欄 —— */
+    .right {
+      flex: 1 1 auto; min-width: 0; background: #f4f6f8;
+      overflow: auto; padding: 10px 12px 24px;
+    }
+    .share-card {
+      background: #fff; border-radius: 6px; overflow: hidden;
+      border: 1px solid #d9e6f2; margin-bottom: 10px;
+    }
+    .share-head {
+      display: grid; grid-template-columns: 72px 1fr 1fr;
+      background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; text-align: center;
+    }
+    .share-head div { padding: 6px 4px; border-left: 1px solid rgba(255,255,255,.25); }
+    .share-head div:first-child { border-left: 0; background: #3b97d6; }
+    .share-row {
+      display: grid; grid-template-columns: 72px 1fr 1fr;
+      border-top: 1px solid #edf1f5; font-size: 11px; min-height: 36px; align-items: center;
+    }
+    .share-row .k { padding: 4px 6px; color: #6a7380; font-weight: 700; background: #f7fafc; }
+    .chips { display: flex; gap: 6px; padding: 4px 6px; flex-wrap: wrap; justify-content: center; }
+    .mini {
+      width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+      color: #fff; font-size: 11px; font-weight: 800;
+    }
+    .val { text-align: center; color: #4b5565; font-variant-numeric: tabular-nums; }
+
+    .mx { background: #fff; border: 1px solid #d9e6f2; border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+    .mx-title {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 10px; font-size: 13px; font-weight: 800; background: #f3f7fb; color: #3a4a5c;
+    }
+    .mx-title .exp { font-size: 12px; color: var(--blue); font-weight: 700; }
+    .gridwrap { overflow: auto; }
+    table.mx-table { border-collapse: collapse; font-size: 10px; width: 100%; font-variant-numeric: tabular-nums; }
+    table.mx-table th, table.mx-table td {
+      border: 1px solid #e6edf4; width: 28px; height: 22px; text-align: center; padding: 0;
+    }
+    table.mx-table th { background: var(--blue); color: #fff; font-weight: 800; }
+    table.mx-table th.corner { background: #dbeffc; color: var(--blue-deep); }
+    table.mx-table td.diag { background: #eef3f8; color: #7b8796; font-weight: 800; }
+    .c-hot { background: #f36b4a; color: #fff; }
+    .c-warm { background: #f0a14a; color: #fff; }
+    .c-mid { background: #3ecf8a; color: #fff; }
+    .c-cool { background: #7ec8f0; color: #16324a; }
+    .c-low { background: #eef6fc; color: #5b6b7c; }
+
+    .picks-note { font-size: 11px; color: #8a93a3; padding: 4px 2px 10px; }
+
+    .status { padding: 40px 16px; text-align: center; color: #8a93a3; }
+    .spinner {
+      width: 22px; height: 22px; border: 2px solid #e0e6ee; border-top-color: var(--blue);
+      border-radius: 50%; margin: 0 auto 10px; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .dev-banner {
+      position: fixed; top: 8px; right: 12px; z-index: 30;
+      background: rgba(29,53,94,.9); color: #ffe08a; font-size: 11px; font-weight: 700;
+      padding: 5px 10px; border-radius: 8px; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="dev-banner">開發頁 · 賽日速覽 PC 風格 v__APP_VERSION__</div>
+  <aside class="sidebar">
+    <div class="logo" title="J18">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="2" y="2" width="60" height="60" rx="12" fill="#ff7a18"/>
+        <text x="32" y="28" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" font-family="Arial Black, sans-serif">J</text>
+        <text x="32" y="50" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="Arial Black, sans-serif">18</text>
+      </svg>
+    </div>
+    <div class="avatar" aria-hidden="true">
+      <svg viewBox="0 0 64 64"><circle cx="32" cy="24" r="12" fill="#e8b48a"/><ellipse cx="32" cy="52" rx="18" ry="14" fill="#6db3e8"/><circle cx="32" cy="24" r="12" fill="#f3c7a0"/></svg>
+    </div>
+    <a class="login-link" href="#" onclick="return false;">登錄</a>
+    <div class="dev-switch"><span class="on">電腦</span><span>手機</span></div>
+    <nav class="nav">
+      <a href="#" onclick="return false;"><span class="ico">⌂</span>首頁</a>
+      <a class="active" href="#"><span class="ico">▣</span>賽日速覽</a>
+      <a href="#" onclick="return false;"><span class="ico">▤</span>倍率/指數</a>
+      <a href="#" onclick="return false;"><span class="ico">☺</span>名家</a>
+      <a href="#" onclick="return false;"><span class="ico">🏆</span>賽果</a>
+      <a href="#" onclick="return false;"><span class="ico">♞</span>騎練</a>
+      <a href="#" onclick="return false;"><span class="ico">📅</span>賽期表</a>
+      <a href="#" onclick="return false;"><span class="ico">↗</span>預測跑法</a>
+      <a href="#" onclick="return false;"><span class="ico">🐴</span>馬匹詳情</a>
+      <a href="#" onclick="return false;"><span class="ico">💧</span>水位詳情</a>
+      <a href="#" onclick="return false;"><span class="badge">1</span><span class="ico">🔔</span>通知</a>
+      <a href="#" onclick="return false;"><span class="ico">?</span>使用指南</a>
+    </nav>
+  </aside>
+
+  <div class="workspace">
+    <section class="center">
+      <div class="ticker"><span class="horn">📢</span><span class="txt" id="ticker">載入賽日資料…</span></div>
+      <div class="race-bar">
+        <span class="live-pill">賽日速覽</span>
+        <div class="race-pills" id="racePills"></div>
+      </div>
+      <div class="race-meta">
+        <div><span class="dot" id="statusDot">● 資料</span><span id="raceMetaLine">—</span></div>
+        <button type="button" class="login-hkjc" disabled>綜合分析</button>
+      </div>
+      <div class="timeline">
+        <div class="labs"><span>開始</span><span>30'</span><span>15'</span><span>10'</span><span>5'</span><span>4'</span><span>3'</span><span>2'</span><span>1'</span><span>0'</span></div>
+        <div class="track"><div class="knob"></div></div>
+      </div>
+      <div class="chip-row">
+        <button type="button" class="dd" id="modeBtn">綜合走勢 ▾</button>
+        <div id="hotChips"></div>
+        <button type="button" class="normal" id="resetSort">正常</button>
+      </div>
+      <div class="sort-row">
+        <span class="lbl">排序方式</span>
+        <button type="button" data-sort="no_asc">馬號</button>
+        <button type="button" class="on" data-sort="fused_desc">綜合</button>
+        <button type="button" data-sort="model_desc">模型</button>
+        <button type="button" data-sort="ai_desc">AI</button>
+        <span class="pro">推介版</span>
+      </div>
+      <div class="horses" id="horseList">
+        <div class="status"><div class="spinner"></div>正在載入…</div>
+      </div>
+    </section>
+
+    <aside class="right" id="rightPane"></aside>
+  </div>
+
+  <script>
+  (function () {
+    const params = new URLSearchParams(location.search);
+    const API_BASE = (params.get("api") || "").replace(/\/$/, "") || "";
+    const FORCE_DEMO = params.get("demo") === "1";
+
+    const NO_COLORS = {
+      1: "#e31c3d", 2: "#222", 3: "#1e5aa8", 4: "#f5c400",
+      5: "#1b8f3a", 6: "#6b3aa0", 7: "#0aa3a3", 8: "#8e8e8e",
+      9: "#c4a035", 10: "#4d7cc8", 11: "#2c3a6b", 12: "#148a8a",
+      13: "#cfcfcf", 14: "#e85d04"
+    };
+    const NO_FG = { 4: "#222", 13: "#333" };
+
+    let races = [];
+    let currentId = null;
+    let currentSort = "fused_desc";
+    let currentData = null;
+    let demoMode = false;
+
+    function api(path) {
+      return fetch(API_BASE + path, { credentials: "omit" }).then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || data.detail || ("HTTP " + r.status));
+        return data;
+      });
+    }
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function num(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+    function fmt(v, d) {
+      const n = num(v);
+      if (n == null) return "—";
+      return n.toFixed(d == null ? 0 : d);
+    }
+    function color(no) { return NO_COLORS[Number(no)] || "#6a7380"; }
+    function fg(no) { return NO_FG[Number(no)] || "#fff"; }
+    function noHtml(no, cls) {
+      cls = cls || "no";
+      return '<span class="' + cls + '" style="background:' + color(no) + ';color:' + fg(no) + '">' + esc(no) + "</span>";
+    }
+
+    const DEMO = {
+      meeting: { racing_date: "2026-09-16", course: "HV", course_label: "跑馬地", n_races: 3 },
+      races: [
+        { race_id: "demo-1", race_num: 1 },
+        { race_id: "demo-2", race_num: 2 },
+        { race_id: "demo-3", race_num: 3 }
+      ],
+      raceView: {
+        ok: true,
+        race: {
+          race_num: 1, race_name: "谷草示範", racing_date: "2026-09-16",
+          course: "HV", course_label: "跑馬地", track: "草地", distance_m: 1000,
+          class_display: "第五班", n_runners: 8, expected_pace: "快"
+        },
+        meta: { match_rate: 0.92, avg_model_coverage: 0.88, provisional: false, expected_pace: "快" },
+        picks: {
+          fused: {
+            available: true, alpha: 0.35,
+            win: [{ horse_no: 11, horse_name: "金風", fused_share_pct: 22 }],
+            place: [
+              { horse_no: 11, horse_name: "金風", fused_share_pct: 22 },
+              { horse_no: 9, horse_name: "銀月", fused_share_pct: 18 },
+              { horse_no: 4, horse_name: "青雲", fused_share_pct: 14 }
+            ]
+          },
+          model: {
+            win: [{ horse_no: 11, horse_name: "金風", model_win_prob_pct: 21.4 }],
+            place: [
+              { horse_no: 11, horse_name: "金風", model_win_prob_pct: 21.4 },
+              { horse_no: 7, horse_name: "翠影", model_win_prob_pct: 16.8 }
+            ]
+          },
+          ai: {
+            available: true,
+            win: [{ horse_no: 11, horse_name: "金風", ai_share_pct: 24 }],
+            place: [
+              { horse_no: 11, horse_name: "金風", ai_share_pct: 24 },
+              { horse_no: 9, horse_name: "銀月", ai_share_pct: 19 },
+              { horse_no: 8, horse_name: "晚霞", ai_share_pct: 13 }
+            ]
+          }
+        },
+        runners: [
+          { horse_no: 11, horse_name: "金風", draw: 3, jockey: "梁", trainer: "巫", handicap_weight: 123, horse_weight: 1111, pred_rank: 1, model_win_prob_pct: 21.4, fused_share_pct: 22, ai_share_pct: 24, ai_summary: "步速對路，近績穩定。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.9,0.7,0.8,0.4,0.85,0.9,0.7,0.6] } },
+          { horse_no: 9, horse_name: "銀月", draw: 4, jockey: "宏", trainer: "韋", handicap_weight: 124, horse_weight: 1119, pred_rank: 2, model_win_prob_pct: 15.6, fused_share_pct: 18, ai_share_pct: 19, ai_summary: "前領走勢，班次合適。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.6,0.8,0.7,0.5,0.7,0.8,0.75,0.5] } },
+          { horse_no: 4, horse_name: "青雲", draw: 1, jockey: "周", trainer: "文", handicap_weight: 130, horse_weight: 1193, pred_rank: 3, model_win_prob_pct: 12.2, fused_share_pct: 14, ai_share_pct: 11, ai_summary: "內檔有利。", is_fused_pick: true, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.5,0.6,0.55,0.95,0.6,0.5,0.45,0.4] } },
+          { horse_no: 7, horse_name: "翠影", draw: 10, jockey: "田", trainer: "石", handicap_weight: 127, horse_weight: 1068, pred_rank: 4, model_win_prob_pct: 16.8, fused_share_pct: 12, ai_share_pct: 9, ai_summary: "模型看好，AI 較保守。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.8,0.4,0.5,0.2,0.5,0.4,0.85,0.7] } },
+          { horse_no: 8, horse_name: "晚霞", draw: 6, jockey: "艾", trainer: "葉", handicap_weight: 125, horse_weight: 1024, pred_rank: 5, model_win_prob_pct: 8.1, fused_share_pct: 10, ai_share_pct: 13, ai_summary: "後上馬，看流量。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.4,0.5,0.45,0.55,0.4,0.3,0.5,0.35] } },
+          { horse_no: 12, horse_name: "洛河", draw: 7, jockey: "金", trainer: "丁", handicap_weight: 122, horse_weight: 1170, pred_rank: 6, model_win_prob_pct: 9.4, fused_share_pct: 9, ai_share_pct: 8, ai_summary: "", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.3,0.7,0.4,0.4,0.35,0.5,0.4,0.3] } },
+          { horse_no: 6, horse_name: "蘭誌", draw: 2, jockey: "希", trainer: "黎", handicap_weight: 128, horse_weight: 1212, pred_rank: 7, model_win_prob_pct: 7.7, fused_share_pct: 8, ai_share_pct: 9, ai_summary: "前領，近績一般。", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.55,0.5,0.5,0.8,0.45,0.7,0.4,0.4] } },
+          { horse_no: 3, horse_name: "雙子美麗", draw: 5, jockey: "鍾", trainer: "東", handicap_weight: 128, horse_weight: 1151, pred_rank: 8, model_win_prob_pct: 8.8, fused_share_pct: 7, ai_share_pct: 7, ai_summary: "", is_fused_pick: false, radar: { labels: ["騎師","練馬師","騎練","檔位","近績","步速","速度","速勢"], values: [0.45,0.4,0.4,0.6,0.5,0.55,0.5,0.45] } }
+        ]
+      }
+    };
+
+    function sortRunners(list, key) {
+      const arr = list.slice();
+      const byNo = (a, b) => (num(a.horse_no) || 99) - (num(b.horse_no) || 99);
+      const nv = (x, k) => num(x[k]) == null ? -1 : num(x[k]);
+      if (key === "model_desc") return arr.sort((a, b) => nv(b, "model_win_prob_pct") - nv(a, "model_win_prob_pct") || byNo(a, b));
+      if (key === "ai_desc") return arr.sort((a, b) => nv(b, "ai_share_pct") - nv(a, "ai_share_pct") || byNo(a, b));
+      if (key === "no_asc") return arr.sort(byNo);
+      if (key === "rank_asc") return arr.sort((a, b) => (num(a.pred_rank) || 99) - (num(b.pred_rank) || 99) || byNo(a, b));
+      return arr.sort((a, b) => nv(b, "fused_share_pct") - nv(a, "fused_share_pct") || byNo(a, b));
+    }
+
+    function paceTag(h, i) {
+      const r = num(h.pred_rank) || 99;
+      if (r <= 2) return '<span class="tag front">熱門</span>';
+      if (String(h.ai_summary || "").indexOf("後上") >= 0) return '<span class="tag back">後上馬</span>';
+      if (String(h.ai_summary || "").indexOf("前領") >= 0) return '<span class="tag front">前領馬</span>';
+      if (r <= 5) return '<span class="tag mid">中置馬</span>';
+      return '<span class="tag back">冷門</span>';
+    }
+
+    function thumbs(h) {
+      const s = num(h.ai_share_pct) || 0;
+      const n = s >= 18 ? 3 : s >= 12 ? 2 : s >= 8 ? 1 : 0;
+      let html = "馬評 ";
+      for (let i = 0; i < 3; i++) html += '<span class="' + (i < n ? "on" : "") + '">👍</span>';
+      return html;
+    }
+
+    function horseRow(h) {
+      const rank = num(h.pred_rank) || 0;
+      const cls = rank === 1 ? "top1" : (h.is_fused_pick ? "pick" : "");
+      const fuse = fmt(h.fused_share_pct, 0);
+      const model = fmt(h.model_win_prob_pct, 1);
+      const ai = fmt(h.ai_share_pct, 0);
+      const mkt = rank === 1 ? '<div class="mkt">綜合首選</div>' : (h.is_fused_pick ? '<div class="mkt">推介列</div>' : "");
+      return (
+        '<article class="horse ' + cls + '">' +
+          noHtml(h.horse_no) +
+          '<div>' +
+            '<div class="hname">' + esc(h.horse_name) + ' <span class="draw">(' + esc(h.draw ?? "-") + ")</span></div>" +
+            '<div class="sub">' + esc(h.jockey || "-") + "　" + esc(h.handicap_weight ?? "-") + "磅<br/>" +
+              esc(h.trainer || "-") + "　" + esc(h.horse_weight ?? "-") + "</div>" +
+            '<div style="margin-top:4px">' + paceTag(h) +
+              (h.is_fused_pick ? '<span class="tag fuse">綜合推介</span>' : "") +
+            "</div>" +
+          "</div>" +
+          '<div class="odds"><div class="big">' + esc(fuse) + '%</div><div class="sml">' + esc(model) + "%</div></div>" +
+          '<div class="wp">' +
+            '<div class="row"><span class="w">W</span><span class="n">' + esc(model) + '</span><span class="d">' + esc(fuse) + "</span></div>" +
+            '<div class="row"><span class="p">P</span><span class="n">' + esc(ai) + '</span><span class="d">AI</span></div>' +
+            '<div class="thumbs">' + thumbs(h) + "</div>" + mkt +
+          "</div>" +
+        "</article>"
+      );
+    }
+
+    function heatClass(v, max) {
+      if (v == null || !(max > 0)) return "";
+      const t = v / max;
+      if (t >= 0.82) return "c-hot";
+      if (t >= 0.62) return "c-warm";
+      if (t >= 0.42) return "c-mid";
+      if (t >= 0.22) return "c-cool";
+      return "c-low";
+    }
+
+    function matrixHtml(title, runners, key) {
+      const nos = runners.map((h) => h.horse_no).filter((n) => n != null).sort((a, b) => a - b);
+      const map = {};
+      runners.forEach((h) => { map[h.horse_no] = num(h[key]) || 0; });
+      let max = 0;
+      const scores = {};
+      nos.forEach((a) => {
+        nos.forEach((b) => {
+          if (a >= b) return;
+          const s = (map[a] * map[b]) / 10;
+          scores[a + "-" + b] = s;
+          if (s > max) max = s;
+        });
+      });
+      let head = '<th class="corner"></th>' + nos.map((n) => "<th>" + n + "</th>").join("");
+      let body = nos.map((row) => {
+        const cells = nos.map((col) => {
+          if (row === col) return '<td class="diag">' + row + "</td>";
+          if (row > col) return "<td></td>";
+          const s = scores[row + "-" + col] || 0;
+          return '<td class="' + heatClass(s, max) + '">' + (s ? s.toFixed(0) : "") + "</td>";
+        }).join("");
+        return "<tr>" + cells + "</tr>";
+      }).join("");
+      return (
+        '<section class="mx"><div class="mx-title">' + esc(title) + '<span class="exp">展開 ▾</span></div>' +
+        '<div class="gridwrap"><table class="mx-table"><thead><tr>' + head + "</tr></thead><tbody>" + body +
+        "</tbody></table></div></section>"
+      );
+    }
+
+    function shareTable(runners, picks) {
+      const fused = sortRunners(runners, "fused_desc").slice(0, 6);
+      const model = sortRunners(runners, "model_desc").slice(0, 6);
+      function chipLine(list, key, digits) {
+        return '<div class="chips">' + list.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div>";
+      }
+      function valLine(list, key, digits) {
+        return '<div class="chips">' + list.map((h) => '<span class="val">' + esc(fmt(h[key], digits)) + "</span>").join("") + "</div>";
+      }
+      const fuseWin = ((picks.fused || {}).win || []).map((x) => x.horse_no);
+      const aiWin = ((picks.ai || {}).win || []).map((x) => x.horse_no);
+      const overlap = fused.map((h) => {
+        let n = 0;
+        if (h.is_fused_pick) n += 1;
+        if ((num(h.model_win_prob_pct) || 0) >= (num(model[0] && model[0].model_win_prob_pct) || 0) * 0.7) n += 1;
+        if ((num(h.ai_share_pct) || 0) >= 12) n += 1;
+        return n;
+      });
+      return (
+        '<section class="share-card">' +
+          '<div class="share-head"><div>活躍指數</div><div>綜合</div><div>模型 / AI</div></div>' +
+          '<div class="share-row"><div class="k">份額</div>' + valLine(fused, "fused_share_pct", 0) + valLine(model, "model_win_prob_pct", 0) + "</div>" +
+          '<div class="share-row"><div class="k">馬號</div>' + chipLine(fused) + chipLine(model) + "</div>" +
+          '<div class="share-row"><div class="k">名家推介</div>' +
+            '<div class="chips">' + fused.map((h) => noHtml(h.horse_no, "mini")).join("") + "</div>" +
+            '<div class="chips">' + (picks.ai && picks.ai.place || []).slice(0, 6).map((h) => noHtml(h.horse_no, "mini")).join("") + "</div></div>" +
+          '<div class="share-row"><div class="k">重疊軌數</div>' +
+            '<div class="chips">' + overlap.map((n) => '<span class="val">' + n + "</span>").join("") + "</div>" +
+            '<div class="chips">' + fuseWin.concat(aiWin).slice(0, 6).map((n) => noHtml(n, "mini")).join("") + "</div></div>" +
+        "</section>"
+      );
+    }
+
+    function forecastTable(runners) {
+      const ranked = sortRunners(runners, "rank_asc").slice(0, 8);
+      const nos = runners.map((h) => h.horse_no).filter(Boolean).sort((a, b) => a - b);
+      const byNo = {};
+      runners.forEach((h) => { byNo[h.horse_no] = h; });
+      let max = 1;
+      ranked.forEach((h) => { max = Math.max(max, num(h.fused_share_pct) || 0); });
+      let head = "<th>第→</th>" + nos.map((n) => "<th>" + n + "</th>").join("");
+      let body = ranked.map((rowH, i) => {
+        const cells = nos.map((n) => {
+          const h = byNo[n];
+          if (!h) return "<td></td>";
+          const same = Number(h.pred_rank) === i + 1;
+          const v = num(h.fused_share_pct) || 0;
+          if (!same && v < max * 0.45) return "<td></td>";
+          return '<td class="' + heatClass(v, max) + '">' + v.toFixed(0) + "</td>";
+        }).join("");
+        return "<tr><th>" + (i + 1) + "</th>" + cells + "</tr>";
+      }).join("");
+      return (
+        '<section class="mx"><div class="mx-title">名次對照（綜合份額）<span class="exp">展開 ▾</span></div>' +
+        '<div class="gridwrap"><table class="mx-table"><thead><tr>' + head + "</tr></thead><tbody>" + body +
+        "</tbody></table></div></section>"
+      );
+    }
+
+    function renderPills() {
+      document.getElementById("racePills").innerHTML = races.map((r) => {
+        const active = String(r.race_id) === String(currentId) ? " active" : "";
+        return '<button type="button" class="' + active.trim() + '" data-id="' + esc(r.race_id) + '">' + esc(r.race_num) + "</button>";
+      }).join("");
+      document.getElementById("racePills").querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => selectRace(btn.getAttribute("data-id")));
+      });
+    }
+
+    function renderHotChips(picks) {
+      const list = ((picks.fused || {}).place || []).slice(0, 6);
+      document.getElementById("hotChips").innerHTML = list.map((h) =>
+        '<button type="button" class="ychip" data-no="' + esc(h.horse_no) + '">' + esc(h.horse_no) + "</button>"
+      ).join("");
+      document.getElementById("hotChips").querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const no = btn.getAttribute("data-no");
+          document.querySelectorAll(".horse").forEach((row) => {
+            const n = row.querySelector(".no");
+            if (n && n.textContent === String(no)) row.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+        });
+      });
+    }
+
+    function renderRace(data) {
+      currentData = data;
+      const race = data.race || {};
+      const meta = data.meta || {};
+      const picks = data.picks || {};
+      const runners = (data.runners || []).slice();
+      const date = String(race.racing_date || "");
+      const md = date.length >= 10 ? (date.slice(8, 10) + "/" + date.slice(5, 7)) : date;
+      document.getElementById("raceMetaLine").textContent =
+        md + "　" + (race.course_label || race.course || "") + "　" +
+        (race.track || "") + "　" + (race.distance_m || "-") + "　" +
+        (race.class_display || "") + "　" + (meta.expected_pace || race.expected_pace || "");
+      document.getElementById("statusDot").textContent = meta.provisional ? "● 暫定" : "● 已就緒";
+      renderHotChips(picks);
+
+      function paintList() {
+        const sorted = sortRunners(runners, currentSort);
+        document.getElementById("horseList").innerHTML = sorted.map(horseRow).join("");
+      }
+      paintList();
+
+      document.getElementById("rightPane").innerHTML =
+        shareTable(runners, picks) +
+        matrixHtml("推介指數（綜合份額交叉）", runners, "fused_share_pct") +
+        matrixHtml("模型指數（勝率交叉）", runners, "model_win_prob_pct") +
+        forecastTable(runners) +
+        '<div class="picks-note">右欄矩陣為賽日速覽分數視覺化（非投注賠率）。開發頁不改動原有 /embed/raceday。</div>';
+    }
+
+    function selectRace(raceId) {
+      currentId = raceId;
+      renderPills();
+      document.getElementById("horseList").innerHTML = '<div class="status"><div class="spinner"></div>計算本場…</div>';
+      if (demoMode || String(raceId).indexOf("demo-") === 0) {
+        const view = JSON.parse(JSON.stringify(DEMO.raceView));
+        const n = Number(String(raceId).split("-")[1] || 1);
+        view.race.race_num = n;
+        view.race.race_name = "示範第" + n + "場";
+        renderRace(view);
+        return;
+      }
+      api("/embed/api/races/" + encodeURIComponent(raceId))
+        .then(renderRace)
+        .catch((err) => {
+          document.getElementById("horseList").innerHTML =
+            '<div class="status">載入失敗：' + esc(err.message) + "</div>";
+        });
+    }
+
+    function applyMeeting(m, raceList, isDemo) {
+      demoMode = !!isDemo;
+      races = raceList || [];
+      const label = m
+        ? ((m.racing_date || "") + "　" + (m.course_label || m.course || "") + "　共 " + (m.n_races || races.length) + " 場")
+        : "尚無賽日排位";
+      document.getElementById("ticker").textContent =
+        (isDemo ? "【示範資料】" : "") +
+        "賽日速覽 PC 風格頁　" + label +
+        "　（原頁 /embed/raceday 不受影響）";
+      if (!races.length) {
+        document.getElementById("horseList").innerHTML = '<div class="status">暫無即將舉行的賽事資料。</div>';
+        return;
+      }
+      currentId = String(races[0].race_id);
+      const qRace = params.get("race");
+      if (qRace && races.some((r) => String(r.race_id) === String(qRace))) currentId = String(qRace);
+      renderPills();
+      selectRace(currentId);
+    }
+
+    document.querySelectorAll(".sort-row button[data-sort]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentSort = btn.getAttribute("data-sort");
+        document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => b.classList.remove("on"));
+        btn.classList.add("on");
+        if (currentData) renderRace(currentData);
+      });
+    });
+    document.getElementById("resetSort").addEventListener("click", () => {
+      currentSort = "no_asc";
+      document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-sort") === "no_asc");
+      });
+      if (currentData) renderRace(currentData);
+    });
+    document.getElementById("modeBtn").addEventListener("click", () => {
+      currentSort = "fused_desc";
+      document.querySelectorAll(".sort-row button[data-sort]").forEach((b) => {
+        b.classList.toggle("on", b.getAttribute("data-sort") === "fused_desc");
+      });
+      if (currentData) renderRace(currentData);
+    });
+
+    function boot() {
+      if (FORCE_DEMO) {
+        applyMeeting(DEMO.meeting, DEMO.races, true);
+        return;
+      }
+      api("/embed/api/default")
+        .then((data) => {
+          const m = data.meeting;
+          const list = data.races || [];
+          if (!m || !list.length) {
+            applyMeeting(DEMO.meeting, DEMO.races, true);
+            return;
+          }
+          applyMeeting(m, list, false);
+        })
+        .catch(() => applyMeeting(DEMO.meeting, DEMO.races, true));
+    }
+    boot();
+  })();
+  </script>
+</body>
+</html>

@@ -4,6 +4,7 @@ J18AI Plus+ 入口：登入關卡 + 依角色導航。
 
 公開嵌入（無需登入；勿用 Streamlit 保留參數 embed=）：
   /?view=raceday  → 電腦版賽日速覽（j18.hk/pc 右手邊 iframe）
+  /?view=raceday_pc → 開發用：整頁 pc.j18.hk 風格賽日速覽（不取代上者）
   相容：/?j18=raceday 、/?page=raceday
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 import streamlit as st
 
-from app_version import get_version_display
+from app_version import get_version, get_version_display
 from auth_utils import (
     ROLE_ADMIN,
     is_logged_in,
@@ -36,6 +37,7 @@ st.set_page_config(
 )
 
 _PUBLIC_RACEDAY_VALUES = frozenset({"raceday", "raceday_embed", "1", "true", "yes"})
+_PUBLIC_RACEDAY_PC_VALUES = frozenset({"raceday_pc", "raceday-pc"})
 
 
 def _is_raceday_public_embed() -> bool:
@@ -69,6 +71,58 @@ def _is_raceday_public_embed() -> bool:
             return True
     return False
 
+
+def _query_flag_in(values: frozenset) -> bool:
+    candidates = []
+    try:
+        for key in ("view", "j18", "page"):
+            candidates.append(st.query_params.get(key, ""))
+            try:
+                candidates.extend(st.query_params.get_all(key) or [])
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        url = getattr(st.context, "url", None) or ""
+        if url:
+            qs = parse_qs(urlparse(str(url)).query)
+            for key in ("view", "j18", "page"):
+                candidates.extend(qs.get(key) or [])
+    except Exception:
+        pass
+    for raw in candidates:
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else ""
+        if str(raw).strip().lower() in values:
+            return True
+    return False
+
+
+def _is_raceday_pc_preview() -> bool:
+    """獨立 PC 風格開發頁（不走原有 embed）。"""
+    return _query_flag_in(_PUBLIC_RACEDAY_PC_VALUES)
+
+
+if _is_raceday_pc_preview():
+    import streamlit.components.v1 as components
+
+    _pc_html = (_ROOT / "static" / "raceday_pc.html").read_text(encoding="utf-8")
+    _pc_html = _pc_html.replace("__APP_VERSION__", get_version())
+    st.markdown(
+        """
+<style>
+#MainMenu, header, footer,
+[data-testid="stToolbar"], [data-testid="stHeader"], [data-testid="stSidebar"],
+section[data-testid="stSidebar"] { display: none !important; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
+iframe { border: 0 !important; }
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+    components.html(_pc_html, height=1100, scrolling=True)
+    st.stop()
 
 if _is_raceday_public_embed():
     # 無需登入：專為 https://j18.hk/pc 右手邊嵌入

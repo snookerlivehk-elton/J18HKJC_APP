@@ -3,6 +3,7 @@
 
 路由：
   GET /embed/raceday          → 電腦版 HTML（專為 j18.hk/pc 右手邊 iframe）
+  GET /embed/raceday-pc       → 開發用：整頁複製 pc.j18.hk 排版的賽日速覽（不取代上者）
   GET /embed/api/health
   GET /embed/api/meetings
   GET /embed/api/races/{id}
@@ -31,6 +32,7 @@ from raceday_embed_payload import (
 
 _ROOT = Path(__file__).resolve().parent
 _HTML_PATH = _ROOT / "static" / "raceday_embed.html"
+_PC_HTML_PATH = _ROOT / "static" / "raceday_pc.html"
 
 # 允許被 j18.hk PC 頁 iframe 嵌入
 _FRAME_ANCESTORS = os.getenv(
@@ -53,12 +55,24 @@ def _read_html() -> str:
     return "<!DOCTYPE html><html><body><p>raceday_embed.html missing</p></body></html>"
 
 
+def _read_pc_html() -> str:
+    if _PC_HTML_PATH.is_file():
+        return _PC_HTML_PATH.read_text(encoding="utf-8")
+    return "<!DOCTYPE html><html><body><p>raceday_pc.html missing</p></body></html>"
+
+
 def mount_raceday_embed(app: FastAPI) -> None:
     """把公開嵌入路由掛到既有 FastAPI app。"""
 
     @app.get("/embed/raceday", response_class=HTMLResponse, include_in_schema=False)
     def embed_raceday_page():
         html = _read_html().replace("__APP_VERSION__", get_version())
+        return HTMLResponse(content=html, headers=_embed_headers())
+
+    @app.get("/embed/raceday-pc", response_class=HTMLResponse, include_in_schema=False)
+    def embed_raceday_pc_page():
+        """獨立開發頁：pc.j18.hk 風格整頁排版，不改動 /embed/raceday。"""
+        html = _read_pc_html().replace("__APP_VERSION__", get_version())
         return HTMLResponse(content=html, headers=_embed_headers())
 
     @app.get("/embed/api/health")
