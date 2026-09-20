@@ -1,16 +1,20 @@
 """
-api_jjjc export 共用工具（speedguide／formguide／text-reports／racecard／results）。
+api_jjjc export 共用工具（speedguide／formguide／text-reports／racecard／results／sectionals／catalog）。
 
 契約語意（api_jjjc → J18 正式回覆）：
   - waiting：HTTP 200 且空列表／空字／placeholder／status∈unpublished|suspicious|date_mismatch|partial|empty
   - failed：5xx、連線失敗、status=unavailable
   - 內容更新：看 content_updated_at（勿用 generated_at）
   - Join：race_id（YYYYMMDD+ST|HV+兩位場次）+ horse_no
+  - meeting_id：YYYY-MM-DD_ST|HV（例 2026-09-16_HV）
+  - venue_code：只得大階 ST|HV
+  - 禁止用 horse_name 做主鍵；排位 DB 可能叫 runner_no＝horse_no
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional, Set
 
 import httpx
@@ -25,6 +29,17 @@ WAITING_STATUSES: Set[str] = {
     "obtained",  # obtained 但 races=[] 仍可能是空殼；由呼叫端再判空
 }
 FAILED_STATUSES: Set[str] = {"unavailable"}
+
+VENUE_ALIASES = {
+    "ST": "ST",
+    "HV": "HV",
+    "SHA TIN": "ST",
+    "SHATIN": "ST",
+    "沙田": "ST",
+    "HAPPY VALLEY": "HV",
+    "HAPPYVALLEY": "HV",
+    "跑馬地": "HV",
+}
 
 
 def api_base(explicit: Optional[str] = None) -> str:
@@ -41,6 +56,36 @@ def normalize_date(d: str) -> str:
     if len(s) == 8 and s.isdigit():
         return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
     return s[:10]
+
+
+def normalize_venue(v: Any) -> Optional[str]:
+    """只回 ST|HV；禁止用 Sha Tin／沙田／st。"""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    key = s.upper().replace("_", " ")
+    if key in ("ST", "HV"):
+        return key
+    mapped = VENUE_ALIASES.get(key) or VENUE_ALIASES.get(s)
+    if mapped:
+        return mapped
+    m = re.search(r"(ST|HV)", key)
+    return m.group(1) if m else None
+
+
+def meeting_id(race_date: str, venue: str) -> str:
+    """穩定會議鍵：YYYY-MM-DD_ST|HV。"""
+    d = normalize_date(race_date)
+    v = normalize_venue(venue) or str(venue or "").strip().upper()
+    return f"{d}_{v}"
+
+
+def make_race_id(race_date: str, venue: str, race_no: int) -> str:
+    d = normalize_date(race_date).replace("-", "")[:8]
+    v = normalize_venue(venue) or "ST"
+    return f"{d}{v}{int(race_no):02d}"
 
 
 def safe_int(v: Any) -> Optional[int]:
@@ -64,6 +109,18 @@ def safe_float(v: Any) -> Optional[float]:
         return None
 
 
+def horse_no_of(row: Dict[str, Any]) -> Optional[int]:
+    """
+    Join 用檔號：export 叫 horse_no；排位 DB 可能叫 runner_no。
+    禁止用 horse_name。
+    """
+    for k in ("horse_no", "runner_no", "horseNo", "runnerNo", "no"):
+        n = safe_int(row.get(k))
+        if n is not None:
+            return n
+    return None
+
+
 def load_payload_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
@@ -80,7 +137,6 @@ def classify_payload_status(payload: Dict[str, Any], *, empty: bool) -> str:
     if empty:
         return "waiting"
     if st in WAITING_STATUSES - {"obtained"}:
-        # partial／empty 等：若已有列仍可 upsert，但標 waiting 讓 tick 再探
         if st in ("empty", "unpublished"):
             return "waiting"
     return "ready"
@@ -98,7 +154,7 @@ def fetch_export_get(
 ) -> Dict[str, Any]:
     """
     GET {base}{path}?date=&venue=[&raceNo=…]
-    404／5xx／連線錯誤 → 拋 httpx.HTTPStatusError 或 httpx.RequestError（呼叫端視為 failed→備援）。
+    404／5xx／連線錯誤 → 拋 httpx.HTTPStatusError 或 httpx.RequestError。
     """
     base = api_base(base_url)
     if not base:
@@ -106,9 +162,12 @@ def fetch_export_get(
             "未設定 JJJC_API_BASE（或 JJJC_RESULTS_API_BASE）。"
             "或改用 --from-file 讀取本機 export JSON。"
         )
+    v = normalize_venue(venue)
+    if not v:
+        raise ValueError(f"venue 必須係 ST|HV，收到：{venue!r}")
     params: Dict[str, Any] = {
         "date": normalize_date(race_date),
-        "venue": str(venue).upper(),
+        "venue": v,
     }
     if race_no is not None:
         params["raceNo"] = int(race_no)
@@ -130,6 +189,23 @@ def fetch_export_get(
     return payload
 
 
+def fetch_catalog(
+    base_url: Optional[str] = None, timeout: float = 30.0
+) -> Dict[str, Any]:
+    """GET /api/export/catalog → jjjc.downstream_catalog.v1"""
+    base = api_base(base_url)
+    if not base:
+        raise ValueError("未設定 JJJC_API_BASE")
+    url = f"{base}/api/export/catalog"
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        r = client.get(url)
+        r.raise_for_status()
+        payload = r.json()
+    if not isinstance(payload, dict):
+        raise ValueError("catalog 回應非 JSON object")
+    return payload
+
+
 def text_nonempty(v: Any) -> bool:
     return bool(str(v or "").strip())
 
@@ -139,6 +215,11 @@ def is_placeholder(runner: Dict[str, Any]) -> bool:
     if flag in (True, 1, "1", "true", "True", "yes", "YES"):
         return True
     return False
+
+
+def energy_is_placeholder(row: Dict[str, Any]) -> bool:
+    flag = row.get("energy_is_placeholder")
+    return flag in (True, 1, "1", "true", "True", "yes", "YES")
 
 
 def effective_text(runner: Dict[str, Any], *keys: str) -> Optional[str]:
