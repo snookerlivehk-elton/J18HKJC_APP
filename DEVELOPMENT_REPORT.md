@@ -73,6 +73,11 @@ UI 不應再做成「純因子實驗室」；主路徑是 **排位 → 查表 �
 RESULTS「已拿到」＝有 `finish_order_num`；步速可算＝有 `runner_sections.position_raw`。  
 舊資料回填：`python sectionals_store.py --backfill`；稽核：`--audit`。
 
+**營運 UI（邊日邊樣唔齊／因子血緣）**  
+- **數據營運中心**：齊備矩陣（名次／分段／評述）＋批次「重同步賽果＋寫分段」／「只回填分段」＋單馬因子原料血緣  
+- **賽日作戰室**：RESULTS「重跑賽果＋回填分段」；③b 本賽日齊備度／正確性抽樣／血緣查詢  
+- CLI：`python -c "from data_audit import window_inventory; …"` 或 `sectionals_store.py --explain-pace 馬名`  
+
 推論加權見 `config.py`：`WEIGHT_*`（含 `WEIGHT_RECENT_FORM`、`WEIGHT_PACE`、`WEIGHT_SPEED_FIGURE`、Speed Guide 三項）。
 
 ### 1.4 關鍵檔案地圖

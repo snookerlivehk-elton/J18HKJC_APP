@@ -31,7 +31,7 @@ from ui_theme import inject_admin_css, page_header
 inject_admin_css()
 page_header(
     "數據營運中心",
-    "多日整備總覽 · 遺留佇列 · 介入報告（tick 主管道；作戰室單日介入）",
+    "多日整備總覽 · 原料齊備矩陣 · 遺留佇列 · 介入報告（tick 主管道；作戰室單日介入）",
 )
 
 pipe = MeetingPipeline()
@@ -210,6 +210,155 @@ else:
         use_container_width=True,
         hide_index=True,
     )
+
+# —— B2. 名次／分段／評述齊備矩陣（可對 DB）——
+st.subheader("名次／分段／評述齊備矩陣")
+st.caption(
+    "快照／結算只係「答案」；呢度睇原料有冇入庫。"
+    "分段＝`runner_sections`；名次＝`runners.finish_order_num`；"
+    "評述＝`text_reports`。覆蓋 <80% 會標 partial／列缺口。"
+)
+from data_audit import (
+    factor_lineage,
+    sectional_correctness_sample,
+    window_inventory,
+)
+
+inv_key = ("ops_inv", tuple(meetings[:24]))
+if st.button("刷新齊備矩陣", key="ops_inv_refresh"):
+    st.session_state.pop("ops_inventory_df", None)
+
+if "ops_inventory_df" not in st.session_state or st.session_state.get("ops_inv_key") != inv_key:
+    with st.spinner("掃描名次／分段／評述覆蓋…"):
+        st.session_state["ops_inventory_df"] = window_inventory(pipe.engine, meetings[:24])
+        st.session_state["ops_inv_key"] = inv_key
+
+df_inv = st.session_state.get("ops_inventory_df")
+if df_inv is None or df_inv.empty:
+    st.info("視窗內無 meeting 可稽核。")
+else:
+    st.dataframe(df_inv, use_container_width=True, hide_index=True)
+    bad = df_inv[df_inv["狀態"].isin(["partial", "missing", "error"])]
+    if not bad.empty:
+        st.warning(f"{len(bad)} 個 meeting 原料唔齊／有錯 — 用下面批次動作補。")
+
+    c_rs1, c_rs2, c_rs3 = st.columns(3)
+    with c_rs1:
+        do_resync = st.button(
+            "批次：重同步賽果＋寫分段",
+            type="primary",
+            use_container_width=True,
+            help="對視窗內每個 meeting 跑 jjjc results（會寫 runner_sections）+ raw 回填",
+        )
+    with c_rs2:
+        do_bf_only = st.button(
+            "批次：只回填分段（唔打 API）",
+            use_container_width=True,
+            help="從既有 runners.raw_json／running_position 回填 runner_sections",
+        )
+    with c_rs3:
+        only_gap = st.checkbox("只處理有缺口嘅日", value=True, key="ops_only_gap")
+
+    targets = meetings[:24]
+    if only_gap and df_inv is not None and not df_inv.empty:
+        gap_set = {
+            (str(r["賽日"])[:10], str(r["場地"]).upper())
+            for _, r in df_inv.iterrows()
+            if r.get("狀態") in ("partial", "missing", "error")
+            or float(r.get("分段覆蓋") or 0) < 0.8
+        }
+        targets = [m for m in targets if m in gap_set]
+
+    if do_resync:
+        logs = []
+        with st.spinner(f"重同步 {len(targets)} 個 meeting…"):
+            for d, c in targets:
+                try:
+                    out = pipe.run_action(d, c, "resync_results_sectionals")
+                    inv = (out.get("inventory") or {})
+                    logs.append(
+                        {
+                            "賽日": d,
+                            "場地": c,
+                            "ok": out.get("ok"),
+                            "runners": (out.get("sync") or {}).get("runner_upserted"),
+                            "sections": (out.get("sync") or {}).get("runner_sections_upserted"),
+                            "分段覆蓋": inv.get("section_coverage"),
+                            "缺口": "；".join(inv.get("gaps") or []),
+                        }
+                    )
+                except Exception as e:
+                    logs.append({"賽日": d, "場地": c, "ok": False, "缺口": str(e)[:120]})
+        st.session_state.pop("ops_inventory_df", None)
+        st.success(f"完成 {len(logs)} 個")
+        st.dataframe(pd.DataFrame(logs), use_container_width=True, hide_index=True)
+        st.rerun()
+
+    if do_bf_only:
+        logs = []
+        with st.spinner(f"回填分段 {len(targets)} 個…"):
+            for d, c in targets:
+                try:
+                    out = pipe.run_action(d, c, "backfill_sectionals")
+                    inv = (out.get("inventory") or {})
+                    logs.append(
+                        {
+                            "賽日": d,
+                            "場地": c,
+                            "寫入馬": out.get("runners_written"),
+                            "段列": out.get("section_rows_upserted"),
+                            "分段覆蓋": inv.get("section_coverage"),
+                            "缺口": "；".join(inv.get("gaps") or []),
+                        }
+                    )
+                except Exception as e:
+                    logs.append({"賽日": d, "場地": c, "缺口": str(e)[:120]})
+        st.session_state.pop("ops_inventory_df", None)
+        st.success(f"回填完成 {len(logs)} 個")
+        st.dataframe(pd.DataFrame(logs), use_container_width=True, hide_index=True)
+        st.rerun()
+
+    st.markdown("#### 單日正確性抽樣（分段 vs raw）")
+    pick_opts = [f"{d} {c}" for d, c in meetings[:24]]
+    if pick_opts:
+        pick = st.selectbox("抽樣 meeting", pick_opts, key="ops_corr_pick")
+        pd_, pc_ = pick.split()[0], pick.split()[1]
+        if st.button("檢查分段是否同 raw 一致", key="ops_corr_btn"):
+            corr = sectional_correctness_sample(pipe.engine, pd_, pc_, limit=40)
+            st.session_state["ops_corr_df"] = corr
+        corr_df = st.session_state.get("ops_corr_df")
+        if corr_df is not None and not corr_df.empty:
+            bad_c = corr_df[(corr_df["missing_in_table"]) | (corr_df["mismatch"])]
+            st.caption(
+                f"抽樣 {len(corr_df)} 匹；問題 {len(bad_c)} 匹"
+                "（missing＝表無列；mismatch＝表同 raw 解析唔同）"
+            )
+            st.dataframe(corr_df, use_container_width=True, hide_index=True)
+
+    st.markdown("#### 因子原料血緣（唔係快照）")
+    st.caption(
+        "輸入馬名 → 睇歷史名次列（近績原料）、`runner_sections`（步速原料）、"
+        "同而家 `factor_scores` 嘅 HORSE／PACE／SPEED。快照只係答案。"
+    )
+    horse_q = st.text_input("馬名（同 factor_scores.entity_name）", key="ops_lineage_horse")
+    if horse_q and st.button("查詢血緣", key="ops_lineage_btn"):
+        st.session_state["ops_lineage"] = factor_lineage(pipe.engine, horse_q.strip(), limit=20)
+    lin = st.session_state.get("ops_lineage")
+    if lin:
+        st.write(lin.get("notes") or {})
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**近績原料（runners）**")
+            st.dataframe(pd.DataFrame(lin.get("form_races") or []), use_container_width=True, hide_index=True)
+        with c2:
+            st.markdown("**步速原料（runner_sections）**")
+            st.dataframe(pd.DataFrame(lin.get("pace_races") or []), use_container_width=True, hide_index=True)
+        st.markdown("**而家落庫分數（factor_scores）**")
+        scores_df = pd.DataFrame(lin.get("factor_scores") or [])
+        if scores_df.empty:
+            st.warning("未有 HORSE／PACE／SPEED 分數 — 請去主頁重算因子。")
+        else:
+            st.dataframe(scores_df, use_container_width=True, hide_index=True)
 
 # —— C. 介入報告 ——
 st.subheader("開放介入報告")

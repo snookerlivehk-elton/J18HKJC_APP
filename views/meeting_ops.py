@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from meeting_pipeline import (
@@ -556,20 +557,50 @@ for stage, label in STAGES:
             if a2.button(
                 "同步 jjjc 賽果",
                 key=f"act_res_{stage}",
-                help="名次／派彩入庫；快照各場齊名次後會自動觸發結算",
+                help="名次／派彩／分段走位入庫；快照各場齊名次後會自動觸發結算",
             ):
-                with st.spinner("jjjc results export → runners…"):
+                with st.spinner("jjjc results export → runners + runner_sections…"):
                     r = pipe.run_action(racing_date, course, "sync_jjjc_results")
                 _rec("sync_jjjc_results", stage, str(r.get("error") or ""))
                 st.session_state["ops_results_result"] = r
                 st.session_state.pop("ops_ready", None)
                 st.rerun()
+            if a2.button(
+                "重跑賽果＋回填分段",
+                key=f"act_res_sec_{stage}",
+                help="再打 jjjc results（寫分段表）+ 從 raw_json 回填保險",
+            ):
+                with st.spinner("resync results + sectionals…"):
+                    r = pipe.run_action(racing_date, course, "resync_results_sectionals")
+                _rec("resync_results_sectionals", stage, str(r.get("ok")))
+                st.session_state["ops_results_result"] = r.get("sync") or r
+                st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state.pop("ops_ready", None)
+                st.rerun()
+            if a2.button(
+                "只回填本賽日分段",
+                key=f"act_bf_sec_{stage}",
+                help="唔打 API；從 runners.raw_json 寫 runner_sections",
+            ):
+                with st.spinner("backfill sectionals…"):
+                    r = pipe.run_action(racing_date, course, "backfill_sectionals")
+                _rec("backfill_sectionals", stage, str(r.get("section_rows_upserted")))
+                st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state.pop("ops_ready", None)
+                st.success(
+                    f"回填馬 {r.get('runners_written')}／段列 {r.get('section_rows_upserted')}"
+                )
             last_res = st.session_state.get("ops_results_result")
             if last_res:
                 if last_res.get("ok"):
                     st.success(
                         f"寫入 {last_res.get('runner_upserted')} 匹／"
                         f"{last_res.get('race_count')} 場"
+                        + (
+                            f"；分段列 {last_res.get('runner_sections_upserted')}"
+                            if last_res.get("runner_sections_upserted") is not None
+                            else ""
+                        )
                     )
                     auto = last_res.get("auto_settle") or {}
                     if auto.get("settled_batches"):
@@ -688,6 +719,91 @@ else:
         )
 
 st.divider()
+st.subheader(f"③b 本賽日原料齊備／正確性 — {racing_date} {course}")
+st.caption(
+    "對照名次、分段、評述覆蓋；可抽樣核對 runner_sections 同 raw 是否一致。"
+    "重跑舊賽日：上面 RESULTS「重跑賽果＋回填分段」，或多日用「數據營運中心」批次。"
+)
+try:
+    from data_audit import (
+        factor_lineage,
+        meeting_inventory,
+        sectional_correctness_sample,
+    )
+
+    if st.button("刷新本賽日齊備度", key="ops_day_inv_btn"):
+        st.session_state["ops_sectionals_inv"] = meeting_inventory(
+            pipe.engine, racing_date, course
+        )
+        st.session_state["ops_day_corr"] = sectional_correctness_sample(
+            pipe.engine, racing_date, course, limit=50
+        )
+
+    inv = st.session_state.get("ops_sectionals_inv")
+    if inv is None:
+        inv = meeting_inventory(pipe.engine, racing_date, course)
+        st.session_state["ops_sectionals_inv"] = inv
+
+    i1, i2, i3, i4 = st.columns(4)
+    i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
+    i2.metric(
+        "有分段",
+        inv.get("with_sections", 0),
+        f"{float(inv.get('section_coverage') or 0):.0%}",
+    )
+    i3.metric(
+        "沿途評述",
+        inv.get("running_comment_n", 0),
+        f"{float(inv.get('running_comment_coverage') or 0):.0%}",
+    )
+    i4.metric(
+        "事故評述",
+        inv.get("incident_n", 0),
+        f"{float(inv.get('incident_coverage') or 0):.0%}",
+    )
+    if inv.get("gaps"):
+        st.warning("缺口：" + "；".join(inv["gaps"]))
+    else:
+        st.success("本賽日名次／分段／評述覆蓋達標（≥80%）。")
+
+    miss = inv.get("missing_sectionals_sample") or []
+    if miss:
+        st.caption("缺分段樣例（最多 40）：")
+        st.dataframe(pd.DataFrame(miss), use_container_width=True, hide_index=True)
+
+    corr = st.session_state.get("ops_day_corr")
+    if corr is not None and not corr.empty:
+        bad_n = int(((corr["missing_in_table"]) | (corr["mismatch"])).sum())
+        st.caption(f"正確性抽樣 {len(corr)} 匹；問題 {bad_n} 匹")
+        st.dataframe(corr, use_container_width=True, hide_index=True)
+
+    st.markdown("**因子原料血緣（本頁可查，唔止快照）**")
+    hq = st.text_input("馬名", key="ops_day_lineage_horse")
+    if hq and st.button("查近績／步速原料", key="ops_day_lineage_btn"):
+        st.session_state["ops_day_lineage"] = factor_lineage(
+            pipe.engine, hq.strip(), limit=20
+        )
+    lin = st.session_state.get("ops_day_lineage")
+    if lin:
+        st.dataframe(
+            pd.DataFrame(lin.get("form_races") or []),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.dataframe(
+            pd.DataFrame(lin.get("pace_races") or []),
+            use_container_width=True,
+            hide_index=True,
+        )
+        scores = pd.DataFrame(lin.get("factor_scores") or [])
+        if scores.empty:
+            st.info("未有 factor_scores — 主頁重算後先有近績／步速 Z。")
+        else:
+            st.dataframe(scores, use_container_width=True, hide_index=True)
+except Exception as e:
+    st.warning(f"齊備稽核暫不可用：{e}")
+
+st.divider()
 st.subheader(f"④ 數據遺留 — {racing_date} {course}")
 st.caption(
     "沿途走勢（corunning／running_comment）或競賽報告（racereport／incident_report）"
@@ -757,5 +873,6 @@ st.caption(
     "【重要】NLP／沿路走勢＝可選強化，**不必人工放行**，也不阻擋「建立快照」或「結算快照」。"
     "無評述時干擾通道自動降覆蓋；有評述後再解析→重算干擾→修訂快照即可。"
     "結算只依賴：賽前快照 × 賽果名次（finish_order），與當日走勢評述無關。"
-    "多日總覽／開放介入報告 →「數據營運中心」。"
+    "原料齊備／因子血緣：本頁「③b」或多日「數據營運中心」齊備矩陣；"
+    "舊賽日重跑：RESULTS「重跑賽果＋回填分段」或營運中心批次。"
 )

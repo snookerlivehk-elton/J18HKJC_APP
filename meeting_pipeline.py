@@ -1162,6 +1162,24 @@ class MeetingPipeline:
                         out["auto_post_race_ads"] = ads
                 return out
 
+            if action == "backfill_sectionals":
+                from data_audit import backfill_meeting_sectionals
+
+                out = backfill_meeting_sectionals(self.engine, racing_date, course)
+                self.refresh_readiness(racing_date, course)
+                return {"ok": True, **out}
+
+            if action == "resync_results_sectionals":
+                from data_audit import resync_results_and_sectionals
+
+                out = resync_results_and_sectionals(
+                    self,
+                    racing_date,
+                    course,
+                    also_backfill=bool(kwargs.get("also_backfill", True)),
+                )
+                return out
+
             if action == "sync_jjjc_speedguide":
                 from jjjc_speedguide_sync import sync_meeting as sync_sg
 
