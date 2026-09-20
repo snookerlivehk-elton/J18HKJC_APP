@@ -28,9 +28,13 @@ from sqlalchemy import create_engine, text
 
 from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE
 from jjjc_export_common import (
+    display_horse_name,
+    display_jockey_name,
+    display_trainer_name,
     horse_no_allowed_for_venue,
     max_horse_no_for_venue,
     normalize_venue,
+    prefer_zh_text,
     venue_from_race_id,
 )
 from sectionals_store import (
@@ -111,6 +115,193 @@ def _runner_ids(race_id: str, horse_no: int, horse_code: Optional[str], race_dat
         horse_id = f"UNK_{race_id}_{int(horse_no):02d}"
         brand = f"H{int(horse_no):02d}"
     return runner_id, horse_id, brand
+
+
+def _load_zh_name_maps(
+    conn, race_id: str, *, brands: Optional[List[str]] = None
+) -> Dict[str, Dict[str, str]]:
+    """
+    由排位／既有歷史列撈中文名，key=馬碼或 horse_no。
+    results export 多數只有英文；racecard／sectionals／舊 runners 有中文。
+    """
+    by_brand: Dict[str, Dict[str, str]] = {}
+    by_no: Dict[str, Dict[str, str]] = {}
+
+    def _ingest(rows, *, brand_key: str = "brand") -> None:
+        for r in rows:
+            if not r:
+                continue
+            row = dict(r)
+            hn = display_horse_name(row) or row.get("horse_name")
+            jn = display_jockey_name(row) or row.get("jockey_name")
+            tn = display_trainer_name(row) or row.get("trainer_name")
+            brand = (
+                str(row.get(brand_key) or row.get("brand_num") or row.get("horse_code") or "")
+                .strip()
+                .upper()
+            )
+            payload = {}
+            if hn:
+                payload["horse_name"] = str(hn)
+            if jn:
+                payload["jockey_name"] = str(jn)
+            if tn:
+                payload["trainer_name"] = str(tn)
+            if not payload:
+                continue
+            if brand:
+                cur = by_brand.get(brand) or {}
+                by_brand[brand] = {
+                    "horse_name": prefer_zh_text(
+                        payload.get("horse_name"), cur.get("horse_name")
+                    )
+                    or cur.get("horse_name"),
+                    "jockey_name": prefer_zh_text(
+                        payload.get("jockey_name"), cur.get("jockey_name")
+                    )
+                    or cur.get("jockey_name"),
+                    "trainer_name": prefer_zh_text(
+                        payload.get("trainer_name"), cur.get("trainer_name")
+                    )
+                    or cur.get("trainer_name"),
+                }
+            hno = _safe_int(row.get("horse_no"))
+            if hno is not None:
+                key = str(hno)
+                cur = by_no.get(key) or {}
+                by_no[key] = {
+                    "horse_name": prefer_zh_text(
+                        payload.get("horse_name"), cur.get("horse_name")
+                    )
+                    or cur.get("horse_name"),
+                    "jockey_name": prefer_zh_text(
+                        payload.get("jockey_name"), cur.get("jockey_name")
+                    )
+                    or cur.get("jockey_name"),
+                    "trainer_name": prefer_zh_text(
+                        payload.get("trainer_name"), cur.get("trainer_name")
+                    )
+                    or cur.get("trainer_name"),
+                }
+
+    try:
+        up = (
+            conn.execute(
+                text(
+                    """
+                    SELECT horse_no, horse_name, horse_code, jockey_name, trainer_name
+                    FROM upcoming_runners WHERE race_id = :rid
+                    """
+                ),
+                {"rid": race_id},
+            )
+            .mappings()
+            .all()
+        )
+        _ingest(up, brand_key="horse_code")
+    except Exception:
+        pass
+    try:
+        hist = (
+            conn.execute(
+                text(
+                    """
+                    SELECT horse_no, horse_name, brand_num, jockey_name, trainer_name
+                    FROM runners WHERE race_id = :rid
+                    """
+                ),
+                {"rid": race_id},
+            )
+            .mappings()
+            .all()
+        )
+        _ingest(hist, brand_key="brand_num")
+    except Exception:
+        pass
+    # 同馬碼喺其他場次嘅中文名（賽果英文覆蓋後仍可還原）
+    brand_list = sorted(
+        {
+            str(b).strip().upper()
+            for b in (brands or [])
+            if b and str(b).strip() and str(b).strip().upper() not in ("NONE", "NAN")
+        }
+    )
+    if brand_list:
+        try:
+            ph = ", ".join(f":b{i}" for i in range(len(brand_list)))
+            params = {f"b{i}": brand_list[i] for i in range(len(brand_list))}
+            cross = (
+                conn.execute(
+                    text(
+                        f"""
+                        SELECT horse_name, brand_num, jockey_name, trainer_name, horse_no
+                        FROM runners
+                        WHERE brand_num IN ({ph})
+                        ORDER BY runner_id DESC
+                        LIMIT 200
+                        """
+                    ),
+                    params,
+                )
+                .mappings()
+                .all()
+            )
+            _ingest(cross, brand_key="brand_num")
+        except Exception:
+            pass
+        try:
+            ph = ", ".join(f":c{i}" for i in range(len(brand_list)))
+            params = {f"c{i}": brand_list[i] for i in range(len(brand_list))}
+            cross_up = (
+                conn.execute(
+                    text(
+                        f"""
+                        SELECT horse_name, horse_code, jockey_name, trainer_name, horse_no
+                        FROM upcoming_runners
+                        WHERE UPPER(horse_code) IN ({ph})
+                        LIMIT 200
+                        """
+                    ),
+                    params,
+                )
+                .mappings()
+                .all()
+            )
+            _ingest(cross_up, brand_key="horse_code")
+        except Exception:
+            pass
+    return {"by_brand": by_brand, "by_no": by_no}
+
+
+def _resolve_display_names(
+    ru: Dict[str, Any],
+    *,
+    horse_no: int,
+    brand: Optional[str],
+    zh_maps: Dict[str, Dict[str, str]],
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """results 列 + 排位／既有中文 → 顯示用馬／騎／練名。"""
+    hint = {}
+    if brand and brand in (zh_maps.get("by_brand") or {}):
+        hint = zh_maps["by_brand"][brand]
+    elif str(horse_no) in (zh_maps.get("by_no") or {}):
+        hint = zh_maps["by_no"][str(horse_no)]
+    horse = prefer_zh_text(
+        display_horse_name(ru),
+        hint.get("horse_name"),
+        ru.get("horse_name"),
+    )
+    jockey = prefer_zh_text(
+        display_jockey_name(ru),
+        hint.get("jockey_name"),
+        ru.get("jockey_name"),
+    )
+    trainer = prefer_zh_text(
+        display_trainer_name(ru),
+        hint.get("trainer_name"),
+        ru.get("trainer_name"),
+    )
+    return horse, jockey, trainer
 
 
 def fetch_export(
@@ -529,6 +720,18 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         continue
                     pending_runners.append(ru)
 
+                # 刪之前先撈中文名（排位 upcoming + 舊 runners + 同馬碼跨場）
+                brands = [
+                    str(ru.get("horse_code") or "").strip().upper()
+                    for ru in pending_runners
+                    if ru.get("horse_code")
+                ]
+                zh_maps = (
+                    _load_zh_name_maps(conn, race_id, brands=brands)
+                    if pending_runners
+                    else {"by_brand": {}, "by_no": {}}
+                )
+
                 if pending_runners:
                     # 整場換血：刪本場全部舊 runners（含場額幽靈），再按 export 插入
                     pruned_ghost_runners += _delete_runners_for_race(conn, race_id)
@@ -540,6 +743,9 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     horse_code = ru.get("horse_code")
                     runner_id, horse_id, brand = _runner_ids(
                         race_id, horse_no, horse_code, race_date
+                    )
+                    horse_name, jockey_name, trainer_name = _resolve_display_names(
+                        ru, horse_no=horse_no, brand=brand, zh_maps=zh_maps
                     )
                     fin_num = _safe_int(ru.get("finish_order_num"))
                     if fin_num is None:
@@ -563,6 +769,9 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         "source": race.get("source") or "official_hkjc",
                         "synced_via": "jjjc_results_sync",
                         "synced_at": datetime.now(timezone.utc).isoformat(),
+                        "display_horse_name": horse_name,
+                        "display_jockey_name": jockey_name,
+                        "display_trainer_name": trainer_name,
                     }
 
                     conn.execute(
@@ -599,12 +808,12 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                             "horse_id": horse_id,
                             "horse_no": horse_no,
                             "brand_num": brand,
-                            "horse_name": ru.get("horse_name"),
+                            "horse_name": horse_name,
                             "finish_order_raw": str(fin_raw) if fin_raw is not None else None,
                             "finish_order_num": fin_num,
                             "final_time": ru.get("finish_time"),
-                            "jockey_name": ru.get("jockey_name"),
-                            "trainer_name": ru.get("trainer_name"),
+                            "jockey_name": jockey_name,
+                            "trainer_name": trainer_name,
                             "handicap_weight": _safe_float(ru.get("actual_weight")),
                             "bar_draw": _safe_int(ru.get("draw")),
                             "horse_body_weight": _safe_float(ru.get("declared_horse_weight")),

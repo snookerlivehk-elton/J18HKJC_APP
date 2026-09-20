@@ -497,7 +497,7 @@ def race_sectionals_grid(engine, race_id: str) -> pd.DataFrame:
             for r in conn.execute(
                 text(
                     """
-                    SELECT runner_id, horse_no, horse_name, finish_order_num, final_time
+                    SELECT runner_id, horse_no, horse_name, brand_num, finish_order_num, final_time
                     FROM runners
                     WHERE race_id = :rid
                     ORDER BY
@@ -559,6 +559,7 @@ def race_sectionals_grid(engine, race_id: str) -> pd.DataFrame:
         time_parts: List[str] = []
         row: Dict[str, Any] = {
             "馬號": ru.get("horse_no"),
+            "馬碼": ru.get("brand_num"),
             "馬名": ru.get("horse_name"),
             "名次": ru.get("finish_order_num"),
             "完成時間": ru.get("final_time"),
@@ -584,7 +585,7 @@ def race_sectionals_grid(engine, race_id: str) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
     if not df.empty and max_stage:
-        front = ["馬號", "馬名", "名次", "完成時間", "走位", "分段時間串"]
+        front = ["馬號", "馬碼", "馬名", "名次", "完成時間", "走位", "分段時間串"]
         mid: List[str] = []
         for sn in range(1, max_stage + 1):
             mid.extend([f"S{sn}名次", f"S{sn}時間"])

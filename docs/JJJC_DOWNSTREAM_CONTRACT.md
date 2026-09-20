@@ -6,7 +6,7 @@
 
 ## 鐵律
 
-1. Join 主鍵：`race_id` + `horse_no`（禁止 `horse_name`）
+1. Join 主鍵：`race_id` + `horse_no`（禁止 `horse_name`）；馬身份用 `horse_code`／`brand_num`
 2. `race_id`：`YYYYMMDD` + `ST|HV` + 兩位場次（例 `20260916HV01`）
 3. `race_date`：`YYYY-MM-DD`
 4. `venue_code`：只得大階 `ST` / `HV`
@@ -14,6 +14,7 @@
 6. 排位 DB 可能叫 `runner_no`＝export 嘅 `horse_no`（`jjjc_export_common.horse_no_of`）
 7. placeholder／`energy_is_placeholder=true`／空殼唔當真值
 8. **場額**：HV `horse_no` ≤12；ST ≤14。J18 results sync 會拒寫超額馬號，並喺重同步時清同場幽靈馬（常見污染：ST Glenealy 14 匹誤寫入 HV `race_id`）
+9. **顯示名**：馬／騎／練優先中文（`*_ch` 或 sectionals／racecard）；results 英文唔好覆蓋已有中文。統計近績多數用 `horse_name`，中英混用會拆散同一匹馬——身份以 `brand_num` 為準，顯示應統一中文
 
 ## 開工檢查
 
