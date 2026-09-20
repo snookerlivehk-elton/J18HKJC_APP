@@ -609,6 +609,44 @@ for stage, label in STAGES:
                     )
                 else:
                     st.error(r.get("error") or r)
+            if a2.button(
+                "修復中文名（馬／騎／練）",
+                key=f"act_zh_{stage}",
+                help="先拉排位別名，再全庫把 runners 英文名改返中文；之後請重算因子",
+            ):
+                with st.spinner("remediate ZH names（全庫）…"):
+                    # 先補本賽日排位（收 EN/CH 別名），再全庫修復
+                    try:
+                        pipe.run_action(racing_date, course, "sync_jjjc_racecard")
+                    except Exception:
+                        pass
+                    r = pipe.run_action(
+                        racing_date,
+                        course,
+                        "remediate_zh_names",
+                        all_meetings=True,
+                        also_factors=True,
+                    )
+                _rec("remediate_zh_names", stage, str(r.get("ok")))
+                st.session_state["ops_zh_remediate"] = r
+                st.session_state.pop("ops_ready", None)
+                if r.get("ok"):
+                    ru = (r.get("runners") or {}).get("runners_updated", 0)
+                    st.success(
+                        f"已修復 {ru} 匹 runners 顯示名；"
+                        f"別名 horse={r.get('alias_counts', {}).get('horse', 0)}／"
+                        f"jockey={r.get('alias_counts', {}).get('jockey', 0)}／"
+                        f"trainer={r.get('alias_counts', {}).get('trainer', 0)}。"
+                        "請再撳「重算因子」合併統計。"
+                    )
+                    samples = (r.get("runners") or {}).get("samples") or []
+                    if samples:
+                        st.caption(
+                            "樣本："
+                            + "； ".join(f"{s.get('horse', '')}" for s in samples[:5])
+                        )
+                else:
+                    st.error(r.get("error") or r)
             last_sec = st.session_state.get("ops_sectionals_sync")
             if last_sec and last_sec.get("ok") and not last_sec.get("waiting"):
                 st.caption(
@@ -941,4 +979,5 @@ st.caption(
     "結算只依賴：賽前快照 × 賽果名次（finish_order），與當日走勢評述無關。"
     "原料齊備／分段內容：本頁「③ 分段時間／走位」選場次即睇；"
     "舊賽日重跑：RESULTS「重跑賽果＋回填分段」或營運中心批次。"
+    "英文馬／騎練名：RESULTS「修復中文名」→ 主頁重算因子。"
 )

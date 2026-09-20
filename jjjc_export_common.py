@@ -256,6 +256,59 @@ def merge_prefer_zh(new: Any, existing: Any) -> Optional[str]:
     return prefer_zh_text(new, existing)
 
 
+_REAL_HORSE_CODE_RE = re.compile(r"^[A-Z]\d{3,}$")
+_SYNTHETIC_BRAND_RE = re.compile(r"^H\d{2}$")  # results 無 code 時 H01–H14
+
+
+def is_real_horse_code(code: Any) -> bool:
+    """
+    真馬碼（如 J446／H349／K037）；排除 results 無 code 時合成嘅 H{horse_no:02d}。
+    """
+    s = str(code or "").strip().upper()
+    if not s or s in ("NONE", "NAN", "NULL", "-"):
+        return False
+    if _SYNTHETIC_BRAND_RE.match(s):
+        return False
+    return bool(_REAL_HORSE_CODE_RE.match(s))
+
+
+def horse_identity_key(
+    brand_num: Any = None,
+    horse_name: Any = None,
+    *,
+    horse_code: Any = None,
+    horse_id: Any = None,
+) -> str:
+    """
+    統計／因子用穩定馬身份：真馬碼 > 非 UNK horse_id > 正規化馬名。
+    禁止用馬名做主鍵嘅情境請優先呢個 key（避免中英拆散近績）。
+    """
+    for c in (brand_num, horse_code):
+        if is_real_horse_code(c):
+            return str(c).strip().upper()
+    hid = str(horse_id or "").strip()
+    if hid and not hid.startswith("UNK_") and "_" in hid:
+        # HK_2026_J446 → J446
+        tail = hid.rsplit("_", 1)[-1].upper()
+        if is_real_horse_code(tail):
+            return tail
+    from bucket_utils import normalize_person_name
+
+    name = normalize_person_name(horse_name)
+    return name or ""
+
+
+def canonical_horse_label(horse_key: str, *names: Any) -> str:
+    """顯示用：有中文名 →「將義」；否則馬碼／英文名。"""
+    zh = prefer_zh_text(*names)
+    key = str(horse_key or "").strip()
+    if zh and not looks_latin_name(zh):
+        return zh
+    if zh:
+        return zh
+    return key
+
+
 def load_payload_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)

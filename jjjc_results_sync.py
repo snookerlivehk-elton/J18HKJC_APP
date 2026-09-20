@@ -32,6 +32,7 @@ from jjjc_export_common import (
     display_jockey_name,
     display_trainer_name,
     horse_no_allowed_for_venue,
+    is_real_horse_code,
     max_horse_no_for_venue,
     normalize_venue,
     prefer_zh_text,
@@ -789,12 +790,13 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                               :horse_body_weight, :scratched, :win_odds, :raw_json
                             )
                             ON CONFLICT (runner_id) DO UPDATE SET
-                              horse_name = COALESCE(EXCLUDED.horse_name, runners.horse_name),
+                              horse_name = EXCLUDED.horse_name,
+                              brand_num = COALESCE(EXCLUDED.brand_num, runners.brand_num),
                               finish_order_raw = EXCLUDED.finish_order_raw,
                               finish_order_num = EXCLUDED.finish_order_num,
                               final_time = COALESCE(EXCLUDED.final_time, runners.final_time),
-                              jockey_name = COALESCE(EXCLUDED.jockey_name, runners.jockey_name),
-                              trainer_name = COALESCE(EXCLUDED.trainer_name, runners.trainer_name),
+                              jockey_name = EXCLUDED.jockey_name,
+                              trainer_name = EXCLUDED.trainer_name,
                               handicap_weight = COALESCE(EXCLUDED.handicap_weight, runners.handicap_weight),
                               bar_draw = COALESCE(EXCLUDED.bar_draw, runners.bar_draw),
                               horse_body_weight = COALESCE(EXCLUDED.horse_body_weight, runners.horse_body_weight),
@@ -807,7 +809,7 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                             "race_id": race_id,
                             "horse_id": horse_id,
                             "horse_no": horse_no,
-                            "brand_num": brand,
+                            "brand_num": brand if is_real_horse_code(brand) else None,
                             "horse_name": horse_name,
                             "finish_order_raw": str(fin_raw) if fin_raw is not None else None,
                             "finish_order_num": fin_num,

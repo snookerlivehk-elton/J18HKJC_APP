@@ -261,9 +261,18 @@ def _entity_key_for_runner(row, match_mode: str, calc: FactorCalculator) -> str:
     if match_mode == 'draw':
         return calc._assign_draw_group(row.get('draw'))
     if match_mode == 'horse':
-        return normalize_person_name(row.get('horse_name'))
+        from jjjc_export_common import horse_identity_key
+        return horse_identity_key(
+            row.get('horse_code') or row.get('brand_num'),
+            row.get('horse_name'),
+        )
     if match_mode == 'horse_jockey':
-        return horse_jockey_name(row.get('horse_name'), row.get('jockey_name'))
+        from jjjc_export_common import horse_identity_key
+        hk = horse_identity_key(
+            row.get('horse_code') or row.get('brand_num'),
+            row.get('horse_name'),
+        )
+        return horse_jockey_name(hk, row.get('jockey_name'))
     return ""
 
 

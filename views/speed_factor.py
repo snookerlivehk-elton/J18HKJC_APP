@@ -114,7 +114,13 @@ if selected_race_id != "None":
         rows = []
         for _, row in runners.iterrows():
             hn = normalize_person_name(row["horse_name"])
-            base = speed_df[speed_df[name_col] == hn]
+            from jjjc_export_common import horse_identity_key
+
+            hk = horse_identity_key(row.get("horse_code"), row.get("horse_name"))
+            base = speed_df[
+                (speed_df[name_col].astype(str) == str(hk))
+                | (speed_df[name_col].map(normalize_person_name) == hn)
+            ]
             hit = not base.empty
             rec = base.iloc[0] if hit else None
             rows.append({
