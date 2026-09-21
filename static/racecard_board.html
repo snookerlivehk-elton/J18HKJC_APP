@@ -87,72 +87,66 @@
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
-      overflow: auto;
+      display: flex;
+      overflow-y: auto;
+      background: #fff;
+    }
+    .lock {
+      flex: 0 0 var(--pin-w);
+      width: var(--pin-w);
+      min-width: var(--pin-w);
+      z-index: 2;
+      background: #fff;
+      box-shadow: 6px 0 8px rgba(45, 62, 80, .10);
+    }
+    .scroll {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
-      background: #fff;
+      overscroll-behavior-x: contain;
     }
+    .scroll-inner { min-width: max-content; }
 
-    table.board {
-      border-collapse: separate;
-      border-spacing: 0;
-      min-width: 100%;
-      font-size: 12px;
-    }
-    .board th, .board td {
+    .hrow {
+      display: flex;
+      align-items: stretch;
+      height: 44px;
       border-bottom: 1px solid var(--line);
-      border-right: 1px solid #f0f2f5;
-      padding: 4px 5px;
-      white-space: nowrap;
-      vertical-align: middle;
       background: #fff;
-      overflow: hidden;
     }
-    .board tbody tr:nth-child(even) th,
-    .board tbody tr:nth-child(even) td { background: #f4f6f8; }
-    .board tbody td:not(.pin),
-    .board tbody th:not(.pin) { position: relative; z-index: 0; }
-    .board tbody tr.scratched td,
-    .board tbody tr.scratched th { opacity: .45; }
-
-    .board thead th {
-      position: sticky; top: 0; z-index: 4;
-      background: #f7f8fa;
+    .hrow.alt { background: #f4f6f8; }
+    .hrow.scratched { opacity: .45; }
+    .lock .hrow {
+      display: grid;
+      grid-template-columns: var(--pin-no) var(--pin-name) var(--pin-draw) var(--pin-odds);
+    }
+    .hrow.head {
+      position: sticky; top: 0; z-index: 5;
+      height: 38px;
+      background: #eef3f8;
       color: #6b7380;
       font-size: 10px; font-weight: 800;
-      letter-spacing: 0;
-      line-height: 1.15;
       text-align: center;
-      height: 36px;
-      box-shadow: 0 1px 0 var(--line);
     }
-    .board thead th.pin { z-index: 6; background: #eef3f8; }
+    .scroll .hrow.head { background: #f7f8fa; }
 
-    .pin {
-      position: sticky;
+    .cell {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 4px;
+      font-size: 12px;
       overflow: hidden;
     }
-    .board tbody td.pin, .board tbody th.pin { z-index: 4; }
-    .pin-no { left: 0; width: var(--pin-no); min-width: var(--pin-no); max-width: var(--pin-no); padding: 4px 1px !important; }
-    .pin-name { left: var(--pin-no); width: var(--pin-name); min-width: var(--pin-name); max-width: var(--pin-name); }
-    .pin-draw { left: calc(var(--pin-no) + var(--pin-name)); width: var(--pin-draw); min-width: var(--pin-draw); max-width: var(--pin-draw); padding: 4px 1px !important; }
-    .pin-odds {
-      left: calc(var(--pin-no) + var(--pin-name) + var(--pin-draw));
-      width: var(--pin-odds); min-width: var(--pin-odds); max-width: var(--pin-odds);
-      padding: 3px 3px !important;
-      box-shadow: 6px 0 8px rgba(45, 62, 80, .08);
-    }
-
-    .board thead th.sortable { cursor: pointer; user-select: none; }
-    .board thead th.sortable:hover { color: var(--blue-2); }
-    .board thead th.on { color: var(--blue-2); background: #e3f1fb; }
-    .caret { font-size: 9px; display: inline; margin-left: 1px; }
+    .lock .cell.name { justify-content: flex-start; }
+    .lock .cell.odds { justify-content: flex-end; padding-right: 6px; }
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable.on, .odds-sort.on { color: var(--blue-2); }
+    .caret { font-size: 9px; margin-left: 1px; }
     .odds-sort {
       display: block; width: 100%; border: 0; background: transparent;
       color: inherit; font: inherit; font-size: 10px; font-weight: 800;
-      padding: 0; line-height: 1.2; cursor: pointer; text-align: center;
+      padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
     }
-    .odds-sort.on { color: var(--blue-2); }
 
     .silk {
       display: inline-flex; align-items: center; justify-content: center;
@@ -163,8 +157,8 @@
     .hname {
       display: block;
       font-size: 12px; font-weight: 800; line-height: 1.2;
-      overflow: hidden; text-overflow: ellipsis;
-      color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--text); max-width: 68px;
     }
     .hname .exit { color: var(--muted); font-weight: 600; font-size: 10px; }
 
@@ -181,17 +175,17 @@
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
     .odds .na { color: var(--muted); font-size: 11px; }
 
-    .num { font-variant-numeric: tabular-nums; text-align: right; font-weight: 700; }
-    .ctr { text-align: center; }
+    .num { font-variant-numeric: tabular-nums; justify-content: flex-end; font-weight: 700; }
+    .ctr { justify-content: center; }
     .muted { color: var(--muted); font-weight: 600; }
     .form { letter-spacing: .02em; font-weight: 700; }
     .comment {
-      max-width: 132px; overflow: hidden; text-overflow: ellipsis;
       font-size: 11px; font-weight: 600; color: #4a5563;
+      justify-content: flex-start;
     }
-    .scroll-col { min-width: 64px; }
-    .scroll-col.wide { min-width: 88px; }
-    .scroll-col.xl { min-width: 140px; }
+    .scroll-col { min-width: 64px; flex: 0 0 64px; }
+    .scroll-col.wide { min-width: 88px; flex: 0 0 88px; }
+    .scroll-col.xl { min-width: 140px; flex: 0 0 140px; }
 
     .tabbar {
       flex: 0 0 52px;
@@ -236,8 +230,11 @@
     <div class="hint">左鎖 馬號／馬名／檔／賠 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
-  <div class="board-wrap" id="scroller">
-    <table class="board" id="board"></table>
+  <div class="board-wrap" id="board">
+    <div class="lock" id="lockPane"></div>
+    <div class="scroll" id="scroller">
+      <div class="scroll-inner" id="scrollPane"></div>
+    </div>
   </div>
 
   <nav class="tabbar" aria-label="主選單">
@@ -296,7 +293,11 @@
       { no:10, name:"豔羨", draw:12, win:8.2, place:2.8, form6:"3-2-5-1-6-4", score:83, value:540, age:5, rating:53, hw:127, peerBest:2, peer:5, placeN:7, career:"26-3-4-3", gold2:"—", gatePct:71, season:"4-1-1-0", early:17, late:24, peerTrack:2, firm:4, soft:2, rail:"B", recent:"2/3/5", comment:"外檔但近績夠穩", dam:"豔陽", sire:"Savabeel", damsire:"Zabeel", owner:"豔羨團體", prize:"288萬", scratched:false }
     ];
 
-    const el = { pills: document.getElementById("racePills"), board: document.getElementById("board") };
+    const el = {
+      pills: document.getElementById("racePills"),
+      lock: document.getElementById("lockPane"),
+      scroll: document.getElementById("scrollPane"),
+    };
     let currentRace = 1;
     let sortKey = "no";
     let sortDir = 1;
@@ -359,29 +360,33 @@
       });
     }
 
-    function th(key, label, extraClass, pinClass) {
+    function headBtn(key, label) {
       const on = sortKey === key ? " on" : "";
       const htmlLabel = esc(label).replace(/\n/g, "<br>");
-      return '<th class="sortable ' + extraClass + " " + pinClass + on + '" data-sort="' + key + '">' +
-        htmlLabel + caret(key) + "</th>";
+      return '<button type="button" class="odds-sort sortable' + on + '" data-sort="' + key + '">' +
+        htmlLabel + caret(key) + "</button>";
     }
 
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
-      const head =
-        "<thead><tr>" +
-          th("no", "號", "", "pin pin-no") +
-          th("name", "馬名", "", "pin pin-name") +
-          th("draw", "檔", "", "pin pin-draw") +
-          '<th class="pin pin-odds' + (sortKey === "win" || sortKey === "place" ? " on" : "") + '">' +
-            '<button type="button" class="odds-sort' + (sortKey === "win" ? " on" : "") + '" data-sort="win">獨贏' + caret("win") + "</button>" +
-            '<button type="button" class="odds-sort' + (sortKey === "place" ? " on" : "") + '" data-sort="place">位置' + caret("place") + "</button>" +
-          "</th>" +
-          SCROLL_COLS.map((c) => th(c.key, c.label, c.cls, "")).join("") +
-        "</tr></thead>";
+      const lockHead =
+        '<div class="hrow head">' +
+          '<div class="cell pin-no">' + headBtn("no", "號") + "</div>" +
+          '<div class="cell pin-name">' + headBtn("name", "馬名") + "</div>" +
+          '<div class="cell pin-draw">' + headBtn("draw", "檔") + "</div>" +
+          '<div class="cell pin-odds">' +
+            headBtn("win", "獨贏") + headBtn("place", "位置") +
+          "</div></div>";
+      const scrollHead =
+        '<div class="hrow head">' +
+          SCROLL_COLS.map((c) =>
+            '<div class="cell ' + c.cls + '">' + headBtn(c.key, c.label) + "</div>"
+          ).join("") +
+        "</div>";
 
-      const body = "<tbody>" + rows.map((r) => {
+      el.lock.innerHTML = lockHead + rows.map((r, i) => {
+        const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
         const winHot = !r.scratched && r.win === hot.minW ? " hot" : "";
         const plaHot = !r.scratched && r.place === hot.minP ? " hot" : "";
@@ -390,24 +395,27 @@
           : '<div class="odds"><span class="win' + winHot + '">' + esc(r.win) +
             '</span><span class="pla' + plaHot + '">' + esc(r.place) + "</span></div>";
         const name = '<span class="hname">' + esc(r.name) +
-          (r.scratched ? '<span class="exit"> 退出</span>' : "") + "</span>";
-        const cells = SCROLL_COLS.map((c) => {
-          const v = fmt(r[c.key]);
-          return '<td class="' + c.cls + '">' + esc(v) + "</td>";
-        }).join("");
-        return '<tr class="' + scratch.trim() + '">' +
-          '<th class="pin pin-no ctr"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span></th>" +
-          '<td class="pin pin-name">' + name + "</td>" +
-          '<td class="pin pin-draw ctr"><span class="draw-dot">' + esc(r.draw) + "</span></td>" +
-          '<td class="pin pin-odds">' + odds + "</td>" +
-          cells +
-        "</tr>";
-      }).join("") + "</tbody>";
+          (r.scratched ? '<span class="exit"> 退</span>' : "") + "</span>";
+        return '<div class="hrow' + alt + scratch + '">' +
+          '<div class="cell pin-no"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span></div>" +
+          '<div class="cell name pin-name">' + name + "</div>" +
+          '<div class="cell pin-draw"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
+          '<div class="cell odds pin-odds">' + odds + "</div>" +
+        "</div>";
+      }).join("");
 
-      el.board.innerHTML = head + body;
-      el.board.querySelectorAll("thead [data-sort]").forEach((thEl) => {
-        thEl.addEventListener("click", () => {
-          const key = thEl.getAttribute("data-sort");
+      el.scroll.innerHTML = scrollHead + rows.map((r, i) => {
+        const alt = i % 2 ? " alt" : "";
+        const scratch = r.scratched ? " scratched" : "";
+        const cells = SCROLL_COLS.map((c) =>
+          '<div class="cell ' + c.cls + '">' + esc(fmt(r[c.key])) + "</div>"
+        ).join("");
+        return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
+      }).join("");
+
+      document.querySelectorAll("#board [data-sort]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.getAttribute("data-sort");
           if (sortKey === key) sortDir = -sortDir;
           else { sortKey = key; sortDir = 1; }
           renderBoard();
@@ -422,13 +430,12 @@
     let drag = null;
     scroller.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
-      if (e.target.closest("button, thead th, .odds-sort")) return;
-      drag = { x: e.clientX, y: e.clientY, sl: scroller.scrollLeft, st: scroller.scrollTop };
+      if (e.target.closest("button, [data-sort]")) return;
+      drag = { x: e.clientX, sl: scroller.scrollLeft };
     });
     window.addEventListener("pointermove", (e) => {
       if (!drag) return;
       scroller.scrollLeft = drag.sl - (e.clientX - drag.x);
-      scroller.scrollTop = drag.st - (e.clientY - drag.y);
     });
     window.addEventListener("pointerup", () => { drag = null; });
     window.addEventListener("pointercancel", () => { drag = null; });
