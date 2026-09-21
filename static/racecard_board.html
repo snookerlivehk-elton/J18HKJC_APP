@@ -23,12 +23,11 @@
       --place: #27ae60;
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      /* 左鎖四欄盡量窄，把寛度讓給右滑區 */
-      --pin-no: 24px;
-      --pin-name: 72px;
+      /* 左鎖三欄：號上名下叠成一列，把寛度讓給右滑區 */
+      --pin-id: 50px;
       --pin-draw: 22px;
-      --pin-odds: 40px;
-      --pin-w: calc(var(--pin-no) + var(--pin-name) + var(--pin-draw) + var(--pin-odds));
+      --pin-odds: 36px;
+      --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
     }
     * { box-sizing: border-box; }
     html, body {
@@ -119,7 +118,7 @@
     .hrow.scratched { opacity: .45; }
     .lock .hrow {
       display: grid;
-      grid-template-columns: var(--pin-no) var(--pin-name) var(--pin-draw) var(--pin-odds);
+      grid-template-columns: var(--pin-id) var(--pin-draw) var(--pin-odds);
     }
     .hrow.head {
       position: sticky; top: 0; z-index: 5;
@@ -137,8 +136,14 @@
       font-size: 12px;
       overflow: hidden;
     }
-    .lock .cell.name { justify-content: flex-start; }
-    .lock .cell.odds { justify-content: flex-end; padding-right: 6px; }
+    .lock .cell.pin-id {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1px;
+      padding: 1px 2px;
+    }
+    .lock .cell.odds { justify-content: flex-end; padding-right: 4px; }
     .sortable { cursor: pointer; user-select: none; }
     .sortable.on, .odds-sort.on { color: var(--blue-2); }
     .caret { font-size: 9px; margin-left: 1px; }
@@ -147,18 +152,22 @@
       color: inherit; font: inherit; font-size: 10px; font-weight: 800;
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
     }
+    .lock .cell.pin-id .odds-sort { font-size: 9px; line-height: 1.1; }
 
     .silk {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 20px; height: 20px; border-radius: 50%;
+      width: 18px; height: 18px; border-radius: 50%;
       font-size: 10px; font-weight: 800; color: #fff;
+      flex: 0 0 18px;
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
     }
     .hname {
       display: block;
-      font-size: 12px; font-weight: 800; line-height: 1.2;
+      font-size: 11px; font-weight: 800; line-height: 1.1;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: var(--text); max-width: 68px;
+      color: var(--text); max-width: 48px;
+      text-align: center;
+      letter-spacing: -.02em;
     }
     .hname .exit { color: var(--muted); font-weight: 600; font-size: 10px; }
 
@@ -227,7 +236,7 @@
     <div class="meta">
       <div id="raceMeta">16/09 周三 19:10 谷草 五班　1000"B" 好地</div>
     </div>
-    <div class="hint">左鎖 馬號／馬名／檔／賠 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
+    <div class="hint">左鎖 號上名下／檔／賠 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
   <div class="board-wrap" id="board">
@@ -372,8 +381,9 @@
       const rows = sortedRows();
       const lockHead =
         '<div class="hrow head">' +
-          '<div class="cell pin-no">' + headBtn("no", "號") + "</div>" +
-          '<div class="cell pin-name">' + headBtn("name", "馬名") + "</div>" +
+          '<div class="cell pin-id">' +
+            headBtn("no", "號") + headBtn("name", "馬名") +
+          "</div>" +
           '<div class="cell pin-draw">' + headBtn("draw", "檔") + "</div>" +
           '<div class="cell pin-odds">' +
             headBtn("win", "獨贏") + headBtn("place", "位置") +
@@ -397,8 +407,7 @@
         const name = '<span class="hname">' + esc(r.name) +
           (r.scratched ? '<span class="exit"> 退</span>' : "") + "</span>";
         return '<div class="hrow' + alt + scratch + '">' +
-          '<div class="cell pin-no"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span></div>" +
-          '<div class="cell name pin-name">' + name + "</div>" +
+          '<div class="cell pin-id"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
           '<div class="cell pin-draw"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
           '<div class="cell odds pin-odds">' + odds + "</div>" +
         "</div>";
