@@ -25,7 +25,7 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖四欄盡量窄，把寛度讓給右滑區 */
       --pin-no: 24px;
-      --pin-name: 56px;
+      --pin-name: 72px;
       --pin-draw: 22px;
       --pin-odds: 40px;
       --pin-w: calc(var(--pin-no) + var(--pin-name) + var(--pin-draw) + var(--pin-odds));
@@ -33,11 +33,17 @@
     * { box-sizing: border-box; }
     html, body {
       margin: 0; height: 100%;
-      background: var(--page); color: var(--text);
+      background: #d8dee6; color: var(--text);
       font-family: var(--font);
       -webkit-font-smoothing: antialiased;
     }
-    body { display: flex; flex-direction: column; min-height: 100%; }
+    body {
+      display: flex; flex-direction: column;
+      max-width: 430px; margin: 0 auto;
+      background: var(--page);
+      min-height: 100%;
+      box-shadow: 0 0 0 1px rgba(45,62,80,.12);
+    }
     button { font-family: inherit; }
 
     .topbar {
@@ -153,7 +159,6 @@
     .hname {
       display: block;
       font-size: 12px; font-weight: 800; line-height: 1.2;
-      max-width: 52px;
       overflow: hidden; text-overflow: ellipsis;
       color: var(--text);
     }
@@ -180,9 +185,9 @@
       max-width: 132px; overflow: hidden; text-overflow: ellipsis;
       font-size: 11px; font-weight: 600; color: #4a5563;
     }
-    .scroll-col { min-width: 52px; }
-    .scroll-col.wide { min-width: 72px; }
-    .scroll-col.xl { min-width: 110px; }
+    .scroll-col { min-width: 64px; }
+    .scroll-col.wide { min-width: 88px; }
+    .scroll-col.xl { min-width: 140px; }
 
     .tabbar {
       flex: 0 0 52px;
