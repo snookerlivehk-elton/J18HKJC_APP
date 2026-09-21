@@ -106,9 +106,12 @@
       white-space: nowrap;
       vertical-align: middle;
       background: #fff;
+      overflow: hidden;
     }
     .board tbody tr:nth-child(even) th,
     .board tbody tr:nth-child(even) td { background: #f4f6f8; }
+    .board tbody td:not(.pin),
+    .board tbody th:not(.pin) { position: relative; z-index: 0; }
     .board tbody tr.scratched td,
     .board tbody tr.scratched th { opacity: .45; }
 
@@ -124,11 +127,12 @@
       box-shadow: 0 1px 0 var(--line);
     }
     .board thead th.pin { z-index: 6; background: #eef3f8; }
-    .board tbody td.pin, .board tbody th.pin { z-index: 3; }
 
     .pin {
       position: sticky;
+      overflow: hidden;
     }
+    .board tbody td.pin, .board tbody th.pin { z-index: 4; }
     .pin-no { left: 0; width: var(--pin-no); min-width: var(--pin-no); max-width: var(--pin-no); padding: 4px 1px !important; }
     .pin-name { left: var(--pin-no); width: var(--pin-name); min-width: var(--pin-name); max-width: var(--pin-name); }
     .pin-draw { left: calc(var(--pin-no) + var(--pin-name)); width: var(--pin-draw); min-width: var(--pin-draw); max-width: var(--pin-draw); padding: 4px 1px !important; }
