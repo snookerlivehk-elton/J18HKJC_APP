@@ -24,7 +24,7 @@
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖三欄：號上名下叠成一列，把寛度讓給右滑區 */
-      --pin-id: 50px;
+      --pin-id: 52px;
       --pin-draw: 22px;
       --pin-odds: 36px;
       --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
@@ -116,6 +116,7 @@
     }
     .hrow.alt { background: #f4f6f8; }
     .hrow.scratched { opacity: .45; }
+    .hrow.scratched .hname { text-decoration: line-through; }
     .lock .hrow {
       display: grid;
       grid-template-columns: var(--pin-id) var(--pin-draw) var(--pin-odds);
@@ -165,11 +166,10 @@
       display: block;
       font-size: 11px; font-weight: 800; line-height: 1.1;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: var(--text); max-width: 48px;
+      color: var(--text); max-width: 50px;
       text-align: center;
       letter-spacing: -.02em;
     }
-    .hname .exit { color: var(--muted); font-weight: 600; font-size: 10px; }
 
     .draw-dot {
       display: inline-flex; align-items: center; justify-content: center;
@@ -404,8 +404,7 @@
           ? '<div class="odds"><span class="na">—</span></div>'
           : '<div class="odds"><span class="win' + winHot + '">' + esc(r.win) +
             '</span><span class="pla' + plaHot + '">' + esc(r.place) + "</span></div>";
-        const name = '<span class="hname">' + esc(r.name) +
-          (r.scratched ? '<span class="exit"> 退</span>' : "") + "</span>";
+        const name = '<span class="hname">' + esc(r.name) + "</span>";
         return '<div class="hrow' + alt + scratch + '">' +
           '<div class="cell pin-id"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
           '<div class="cell pin-draw"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
