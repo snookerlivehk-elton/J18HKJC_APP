@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>排位 · J18</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --nav: #3d5a80;
+      --nav-2: #334b6b;
+      --page: #eef1f5;
+      --text: #2c3340;
+      --muted: #8a93a3;
+      --blue: #5ba3d9;
+      --blue-2: #3b8fd4;
+      --green: #5cb85c;
+      --orange: #e88b2a;
+      --red: #e74c3c;
+      --place: #27ae60;
+      --line: #e4e7ec;
+      --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      /* 左鎖四欄盡量窄，把寛度讓給右滑區 */
+      --pin-no: 24px;
+      --pin-name: 56px;
+      --pin-draw: 22px;
+      --pin-odds: 40px;
+      --pin-w: calc(var(--pin-no) + var(--pin-name) + var(--pin-draw) + var(--pin-odds));
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      background: var(--page); color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    body { display: flex; flex-direction: column; min-height: 100%; }
+    button { font-family: inherit; }
+
+    .topbar {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 44px; padding: 0 10px;
+      background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
+      color: #fff; z-index: 30;
+    }
+    .topbar .side { width: 64px; font-size: 15px; font-weight: 700; }
+    .topbar .side.r { text-align: right; opacity: .9; }
+    .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
+
+    .subhead {
+      flex: 0 0 auto;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px 10px;
+    }
+    .date-row {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 15px; font-weight: 800; color: var(--blue-2); margin-bottom: 8px;
+    }
+    .date-row .u { color: #9aa3b0; font-size: 12px; font-weight: 700; }
+
+    .race-pills { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    .race-pills button {
+      width: 32px; height: 26px; border: 0; border-radius: 6px; cursor: pointer;
+      font-weight: 800; font-size: 13px; color: #fff; background: var(--green);
+    }
+    .race-pills button.active { background: var(--blue); }
+
+    .meta {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; margin-top: 8px; font-size: 12px; line-height: 1.45; color: #5b6575;
+    }
+    .hint {
+      margin-top: 6px; font-size: 11px; color: var(--muted); font-weight: 600;
+    }
+
+    .board-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      background: #fff;
+    }
+
+    table.board {
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 100%;
+      font-size: 12px;
+    }
+    .board th, .board td {
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid #f0f2f5;
+      padding: 4px 5px;
+      white-space: nowrap;
+      vertical-align: middle;
+      background: #fff;
+    }
+    .board tbody tr:nth-child(even) th,
+    .board tbody tr:nth-child(even) td { background: #f4f6f8; }
+    .board tbody tr.scratched td,
+    .board tbody tr.scratched th { opacity: .45; }
+
+    .board thead th {
+      position: sticky; top: 0; z-index: 4;
+      background: #f7f8fa;
+      color: #6b7380;
+      font-size: 10px; font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1.15;
+      text-align: center;
+      height: 36px;
+      box-shadow: 0 1px 0 var(--line);
+    }
+    .board thead th.pin { z-index: 6; background: #eef3f8; }
+    .board tbody td.pin, .board tbody th.pin { z-index: 3; }
+
+    .pin {
+      position: sticky;
+    }
+    .pin-no { left: 0; width: var(--pin-no); min-width: var(--pin-no); max-width: var(--pin-no); padding: 4px 1px !important; }
+    .pin-name { left: var(--pin-no); width: var(--pin-name); min-width: var(--pin-name); max-width: var(--pin-name); }
+    .pin-draw { left: calc(var(--pin-no) + var(--pin-name)); width: var(--pin-draw); min-width: var(--pin-draw); max-width: var(--pin-draw); padding: 4px 1px !important; }
+    .pin-odds {
+      left: calc(var(--pin-no) + var(--pin-name) + var(--pin-draw));
+      width: var(--pin-odds); min-width: var(--pin-odds); max-width: var(--pin-odds);
+      padding: 3px 3px !important;
+      box-shadow: 6px 0 8px rgba(45, 62, 80, .08);
+    }
+
+    .board thead th.sortable { cursor: pointer; user-select: none; }
+    .board thead th.sortable:hover { color: var(--blue-2); }
+    .board thead th.on { color: var(--blue-2); background: #e3f1fb; }
+    .caret { font-size: 9px; display: inline; margin-left: 1px; }
+    .odds-sort {
+      display: block; width: 100%; border: 0; background: transparent;
+      color: inherit; font: inherit; font-size: 10px; font-weight: 800;
+      padding: 0; line-height: 1.2; cursor: pointer; text-align: center;
+    }
+    .odds-sort.on { color: var(--blue-2); }
+
+    .silk {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; border-radius: 50%;
+      font-size: 10px; font-weight: 800; color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+    }
+    .hname {
+      display: block;
+      font-size: 12px; font-weight: 800; line-height: 1.2;
+      max-width: 52px;
+      overflow: hidden; text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .hname .exit { color: var(--muted); font-weight: 600; font-size: 10px; }
+
+    .draw-dot {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1px solid #cfd6de; font-size: 10px; font-weight: 800;
+      background: #fff; color: #334;
+    }
+
+    .odds { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+    .odds .win { font-size: 13px; font-weight: 800; color: var(--text); }
+    .odds .pla { font-size: 11px; font-weight: 700; color: #7b8494; }
+    .odds .win.hot, .odds .pla.hot { color: var(--red); }
+    .odds .na { color: var(--muted); font-size: 11px; }
+
+    .num { font-variant-numeric: tabular-nums; text-align: right; font-weight: 700; }
+    .ctr { text-align: center; }
+    .muted { color: var(--muted); font-weight: 600; }
+    .form { letter-spacing: .02em; font-weight: 700; }
+    .comment {
+      max-width: 132px; overflow: hidden; text-overflow: ellipsis;
+      font-size: 11px; font-weight: 600; color: #4a5563;
+    }
+    .scroll-col { min-width: 52px; }
+    .scroll-col.wide { min-width: 72px; }
+    .scroll-col.xl { min-width: 110px; }
+
+    .tabbar {
+      flex: 0 0 52px;
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      background: var(--nav); color: rgba(255,255,255,.7);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tabbar .tab {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; font-size: 10px; font-weight: 700; text-decoration: none; color: inherit;
+    }
+    .tabbar .tab.on { color: #fff; }
+    .tabbar .ico { font-size: 16px; line-height: 1; }
+
+    .silk-1 { background:#e10600; } .silk-2 { background:#111; }
+    .silk-3 { background:#0057b8; } .silk-4 { background:#ffd100; color:#222; }
+    .silk-5 { background:#00a651; } .silk-6 { background:#e4007c; }
+    .silk-7 { background:#00b5e2; color:#083044; } .silk-8 { background:#8a8d8f; }
+    .silk-9 { background:#ff6a00; } .silk-10 { background:#6f2c91; }
+    .silk-11 { background:#a8d08d; color:#1a3318; } .silk-12 { background:#7a1f2b; }
+    .silk-13 { background:#fff; color:#111; box-shadow: inset 0 0 0 1px #999; }
+    .silk-14 { background:#c5a028; color:#1a1408; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="side">‹ 返回</div>
+    <h1>排位</h1>
+    <div class="side r">?</div>
+  </header>
+
+  <section class="subhead">
+    <div class="date-row">
+      <span>2026</span><span class="u">年</span>
+      <span>09</span><span class="u">月</span>
+      <span>16</span><span class="u">日</span> ▾
+    </div>
+    <div class="race-pills" id="racePills" aria-label="場次"></div>
+    <div class="meta">
+      <div id="raceMeta">16/09 周三 19:10 谷草 五班　1000"B" 好地</div>
+    </div>
+    <div class="hint">左鎖 馬號／馬名／檔／賠 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
+  </section>
+
+  <div class="board-wrap" id="scroller">
+    <table class="board" id="board"></table>
+  </div>
+
+  <nav class="tabbar" aria-label="主選單">
+    <div class="tab"><span class="ico">⌂</span>首頁</div>
+    <div class="tab on"><span class="ico">☰</span>排位</div>
+    <div class="tab"><span class="ico">☺</span>名家</div>
+    <div class="tab"><span class="ico">🏆</span>賽果</div>
+    <div class="tab"><span class="ico">⋯</span>更多</div>
+  </nav>
+
+  <script>
+  (function () {
+    const SILK_N = 14;
+    const SCROLL_COLS = [
+      { key: "form6", label: "近績", cls: "scroll-col wide form" },
+      { key: "score", label: "賽前\n綜合分", cls: "scroll-col num" },
+      { key: "value", label: "身價", cls: "scroll-col num" },
+      { key: "age", label: "年齡", cls: "scroll-col ctr" },
+      { key: "rating", label: "評分", cls: "scroll-col num" },
+      { key: "hw", label: "配膊", cls: "scroll-col num" },
+      { key: "peerBest", label: "同期\n較佳", cls: "scroll-col num" },
+      { key: "peer", label: "同期", cls: "scroll-col num" },
+      { key: "placeN", label: "入位\n次數", cls: "scroll-col num" },
+      { key: "career", label: "出道\n至今", cls: "scroll-col wide muted" },
+      { key: "gold2", label: "黃金\n2歲", cls: "scroll-col ctr" },
+      { key: "gatePct", label: "入閘%", cls: "scroll-col num" },
+      { key: "season", label: "本季", cls: "scroll-col wide muted" },
+      { key: "early", label: "早走", cls: "scroll-col num" },
+      { key: "late", label: "後上", cls: "scroll-col num" },
+      { key: "peerTrack", label: "同期\n場地", cls: "scroll-col num" },
+      { key: "firm", label: "快地", cls: "scroll-col num" },
+      { key: "soft", label: "濕地", cls: "scroll-col num" },
+      { key: "rail", label: "跑道", cls: "scroll-col ctr" },
+      { key: "recent", label: "往績", cls: "scroll-col wide form" },
+      { key: "comment", label: "評語", cls: "scroll-col xl comment" },
+      { key: "dam", label: "母系", cls: "scroll-col wide" },
+      { key: "sire", label: "父系", cls: "scroll-col wide" },
+      { key: "damsire", label: "外祖父", cls: "scroll-col wide" },
+      { key: "owner", label: "馬主", cls: "scroll-col xl" },
+      { key: "prize", label: "獎金", cls: "scroll-col num wide" }
+    ];
+
+    /* 設計稿示範資料：用你賽果圖裡出現過的馬，其餘欄位是草稿占位 */
+    const RUNNERS = [
+      { no:11, name:"辣得金", draw:3, win:4.5, place:1.6, form6:"1-2-3-4-5-6", score:92, value:820, age:6, rating:52, hw:123, peerBest:2, peer:5, placeN:8, career:"32-5-6-4", gold2:"—", gatePct:78, season:"4-1-0-1", early:31, late:12, peerTrack:3, firm:6, soft:2, rail:"B", recent:"2/1/4", comment:"谷草短途前領有利", dam:"金辣", sire:"Deep Field", damsire:"Redoute", owner:"金運團體", prize:"520萬", scratched:false },
+      { no:12, name:"洛河", draw:7, win:18, place:4.6, form6:"5-8-4-9-7-6", score:71, value:380, age:5, rating:48, hw:122, peerBest:0, peer:3, placeN:4, career:"28-2-3-3", gold2:"—", gatePct:64, season:"3-0-1-0", early:18, late:22, peerTrack:1, firm:3, soft:1, rail:"B", recent:"8/5/4", comment:"中置等步，需要速度戰", dam:"洛水", sire:"Per Incanto", damsire:"Danehill", owner:"河畔團體", prize:"210萬", scratched:false },
+      { no:6, name:"廳誌", draw:1, win:16, place:4.6, form6:"3-4-2-6-5-8", score:74, value:410, age:6, rating:50, hw:128, peerBest:1, peer:4, placeN:6, career:"40-3-5-4", gold2:"—", gatePct:81, season:"5-0-2-1", early:36, late:8, peerTrack:2, firm:4, soft:2, rail:"B", recent:"3/4/2", comment:"內檔前領，短途可搏", dam:"誌喜", sire:"Super Easy", damsire:"O'Reilly", owner:"廳堂馬主", prize:"265萬", scratched:false },
+      { no:3, name:"雙子美麗", draw:2, win:11, place:3.5, form6:"2-3-1-5-4-7", score:81, value:560, age:4, rating:54, hw:130, peerBest:2, peer:6, placeN:7, career:"18-3-4-2", gold2:"有", gatePct:72, season:"4-1-1-1", early:28, late:16, peerTrack:4, firm:5, soft:1, rail:"B", recent:"1/3/2", comment:"評分上升，內檔有機", dam:"雙子星", sire:"Maurice", damsire:"Sunday", owner:"美麗團體", prize:"340萬", scratched:false },
+      { no:8, name:"陸上鳳", draw:6, win:12, place:3.6, form6:"6-5-8-4-9-3", score:76, value:490, age:5, rating:49, hw:125, peerBest:1, peer:3, placeN:5, career:"24-2-3-4", gold2:"—", gatePct:69, season:"3-0-1-1", early:11, late:33, peerTrack:2, firm:3, soft:3, rail:"B", recent:"5/8/4", comment:"後上型，需要慢步速", dam:"鳳舞", sire:"Sacred Falls", damsire:"Zabeel", owner:"陸上團體", prize:"198萬", scratched:false },
+      { no:1, name:"迅雷駒", draw:4, win:7.5, place:2.4, form6:"4-1-2-3-6-5", score:85, value:610, age:5, rating:56, hw:126, peerBest:3, peer:7, placeN:9, career:"22-4-3-3", gold2:"—", gatePct:75, season:"4-2-0-1", early:24, late:18, peerTrack:3, firm:5, soft:2, rail:"B", recent:"1/4/2", comment:"穩定入位，賠率有值", dam:"迅雷", sire:"Snitzel", damsire:"Redoute", owner:"迅雷團體", prize:"410萬", scratched:false },
+      { no:2, name:"夜燈", draw:8, win:9.2, place:2.9, form6:"7-3-5-2-8-4", score:79, value:450, age:4, rating:47, hw:121, peerBest:1, peer:4, placeN:5, career:"16-2-2-3", gold2:"有", gatePct:61, season:"3-1-0-1", early:14, late:26, peerTrack:1, firm:2, soft:2, rail:"B", recent:"3/7/5", comment:"外檔要提早佔位", dam:"燈影", sire:"Shamardal", damsire:"Dubawi", owner:"夜燈馬主", prize:"176萬", scratched:false },
+      { no:4, name:"青雲路", draw:5, win:22, place:5.8, form6:"9-8-7-6-5-10", score:63, value:290, age:6, rating:44, hw:119, peerBest:0, peer:2, placeN:3, career:"36-1-2-3", gold2:"—", gatePct:58, season:"2-0-0-1", early:20, late:15, peerTrack:0, firm:2, soft:1, rail:"B", recent:"9/8/7", comment:"近績偏弱，冷門觀望", dam:"青雲", sire:"Tavistock", damsire:"Montjeu", owner:"青雲團體", prize:"132萬", scratched:false },
+      { no:5, name:"精銳襲擊", draw:9, win:null, place:null, form6:"—", score:null, value:330, age:5, rating:46, hw:120, peerBest:0, peer:1, placeN:2, career:"14-1-1-1", gold2:"—", gatePct:54, season:"1-0-0-0", early:16, late:10, peerTrack:0, firm:1, soft:0, rail:"B", recent:"—", comment:"退出", dam:"精銳", sire:"I Am Invincible", damsire:"Encosta", owner:"襲擊團體", prize:"88萬", scratched:true },
+      { no:7, name:"無懼", draw:10, win:15, place:4.4, form6:"4-6-5-3-8-7", score:70, value:360, age:5, rating:51, hw:124, peerBest:1, peer:3, placeN:4, career:"20-2-2-2", gold2:"—", gatePct:66, season:"3-0-1-0", early:22, late:14, peerTrack:1, firm:3, soft:1, rail:"B", recent:"6/4/5", comment:"外檔要有速度配合", dam:"無畏", sire:"Exceed", damsire:"Danehill", owner:"無懼團體", prize:"154萬", scratched:false },
+      { no:9, name:"旗開馬到", draw:11, win:33, place:9.1, form6:"10-9-8-11-7-12", score:58, value:240, age:4, rating:42, hw:118, peerBest:0, peer:1, placeN:1, career:"12-0-1-1", gold2:"—", gatePct:49, season:"2-0-0-0", early:9, late:19, peerTrack:0, firm:1, soft:1, rail:"B", recent:"10/9/8", comment:"大外檔冷門", dam:"旗開", sire:"Written Tycoon", damsire:"Last Tycoon", owner:"馬到團體", prize:"64萬", scratched:false },
+      { no:10, name:"豔羨", draw:12, win:8.2, place:2.8, form6:"3-2-5-1-6-4", score:83, value:540, age:5, rating:53, hw:127, peerBest:2, peer:5, placeN:7, career:"26-3-4-3", gold2:"—", gatePct:71, season:"4-1-1-0", early:17, late:24, peerTrack:2, firm:4, soft:2, rail:"B", recent:"2/3/5", comment:"外檔但近績夠穩", dam:"豔陽", sire:"Savabeel", damsire:"Zabeel", owner:"豔羨團體", prize:"288萬", scratched:false }
+    ];
+
+    const el = { pills: document.getElementById("racePills"), board: document.getElementById("board") };
+    let currentRace = 1;
+    let sortKey = "no";
+    let sortDir = 1;
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function silkClass(n) { return "silk silk-" + (((Number(n) - 1 + SILK_N) % SILK_N) + 1); }
+    function fmt(v) {
+      if (v == null || v === "") return "—";
+      return v;
+    }
+    function numOrNull(v) {
+      if (v == null || v === "" || v === "—") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function bestOdds() {
+      let minW = Infinity, minP = Infinity;
+      RUNNERS.forEach((r) => {
+        if (r.scratched) return;
+        if (numOrNull(r.win) != null) minW = Math.min(minW, r.win);
+        if (numOrNull(r.place) != null) minP = Math.min(minP, r.place);
+      });
+      return { minW, minP };
+    }
+
+    function caret(key) {
+      if (sortKey !== key) return '<span class="caret"> </span>';
+      return '<span class="caret">' + (sortDir > 0 ? "▲" : "▼") + "</span>";
+    }
+
+    function sortedRows() {
+      const arr = RUNNERS.slice();
+      arr.sort((a, b) => {
+        const av = a[sortKey], bv = b[sortKey];
+        const an = numOrNull(av), bn = numOrNull(bv);
+        let cmp;
+        if (an != null && bn != null) cmp = an - bn;
+        else cmp = String(av == null ? "" : av).localeCompare(String(bv == null ? "" : bv), "zh-Hant");
+        if (cmp === 0) cmp = a.no - b.no;
+        return cmp * sortDir;
+      });
+      return arr;
+    }
+
+    function renderPills() {
+      el.pills.innerHTML = [1,2,3,4,5,6,7,8].map((n) => {
+        const on = n === currentRace ? " active" : "";
+        return '<button type="button" class="' + on.trim() + '" data-n="' + n + '">' + n + "</button>";
+      }).join("");
+      el.pills.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentRace = Number(btn.getAttribute("data-n"));
+          renderPills();
+        });
+      });
+    }
+
+    function th(key, label, extraClass, pinClass) {
+      const on = sortKey === key ? " on" : "";
+      const htmlLabel = esc(label).replace(/\n/g, "<br>");
+      return '<th class="sortable ' + extraClass + " " + pinClass + on + '" data-sort="' + key + '">' +
+        htmlLabel + caret(key) + "</th>";
+    }
+
+    function renderBoard() {
+      const hot = bestOdds();
+      const rows = sortedRows();
+      const head =
+        "<thead><tr>" +
+          th("no", "號", "", "pin pin-no") +
+          th("name", "馬名", "", "pin pin-name") +
+          th("draw", "檔", "", "pin pin-draw") +
+          '<th class="pin pin-odds' + (sortKey === "win" || sortKey === "place" ? " on" : "") + '">' +
+            '<button type="button" class="odds-sort' + (sortKey === "win" ? " on" : "") + '" data-sort="win">獨贏' + caret("win") + "</button>" +
+            '<button type="button" class="odds-sort' + (sortKey === "place" ? " on" : "") + '" data-sort="place">位置' + caret("place") + "</button>" +
+          "</th>" +
+          SCROLL_COLS.map((c) => th(c.key, c.label, c.cls, "")).join("") +
+        "</tr></thead>";
+
+      const body = "<tbody>" + rows.map((r) => {
+        const scratch = r.scratched ? " scratched" : "";
+        const winHot = !r.scratched && r.win === hot.minW ? " hot" : "";
+        const plaHot = !r.scratched && r.place === hot.minP ? " hot" : "";
+        const odds = r.scratched || r.win == null
+          ? '<div class="odds"><span class="na">—</span></div>'
+          : '<div class="odds"><span class="win' + winHot + '">' + esc(r.win) +
+            '</span><span class="pla' + plaHot + '">' + esc(r.place) + "</span></div>";
+        const name = '<span class="hname">' + esc(r.name) +
+          (r.scratched ? '<span class="exit"> 退出</span>' : "") + "</span>";
+        const cells = SCROLL_COLS.map((c) => {
+          const v = fmt(r[c.key]);
+          return '<td class="' + c.cls + '">' + esc(v) + "</td>";
+        }).join("");
+        return '<tr class="' + scratch.trim() + '">' +
+          '<th class="pin pin-no ctr"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span></th>" +
+          '<td class="pin pin-name">' + name + "</td>" +
+          '<td class="pin pin-draw ctr"><span class="draw-dot">' + esc(r.draw) + "</span></td>" +
+          '<td class="pin pin-odds">' + odds + "</td>" +
+          cells +
+        "</tr>";
+      }).join("") + "</tbody>";
+
+      el.board.innerHTML = head + body;
+      el.board.querySelectorAll("thead [data-sort]").forEach((thEl) => {
+        thEl.addEventListener("click", () => {
+          const key = thEl.getAttribute("data-sort");
+          if (sortKey === key) sortDir = -sortDir;
+          else { sortKey = key; sortDir = 1; }
+          renderBoard();
+        });
+      });
+    }
+
+    renderPills();
+    renderBoard();
+
+    const scroller = document.getElementById("scroller");
+    let drag = null;
+    scroller.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      if (e.target.closest("button, thead th, .odds-sort")) return;
+      drag = { x: e.clientX, y: e.clientY, sl: scroller.scrollLeft, st: scroller.scrollTop };
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      scroller.scrollLeft = drag.sl - (e.clientX - drag.x);
+      scroller.scrollTop = drag.st - (e.clientY - drag.y);
+    });
+    window.addEventListener("pointerup", () => { drag = null; });
+    window.addEventListener("pointercancel", () => { drag = null; });
+  })();
+  </script>
+</body>
+</html>

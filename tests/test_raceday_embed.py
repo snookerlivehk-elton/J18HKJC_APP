@@ -48,6 +48,24 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn('class="sidebar"', old.text)
         self.assertNotIn("綜合走勢", old.text)
 
+    def test_racecard_board_prototype_serves(self):
+        from raceday_embed_api import create_app
+
+        client = TestClient(create_app())
+        r = client.get("/embed/racecard")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers.get("content-type", ""))
+        self.assertIn("排位", r.text)
+        self.assertIn("pin-odds", r.text)
+        self.assertIn("pin-name", r.text)
+        self.assertIn("賽前", r.text)
+        self.assertIn("綜合分", r.text)
+        self.assertIn("外祖父", r.text)
+        self.assertIn("左鎖", r.text)
+        # 不取代原有賽日嵌入頁
+        old = client.get("/embed/raceday")
+        self.assertNotIn("pin-odds", old.text)
+
     def test_health_and_default_empty(self):
         from raceday_embed_api import create_app
 
