@@ -69,7 +69,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("draw-no", r.text)
         self.assertIn("draw-sort", r.text)
         self.assertIn(".hno", r.text)
-        self.assertIn("font-size: 16px", r.text)
+        self.assertIn("font-size: 17px", r.text)
         self.assertIn(".odds .win { font-size: 14px", r.text)
         self.assertIn(".odds .pla { font-size: 12px", r.text)
         self.assertIn(".hrow:not(.head) .cell.pin-odds", r.text)
