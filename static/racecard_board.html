@@ -131,7 +131,7 @@
       height: 47px;
       background: #eef3f8;
       color: #6b7380;
-      font-size: var(--head-fs); font-weight: 800;
+      font-size: var(--head-fs); font-weight: 400;
       text-align: center;
     }
     .hrow.head .lock-cluster {
@@ -143,6 +143,7 @@
       display: flex; align-items: center; justify-content: center;
       padding: 0 2px;
       font-size: var(--head-fs);
+      font-weight: 400;
       overflow: hidden;
     }
     .lock-cluster .cell.pin-id {
@@ -235,7 +236,7 @@
       color: inherit;
       font: inherit;
       font-size: var(--head-fs);
-      font-weight: 800;
+      font-weight: 400;
       padding: 0;
       line-height: 1.02;
       cursor: pointer;
@@ -247,19 +248,19 @@
       justify-content: center;
       line-height: 1.02;
       font-size: inherit;
-      font-weight: 800;
+      font-weight: 400;
     }
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
       display: block;
-      font-size: var(--head-fs); font-weight: 800; line-height: 1.02;
+      font-size: var(--head-fs); font-weight: 400; line-height: 1.02;
       color: #6b7380; cursor: default; user-select: none;
     }
     .odds-sort {
       display: inline-flex; flex-direction: row;
       align-items: center; justify-content: center; gap: 1px;
       width: auto; max-width: 100%; border: 0; background: transparent;
-      color: inherit; font: inherit; font-size: var(--head-fs); font-weight: 800;
+      color: inherit; font: inherit; font-size: var(--head-fs); font-weight: 400;
       padding: 0; line-height: 1.02; cursor: pointer; text-align: center;
       white-space: nowrap; border-radius: 3px;
     }
@@ -308,8 +309,8 @@
       min-height: 0;
       align-self: stretch;
       justify-self: stretch;
-      /* 相對上一版：右移 3px、下移 1px */
-      margin: 1px 0 0 2px;
+      /* 相對上一版：右移 2px */
+      margin: 1px 0 0 4px;
       height: calc(100% + 1px);
       overflow: hidden;
       z-index: 1;
@@ -361,9 +362,9 @@
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
     .odds .na { color: var(--muted); font-size: 14px; }
 
-    .muted { color: var(--muted); font-weight: 600; }
-    .form { letter-spacing: .02em; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .comment { font-size: var(--head-fs); font-weight: 600; color: #4a5563; }
+    .muted { color: var(--muted); font-weight: 400; }
+    .form { letter-spacing: .02em; font-weight: 400; font-variant-numeric: tabular-nums; }
+    .comment { font-size: var(--head-fs); font-weight: 400; color: #4a5563; }
     /* 右滑列：列寬隨最長內容；數據到分隔線 = --scroll-col-gap */
     .scroll-col {
       position: relative;
@@ -384,7 +385,7 @@
     }
     .scroll-col.num {
       font-variant-numeric: tabular-nums;
-      font-weight: 700;
+      font-weight: 400;
     }
     .scroll-col .v {
       display: block;
