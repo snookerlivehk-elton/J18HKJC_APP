@@ -67,6 +67,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("綜合分", r.text)
         self.assertIn("外祖父", r.text)
         self.assertIn("左鎖", r.text)
+        self.assertIn("scroll-head", r.text)
+        self.assertIn("scrollHead", r.text)
         self.assertIn("head-static", r.text)
         self.assertIn("sort-ico", r.text)
         self.assertNotIn('data-sort="name"', r.text)

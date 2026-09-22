@@ -98,13 +98,30 @@
       flex: 0 0 var(--pin-w);
       width: var(--pin-w);
       min-width: var(--pin-w);
-      z-index: 2;
+      z-index: 4;
       background: #fff;
       box-shadow: 6px 0 8px rgba(45, 62, 80, .10);
     }
-    .scroll {
+    .scroll-pane {
       flex: 1 1 auto;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .scroll-head {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      flex: 0 0 44px;
+      height: 44px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior: none;
+      background: #f7f8fa;
+      scrollbar-width: none;
+    }
+    .scroll-head::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .scroll-body {
       overflow-x: auto;
       overflow-y: hidden;
       overscroll-behavior: none;
@@ -127,14 +144,17 @@
       grid-template-columns: var(--pin-id) var(--pin-draw) var(--pin-odds);
     }
     .hrow.head {
-      position: sticky; top: 0; z-index: 5;
+      position: sticky; top: 0; z-index: 6;
       height: 44px;
       background: #eef3f8;
       color: #6b7380;
       font-size: var(--head-fs); font-weight: 800;
       text-align: center;
     }
-    .scroll .hrow.head { background: #f7f8fa; }
+    .scroll-head .hrow.head {
+      position: static;
+      background: #f7f8fa;
+    }
 
     .cell {
       display: flex; align-items: center; justify-content: center;
@@ -330,8 +350,11 @@
 
   <div class="board-wrap" id="board">
     <div class="lock" id="lockPane"></div>
-    <div class="scroll" id="scroller">
-      <div class="scroll-inner" id="scrollPane"></div>
+    <div class="scroll-pane">
+      <div class="scroll-head" id="scrollHead"></div>
+      <div class="scroll-body" id="scroller">
+        <div class="scroll-inner" id="scrollPane"></div>
+      </div>
     </div>
   </div>
 
@@ -394,6 +417,7 @@
     const el = {
       pills: document.getElementById("racePills"),
       lock: document.getElementById("lockPane"),
+      scrollHead: document.getElementById("scrollHead"),
       scroll: document.getElementById("scrollPane"),
     };
     let currentRace = 1;
@@ -519,7 +543,8 @@
         "</div>";
       }).join("");
 
-      el.scroll.innerHTML = scrollHead + rows.map((r, i) => {
+      el.scrollHead.innerHTML = scrollHead;
+      el.scroll.innerHTML = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
         const cells = SCROLL_COLS.map((c) =>
@@ -527,6 +552,10 @@
         ).join("");
         return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
       }).join("");
+
+      const headStrip = document.getElementById("scrollHead");
+      const bodyStrip = document.getElementById("scroller");
+      headStrip.scrollLeft = bodyStrip.scrollLeft;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -542,16 +571,33 @@
     renderPills();
     renderBoard();
 
-    const scroller = document.getElementById("scroller");
+    const headStrip = document.getElementById("scrollHead");
+    const bodyStrip = document.getElementById("scroller");
+    let syncing = false;
+    function syncX(from, to) {
+      from.addEventListener("scroll", () => {
+        if (syncing) return;
+        syncing = true;
+        to.scrollLeft = from.scrollLeft;
+        syncing = false;
+      }, { passive: true });
+    }
+    syncX(headStrip, bodyStrip);
+    syncX(bodyStrip, headStrip);
+
     let drag = null;
-    scroller.addEventListener("pointerdown", (e) => {
+    function onDragStart(e, node) {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
       if (e.target.closest("button, [data-sort]")) return;
-      drag = { x: e.clientX, sl: scroller.scrollLeft };
-    });
+      drag = { x: e.clientX, sl: node.scrollLeft };
+    }
+    headStrip.addEventListener("pointerdown", (e) => onDragStart(e, headStrip));
+    bodyStrip.addEventListener("pointerdown", (e) => onDragStart(e, bodyStrip));
     window.addEventListener("pointermove", (e) => {
       if (!drag) return;
-      scroller.scrollLeft = drag.sl - (e.clientX - drag.x);
+      const sl = drag.sl - (e.clientX - drag.x);
+      headStrip.scrollLeft = sl;
+      bodyStrip.scrollLeft = sl;
     });
     window.addEventListener("pointerup", () => { drag = null; });
     window.addEventListener("pointercancel", () => { drag = null; });
