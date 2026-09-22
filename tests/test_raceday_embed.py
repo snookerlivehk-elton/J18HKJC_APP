@@ -61,7 +61,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("--pin-id", r.text)
         self.assertIn("hno", r.text)
         self.assertIn("has-img", r.text)
-        self.assertIn("background-size: 200%", r.text)
+        self.assertIn("background-size: contain", r.text)
         self.assertIn("background-color: transparent", r.text)
         self.assertIn("馬號", r.text)
         self.assertIn("檔位", r.text)

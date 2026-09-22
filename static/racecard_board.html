@@ -153,8 +153,8 @@
     /* 資料列：彩衣左上出血，不蓋馬號／馬名 */
     .hrow:not(.head) .cell.pin-id {
       display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      grid-template-rows: 28px minmax(0, 1fr);
+      grid-template-columns: 24px minmax(0, 1fr);
+      grid-template-rows: 30px minmax(0, 1fr);
       align-items: stretch;
       justify-items: stretch;
       padding: 0;
@@ -272,9 +272,8 @@
     }
     .silk.has-img {
       background-color: transparent;
-      /* 放大裁掉帽子與灰邊，只留彩衣身 */
-      background-size: 200% auto;
-      background-position: 50% 70%;
+      background-size: contain;
+      background-position: left top;
       background-repeat: no-repeat;
     }
     .hname {
