@@ -23,10 +23,10 @@
       --place: #27ae60;
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      /* 左鎖三欄：號上名下叠成一列，把寛度讓給右滑區 */
+      /* 左鎖三欄：馬號上馬名下、檔位横排、獨贏上位置下 */
       --pin-id: 52px;
-      --pin-draw: 22px;
-      --pin-odds: 36px;
+      --pin-draw: 34px;
+      --pin-odds: 42px;
       --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
     }
     * { box-sizing: border-box; }
@@ -123,7 +123,7 @@
     }
     .hrow.head {
       position: sticky; top: 0; z-index: 5;
-      height: 38px;
+      height: 40px;
       background: #eef3f8;
       color: #6b7380;
       font-size: 10px; font-weight: 800;
@@ -141,19 +141,27 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 1px;
+      gap: 0;
       padding: 1px 2px;
     }
-    .lock .cell.odds { justify-content: flex-end; padding-right: 4px; }
+    .lock .hrow.head .cell { padding: 0 2px; }
+    .lock .hrow.head .cell.pin-odds {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+    }
+    .lock .cell.odds { justify-content: flex-end; padding-right: 5px; }
     .sortable { cursor: pointer; user-select: none; }
     .sortable.on, .odds-sort.on { color: var(--blue-2); }
-    .caret { font-size: 9px; margin-left: 1px; }
+    .caret { font-size: 8px; margin-left: 0; }
     .odds-sort {
       display: block; width: 100%; border: 0; background: transparent;
       color: inherit; font: inherit; font-size: 10px; font-weight: 800;
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
+      white-space: nowrap;
     }
-    .lock .cell.pin-id .odds-sort { font-size: 9px; line-height: 1.1; }
+    .lock .hrow.head .odds-sort { font-size: 9px; line-height: 1.2; }
 
     .silk {
       display: inline-flex; align-items: center; justify-content: center;
@@ -184,17 +192,30 @@
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
     .odds .na { color: var(--muted); font-size: 11px; }
 
-    .num { font-variant-numeric: tabular-nums; justify-content: flex-end; font-weight: 700; }
-    .ctr { justify-content: center; }
     .muted { color: var(--muted); font-weight: 600; }
-    .form { letter-spacing: .02em; font-weight: 700; }
-    .comment {
-      font-size: 11px; font-weight: 600; color: #4a5563;
-      justify-content: flex-start;
+    .form { letter-spacing: .02em; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .comment { font-size: 11px; font-weight: 600; color: #4a5563; }
+    /* 右滑列：數字靠右、文字靠左；細分隔線做間隔，欄寛收緊減少空拖 */
+    .scroll-col {
+      min-width: 44px; flex: 0 0 44px;
+      padding: 0 6px;
+      border-right: 1px solid #eef0f3;
+      white-space: nowrap;
     }
-    .scroll-col { min-width: 64px; flex: 0 0 64px; }
-    .scroll-col.wide { min-width: 88px; flex: 0 0 88px; }
-    .scroll-col.xl { min-width: 140px; flex: 0 0 140px; }
+    .scroll-col.sm { min-width: 36px; flex: 0 0 36px; padding: 0 5px; }
+    .scroll-col.md { min-width: 52px; flex: 0 0 52px; }
+    .scroll-col.form { min-width: 80px; flex: 0 0 80px; }
+    .scroll-col.wide { min-width: 68px; flex: 0 0 68px; }
+    .scroll-col.xl { min-width: 108px; flex: 0 0 108px; }
+    .scroll-col.num {
+      justify-content: flex-end;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+    .scroll-col.txt { justify-content: flex-start; }
+    .scroll .hrow.head .num .odds-sort { text-align: right; }
+    .scroll .hrow.head .txt .odds-sort { text-align: left; }
+    .scroll .hrow.head .odds-sort { font-size: 9px; }
 
     .tabbar {
       flex: 0 0 52px;
@@ -236,7 +257,7 @@
     <div class="meta">
       <div id="raceMeta">16/09 周三 19:10 谷草 五班　1000"B" 好地</div>
     </div>
-    <div class="hint">左鎖 號上名下／檔／賠 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
+    <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
   <div class="board-wrap" id="board">
@@ -258,32 +279,32 @@
   (function () {
     const SILK_N = 14;
     const SCROLL_COLS = [
-      { key: "form6", label: "近績", cls: "scroll-col wide form" },
+      { key: "form6", label: "近績", cls: "scroll-col form txt" },
       { key: "score", label: "賽前\n綜合分", cls: "scroll-col num" },
       { key: "value", label: "身價", cls: "scroll-col num" },
-      { key: "age", label: "年齡", cls: "scroll-col ctr" },
-      { key: "rating", label: "評分", cls: "scroll-col num" },
-      { key: "hw", label: "配膊", cls: "scroll-col num" },
-      { key: "peerBest", label: "同期\n較佳", cls: "scroll-col num" },
-      { key: "peer", label: "同期", cls: "scroll-col num" },
-      { key: "placeN", label: "入位\n次數", cls: "scroll-col num" },
-      { key: "career", label: "出道\n至今", cls: "scroll-col wide muted" },
-      { key: "gold2", label: "黃金\n2歲", cls: "scroll-col ctr" },
+      { key: "age", label: "年齡", cls: "scroll-col num sm" },
+      { key: "rating", label: "評分", cls: "scroll-col num sm" },
+      { key: "hw", label: "配膊", cls: "scroll-col num sm" },
+      { key: "peerBest", label: "同期\n較佳", cls: "scroll-col num sm" },
+      { key: "peer", label: "同期", cls: "scroll-col num sm" },
+      { key: "placeN", label: "入位\n次數", cls: "scroll-col num sm" },
+      { key: "career", label: "出道\n至今", cls: "scroll-col form txt muted" },
+      { key: "gold2", label: "黃金\n2歲", cls: "scroll-col txt sm" },
       { key: "gatePct", label: "入閘%", cls: "scroll-col num" },
-      { key: "season", label: "本季", cls: "scroll-col wide muted" },
-      { key: "early", label: "早走", cls: "scroll-col num" },
-      { key: "late", label: "後上", cls: "scroll-col num" },
-      { key: "peerTrack", label: "同期\n場地", cls: "scroll-col num" },
-      { key: "firm", label: "快地", cls: "scroll-col num" },
-      { key: "soft", label: "濕地", cls: "scroll-col num" },
-      { key: "rail", label: "跑道", cls: "scroll-col ctr" },
-      { key: "recent", label: "往績", cls: "scroll-col wide form" },
-      { key: "comment", label: "評語", cls: "scroll-col xl comment" },
-      { key: "dam", label: "母系", cls: "scroll-col wide" },
-      { key: "sire", label: "父系", cls: "scroll-col wide" },
-      { key: "damsire", label: "外祖父", cls: "scroll-col wide" },
-      { key: "owner", label: "馬主", cls: "scroll-col xl" },
-      { key: "prize", label: "獎金", cls: "scroll-col num wide" }
+      { key: "season", label: "本季", cls: "scroll-col form txt muted" },
+      { key: "early", label: "早走", cls: "scroll-col num sm" },
+      { key: "late", label: "後上", cls: "scroll-col num sm" },
+      { key: "peerTrack", label: "同期\n場地", cls: "scroll-col num sm" },
+      { key: "firm", label: "快地", cls: "scroll-col num sm" },
+      { key: "soft", label: "濕地", cls: "scroll-col num sm" },
+      { key: "rail", label: "跑道", cls: "scroll-col txt sm" },
+      { key: "recent", label: "往績", cls: "scroll-col form txt" },
+      { key: "comment", label: "評語", cls: "scroll-col xl txt comment" },
+      { key: "dam", label: "母系", cls: "scroll-col wide txt" },
+      { key: "sire", label: "父系", cls: "scroll-col wide txt" },
+      { key: "damsire", label: "外祖父", cls: "scroll-col wide txt" },
+      { key: "owner", label: "馬主", cls: "scroll-col xl txt" },
+      { key: "prize", label: "獎金", cls: "scroll-col num md" }
     ];
 
     /* 設計稿示範資料：用你賽果圖裡出現過的馬，其餘欄位是草稿占位 */
@@ -338,7 +359,7 @@
     }
 
     function caret(key) {
-      if (sortKey !== key) return '<span class="caret"> </span>';
+      if (sortKey !== key) return "";
       return '<span class="caret">' + (sortDir > 0 ? "▲" : "▼") + "</span>";
     }
 
@@ -382,9 +403,9 @@
       const lockHead =
         '<div class="hrow head">' +
           '<div class="cell pin-id">' +
-            headBtn("no", "號") + headBtn("name", "馬名") +
+            headBtn("no", "馬號") + headBtn("name", "馬名") +
           "</div>" +
-          '<div class="cell pin-draw">' + headBtn("draw", "檔") + "</div>" +
+          '<div class="cell pin-draw">' + headBtn("draw", "檔位") + "</div>" +
           '<div class="cell pin-odds">' +
             headBtn("win", "獨贏") + headBtn("place", "位置") +
           "</div></div>";
