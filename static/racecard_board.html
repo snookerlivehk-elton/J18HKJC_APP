@@ -33,6 +33,7 @@
     * { box-sizing: border-box; }
     html, body {
       margin: 0; height: 100%;
+      overflow: hidden;
       background: #d8dee6; color: var(--text);
       font-family: var(--font);
       -webkit-font-smoothing: antialiased;
@@ -85,65 +86,44 @@
       margin-top: 6px; font-size: 11px; color: var(--muted); font-weight: 600;
     }
 
+    /* 單一原生滾動：表頭 sticky top、左鎖 sticky left，左右滑同層不會卡頓 */
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
-      display: flex;
-      overflow-y: auto;
-      overflow-x: hidden;
-      overscroll-behavior: none;
-      background: #fff;
-    }
-    .lock {
-      flex: 0 0 var(--pin-w);
-      width: var(--pin-w);
-      min-width: var(--pin-w);
-      z-index: 4;
-      background: #fff;
-      box-shadow: 6px 0 8px rgba(45, 62, 80, .10);
-    }
-    .scroll-pane {
-      flex: 1 1 auto;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    .scroll-head {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      flex: 0 0 44px;
-      height: 44px;
-      overflow: hidden;
-      background: #f7f8fa;
-      touch-action: pan-x;
-    }
-    .scroll-head-inner {
-      min-width: max-content;
-      will-change: transform;
-    }
-    .scroll-body {
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow: auto;
       overscroll-behavior: none;
       -webkit-overflow-scrolling: touch;
+      background: #fff;
     }
-    .scroll-inner { min-width: max-content; }
 
     .hrow {
       display: flex;
       align-items: stretch;
       height: 44px;
+      min-width: max-content;
       border-bottom: 1px solid var(--line);
       background: #fff;
     }
     .hrow.alt { background: #f4f6f8; }
-    .hrow.scratched { opacity: .45; }
     .hrow.scratched .hname { text-decoration: line-through; }
-    .lock .hrow {
+    .hrow.scratched .cell { opacity: .45; }
+
+    .lock-cluster {
+      position: sticky;
+      left: 0;
+      top: auto;
+      z-index: 4;
       display: grid;
       grid-template-columns: var(--pin-id) var(--pin-draw) var(--pin-odds);
+      flex: 0 0 var(--pin-w);
+      width: var(--pin-w);
+      min-width: var(--pin-w);
+      align-self: stretch;
+      background: #fff;
+      box-shadow: 6px 0 8px rgba(45, 62, 80, .10);
+      isolation: isolate;
     }
+    .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
       position: sticky; top: 0; z-index: 6;
       height: 44px;
@@ -152,9 +132,9 @@
       font-size: var(--head-fs); font-weight: 800;
       text-align: center;
     }
-    .scroll-head .hrow.head {
-      position: static;
-      background: #f7f8fa;
+    .hrow.head .lock-cluster {
+      z-index: 8;
+      background: #eef3f8;
     }
 
     .cell {
@@ -163,21 +143,21 @@
       font-size: var(--head-fs);
       overflow: hidden;
     }
-    .lock .cell.pin-id {
+    .lock-cluster .cell.pin-id {
       flex-direction: column;
       justify-content: center;
       align-items: center;
       gap: 0;
       padding: 1px 2px;
     }
-    .lock .hrow.head .cell { padding: 0 2px; }
-    .lock .hrow.head .cell.pin-odds {
+    .hrow.head .lock-cluster .cell { padding: 0 2px; }
+    .hrow.head .cell.pin-odds {
       flex-direction: column;
       justify-content: center;
       align-items: center;
       gap: 0;
     }
-    .lock .hrow.head .cell.head-split {
+    .hrow.head .cell.head-split {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       grid-template-rows: auto auto;
@@ -187,13 +167,13 @@
       column-gap: 1px;
       row-gap: 0;
     }
-    .lock .hrow.head .cell.head-split .odds-sort { grid-column: 1; grid-row: 1; }
-    .lock .hrow.head .cell.head-split .head-static { grid-column: 1; grid-row: 2; }
-    .lock .hrow.head .cell.head-split .sort-hit {
+    .hrow.head .cell.head-split .odds-sort { grid-column: 1; grid-row: 1; }
+    .hrow.head .cell.head-split .head-static { grid-column: 1; grid-row: 2; }
+    .hrow.head .cell.head-split .sort-hit {
       grid-column: 2; grid-row: 1 / span 2;
       align-self: center;
     }
-    .lock .cell.odds { justify-content: center; padding: 0 3px; }
+    .lock-cluster .cell.odds { justify-content: center; padding: 0 3px; }
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
       display: block;
@@ -208,8 +188,8 @@
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
       white-space: nowrap; border-radius: 3px;
     }
-    .lock .hrow.head .odds-sort { font-size: var(--head-fs); line-height: 1.05; }
-    .scroll .hrow.head .odds-sort {
+    .hrow.head .lock-cluster .odds-sort { font-size: var(--head-fs); line-height: 1.05; }
+    .hrow.head .scroll-col .odds-sort {
       flex-direction: row; align-items: center; justify-content: center;
       gap: 2px; width: 100%; font-size: var(--head-fs); white-space: normal;
     }
@@ -349,17 +329,7 @@
     <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 馬名、位置不可排序 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
-  <div class="board-wrap" id="board">
-    <div class="lock" id="lockPane"></div>
-    <div class="scroll-pane">
-      <div class="scroll-head" id="scrollHeadClip">
-        <div class="scroll-head-inner" id="scrollHead"></div>
-      </div>
-      <div class="scroll-body" id="scroller">
-        <div class="scroll-inner" id="scrollPane"></div>
-      </div>
-    </div>
-  </div>
+  <div class="board-wrap" id="board"></div>
 
   <nav class="tabbar" aria-label="主選單">
     <div class="tab"><span class="ico">⌂</span>首頁</div>
@@ -419,9 +389,7 @@
 
     const el = {
       pills: document.getElementById("racePills"),
-      lock: document.getElementById("lockPane"),
-      scrollHead: document.getElementById("scrollHead"),
-      scroll: document.getElementById("scrollPane"),
+      board: document.getElementById("board"),
     };
     let currentRace = 1;
     let sortKey = "no";
@@ -463,16 +431,6 @@
     function colOn(key) {
       if (key === "odds") return sortKey === "win" ? " sort-col" : "";
       return sortKey === key ? " sort-col" : "";
-    }
-    let headRaf = 0;
-    function pinHeadX() {
-      const body = document.getElementById("scroller");
-      if (!el.scrollHead || !body) return;
-      if (headRaf) return;
-      headRaf = requestAnimationFrame(() => {
-        headRaf = 0;
-        el.scrollHead.style.transform = "translate3d(" + (-body.scrollLeft) + "px,0,0)";
-      });
     }
 
     function sortedRows() {
@@ -523,8 +481,10 @@
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
+      const sl = el.board.scrollLeft;
+      const st = el.board.scrollTop;
       const lockHead =
-        '<div class="hrow head">' +
+        '<div class="lock-cluster">' +
           '<div class="cell pin-id head-split' + headOn("no") + '">' +
             headBtn("no", "馬號", false) + headStatic("馬名") + sortHit("no") +
           "</div>" +
@@ -532,14 +492,12 @@
           '<div class="cell pin-odds head-split' + headOn("win") + '">' +
             headBtn("win", "獨贏", false) + headStatic("位置") + sortHit("win") +
           "</div></div>";
-      const scrollHead =
-        '<div class="hrow head">' +
-          SCROLL_COLS.map((c) =>
-            '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
-          ).join("") +
-        "</div>";
+      const scrollHeadCells = SCROLL_COLS.map((c) =>
+        '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
+      ).join("");
+      const head = '<div class="hrow head">' + lockHead + scrollHeadCells + "</div>";
 
-      el.lock.innerHTML = lockHead + rows.map((r, i) => {
+      const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
         const winHot = !r.scratched && r.win === hot.minW ? " hot" : "";
@@ -549,23 +507,21 @@
           : '<div class="odds"><span class="win' + winHot + '">' + esc(r.win) +
             '</span><span class="pla' + plaHot + '">' + esc(r.place) + "</span></div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
-        return '<div class="hrow' + alt + scratch + '">' +
-          '<div class="cell pin-id' + colOn("no") + '"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
-          '<div class="cell pin-draw' + colOn("draw") + '"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
-          '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
-        "</div>";
-      }).join("");
-
-      el.scrollHead.innerHTML = scrollHead;
-      el.scroll.innerHTML = rows.map((r, i) => {
-        const alt = i % 2 ? " alt" : "";
-        const scratch = r.scratched ? " scratched" : "";
+        const lock =
+          '<div class="lock-cluster">' +
+            '<div class="cell pin-id' + colOn("no") + '"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
+            '<div class="cell pin-draw' + colOn("draw") + '"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
+            '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
+          "</div>";
         const cells = SCROLL_COLS.map((c) =>
           '<div class="cell ' + c.cls + colOn(c.key) + '"><span class="v">' + esc(fmt(r[c.key])) + "</span></div>"
         ).join("");
-        return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
+        return '<div class="hrow' + alt + scratch + '">' + lock + cells + "</div>";
       }).join("");
-      pinHeadX();
+
+      el.board.innerHTML = head + body;
+      el.board.scrollLeft = sl;
+      el.board.scrollTop = st;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -580,29 +536,6 @@
 
     renderPills();
     renderBoard();
-
-    const headClip = document.getElementById("scrollHeadClip");
-    const bodyStrip = document.getElementById("scroller");
-    bodyStrip.addEventListener("scroll", pinHeadX, { passive: true });
-
-    let drag = null;
-    headClip.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
-      if (e.target.closest("button, [data-sort]")) return;
-      drag = { x: e.clientX, sl: bodyStrip.scrollLeft };
-      try { headClip.setPointerCapture(e.pointerId); } catch (err) {}
-    });
-    bodyStrip.addEventListener("pointerdown", (e) => {
-      if (e.pointerType !== "mouse" || e.button !== 0) return;
-      if (e.target.closest("button, [data-sort]")) return;
-      drag = { x: e.clientX, sl: bodyStrip.scrollLeft };
-    });
-    window.addEventListener("pointermove", (e) => {
-      if (!drag) return;
-      bodyStrip.scrollLeft = drag.sl - (e.clientX - drag.x);
-    });
-    window.addEventListener("pointerup", () => { drag = null; });
-    window.addEventListener("pointercancel", () => { drag = null; });
   })();
   </script>
 </body>
