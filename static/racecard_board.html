@@ -150,19 +150,37 @@
       gap: 1px;
       padding: 1px 2px;
     }
-    .pin-top {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      min-height: 18px;
+    /* 資料列：彩衣左上出血，不蓋馬號／馬名 */
+    .hrow:not(.head) .cell.pin-id {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      grid-template-rows: 28px minmax(0, 1fr);
+      align-items: stretch;
+      justify-items: stretch;
+      padding: 0;
+      overflow: visible;
+      position: relative;
     }
     .hno {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      justify-self: center;
+      z-index: 2;
       font-size: 15px;
       font-weight: 800;
       line-height: 1;
       font-variant-numeric: tabular-nums;
       color: var(--text);
+    }
+    .hrow:not(.head) .cell.pin-id .hname {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      z-index: 2;
+      align-self: center;
+      max-width: none;
+      width: 100%;
+      padding: 0 2px 2px;
     }
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
     .hrow.head .cell.pin-odds {
@@ -233,11 +251,23 @@
     .hrow.alt .cell.sort-col { background: rgba(91, 163, 217, .18); }
 
     .silk {
-      display: inline-block;
-      width: 16px; height: 16px; border-radius: 3px;
-      flex: 0 0 16px;
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.18);
+      display: block;
+      width: 16px; height: 16px;
+      border-radius: 0;
       background-color: #cfd6de;
+    }
+    .hrow:not(.head) .cell.pin-id .silk {
+      grid-column: 1;
+      grid-row: 1;
+      width: auto;
+      min-width: 0;
+      min-height: 0;
+      align-self: stretch;
+      justify-self: stretch;
+      /* 貼到列頂／左鎖邊框交接，左上出血 */
+      margin: -1px 0 0 0;
+      height: calc(100% + 1px);
+      z-index: 1;
     }
     .silk.has-img {
       background-size: cover;
@@ -539,8 +569,8 @@
         const name = '<span class="hname">' + esc(r.name) + "</span>";
         const lock =
           '<div class="lock-cluster">' +
-            '<div class="cell pin-id' + colOn("no") + '"><span class="pin-top">' + silkTag(r) +
-            '<span class="hno">' + esc(r.no) + "</span></span>" + name + "</div>" +
+            '<div class="cell pin-id' + colOn("no") + '">' + silkTag(r) +
+            '<span class="hno">' + esc(r.no) + "</span>" + name + "</div>" +
             '<div class="cell pin-draw' + colOn("draw") + '"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
             '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
           "</div>";
