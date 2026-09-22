@@ -151,7 +151,7 @@
       align-items: center;
       gap: 0;
     }
-    .lock .cell.odds { justify-content: flex-end; padding-right: 5px; }
+    .lock .cell.odds { justify-content: center; padding: 0 3px; }
     .sortable { cursor: pointer; user-select: none; }
     .sortable.on, .odds-sort.on { color: var(--blue-2); }
     .caret { font-size: 8px; margin-left: 0; }
@@ -186,7 +186,7 @@
       background: #fff; color: #334;
     }
 
-    .odds { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+    .odds { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
     .odds .win { font-size: 13px; font-weight: 800; color: var(--text); }
     .odds .pla { font-size: 11px; font-weight: 700; color: #7b8494; }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
@@ -195,27 +195,41 @@
     .muted { color: var(--muted); font-weight: 600; }
     .form { letter-spacing: .02em; font-weight: 700; font-variant-numeric: tabular-nums; }
     .comment { font-size: 11px; font-weight: 600; color: #4a5563; }
-    /* 右滑列：數字靠右、文字靠左；細分隔線做間隔，欄寛收緊減少空拖 */
+    /* 右滑列：內容一律居中；分隔線用內縮豎線，避免壓到數字 */
     .scroll-col {
-      min-width: 44px; flex: 0 0 44px;
-      padding: 0 6px;
-      border-right: 1px solid #eef0f3;
-      white-space: nowrap;
+      position: relative;
+      min-width: 46px; flex: 0 0 46px;
+      justify-content: center;
+      padding: 0 8px;
+      overflow: hidden;
     }
-    .scroll-col.sm { min-width: 36px; flex: 0 0 36px; padding: 0 5px; }
-    .scroll-col.md { min-width: 52px; flex: 0 0 52px; }
-    .scroll-col.form { min-width: 80px; flex: 0 0 80px; }
-    .scroll-col.wide { min-width: 68px; flex: 0 0 68px; }
-    .scroll-col.xl { min-width: 108px; flex: 0 0 108px; }
+    .scroll-col::after {
+      content: "";
+      position: absolute;
+      top: 6px; bottom: 6px; right: 0;
+      width: 1px;
+      background: #e4e7ec;
+      pointer-events: none;
+    }
+    .scroll-col.sm { min-width: 42px; flex: 0 0 42px; padding: 0 7px; }
+    .scroll-col.md { min-width: 56px; flex: 0 0 56px; }
+    .scroll-col.form { min-width: 88px; flex: 0 0 88px; }
+    .scroll-col.wide { min-width: 72px; flex: 0 0 72px; }
+    .scroll-col.xl { min-width: 112px; flex: 0 0 112px; }
     .scroll-col.num {
-      justify-content: flex-end;
       font-variant-numeric: tabular-nums;
       font-weight: 700;
     }
-    .scroll-col.txt { justify-content: flex-start; }
-    .scroll .hrow.head .num .odds-sort { text-align: right; }
-    .scroll .hrow.head .txt .odds-sort { text-align: left; }
-    .scroll .hrow.head .odds-sort { font-size: 9px; }
+    .scroll-col .v {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .scroll .hrow.head .odds-sort { font-size: 9px; text-align: center; }
 
     .tabbar {
       flex: 0 0 52px;
@@ -437,7 +451,7 @@
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
         const cells = SCROLL_COLS.map((c) =>
-          '<div class="cell ' + c.cls + '">' + esc(fmt(r[c.key])) + "</div>"
+          '<div class="cell ' + c.cls + '"><span class="v">' + esc(fmt(r[c.key])) + "</span></div>"
         ).join("");
         return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
       }).join("");
