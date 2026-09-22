@@ -25,9 +25,10 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖三欄：馬號上馬名下、檔位横排、獨贏上位置下 */
       --pin-id: 52px;
-      --pin-draw: 38px;
+      --pin-draw: 40px;
       --pin-odds: 44px;
       --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
+      --head-fs: 11px;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -126,7 +127,7 @@
       height: 44px;
       background: #eef3f8;
       color: #6b7380;
-      font-size: 11px; font-weight: 800;
+      font-size: var(--head-fs); font-weight: 800;
       text-align: center;
     }
     .scroll .hrow.head { background: #f7f8fa; }
@@ -134,7 +135,7 @@
     .cell {
       display: flex; align-items: center; justify-content: center;
       padding: 0 4px;
-      font-size: 12px;
+      font-size: var(--head-fs);
       overflow: hidden;
     }
     .lock .cell.pin-id {
@@ -171,23 +172,23 @@
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
       display: block;
-      font-size: 11px; font-weight: 800; line-height: 1.05;
+      font-size: var(--head-fs); font-weight: 800; line-height: 1.05;
       color: #6b7380; cursor: default; user-select: none;
     }
     .odds-sort {
       display: inline-flex; flex-direction: row;
       align-items: center; justify-content: center; gap: 2px;
       width: auto; max-width: 100%; border: 0; background: transparent;
-      color: inherit; font: inherit; font-size: 10px; font-weight: 800;
+      color: inherit; font: inherit; font-size: var(--head-fs); font-weight: 800;
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
       white-space: nowrap; border-radius: 3px;
     }
-    .lock .hrow.head .odds-sort { font-size: 11px; line-height: 1.05; }
+    .lock .hrow.head .odds-sort { font-size: var(--head-fs); line-height: 1.05; }
     .scroll .hrow.head .odds-sort {
       flex-direction: row; align-items: center; justify-content: center;
-      gap: 2px; width: 100%; font-size: 11px; white-space: normal;
+      gap: 2px; width: 100%; font-size: var(--head-fs); white-space: normal;
     }
-    .odds-sort .lab { display: block; line-height: 1.05; }
+    .odds-sort .lab { display: block; line-height: 1.05; font-size: inherit; }
     .sort-hit {
       display: inline-flex; align-items: center; justify-content: center;
       border: 0; background: transparent; padding: 0; margin: 0;
@@ -243,7 +244,7 @@
 
     .muted { color: var(--muted); font-weight: 600; }
     .form { letter-spacing: .02em; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .comment { font-size: 11px; font-weight: 600; color: #4a5563; }
+    .comment { font-size: var(--head-fs); font-weight: 600; color: #4a5563; }
     /* 右滑列：內容一律居中；分隔線用內縮豎線，避免壓到數字 */
     .scroll-col {
       position: relative;
@@ -277,8 +278,8 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       text-align: center;
+      font-size: var(--head-fs);
     }
-    .scroll .hrow.head .odds-sort { font-size: 9px; text-align: center; }
 
     .tabbar {
       flex: 0 0 52px;
