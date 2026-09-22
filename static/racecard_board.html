@@ -377,19 +377,6 @@
       line-height: inherit;
     }
 
-    .tabbar {
-      flex: 0 0 52px;
-      display: grid; grid-template-columns: repeat(5, 1fr);
-      background: var(--nav); color: rgba(255,255,255,.7);
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-    .tabbar .tab {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 2px; font-size: 10px; font-weight: 700; text-decoration: none; color: inherit;
-    }
-    .tabbar .tab.on { color: #fff; }
-    .tabbar .ico { font-size: 16px; line-height: 1; }
-
     .silk-1 { background:#e10600; } .silk-2 { background:#111; }
     .silk-3 { background:#0057b8; } .silk-4 { background:#ffd100; color:#222; }
     .silk-5 { background:#00a651; } .silk-6 { background:#e4007c; }
@@ -421,14 +408,6 @@
   </section>
 
   <div class="board-wrap" id="board"></div>
-
-  <nav class="tabbar" aria-label="主選單">
-    <div class="tab"><span class="ico">⌂</span>首頁</div>
-    <div class="tab on"><span class="ico">☰</span>排位</div>
-    <div class="tab"><span class="ico">☺</span>名家</div>
-    <div class="tab"><span class="ico">🏆</span>賽果</div>
-    <div class="tab"><span class="ico">⋯</span>更多</div>
-  </nav>
 
   <script>
   (function () {
