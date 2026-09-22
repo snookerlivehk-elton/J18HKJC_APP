@@ -4,7 +4,7 @@
 路由：
   GET /embed/raceday          → 電腦版 HTML（專為 j18.hk/pc 右手邊 iframe）
   GET /embed/raceday-pc       → 開發用：整頁複製 pc.j18.hk 排版的賽日速覽（不取代上者）
-  GET /embed/racecard         → 排位表設計稿（左鎖號上名下／檔／賠，右滑其餘欄）
+  GET /embed/racecard         → 排位表設計稿（左鎖馬號／馬名／檔位／獨贏位置，右滑其餘欄）
   GET /embed/api/health
   GET /embed/api/meetings
   GET /embed/api/races/{id}
