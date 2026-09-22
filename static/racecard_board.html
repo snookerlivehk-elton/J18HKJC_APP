@@ -170,9 +170,9 @@
       align-self: center;
       justify-self: center;
       z-index: 2;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: grid;
+      place-items: center;
+      place-content: center;
       width: 22px;
       height: 22px;
       border-radius: 50%;
@@ -180,9 +180,21 @@
       color: #fff;
       font-size: 15px;
       font-weight: 400;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
+      line-height: 0;
+      padding: 0;
+      font-variant-numeric: tabular-nums lining-nums;
       margin-top: -1px;
+    }
+    .hno > span,
+    .draw-no > span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 1em;
+      line-height: 1;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums lining-nums;
+      transform: translateY(0.06em);
     }
     .hrow:not(.head) .cell.pin-id .hname {
       grid-column: 1 / -1;
@@ -339,9 +351,9 @@
       padding: 0 3px 0 2px;
     }
     .draw-no {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: grid;
+      place-items: center;
+      place-content: center;
       flex: 0 0 auto;
       width: 21px;
       height: 21px;
@@ -350,9 +362,10 @@
       background: #fff;
       font-size: 13px;
       font-weight: 400;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -.04em;
+      line-height: 0;
+      padding: 0;
+      font-variant-numeric: tabular-nums lining-nums;
+      letter-spacing: 0;
       color: var(--text);
       text-align: center;
     }
@@ -735,9 +748,9 @@
         const lock =
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '">' + silkTag(r) +
-            '<span class="hno">' + esc(r.no) + "</span>" + name + "</div>" +
+            '<span class="hno"><span>' + esc(r.no) + "</span></span>" + name + "</div>" +
             '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
-            '<span class="draw-no">' + esc(r.draw) + "</span></div>" +
+            '<span class="draw-no"><span>' + esc(r.draw) + "</span></span></div>" +
           "</div>";
         const cells = SCROLL_COLS.map((c) =>
           '<div class="cell ' + c.cls + colOn(c.key) + '">' + cellValue(c, r) + "</div>"
