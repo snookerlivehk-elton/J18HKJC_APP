@@ -130,7 +130,7 @@
       position: sticky; top: 0; z-index: 6;
       height: 47px;
       background: #eef3f8;
-      color: #6b7380;
+      color: #111;
       font-size: var(--head-fs); font-weight: 400;
       text-align: center;
     }
@@ -156,8 +156,8 @@
     /* 資料列：彩衣左上出血，不蓋馬號／馬名 */
     .hrow:not(.head) .cell.pin-id {
       display: grid;
-      grid-template-columns: 23px minmax(0, 1fr);
-      grid-template-rows: 29px minmax(0, 1fr);
+      grid-template-columns: 25px minmax(0, 1fr);
+      grid-template-rows: 31px minmax(0, 1fr);
       align-items: stretch;
       justify-items: stretch;
       padding: 0;
@@ -254,7 +254,7 @@
     .head-static {
       display: block;
       font-size: var(--head-fs); font-weight: 400; line-height: 1.02;
-      color: #6b7380; cursor: default; user-select: none;
+      color: #111; cursor: default; user-select: none;
     }
     .odds-sort {
       display: inline-flex; flex-direction: row;
@@ -290,14 +290,13 @@
     .hrow.head .cell.sort-on {
       background: #e4eef8;
       box-shadow: inset 0 -2px 0 #3b8fd4;
-      color: #2c5f8a;
     }
     .cell.sort-col { background: rgba(91, 163, 217, .12); }
     .hrow.alt .cell.sort-col { background: rgba(91, 163, 217, .18); }
 
     .silk {
       display: block;
-      width: 15px; height: 15px;
+      width: 17px; height: 17px;
       border-radius: 0;
       background-color: transparent;
     }
@@ -309,8 +308,8 @@
       min-height: 0;
       align-self: stretch;
       justify-self: stretch;
-      /* 相對上一版：右移 2px */
-      margin: 1px 0 0 4px;
+      /* 相對上一版：下移 3px、增大 2px */
+      margin: 4px 0 0 4px;
       height: calc(100% + 1px);
       overflow: hidden;
       z-index: 1;
