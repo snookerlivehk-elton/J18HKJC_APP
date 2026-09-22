@@ -70,6 +70,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("head-static", r.text)
         self.assertIn("sort-ico", r.text)
         self.assertNotIn('data-sort="name"', r.text)
+        self.assertNotIn('data-sort="place"', r.text)
         # 不取代原有賽日嵌入頁
         old = client.get("/embed/raceday")
         self.assertNotIn("pin-odds", old.text)

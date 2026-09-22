@@ -25,8 +25,8 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖三欄：馬號上馬名下、檔位横排、獨贏上位置下 */
       --pin-id: 52px;
-      --pin-draw: 34px;
-      --pin-odds: 42px;
+      --pin-draw: 38px;
+      --pin-odds: 44px;
       --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
     }
     * { box-sizing: border-box; }
@@ -151,6 +151,20 @@
       align-items: center;
       gap: 0;
     }
+    .lock .hrow.head .cell.head-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto;
+      align-items: center;
+      justify-items: center;
+      column-gap: 1px;
+    }
+    .lock .hrow.head .cell.head-split .odds-sort { grid-column: 1; grid-row: 1; }
+    .lock .hrow.head .cell.head-split .head-static { grid-column: 1; grid-row: 2; }
+    .lock .hrow.head .cell.head-split .sort-hit {
+      grid-column: 2; grid-row: 1 / span 2;
+      align-self: center;
+    }
     .lock .cell.odds { justify-content: center; padding: 0 3px; }
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
@@ -168,13 +182,18 @@
     }
     .lock .hrow.head .odds-sort { font-size: 9px; line-height: 1.2; }
     .scroll .hrow.head .odds-sort {
-      flex-direction: column; gap: 1px; width: 100%;
-      font-size: 9px; white-space: normal;
+      flex-direction: row; align-items: center; justify-content: center;
+      gap: 2px; width: 100%; font-size: 9px; white-space: normal;
     }
-    .odds-sort .lab { display: block; }
+    .odds-sort .lab { display: block; line-height: 1.15; }
+    .sort-hit {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; background: transparent; padding: 0; margin: 0;
+      cursor: pointer; color: inherit; line-height: 1;
+    }
     .sort-ico {
       display: inline-flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 2px; flex: 0 0 auto;
+      justify-content: center; gap: 1px; flex: 0 0 auto;
       line-height: 1;
     }
     .sort-ico .u, .sort-ico .d {
@@ -226,9 +245,9 @@
     /* 右滑列：內容一律居中；分隔線用內縮豎線，避免壓到數字 */
     .scroll-col {
       position: relative;
-      min-width: 46px; flex: 0 0 46px;
+      min-width: 50px; flex: 0 0 50px;
       justify-content: center;
-      padding: 0 8px;
+      padding: 0 6px;
       overflow: hidden;
     }
     .scroll-col::after {
@@ -239,7 +258,7 @@
       background: #e4e7ec;
       pointer-events: none;
     }
-    .scroll-col.sm { min-width: 42px; flex: 0 0 42px; padding: 0 7px; }
+    .scroll-col.sm { min-width: 44px; flex: 0 0 44px; padding: 0 5px; }
     .scroll-col.md { min-width: 56px; flex: 0 0 56px; }
     .scroll-col.form { min-width: 88px; flex: 0 0 88px; }
     .scroll-col.wide { min-width: 72px; flex: 0 0 72px; }
@@ -299,7 +318,7 @@
     <div class="meta">
       <div id="raceMeta">16/09 周三 19:10 谷草 五班　1000"B" 好地</div>
     </div>
-    <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 馬名不可排序 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
+    <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 馬名、位置不可排序 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
   <div class="board-wrap" id="board">
@@ -408,7 +427,7 @@
     }
     function headOn(key) { return sortKey === key ? " sort-on" : ""; }
     function colOn(key) {
-      if (key === "odds") return (sortKey === "win" || sortKey === "place") ? " sort-col" : "";
+      if (key === "odds") return sortKey === "win" ? " sort-col" : "";
       return sortKey === key ? " sort-col" : "";
     }
 
@@ -439,13 +458,19 @@
       });
     }
 
-    function headBtn(key, label) {
+    function headBtn(key, label, withIco) {
       const on = sortKey === key;
       const htmlLabel = esc(label).replace(/\n/g, "<br>");
       const aria = on ? (sortDir > 0 ? "ascending" : "descending") : "none";
       return '<button type="button" class="odds-sort sortable' + (on ? " on" : "") +
         '" data-sort="' + key + '" aria-sort="' + aria + '">' +
-        '<span class="lab">' + htmlLabel + "</span>" + sortIco(key) + "</button>";
+        '<span class="lab">' + htmlLabel + "</span>" +
+        (withIco === false ? "" : sortIco(key)) + "</button>";
+    }
+    function sortHit(key) {
+      const on = sortKey === key ? " on" : "";
+      return '<button type="button" class="sort-hit sortable' + on + '" data-sort="' + key +
+        '" tabindex="-1" aria-hidden="true">' + sortIco(key) + "</button>";
     }
     function headStatic(label) {
       return '<span class="head-static">' + esc(label) + "</span>";
@@ -456,12 +481,12 @@
       const rows = sortedRows();
       const lockHead =
         '<div class="hrow head">' +
-          '<div class="cell pin-id' + headOn("no") + '">' +
-            headBtn("no", "馬號") + headStatic("馬名") +
+          '<div class="cell pin-id head-split' + headOn("no") + '">' +
+            headBtn("no", "馬號", false) + headStatic("馬名") + sortHit("no") +
           "</div>" +
           '<div class="cell pin-draw' + headOn("draw") + '">' + headBtn("draw", "檔位") + "</div>" +
-          '<div class="cell pin-odds' + (sortKey === "win" || sortKey === "place" ? " sort-on" : "") + '">' +
-            headBtn("win", "獨贏") + headBtn("place", "位置") +
+          '<div class="cell pin-odds head-split' + headOn("win") + '">' +
+            headBtn("win", "獨贏", false) + headStatic("位置") + sortHit("win") +
           "</div></div>";
       const scrollHead =
         '<div class="hrow head">' +
@@ -499,7 +524,7 @@
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.getAttribute("data-sort");
-          if (!key || key === "name") return;
+          if (!key || key === "name" || key === "place") return;
           if (sortKey === key) sortDir = -sortDir;
           else { sortKey = key; sortDir = 1; }
           renderBoard();
