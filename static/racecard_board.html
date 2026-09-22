@@ -36,6 +36,7 @@
       background: #d8dee6; color: var(--text);
       font-family: var(--font);
       -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
     }
     body {
       display: flex; flex-direction: column;
@@ -89,6 +90,8 @@
       min-height: 0;
       display: flex;
       overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: none;
       background: #fff;
     }
     .lock {
@@ -103,8 +106,9 @@
       flex: 1 1 auto;
       min-width: 0;
       overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-x: contain;
+      overflow-y: hidden;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: auto;
     }
     .scroll-inner { min-width: max-content; }
 
