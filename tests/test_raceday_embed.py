@@ -82,7 +82,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("border-radius: 50%", r.text)
         self.assertIn("place-items: center", r.text)
         self.assertIn("tabular-nums lining-nums", r.text)
-        self.assertIn("translateY(0.06em)", r.text)
+        self.assertIn("translateY(-0.08em)", r.text)
         self.assertIn('<span class="hno"><span>', r.text)
         self.assertIn("letter-spacing: 0", r.text)
         self.assertIn("width: 17px; height: 17px", r.text)
