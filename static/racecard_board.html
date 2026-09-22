@@ -139,7 +139,7 @@
 
     .cell {
       display: flex; align-items: center; justify-content: center;
-      padding: 0 4px;
+      padding: 0 2px;
       font-size: var(--head-fs);
       overflow: hidden;
     }
@@ -180,7 +180,7 @@
       align-self: center;
       max-width: none;
       width: 100%;
-      padding: 0 2px 2px;
+      padding: 0 1px 0;
     }
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
     .hrow.head .cell.pin-odds {
@@ -212,23 +212,24 @@
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
       display: block;
-      font-size: var(--head-fs); font-weight: 800; line-height: 1.05;
+      font-size: var(--head-fs); font-weight: 800; line-height: 1.02;
       color: #6b7380; cursor: default; user-select: none;
     }
     .odds-sort {
       display: inline-flex; flex-direction: row;
-      align-items: center; justify-content: center; gap: 2px;
+      align-items: center; justify-content: center; gap: 1px;
       width: auto; max-width: 100%; border: 0; background: transparent;
       color: inherit; font: inherit; font-size: var(--head-fs); font-weight: 800;
-      padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
+      padding: 0; line-height: 1.02; cursor: pointer; text-align: center;
       white-space: nowrap; border-radius: 3px;
     }
-    .hrow.head .lock-cluster .odds-sort { font-size: var(--head-fs); line-height: 1.05; }
+    .hrow.head .lock-cluster .odds-sort { font-size: var(--head-fs); line-height: 1.02; }
     .hrow.head .scroll-col .odds-sort {
       flex-direction: row; align-items: center; justify-content: center;
-      gap: 2px; width: 100%; font-size: var(--head-fs); white-space: normal;
+      gap: 1px; width: 100%; font-size: var(--head-fs); white-space: normal;
+      line-height: 1.02;
     }
-    .odds-sort .lab { display: block; line-height: 1.05; font-size: inherit; }
+    .odds-sort .lab { display: block; line-height: 1.02; font-size: inherit; }
     .sort-hit {
       display: inline-flex; align-items: center; justify-content: center;
       border: 0; background: transparent; padding: 0; margin: 0;
@@ -281,7 +282,7 @@
     }
     .hname {
       display: block;
-      font-size: 11px; font-weight: 800; line-height: 1.1;
+      font-size: 11px; font-weight: 800; line-height: 1.02;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       color: var(--text); max-width: 50px;
       text-align: center;
@@ -292,8 +293,8 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 1px;
-      padding: 2px 1px 1px;
+      gap: 0;
+      padding: 1px 1px 0;
     }
     .draw-pct {
       display: block;
@@ -313,7 +314,7 @@
       flex: 0 0 auto;
     }
 
-    .odds { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+    .odds { display: flex; flex-direction: column; align-items: center; gap: 0; line-height: 1.02; }
     .odds .win { font-size: 13px; font-weight: 800; color: var(--text); }
     .odds .pla { font-size: 11px; font-weight: 700; color: #7b8494; }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
@@ -327,21 +328,21 @@
       position: relative;
       min-width: 54px; flex: 0 0 54px;
       justify-content: center;
-      padding: 0 5px;
+      padding: 0 3px;
       overflow: hidden;
     }
     .scroll-col::after {
       content: "";
       position: absolute;
-      top: 6px; bottom: 6px; right: 0;
+      top: 2px; bottom: 2px; right: 0;
       width: 1px;
       background: #e4e7ec;
       pointer-events: none;
     }
-    .scroll-col.sm { min-width: 48px; flex: 0 0 48px; padding: 0 4px; }
+    .scroll-col.sm { min-width: 48px; flex: 0 0 48px; padding: 0 2px; }
     .scroll-col.md { min-width: 56px; flex: 0 0 56px; }
     .scroll-col.form { min-width: 108px; flex: 0 0 108px; }
-    .scroll-col.wide { min-width: 72px; flex: 0 0 72px; }
+    .scroll-col.wide { min-width: 64px; flex: 0 0 64px; }
     .scroll-col.xl { min-width: 112px; flex: 0 0 112px; }
     .scroll-col.num {
       font-variant-numeric: tabular-nums;
@@ -356,6 +357,32 @@
       white-space: nowrap;
       text-align: center;
       font-size: var(--head-fs);
+      line-height: 1.05;
+    }
+    .scroll-col .v.stacked {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      white-space: nowrap;
+      line-height: 1.02;
+    }
+    .scroll-col .v.stacked .nm {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 800;
+      line-height: 1.02;
+    }
+    .scroll-col .v.stacked .sub {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      color: #7b8494;
+      font-variant-numeric: tabular-nums;
     }
 
     .tabbar {
@@ -468,6 +495,26 @@
       if (v == null || v === "") return "—";
       return v;
     }
+    function splitNameAllow(s) {
+      const t = String(s == null ? "" : s).trim();
+      const m = t.match(/^(.*?)[\s\u3000]*([(\uFF08][+\-]?\d+[)\uFF09])$/);
+      if (!m || !String(m[1]).trim()) return { name: t, allow: "" };
+      return { name: m[1].trim(), allow: m[2] };
+    }
+    function sortVal(row, key) {
+      if (key === "jockey") return splitNameAllow(row.jockey).name;
+      return row[key];
+    }
+    function cellValue(c, r) {
+      if (c.key === "jockey") {
+        const p = splitNameAllow(r.jockey);
+        if (p.allow) {
+          return '<span class="v stacked"><span class="nm">' + esc(fmt(p.name)) +
+            '</span><span class="sub">' + esc(p.allow) + "</span></span>";
+        }
+      }
+      return '<span class="v">' + esc(fmt(r[c.key])) + "</span>";
+    }
     function numOrNull(v) {
       if (v == null || v === "" || v === "—") return null;
       const n = Number(v);
@@ -545,7 +592,7 @@
     function sortedRows() {
       const arr = currentRunners();
       arr.sort((a, b) => {
-        const av = a[sortKey], bv = b[sortKey];
+        const av = sortVal(a, sortKey), bv = sortVal(b, sortKey);
         const an = numOrNull(av), bn = numOrNull(bv);
         let cmp;
         if (an != null && bn != null) cmp = an - bn;
@@ -636,7 +683,7 @@
             '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
           "</div>";
         const cells = SCROLL_COLS.map((c) =>
-          '<div class="cell ' + c.cls + colOn(c.key) + '"><span class="v">' + esc(fmt(r[c.key])) + "</span></div>"
+          '<div class="cell ' + c.cls + colOn(c.key) + '">' + cellValue(c, r) + "</div>"
         ).join("");
         return '<div class="hrow' + alt + scratch + '">' + lock + cells + "</div>";
       }).join("");
