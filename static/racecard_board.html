@@ -101,7 +101,7 @@
     .hrow {
       display: flex;
       align-items: stretch;
-      height: 46px;
+      height: 47px;
       min-width: max-content;
       border-bottom: 1px solid var(--line);
       background: #fff;
@@ -128,7 +128,7 @@
     .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
       position: sticky; top: 0; z-index: 6;
-      height: 46px;
+      height: 47px;
       background: #eef3f8;
       color: #6b7380;
       font-size: var(--head-fs); font-weight: 800;
@@ -155,8 +155,8 @@
     /* 資料列：彩衣左上出血，不蓋馬號／馬名 */
     .hrow:not(.head) .cell.pin-id {
       display: grid;
-      grid-template-columns: 25px minmax(0, 1fr);
-      grid-template-rows: 31px minmax(0, 1fr);
+      grid-template-columns: 24px minmax(0, 1fr);
+      grid-template-rows: 30px minmax(0, 1fr);
       align-items: stretch;
       justify-items: stretch;
       padding: 0;
@@ -169,7 +169,7 @@
       align-self: center;
       justify-self: center;
       z-index: 2;
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 400;
       line-height: 1;
       font-variant-numeric: tabular-nums;
@@ -289,7 +289,7 @@
 
     .silk {
       display: block;
-      width: 17px; height: 17px;
+      width: 16px; height: 16px;
       border-radius: 0;
       background-color: transparent;
     }
@@ -315,7 +315,7 @@
     }
     .hname {
       display: block;
-      font-size: 13px; font-weight: 800; line-height: 1.02;
+      font-size: 13px; font-weight: 400; line-height: 1.02;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       color: var(--text); max-width: 52px;
       text-align: center;
@@ -334,12 +334,12 @@
       align-items: center;
       justify-content: center;
       flex: 0 0 auto;
-      width: 23px;
-      height: 23px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       border: 1px solid #cfd6de;
       background: #fff;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 400;
       line-height: 1;
       font-variant-numeric: tabular-nums;
@@ -349,10 +349,10 @@
     }
 
     .odds { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.02; }
-    .odds .win { font-size: 15px; font-weight: 400; color: var(--text); }
-    .odds .pla { font-size: 13px; font-weight: 400; color: #7b8494; }
+    .odds .win { font-size: 14px; font-weight: 400; color: var(--text); }
+    .odds .pla { font-size: 14px; font-weight: 400; color: #7b8494; }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
-    .odds .na { color: var(--muted); font-size: 13px; }
+    .odds .na { color: var(--muted); font-size: 14px; }
 
     .muted { color: var(--muted); font-weight: 600; }
     .form { letter-spacing: .02em; font-weight: 700; font-variant-numeric: tabular-nums; }
