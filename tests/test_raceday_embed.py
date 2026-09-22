@@ -67,6 +67,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("綜合分", r.text)
         self.assertIn("外祖父", r.text)
         self.assertIn("左鎖", r.text)
+        self.assertIn("head-static", r.text)
+        self.assertIn("sort-ico", r.text)
+        self.assertNotIn('data-sort="name"', r.text)
         # 不取代原有賽日嵌入頁
         old = client.get("/embed/raceday")
         self.assertNotIn("pin-odds", old.text)

@@ -153,15 +153,42 @@
     }
     .lock .cell.odds { justify-content: center; padding: 0 3px; }
     .sortable { cursor: pointer; user-select: none; }
-    .sortable.on, .odds-sort.on { color: var(--blue-2); }
-    .caret { font-size: 8px; margin-left: 0; }
+    .head-static {
+      display: block;
+      font-size: 9px; font-weight: 800; line-height: 1.2;
+      color: #8a93a3; cursor: default; user-select: none;
+    }
     .odds-sort {
-      display: block; width: 100%; border: 0; background: transparent;
+      display: inline-flex; flex-direction: row;
+      align-items: center; justify-content: center; gap: 2px;
+      width: auto; max-width: 100%; border: 0; background: transparent;
       color: inherit; font: inherit; font-size: 10px; font-weight: 800;
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
-      white-space: nowrap;
+      white-space: nowrap; border-radius: 3px;
     }
     .lock .hrow.head .odds-sort { font-size: 9px; line-height: 1.2; }
+    .scroll .hrow.head .odds-sort {
+      flex-direction: column; gap: 1px; width: 100%;
+      font-size: 9px; white-space: normal;
+    }
+    .odds-sort .lab { display: block; }
+    .sort-ico {
+      display: inline-flex; flex-direction: column; align-items: center;
+      justify-content: center; line-height: .7; flex: 0 0 auto;
+    }
+    .sort-ico .u, .sort-ico .d {
+      display: block; font-size: 7px; font-weight: 900;
+      color: #c5cad3; line-height: .72;
+    }
+    .sortable.on { color: #2c5f8a; }
+    .sort-ico .u.on, .sort-ico .d.on { color: var(--orange); }
+    .hrow.head .cell.sort-on {
+      background: #e4eef8;
+      box-shadow: inset 0 -2px 0 #3b8fd4;
+      color: #2c5f8a;
+    }
+    .cell.sort-col { background: rgba(91, 163, 217, .12); }
+    .hrow.alt .cell.sort-col { background: rgba(91, 163, 217, .18); }
 
     .silk {
       display: inline-flex; align-items: center; justify-content: center;
@@ -271,7 +298,7 @@
     <div class="meta">
       <div id="raceMeta">16/09 周三 19:10 谷草 五班　1000"B" 好地</div>
     </div>
-    <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
+    <div class="hint">左鎖 馬號／馬名／檔位／獨贏位置 · 馬名不可排序 · 右滑其餘欄 · 點表頭排序（左欄會跟住走）</div>
   </section>
 
   <div class="board-wrap" id="board">
@@ -372,9 +399,16 @@
       return { minW, minP };
     }
 
-    function caret(key) {
-      if (sortKey !== key) return "";
-      return '<span class="caret">' + (sortDir > 0 ? "▲" : "▼") + "</span>";
+    function sortIco(key) {
+      const on = sortKey === key;
+      const up = on && sortDir > 0 ? " on" : "";
+      const dn = on && sortDir < 0 ? " on" : "";
+      return '<span class="sort-ico" aria-hidden="true"><span class="u' + up + '">▲</span><span class="d' + dn + '">▼</span></span>';
+    }
+    function headOn(key) { return sortKey === key ? " sort-on" : ""; }
+    function colOn(key) {
+      if (key === "odds") return (sortKey === "win" || sortKey === "place") ? " sort-col" : "";
+      return sortKey === key ? " sort-col" : "";
     }
 
     function sortedRows() {
@@ -405,10 +439,15 @@
     }
 
     function headBtn(key, label) {
-      const on = sortKey === key ? " on" : "";
+      const on = sortKey === key;
       const htmlLabel = esc(label).replace(/\n/g, "<br>");
-      return '<button type="button" class="odds-sort sortable' + on + '" data-sort="' + key + '">' +
-        htmlLabel + caret(key) + "</button>";
+      const aria = on ? (sortDir > 0 ? "ascending" : "descending") : "none";
+      return '<button type="button" class="odds-sort sortable' + (on ? " on" : "") +
+        '" data-sort="' + key + '" aria-sort="' + aria + '">' +
+        '<span class="lab">' + htmlLabel + "</span>" + sortIco(key) + "</button>";
+    }
+    function headStatic(label) {
+      return '<span class="head-static">' + esc(label) + "</span>";
     }
 
     function renderBoard() {
@@ -416,17 +455,17 @@
       const rows = sortedRows();
       const lockHead =
         '<div class="hrow head">' +
-          '<div class="cell pin-id">' +
-            headBtn("no", "馬號") + headBtn("name", "馬名") +
+          '<div class="cell pin-id' + headOn("no") + '">' +
+            headBtn("no", "馬號") + headStatic("馬名") +
           "</div>" +
-          '<div class="cell pin-draw">' + headBtn("draw", "檔位") + "</div>" +
-          '<div class="cell pin-odds">' +
+          '<div class="cell pin-draw' + headOn("draw") + '">' + headBtn("draw", "檔位") + "</div>" +
+          '<div class="cell pin-odds' + (sortKey === "win" || sortKey === "place" ? " sort-on" : "") + '">' +
             headBtn("win", "獨贏") + headBtn("place", "位置") +
           "</div></div>";
       const scrollHead =
         '<div class="hrow head">' +
           SCROLL_COLS.map((c) =>
-            '<div class="cell ' + c.cls + '">' + headBtn(c.key, c.label) + "</div>"
+            '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
           ).join("") +
         "</div>";
 
@@ -441,9 +480,9 @@
             '</span><span class="pla' + plaHot + '">' + esc(r.place) + "</span></div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
         return '<div class="hrow' + alt + scratch + '">' +
-          '<div class="cell pin-id"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
-          '<div class="cell pin-draw"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
-          '<div class="cell odds pin-odds">' + odds + "</div>" +
+          '<div class="cell pin-id' + colOn("no") + '"><span class="' + silkClass(r.no) + '">' + esc(r.no) + "</span>" + name + "</div>" +
+          '<div class="cell pin-draw' + colOn("draw") + '"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
+          '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
         "</div>";
       }).join("");
 
@@ -451,7 +490,7 @@
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
         const cells = SCROLL_COLS.map((c) =>
-          '<div class="cell ' + c.cls + '"><span class="v">' + esc(fmt(r[c.key])) + "</span></div>"
+          '<div class="cell ' + c.cls + colOn(c.key) + '"><span class="v">' + esc(fmt(r[c.key])) + "</span></div>"
         ).join("");
         return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
       }).join("");
@@ -459,6 +498,7 @@
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.getAttribute("data-sort");
+          if (!key || key === "name") return;
           if (sortKey === key) sortDir = -sortDir;
           else { sortKey = key; sortDir = 1; }
           renderBoard();
