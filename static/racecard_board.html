@@ -156,8 +156,10 @@
       grid-template-columns: minmax(0, 1fr) auto;
       grid-template-rows: auto auto;
       align-items: center;
+      align-content: center;
       justify-items: center;
       column-gap: 1px;
+      row-gap: 0;
     }
     .lock .hrow.head .cell.head-split .odds-sort { grid-column: 1; grid-row: 1; }
     .lock .hrow.head .cell.head-split .head-static { grid-column: 1; grid-row: 2; }
@@ -169,7 +171,7 @@
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
       display: block;
-      font-size: 11px; font-weight: 800; line-height: 1.2;
+      font-size: 11px; font-weight: 800; line-height: 1.05;
       color: #6b7380; cursor: default; user-select: none;
     }
     .odds-sort {
@@ -180,12 +182,12 @@
       padding: 0; line-height: 1.15; cursor: pointer; text-align: center;
       white-space: nowrap; border-radius: 3px;
     }
-    .lock .hrow.head .odds-sort { font-size: 11px; line-height: 1.2; }
+    .lock .hrow.head .odds-sort { font-size: 11px; line-height: 1.05; }
     .scroll .hrow.head .odds-sort {
       flex-direction: row; align-items: center; justify-content: center;
       gap: 2px; width: 100%; font-size: 11px; white-space: normal;
     }
-    .odds-sort .lab { display: block; line-height: 1.15; }
+    .odds-sort .lab { display: block; line-height: 1.05; }
     .sort-hit {
       display: inline-flex; align-items: center; justify-content: center;
       border: 0; background: transparent; padding: 0; margin: 0;
