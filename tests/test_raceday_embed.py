@@ -89,6 +89,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("練馬師", r.text)
         self.assertIn("splitNameAllow", r.text)
         self.assertIn("v stacked", r.text)
+        self.assertIn("v.stacked .sub", r.text)
+        self.assertIn("font: inherit", r.text)
         self.assertIn("top: 2px; bottom: 2px", r.text)
         self.assertNotIn("top: 6px; bottom: 6px", r.text)
         self.assertIn("周俊樂 (-2)", r.text)
