@@ -114,18 +114,19 @@
       z-index: 5;
       flex: 0 0 44px;
       height: 44px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      overscroll-behavior: none;
+      overflow: hidden;
       background: #f7f8fa;
-      scrollbar-width: none;
+      touch-action: pan-x;
     }
-    .scroll-head::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .scroll-head-inner {
+      min-width: max-content;
+      will-change: transform;
+    }
     .scroll-body {
       overflow-x: auto;
       overflow-y: hidden;
       overscroll-behavior: none;
-      -webkit-overflow-scrolling: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .scroll-inner { min-width: max-content; }
 
@@ -351,7 +352,9 @@
   <div class="board-wrap" id="board">
     <div class="lock" id="lockPane"></div>
     <div class="scroll-pane">
-      <div class="scroll-head" id="scrollHead"></div>
+      <div class="scroll-head" id="scrollHeadClip">
+        <div class="scroll-head-inner" id="scrollHead"></div>
+      </div>
       <div class="scroll-body" id="scroller">
         <div class="scroll-inner" id="scrollPane"></div>
       </div>
@@ -461,6 +464,16 @@
       if (key === "odds") return sortKey === "win" ? " sort-col" : "";
       return sortKey === key ? " sort-col" : "";
     }
+    let headRaf = 0;
+    function pinHeadX() {
+      const body = document.getElementById("scroller");
+      if (!el.scrollHead || !body) return;
+      if (headRaf) return;
+      headRaf = requestAnimationFrame(() => {
+        headRaf = 0;
+        el.scrollHead.style.transform = "translate3d(" + (-body.scrollLeft) + "px,0,0)";
+      });
+    }
 
     function sortedRows() {
       const arr = RUNNERS.slice();
@@ -552,10 +565,7 @@
         ).join("");
         return '<div class="hrow' + alt + scratch + '">' + cells + "</div>";
       }).join("");
-
-      const headStrip = document.getElementById("scrollHead");
-      const bodyStrip = document.getElementById("scroller");
-      headStrip.scrollLeft = bodyStrip.scrollLeft;
+      pinHeadX();
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -571,33 +581,25 @@
     renderPills();
     renderBoard();
 
-    const headStrip = document.getElementById("scrollHead");
+    const headClip = document.getElementById("scrollHeadClip");
     const bodyStrip = document.getElementById("scroller");
-    let syncing = false;
-    function syncX(from, to) {
-      from.addEventListener("scroll", () => {
-        if (syncing) return;
-        syncing = true;
-        to.scrollLeft = from.scrollLeft;
-        syncing = false;
-      }, { passive: true });
-    }
-    syncX(headStrip, bodyStrip);
-    syncX(bodyStrip, headStrip);
+    bodyStrip.addEventListener("scroll", pinHeadX, { passive: true });
 
     let drag = null;
-    function onDragStart(e, node) {
+    headClip.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest("button, [data-sort]")) return;
+      drag = { x: e.clientX, sl: bodyStrip.scrollLeft };
+      try { headClip.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    bodyStrip.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "mouse" || e.button !== 0) return;
       if (e.target.closest("button, [data-sort]")) return;
-      drag = { x: e.clientX, sl: node.scrollLeft };
-    }
-    headStrip.addEventListener("pointerdown", (e) => onDragStart(e, headStrip));
-    bodyStrip.addEventListener("pointerdown", (e) => onDragStart(e, bodyStrip));
+      drag = { x: e.clientX, sl: bodyStrip.scrollLeft };
+    });
     window.addEventListener("pointermove", (e) => {
       if (!drag) return;
-      const sl = drag.sl - (e.clientX - drag.x);
-      headStrip.scrollLeft = sl;
-      bodyStrip.scrollLeft = sl;
+      bodyStrip.scrollLeft = drag.sl - (e.clientX - drag.x);
     });
     window.addEventListener("pointerup", () => { drag = null; });
     window.addEventListener("pointercancel", () => { drag = null; });
