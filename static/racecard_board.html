@@ -23,9 +23,9 @@
       --place: #27ae60;
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      /* 左鎖三欄：馬號上馬名下、檔位横排、獨贏上位置下 */
+      /* 左鎖三欄：馬號上馬名下、勝%上檔位下、獨贏上位置下 */
       --pin-id: 52px;
-      --pin-draw: 40px;
+      --pin-draw: 44px;
       --pin-odds: 44px;
       --pin-w: calc(var(--pin-id) + var(--pin-draw) + var(--pin-odds));
       --head-fs: 11px;
@@ -205,6 +205,9 @@
       grid-column: 2; grid-row: 1 / span 2;
       align-self: center;
     }
+    /* 檔位：勝% 在上（不可排）、檔位在下可排 */
+    .hrow.head .cell.pin-draw.head-split .head-static { grid-row: 1; }
+    .hrow.head .cell.pin-draw.head-split .odds-sort { grid-row: 2; }
     .lock-cluster .cell.odds { justify-content: center; padding: 0 3px; }
     .sortable { cursor: pointer; user-select: none; }
     .head-static {
@@ -285,11 +288,29 @@
       letter-spacing: -.02em;
     }
 
+    .hrow:not(.head) .cell.pin-draw {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1px;
+      padding: 2px 1px 1px;
+    }
+    .draw-pct {
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.04em;
+      color: #3b8fd4;
+    }
+    .draw-pct.hot { color: var(--orange); }
     .draw-dot {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 18px; height: 18px; border-radius: 50%;
+      width: 16px; height: 16px; border-radius: 50%;
       border: 1px solid #cfd6de; font-size: 10px; font-weight: 800;
       background: #fff; color: #334;
+      flex: 0 0 auto;
     }
 
     .odds { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
@@ -377,7 +398,7 @@
     <div class="meta">
       <div id="raceMeta">18:40 南風讓賽　谷草 "C" 1650米 第五班 好地</div>
     </div>
-    <div class="hint">資料截自馬會 23/09 跑馬地排位表及投注頁（非即時）· 左鎖 馬號／馬名／檔位／獨贏位置 · 馬名、位置不可排序</div>
+    <div class="hint">資料截自馬會 23/09 跑馬地排位表及投注頁（非即時）· 檔位勝率為示意數字 · 左鎖 馬號／馬名／檔位／獨贏位置 · 馬名、位置、勝%不可排序</div>
   </section>
 
   <div class="board-wrap" id="board"></div>
@@ -457,6 +478,30 @@
       if (n == null) return "—";
       if (kind === "place") return n.toFixed(1);
       return Number.isInteger(n) ? String(n) : String(n);
+    }
+    /* 示意：同檔同場同一勝率，各場略轉一檔，方便先看版面 */
+    const DRAW_WIN_DEMO = [10.8, 9.9, 9.4, 8.7, 8.2, 7.8, 7.4, 7.1, 7.6, 7.3, 8.0, 7.8];
+    function drawWinPct(r) {
+      const n = numOrNull(r && r.drawWinPct);
+      if (n != null) return n;
+      const d = numOrNull(r && r.draw);
+      if (d == null || d < 1) return null;
+      const shift = ((currentRace - 1) * 2) % DRAW_WIN_DEMO.length;
+      return DRAW_WIN_DEMO[(d - 1 + shift) % DRAW_WIN_DEMO.length];
+    }
+    function fmtDrawPct(v) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      return n.toFixed(1) + "%";
+    }
+    function bestDrawPct() {
+      let maxP = -Infinity;
+      currentRunners().forEach((r) => {
+        if (r.scratched) return;
+        const n = numOrNull(drawWinPct(r));
+        if (n != null) maxP = Math.max(maxP, n);
+      });
+      return maxP;
     }
     function silkTag(r) {
       if (r.silk) {
@@ -548,6 +593,7 @@
 
     function renderBoard() {
       const hot = bestOdds();
+      const hotDraw = bestDrawPct();
       const rows = sortedRows();
       const sl = el.board.scrollLeft;
       const st = el.board.scrollTop;
@@ -556,7 +602,9 @@
           '<div class="cell pin-id head-split' + headOn("no") + '">' +
             headBtn("no", "馬號", false) + headStatic("馬名") + sortHit("no") +
           "</div>" +
-          '<div class="cell pin-draw' + headOn("draw") + '">' + headBtn("draw", "檔位") + "</div>" +
+          '<div class="cell pin-draw head-split' + headOn("draw") + '">' +
+            headStatic("勝%") + headBtn("draw", "檔位", false) + sortHit("draw") +
+          "</div>" +
           '<div class="cell pin-odds head-split' + headOn("win") + '">' +
             headBtn("win", "獨贏", false) + headStatic("位置") + sortHit("win") +
           "</div></div>";
@@ -575,11 +623,16 @@
           : '<div class="odds"><span class="win' + winHot + '">' + esc(fmtOdds(r.win, "win")) +
             '</span><span class="pla' + plaHot + '">' + esc(fmtOdds(r.place, "place")) + "</span></div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
+        const pct = drawWinPct(r);
+        const pctHot = !r.scratched && pct === hotDraw ? " hot" : "";
+        const drawCell =
+          '<span class="draw-pct' + pctHot + '">' + esc(fmtDrawPct(pct)) + "</span>" +
+          '<span class="draw-dot">' + esc(r.draw) + "</span>";
         const lock =
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '">' + silkTag(r) +
             '<span class="hno">' + esc(r.no) + "</span>" + name + "</div>" +
-            '<div class="cell pin-draw' + colOn("draw") + '"><span class="draw-dot">' + esc(r.draw) + "</span></div>" +
+            '<div class="cell pin-draw' + colOn("draw") + '">' + drawCell + "</div>" +
             '<div class="cell odds pin-odds' + colOn("odds") + '">' + odds + "</div>" +
           "</div>";
         const cells = SCROLL_COLS.map((c) =>
@@ -595,7 +648,7 @@
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.getAttribute("data-sort");
-          if (!key || key === "name" || key === "place") return;
+          if (!key || key === "name" || key === "place" || key === "drawWinPct") return;
           if (sortKey === key) sortDir = -sortDir;
           else { sortKey = key; sortDir = 1; }
           renderBoard();
