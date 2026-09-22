@@ -254,7 +254,7 @@
       display: block;
       width: 16px; height: 16px;
       border-radius: 0;
-      background-color: #cfd6de;
+      background-color: transparent;
     }
     .hrow:not(.head) .cell.pin-id .silk {
       grid-column: 1;
@@ -267,11 +267,14 @@
       /* 貼到列頂／左鎖邊框交接，左上出血 */
       margin: -1px 0 0 0;
       height: calc(100% + 1px);
+      overflow: hidden;
       z-index: 1;
     }
     .silk.has-img {
-      background-size: cover;
-      background-position: center;
+      background-color: transparent;
+      /* 放大裁掉帽子與灰邊，只留彩衣身 */
+      background-size: 200% auto;
+      background-position: 50% 70%;
       background-repeat: no-repeat;
     }
     .hname {
