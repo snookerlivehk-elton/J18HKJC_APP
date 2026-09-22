@@ -63,7 +63,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("has-img", r.text)
         self.assertIn("background-size: contain", r.text)
         self.assertIn("background-color: transparent", r.text)
-        self.assertIn("margin: 0 0 0 -1px", r.text)
+        self.assertIn("margin: 1px 0 0 2px", r.text)
         self.assertIn("馬號", r.text)
         self.assertIn("檔位", r.text)
         self.assertIn("draw-lab", r.text)
