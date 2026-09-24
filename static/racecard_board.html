@@ -88,6 +88,14 @@
       margin-top: 6px; font-size: 11px; color: var(--muted); font-weight: 600;
     }
 
+    /* 表格區殼：表體 + 馬匹詳情彈層同尺寸 */
+    .board-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
     /* 單一原生滾動：表頭 sticky top、左鎖 sticky left，左右滑同層不會卡頓 */
     .board-wrap {
       flex: 1 1 auto;
@@ -97,6 +105,156 @@
       -webkit-overflow-scrolling: touch;
       background: #fff;
     }
+
+    .horse-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      box-shadow: inset 0 1px 0 rgba(45, 62, 80, .08);
+      animation: horseSheetIn .22s ease-out;
+    }
+    .horse-sheet[hidden] { display: none !important; }
+    @keyframes horseSheetIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .horse-sheet-bar {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 44px 12px 12px;
+      background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
+      color: #fff;
+    }
+    .horse-sheet-silk {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      background-color: transparent;
+      background-size: contain;
+      background-position: left top;
+      background-repeat: no-repeat;
+    }
+    .horse-sheet-id {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.35);
+      font-size: 14px;
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .horse-sheet-title {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .horse-sheet-title .nm {
+      display: block;
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: .02em;
+      line-height: 1.15;
+    }
+    .horse-sheet-title .sub {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      opacity: .88;
+      line-height: 1.25;
+    }
+    .horse-sheet-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(255,255,255,.14);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .horse-sheet-close:active { background: rgba(255,255,255,.28); }
+    .horse-sheet-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 10px 16px;
+      background: #f4f6f8;
+    }
+    .horse-sheet-odds {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .horse-sheet-odds .box {
+      background: #fff;
+      border: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .horse-sheet-odds .k {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .horse-sheet-odds .v {
+      display: block;
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      line-height: 1;
+    }
+    .horse-sheet-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+    .horse-sheet-grid .item {
+      background: #fff;
+      padding: 9px 10px;
+      min-width: 0;
+    }
+    .horse-sheet-grid .item.wide { grid-column: 1 / -1; }
+    .horse-sheet-grid .k {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 3px;
+      line-height: 1.2;
+    }
+    .horse-sheet-grid .v {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 400;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .horse-sheet-grid .v.muted { color: var(--muted); }
 
     .hrow {
       display: flex;
@@ -163,6 +321,11 @@
       padding: 0;
       overflow: visible;
       position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hrow:not(.head) .cell.pin-id:active {
+      background: rgba(91, 163, 217, .16);
     }
     .hno {
       grid-column: 2;
@@ -460,7 +623,21 @@
     <div class="hint">資料截自馬會 23/09 跑馬地排位表及投注頁（非即時）· 左鎖 馬號／馬名／獨贏位置檔位 · 馬名、位置、獨贏不可排序</div>
   </section>
 
-  <div class="board-wrap" id="board"></div>
+  <div class="board-shell">
+    <div class="board-wrap" id="board"></div>
+    <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
+      <div class="horse-sheet-bar">
+        <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
+        <span class="horse-sheet-id" id="horseSheetNo"></span>
+        <div class="horse-sheet-title">
+          <span class="nm" id="horseSheetName"></span>
+          <span class="sub" id="horseSheetRace"></span>
+        </div>
+        <button type="button" class="horse-sheet-close" id="horseSheetClose" aria-label="關閉">×</button>
+      </div>
+      <div class="horse-sheet-body" id="horseSheetBody"></div>
+    </div>
+  </div>
 
   <script>
   (function () {
@@ -508,6 +685,13 @@
     const el = {
       pills: document.getElementById("racePills"),
       board: document.getElementById("board"),
+      sheet: document.getElementById("horseSheet"),
+      sheetSilk: document.getElementById("horseSheetSilk"),
+      sheetNo: document.getElementById("horseSheetNo"),
+      sheetName: document.getElementById("horseSheetName"),
+      sheetRace: document.getElementById("horseSheetRace"),
+      sheetBody: document.getElementById("horseSheetBody"),
+      sheetClose: document.getElementById("horseSheetClose"),
     };
     let currentRace = 1;
     let sortKey = "no";
@@ -640,6 +824,7 @@
           currentRace = Number(btn.getAttribute("data-n"));
           sortKey = "no";
           sortDir = 1;
+          closeHorseSheet();
           renderPills();
           renderMeta();
           renderBoard();
@@ -713,6 +898,74 @@
       });
     }
 
+    function sheetItem(label, value, wide) {
+      const empty = value == null || value === "" || value === "—";
+      return '<div class="item' + (wide ? " wide" : "") + '"><span class="k">' + esc(label) +
+        '</span><span class="v' + (empty ? " muted" : "") + '">' + esc(empty ? "—" : value) + "</span></div>";
+    }
+    function closeHorseSheet() {
+      if (!el.sheet || el.sheet.hasAttribute("hidden")) return;
+      el.sheet.setAttribute("hidden", "");
+      el.sheet.setAttribute("aria-hidden", "true");
+    }
+    function openHorseSheet(no) {
+      const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
+      if (!r || !el.sheet) return;
+      const meet = currentMeet();
+      const j = splitNameAllow(r.jockey);
+      el.sheetNo.textContent = String(r.no);
+      el.sheetName.textContent = r.name || "";
+      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
+      if (r.silk) {
+        el.sheetSilk.style.backgroundImage = "url('" + String(r.silk).replace(/'/g, "%27") + "')";
+        el.sheetSilk.className = "horse-sheet-silk";
+      } else {
+        el.sheetSilk.style.backgroundImage = "";
+        el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
+      }
+      el.sheetBody.innerHTML =
+        '<div class="horse-sheet-odds">' +
+          '<div class="box"><span class="k">檔位</span><span class="v">' + esc(fmt(r.draw)) + "</span></div>" +
+          '<div class="box"><span class="k">獨贏</span><span class="v">' + esc(r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win")) + "</span></div>" +
+          '<div class="box"><span class="k">位置</span><span class="v">' + esc(r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place")) + "</span></div>" +
+        "</div>" +
+        '<div class="horse-sheet-grid">' +
+          sheetItem("近績", r.form6) +
+          sheetItem("往績", r.recent) +
+          sheetItem("騎師", j.allow ? (j.name + " " + j.allow) : r.jockey) +
+          sheetItem("練馬師", r.trainer) +
+          sheetItem("年齡", r.age) +
+          sheetItem("評分", r.rating) +
+          sheetItem("評分+/-", r.rtgDelta) +
+          sheetItem("負磅", r.hw) +
+          sheetItem("排位體重", r.bodyWt) +
+          sheetItem("配備", r.gear) +
+          sheetItem("出道至今", r.career) +
+          sheetItem("跑道", r.rail) +
+          sheetItem("父系", r.sire) +
+          sheetItem("母系", r.dam) +
+          sheetItem("外祖父", r.damsire, true) +
+          sheetItem("馬主", r.owner, true) +
+          sheetItem("獎金", r.prize) +
+        "</div>";
+      el.sheet.removeAttribute("hidden");
+      el.sheet.setAttribute("aria-hidden", "false");
+      if (el.sheetClose) el.sheetClose.focus();
+    }
+    function bindHorseSheetOpens() {
+      document.querySelectorAll("#board .hrow:not(.head) .cell.pin-id[data-no]").forEach(function (cell) {
+        cell.addEventListener("click", function () {
+          openHorseSheet(cell.getAttribute("data-no"));
+        });
+        cell.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            openHorseSheet(cell.getAttribute("data-no"));
+          }
+        });
+      });
+    }
+
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
@@ -747,7 +1000,7 @@
         const name = '<span class="hname">' + esc(r.name) + "</span>";
         const lock =
           '<div class="lock-cluster">' +
-            '<div class="cell pin-id' + colOn("no") + '">' + silkTag(r) +
+            '<div class="cell pin-id' + colOn("no") + '" data-no="' + esc(r.no) + '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 詳情">' + silkTag(r) +
             '<span class="hno"><span>' + esc(r.no) + "</span></span>" + name + "</div>" +
             '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
             '<span class="draw-no"><span>' + esc(r.draw) + "</span></span></div>" +
@@ -772,12 +1025,19 @@
           renderBoard();
         });
       });
+      bindHorseSheetOpens();
     }
 
     applyColFitRule();
     renderPills();
     renderMeta();
     renderBoard();
+    if (el.sheetClose) {
+      el.sheetClose.addEventListener("click", closeHorseSheet);
+    }
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") closeHorseSheet();
+    });
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { renderBoard(); });
     }
