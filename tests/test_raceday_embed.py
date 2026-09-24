@@ -122,6 +122,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("horseSheetClose", r.text)
         self.assertIn('data-no="', r.text)
         self.assertIn("board-shell", r.text)
+        self.assertNotIn("date-row", r.text)
+        self.assertNotIn("▾", r.text)
         self.assertIn("堅多福", r.text)
         self.assertIn("投注頁", r.text)
         self.assertIn('"win":3.4', r.text)
