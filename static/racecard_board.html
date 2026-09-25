@@ -23,7 +23,7 @@
       --place: #27ae60;
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-      /* 左鎖兩欄：馬號上馬名下；獨贏上位置下、右側豎排檔位 */
+      /* 左鎖兩欄：馬號上馬名下；檔位豎排左、獨贏上位置下右 */
       --pin-id: 57px;
       --pin-odds: 56px;
       --pin-w: calc(var(--pin-id) + var(--pin-odds));
@@ -378,7 +378,7 @@
       grid-column: 2; grid-row: 1 / span 2;
       align-self: center;
     }
-    /* 獨贏／位置左、檔位豎排右，同一格 1px */
+    /* 檔位豎排左、獨贏／位置右，同一格 */
     .hrow.head .cell.pin-odds {
       flex-direction: row;
       justify-content: center;
@@ -503,7 +503,7 @@
       align-items: center;
       justify-content: center;
       gap: 3px;
-      padding: 0 3px 0 2px;
+      padding: 0 2px 0 3px;
     }
     .draw-no {
       display: grid;
@@ -963,12 +963,12 @@
             headBtn("no", "馬號", false) + headStatic("馬名") + sortHit("no") +
           "</div>" +
           '<div class="cell pin-odds' + headOn("draw") + '">' +
-            '<div class="odds-labs">' + headStatic("獨贏") + headStatic("位置") + "</div>" +
             '<button type="button" class="draw-sort sortable' + (sortKey === "draw" ? " on" : "") +
             '" data-sort="draw" aria-sort="' +
             (sortKey === "draw" ? (sortDir > 0 ? "ascending" : "descending") : "none") +
             '"><span class="draw-lab"><span>檔</span><span>位</span></span>' +
-            sortIco("draw") + "</button></div></div>";
+            sortIco("draw") + "</button>" +
+            '<div class="odds-labs">' + headStatic("獨贏") + headStatic("位置") + "</div></div></div>";
       const scrollHeadCells = SCROLL_COLS.map((c) =>
         '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
       ).join("");
@@ -988,8 +988,8 @@
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '" data-no="' + esc(r.no) + '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 詳情">' + silkTag(r) +
             '<span class="hno"><span>' + esc(r.no) + "</span></span>" + name + "</div>" +
-            '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
-            '<span class="draw-no"><span>' + esc(r.draw) + "</span></span></div>" +
+            '<div class="cell odds pin-odds' + colOn("draw") + '">' +
+            '<span class="draw-no"><span>' + esc(r.draw) + "</span></span>" + odds + "</div>" +
           "</div>";
         const cells = SCROLL_COLS.map((c) =>
           '<div class="cell ' + c.cls + colOn(c.key) + '">' + cellValue(c, r) + "</div>"
