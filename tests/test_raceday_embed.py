@@ -77,7 +77,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn(".odds .pla { font-size: 14px", r.text)
         self.assertIn("font-weight: 400", r.text)
         self.assertIn(".hrow:not(.head) .cell.pin-odds", r.text)
-        self.assertIn("justify-content: center;\n      gap: 3px", r.text)
+        self.assertIn("justify-content: center;\n      gap: 5px", r.text)
         self.assertIn("padding: 0 3px 0 2px", r.text)
         self.assertIn("draw-sort sortable", r.text)
         self.assertIn("odds-labs", r.text)
