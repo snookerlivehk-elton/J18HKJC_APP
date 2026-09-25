@@ -61,6 +61,61 @@
     .topbar .side.r { text-align: right; opacity: .9; }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
 
+    /* 頁眉下公告跑馬燈 */
+    .anno {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: stretch;
+      height: 28px;
+      background: #fff6d6;
+      border-bottom: 1px solid #edd9a0;
+      overflow: hidden;
+      z-index: 28;
+    }
+    .anno-lab {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
+      background: #f0dfa0;
+      color: #3d5a80;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      white-space: nowrap;
+    }
+    .anno-track {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      mask-image: linear-gradient(90deg, transparent 0, #000 8px, #000 calc(100% - 8px), transparent);
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8px, #000 calc(100% - 8px), transparent);
+    }
+    .anno-run {
+      display: inline-flex;
+      align-items: center;
+      gap: 56px;
+      white-space: nowrap;
+      will-change: transform;
+      animation: annoMarquee 22s linear infinite;
+      color: #d32f2f;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1;
+      padding-left: 10px;
+    }
+    .anno-run span { flex: 0 0 auto; }
+    @keyframes annoMarquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .anno-run { animation: none; transform: none; }
+    }
+
     .subhead {
       flex: 0 0 auto;
       background: #fff;
@@ -601,6 +656,16 @@
     <h1>排位</h1>
     <div class="side r">?</div>
   </header>
+
+  <div class="anno" role="region" aria-label="公告">
+    <span class="anno-lab">公告</span>
+    <div class="anno-track">
+      <div class="anno-run">
+        <span>如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
+        <span aria-hidden="true">如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
+      </div>
+    </div>
+  </div>
 
   <section class="subhead">
     <div class="race-pills" id="racePills" aria-label="場次"></div>
