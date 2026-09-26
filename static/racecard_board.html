@@ -143,14 +143,25 @@
       display: flex;
       flex-direction: column;
     }
-    /* 單一原生滾動：表頭 sticky top、左鎖 sticky left，左右滑同層不會卡頓 */
+    /* 縱向：board-wrap；橫向馬匹：board-x；連贏在 board-x 外，左右滑互不干擾 */
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       overscroll-behavior: none;
       -webkit-overflow-scrolling: touch;
       background: #fff;
+    }
+    .board-x {
+      overflow-x: auto;
+      overflow-y: clip;
+      overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+    }
+    @supports not (overflow-y: clip) {
+      .board-x { overflow-y: hidden; }
     }
 
     .horse-sheet {
@@ -649,12 +660,12 @@
     .silk-13 { background:#fff; color:#111; box-shadow: inset 0 0 0 1px #999; }
     .silk-14 { background:#c5a028; color:#1a1408; }
 
-    /* 連贏區：縱向可跟列表一起滑；橫向手勢不得帶動上方馬匹表 */
+    /* 連贏區：與馬匹橫滑容器分離，僅跟隨縱向列表滾動 */
     .qin-panel {
-      position: sticky;
-      left: 0;
+      position: relative;
       z-index: 2;
       box-sizing: border-box;
+      width: 100%;
       background: #eef1f5;
       border-top: 8px solid #eef1f5;
       padding: 0 0 10px;
@@ -915,6 +926,7 @@
     const el = {
       pills: document.getElementById("racePills"),
       board: document.getElementById("board"),
+      boardX: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
@@ -1382,9 +1394,9 @@
       );
     }
     function fitQinPanelWidth() {
+      /* 連贏已與 board-x 分離，寬度跟 board-wrap 即可 */
       const panel = document.getElementById("qinPanel");
-      if (!panel || !el.board) return;
-      panel.style.width = el.board.clientWidth + "px";
+      if (panel) panel.style.width = "";
     }
     function bindQinPreview() {
       document.querySelectorAll("#qinPanel [data-qin-n]").forEach(function (btn) {
@@ -1395,50 +1407,51 @@
         });
       });
     }
-    /* 連贏區內的左右滑不得改變馬匹表的 scrollLeft */
-    const qinScrollGuard = { armed: false, lockSL: 0 };
-    let qinScrollBoardBound = false;
+    /* 連贏區手勢自管：縱向滾 board-wrap，橫向只滾連贏矩陣，绝不改 board-x */
     function bindQinScrollIsolate() {
       const panel = document.getElementById("qinPanel");
       if (!panel || !el.board) return;
-      function arm() {
-        qinScrollGuard.armed = true;
-        qinScrollGuard.lockSL = el.board.scrollLeft;
-      }
-      function disarm() { qinScrollGuard.armed = false; }
-      function holdX() {
-        if (!qinScrollGuard.armed) return;
-        if (el.board.scrollLeft !== qinScrollGuard.lockSL) {
-          el.board.scrollLeft = qinScrollGuard.lockSL;
+      const qinBlock = panel.querySelector(".qin-block");
+      let sx = 0, sy = 0, lx = 0, ly = 0, mode = null;
+      panel.addEventListener("touchstart", function (ev) {
+        if (ev.touches.length !== 1) return;
+        const t = ev.touches[0];
+        sx = lx = t.clientX;
+        sy = ly = t.clientY;
+        mode = null;
+      }, { passive: true, capture: true });
+      panel.addEventListener("touchmove", function (ev) {
+        if (ev.touches.length !== 1) return;
+        const t = ev.touches[0];
+        const dx = t.clientX - lx;
+        const dy = t.clientY - ly;
+        if (!mode) {
+          const adx = Math.abs(t.clientX - sx);
+          const ady = Math.abs(t.clientY - sy);
+          if (adx < 8 && ady < 8) return;
+          mode = adx > ady ? "x" : "y";
         }
-      }
-      panel.addEventListener("touchstart", arm, { passive: true, capture: true });
-      panel.addEventListener("touchmove", holdX, { passive: true, capture: true });
-      panel.addEventListener("touchend", disarm, { passive: true, capture: true });
-      panel.addEventListener("touchcancel", disarm, { passive: true, capture: true });
-      panel.addEventListener("pointerdown", function (ev) {
-        if (ev.pointerType === "mouse" && ev.button !== 0) return;
-        arm();
-      }, { capture: true });
-      panel.addEventListener("pointerup", disarm, { capture: true });
-      panel.addEventListener("pointercancel", disarm, { capture: true });
+        ev.preventDefault();
+        if (mode === "y") {
+          el.board.scrollTop -= dy;
+        } else if (qinBlock) {
+          qinBlock.scrollLeft -= dx;
+        }
+        lx = t.clientX;
+        ly = t.clientY;
+      }, { passive: false, capture: true });
       panel.addEventListener("wheel", function (ev) {
         if (Math.abs(ev.deltaX) <= Math.abs(ev.deltaY)) return;
-        const sl = el.board.scrollLeft;
-        requestAnimationFrame(function () {
-          el.board.scrollLeft = sl;
-        });
-      }, { passive: true, capture: true });
-      if (!qinScrollBoardBound) {
-        qinScrollBoardBound = true;
-        el.board.addEventListener("scroll", holdX, { passive: true });
-      }
+        if (!qinBlock) return;
+        ev.preventDefault();
+        qinBlock.scrollLeft += ev.deltaX;
+      }, { passive: false, capture: true });
     }
 
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
-      const sl = el.board.scrollLeft;
+      const sl = el.boardX ? el.boardX.scrollLeft : 0;
       const st = el.board.scrollTop;
       const lockHead =
         '<div class="lock-cluster">' +
@@ -1480,10 +1493,13 @@
         return '<div class="hrow' + alt + scratch + '">' + lock + cells + "</div>";
       }).join("");
 
-      el.board.innerHTML = head + body + renderQinPanelHtml();
+      el.board.innerHTML =
+        '<div class="board-x" id="boardX">' + head + body + "</div>" +
+        renderQinPanelHtml();
+      el.boardX = document.getElementById("boardX");
       fitScrollColWidths();
       fitQinPanelWidth();
-      el.board.scrollLeft = sl;
+      if (el.boardX) el.boardX.scrollLeft = sl;
       el.board.scrollTop = st;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {

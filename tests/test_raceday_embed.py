@@ -144,6 +144,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("qin-dense", r.text)
         self.assertIn('btn(18, "18")', r.text)
         self.assertIn("bindQinScrollIsolate", r.text)
+        self.assertIn("board-x", r.text)
+        self.assertIn("overflow-y: clip", r.text)
         self.assertIn("touch-action: pan-y", r.text)
         self.assertIn("overscroll-behavior: contain", r.text)
         self.assertNotIn("qinIdxToggle", r.text)
