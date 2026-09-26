@@ -134,6 +134,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("board-horses", r.text)
         self.assertIn("syncHorseHeadPin", r.text)
         self.assertIn("syncHorseHeadLockX", r.text)
+        self.assertIn("measureHorsePinGeometry", r.text)
         self.assertIn("is-vpinned", r.text)
         self.assertNotIn("board-head-pin", r.text)
         self.assertNotIn("bindHorseHeadScroll", r.text)
