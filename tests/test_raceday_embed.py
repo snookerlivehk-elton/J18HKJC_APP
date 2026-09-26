@@ -196,6 +196,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("const QIN_FIT_N = 14", r.text)
         self.assertIn("QIN_MAX_N", r.text)
         self.assertIn("fitQinTableWidths", r.text)
+        self.assertIn("const titleW = 40", r.text)
         self.assertIn("ensureQinDemo20Race", r.text)
         self.assertIn("ensureRace9Has14Runners", r.text)
         self.assertIn("demoPad14", r.text)

@@ -1710,7 +1710,7 @@
       if (!panel || !tbl) return;
       const n = Number(tbl.getAttribute("data-n") || 0);
       if (n < 2) return;
-      const titleW = 44;
+      const titleW = 40;
       const avail = Math.max(panel.clientWidth, 200);
       const denom = Math.min(n, QIN_FIT_N);
       const cell = Math.max(18, Math.floor((avail - titleW) / denom));
