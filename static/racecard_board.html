@@ -165,11 +165,53 @@
     @supports not (overflow-y: clip) {
       .board-x { overflow-y: hidden; }
     }
-    /* 馬匹區塊：board-x 用 overflow-y:clip，表頭 sticky top 可穿透到 board-wrap；
-       橫滑原生、豎吸頂原生，無需 JS transform 同步 */
+    /* 馬匹區塊：表頭在 board-x 外 CSS sticky（豎鎖原生）；
+       右表頭用獨立 overflow-x + scrollLeft 跟隨 body（非 transform，減少果凍） */
     .board-horses {
       position: relative;
       background: #fff;
+    }
+    .board-head-pin {
+      position: sticky;
+      top: 0;
+      z-index: 7;
+      background: #eef3f8;
+      overflow: hidden;
+    }
+    .board-head-pin .hrow.head {
+      position: relative;
+      top: auto;
+      z-index: 7;
+      width: 100%;
+      min-width: 0;
+    }
+    .board-head-pin .lock-cluster {
+      position: relative;
+      left: auto;
+      z-index: 8;
+      background: #eef3f8;
+    }
+    .board-head-x {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 47px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      pointer-events: none;
+    }
+    .board-head-x::-webkit-scrollbar { display: none; }
+    .board-head-x .head-scroll-inner {
+      display: flex;
+      align-items: stretch;
+      height: 100%;
+      min-width: max-content;
+    }
+    .board-head-pin button,
+    .board-head-pin .sort-hit {
+      pointer-events: auto;
     }
 
     .horse-sheet {
@@ -351,9 +393,8 @@
     }
     .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
-      position: sticky;
-      top: 0;
-      z-index: 7;
+      position: relative;
+      z-index: 6;
       height: 47px;
       background: #eef3f8;
       color: #111;
@@ -879,6 +920,7 @@
       board: document.getElementById("board"),
       boardMain: document.getElementById("boardMain"),
       boardX: null,
+      boardHeadX: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
@@ -1374,6 +1416,24 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
     }
+    /* 豎向：board-head-pin CSS sticky；橫向：board-head-x.scrollLeft 跟隨 board-x（無 transform） */
+    let headScrollBound = false;
+    function syncHeadScrollLeft() {
+      const body = el.boardX;
+      const headX = el.boardHeadX;
+      if (!body || !headX) return;
+      const sl = body.scrollLeft || 0;
+      if (headX.scrollLeft !== sl) headX.scrollLeft = sl;
+    }
+    function bindHorseHeadScroll() {
+      if (!el.boardX || !el.boardHeadX) return;
+      if (!headScrollBound) {
+        headScrollBound = true;
+        el.boardX.addEventListener("scroll", syncHeadScrollLeft, { passive: true });
+      }
+      syncHeadScrollLeft();
+    }
+
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
@@ -1394,7 +1454,13 @@
       const scrollHeadCells = SCROLL_COLS.map((c) =>
         '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
       ).join("");
-      const head = '<div class="hrow head">' + lockHead + scrollHeadCells + "</div>";
+      const head =
+        '<div class="hrow head">' +
+          lockHead +
+          '<div class="board-head-x" id="boardHeadX">' +
+            '<div class="head-scroll-inner">' + scrollHeadCells + "</div>" +
+          "</div>" +
+        "</div>";
 
       const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
@@ -1421,13 +1487,17 @@
 
       el.boardMain.innerHTML =
         '<div class="board-horses" id="boardHorses">' +
-          '<div class="board-x" id="boardX">' + head + body + "</div>" +
+          '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
+          '<div class="board-x" id="boardX">' + body + "</div>" +
         "</div>" +
         renderQinPanelHtml();
       el.boardX = document.getElementById("boardX");
+      el.boardHeadX = document.getElementById("boardHeadX");
+      headScrollBound = false;
       fitScrollColWidths();
       fitQinTableWidths();
       if (el.boardX) el.boardX.scrollLeft = sl;
+      syncHeadScrollLeft();
       el.board.scrollTop = st;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
@@ -1440,6 +1510,7 @@
         });
       });
       bindHorseSheetOpens();
+      bindHorseHeadScroll();
     }
 
     applyColFitRule();
@@ -1457,6 +1528,7 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
+      syncHeadScrollLeft();
     });
   })();
   </script>
