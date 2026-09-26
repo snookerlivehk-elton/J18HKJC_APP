@@ -146,11 +146,14 @@
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
-      overflow-x: hidden;
+      overflow-x: clip;
       overflow-y: auto;
       overscroll-behavior: none;
       -webkit-overflow-scrolling: touch;
       background: #fff;
+    }
+    @supports not (overflow-x: clip) {
+      .board-wrap { overflow-x: hidden; }
     }
     .board-x {
       overflow-x: auto;
@@ -162,10 +165,27 @@
     @supports not (overflow-y: clip) {
       .board-x { overflow-y: hidden; }
     }
-    /* 馬匹區塊：表頭僅在本區塊仍有內容入鏡時吸頂 */
+    /* 馬匹區塊：表頭在 board-x 外吸頂，區塊滾完後隨最後一匹一起離開 */
     .board-horses {
       position: relative;
       background: #fff;
+    }
+    .board-head-pin {
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
+      background: #eef3f8;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .board-head-pin::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
     }
 
     .horse-sheet {
@@ -348,17 +368,12 @@
     .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
       position: relative;
-      top: auto;
       z-index: 6;
       height: 47px;
       background: #eef3f8;
       color: #111;
       font-size: var(--head-fs); font-weight: 400;
       text-align: center;
-    }
-    .hrow.head.is-pinned {
-      position: sticky;
-      top: 0;
     }
     .hrow.head .lock-cluster {
       z-index: 8;
@@ -879,6 +894,7 @@
       board: document.getElementById("board"),
       boardMain: document.getElementById("boardMain"),
       boardX: null,
+      boardHead: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
@@ -1374,24 +1390,21 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
     }
-    /* 條件吸頂：最後一匹馬資訊尚未離開視口時鎖定表頭；滾過後表頭隨馬匹區一起離開 */
-    function syncHorseHeadPin() {
-      const wrap = el.board;
-      const horses = document.getElementById("boardHorses");
-      const head = horses && horses.querySelector(".hrow.head");
-      if (!wrap || !horses || !head) return;
-      const wrapTop = wrap.getBoundingClientRect().top;
-      const horsesBottom = horses.getBoundingClientRect().bottom;
-      const headH = head.offsetHeight || 47;
-      const pin = horsesBottom > wrapTop + headH;
-      head.classList.toggle("is-pinned", pin);
-    }
-    let horsePinBound = false;
-    function bindHorseHeadPin() {
-      syncHorseHeadPin();
-      if (horsePinBound || !el.board) return;
-      horsePinBound = true;
-      el.board.addEventListener("scroll", syncHorseHeadPin, { passive: true });
+    /* 表頭在 board-x 外 sticky；橫滑與馬匹列同步 */
+    function bindHorseHeadScroll() {
+      const head = el.boardHead;
+      const body = el.boardX;
+      if (!head || !body) return;
+      let syncing = false;
+      function link(from) {
+        if (syncing) return;
+        syncing = true;
+        if (from === "body") head.scrollLeft = body.scrollLeft;
+        else body.scrollLeft = head.scrollLeft;
+        syncing = false;
+      }
+      body.addEventListener("scroll", function () { link("body"); }, { passive: true });
+      head.addEventListener("scroll", function () { link("head"); }, { passive: true });
     }
 
     function renderBoard() {
@@ -1441,13 +1454,16 @@
 
       el.boardMain.innerHTML =
         '<div class="board-horses" id="boardHorses">' +
-          '<div class="board-x" id="boardX">' + head + body + "</div>" +
+          '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
+          '<div class="board-x" id="boardX">' + body + "</div>" +
         "</div>" +
         renderQinPanelHtml();
+      el.boardHead = document.getElementById("boardHead");
       el.boardX = document.getElementById("boardX");
       fitScrollColWidths();
       fitQinTableWidths();
       if (el.boardX) el.boardX.scrollLeft = sl;
+      if (el.boardHead) el.boardHead.scrollLeft = sl;
       el.board.scrollTop = st;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
@@ -1460,8 +1476,7 @@
         });
       });
       bindHorseSheetOpens();
-      bindHorseHeadPin();
-      requestAnimationFrame(syncHorseHeadPin);
+      bindHorseHeadScroll();
     }
 
     applyColFitRule();
@@ -1479,7 +1494,6 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
-      syncHorseHeadPin();
     });
   })();
   </script>
