@@ -176,6 +176,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("QIN_MAX_N", r.text)
         self.assertIn("fitQinTableWidths", r.text)
         self.assertIn("ensureQinDemo20Race", r.text)
+        self.assertIn("ensureRace9Has14Runners", r.text)
+        self.assertIn("demoPad14", r.text)
         self.assertIn("二十駒演示", r.text)
         self.assertIn("board-x", r.text)
         self.assertNotIn("qinPreviewN", r.text)
