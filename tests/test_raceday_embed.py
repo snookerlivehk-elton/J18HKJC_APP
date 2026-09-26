@@ -130,6 +130,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("horseSheetClose", r.text)
         self.assertIn('data-no="', r.text)
         self.assertIn("board-shell", r.text)
+        self.assertIn("board-main", r.text)
         self.assertIn("qin-panel", r.text)
         self.assertIn("qin-tbl", r.text)
         self.assertIn("連/指", r.text)

@@ -61,16 +61,14 @@
     .topbar .side.r { text-align: right; opacity: .9; }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
 
-    /* 頁眉下公告跑馬燈 */
+    /* 頁眉下公告跑馬燈（隨列表滾動，不鎖定） */
     .anno {
-      flex: 0 0 auto;
       display: flex;
       align-items: stretch;
       height: 28px;
       background: #fff6d6;
       border-bottom: 1px solid #edd9a0;
       overflow: hidden;
-      z-index: 28;
     }
     .anno-lab {
       flex: 0 0 auto;
@@ -117,7 +115,6 @@
     }
 
     .subhead {
-      flex: 0 0 auto;
       background: #fff;
       border-bottom: 1px solid var(--line);
       padding: 8px 10px 10px;
@@ -788,25 +785,27 @@
     <div class="side r">?</div>
   </header>
 
-  <div class="anno" role="region" aria-label="公告">
-    <span class="anno-lab">公告</span>
-    <div class="anno-track">
-      <div class="anno-run">
-        <span>如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
-        <span aria-hidden="true">如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
-      </div>
-    </div>
-  </div>
-
-  <section class="subhead">
-    <div class="race-pills" id="racePills" aria-label="場次"></div>
-    <div class="meta">
-      <div id="raceMeta">18:40 南風讓賽　谷草 "C" 1650米 第五班 好地</div>
-    </div>
-  </section>
-
   <div class="board-shell">
-    <div class="board-wrap" id="board"></div>
+    <div class="board-wrap" id="board">
+      <div class="anno" role="region" aria-label="公告">
+        <span class="anno-lab">公告</span>
+        <div class="anno-track">
+          <div class="anno-run">
+            <span>如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
+            <span aria-hidden="true">如您對使用過程有困惑和建議都請聯繫客服，我們很重視您的意見。</span>
+          </div>
+        </div>
+      </div>
+
+      <section class="subhead">
+        <div class="race-pills" id="racePills" aria-label="場次"></div>
+        <div class="meta">
+          <div id="raceMeta">18:40 南風讓賽　谷草 "C" 1650米 第五班 好地</div>
+        </div>
+      </section>
+
+      <div class="board-main" id="boardMain"></div>
+    </div>
     <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
       <div class="horse-sheet-bar">
         <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
@@ -867,6 +866,7 @@
     const el = {
       pills: document.getElementById("racePills"),
       board: document.getElementById("board"),
+      boardMain: document.getElementById("boardMain"),
       boardX: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
@@ -1409,7 +1409,7 @@
         return '<div class="hrow' + alt + scratch + '">' + lock + cells + "</div>";
       }).join("");
 
-      el.board.innerHTML =
+      el.boardMain.innerHTML =
         '<div class="board-x" id="boardX">' + head + body + "</div>" +
         renderQinPanelHtml();
       el.boardX = document.getElementById("boardX");
