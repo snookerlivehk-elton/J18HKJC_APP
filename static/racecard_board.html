@@ -165,24 +165,10 @@
     @supports not (overflow-y: clip) {
       .board-x { overflow-y: hidden; }
     }
-    /* 馬匹區塊：表頭在 board-x 外吸頂，區塊滾完後隨最後一匹一起離開 */
+    /* 馬匹區塊：表頭與列同在 board-x（橫滑原生同步）；縱向用 JS translateY 吸頂 */
     .board-horses {
       position: relative;
       background: #fff;
-    }
-    .board-head-pin {
-      position: sticky;
-      top: 0;
-      z-index: 6;
-      overflow: hidden;
-      touch-action: pan-x;
-      background: #eef3f8;
-    }
-    .board-head-pin .hrow.head {
-      will-change: transform;
-    }
-    .board-head-pin .lock-cluster {
-      will-change: transform;
     }
 
     .horse-sheet {
@@ -371,6 +357,14 @@
       color: #111;
       font-size: var(--head-fs); font-weight: 400;
       text-align: center;
+    }
+    .hrow.head.is-vpinned {
+      z-index: 7;
+      box-shadow: 0 1px 0 rgba(45, 62, 80, .08);
+    }
+    .hrow.head.is-vpinned .lock-cluster {
+      position: relative;
+      left: auto;
     }
     .hrow.head .lock-cluster {
       z-index: 8;
@@ -891,7 +885,6 @@
       board: document.getElementById("board"),
       boardMain: document.getElementById("boardMain"),
       boardX: null,
-      boardHead: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
@@ -1387,68 +1380,49 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
     }
-    /* 表頭 sticky 在 board-x 外；橫滑用 transform 跟隨，避免雙 scrollLeft 卡頓 */
-    function syncHorseHeadTransform() {
-      const head = el.boardHead;
+    /* 表頭與列同容器橫滑（零延遲）；縱向吸頂用 translateY，滾出馬匹區後釋放 */
+    let horsePinBound = false;
+    function syncHorseHeadLockX() {
       const body = el.boardX;
-      if (!head || !body) return;
-      const row = head.querySelector(".hrow.head");
-      const lock = row && row.querySelector(".lock-cluster");
-      const sl = body.scrollLeft || 0;
-      if (row) row.style.transform = "translate3d(" + (-sl) + "px,0,0)";
-      if (lock) lock.style.transform = "translate3d(" + sl + "px,0,0)";
+      const head = body && body.querySelector(".hrow.head");
+      const lock = head && head.querySelector(".lock-cluster");
+      if (!head || !lock) return;
+      if (!head.classList.contains("is-vpinned")) {
+        lock.style.transform = "";
+        return;
+      }
+      lock.style.transform = "translate3d(" + (body.scrollLeft || 0) + "px,0,0)";
     }
-    function bindHorseHeadScroll() {
-      const head = el.boardHead;
+    function syncHorseHeadPin() {
+      const wrap = el.board;
       const body = el.boardX;
-      if (!head || !body) return;
-      let raf = 0;
-      function onBodyScroll() {
-        if (raf) return;
-        raf = requestAnimationFrame(function () {
-          raf = 0;
-          syncHorseHeadTransform();
-        });
+      const head = body && body.querySelector(".hrow.head");
+      if (!wrap || !body || !head) return;
+      const wrapTop = wrap.getBoundingClientRect().top;
+      const bodyTop = body.getBoundingClientRect().top;
+      const headH = head.offsetHeight || 47;
+      const maxPin = Math.max(0, body.offsetHeight - headH);
+      let pinY = 0;
+      if (bodyTop < wrapTop) {
+        pinY = Math.min(wrapTop - bodyTop, maxPin);
       }
-      body.addEventListener("scroll", onBodyScroll, { passive: true });
-      syncHorseHeadTransform();
-
-      let active = false;
-      let dragged = false;
-      let startX = 0;
-      let startSl = 0;
-      let pid = null;
-      head.addEventListener("pointerdown", function (ev) {
-        if (ev.pointerType === "mouse" && ev.button !== 0) return;
-        if (ev.target && ev.target.closest && ev.target.closest("button, a, input")) return;
-        active = true;
-        dragged = false;
-        startX = ev.clientX;
-        startSl = body.scrollLeft;
-        pid = ev.pointerId;
-      });
-      head.addEventListener("pointermove", function (ev) {
-        if (!active) return;
-        const dx = ev.clientX - startX;
-        if (!dragged) {
-          if (Math.abs(dx) < 6) return;
-          dragged = true;
-          try { head.setPointerCapture(pid); } catch (e) { /* ignore */ }
-        }
-        body.scrollLeft = startSl - dx;
-      });
-      function endDrag() {
-        active = false;
-        pid = null;
+      if (pinY > 0) {
+        head.style.transform = "translate3d(0," + pinY + "px,0)";
+        head.classList.add("is-vpinned");
+      } else {
+        head.style.transform = "";
+        head.classList.remove("is-vpinned");
       }
-      head.addEventListener("pointerup", endDrag);
-      head.addEventListener("pointercancel", endDrag);
-      head.addEventListener("click", function (ev) {
-        if (!dragged) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        dragged = false;
-      }, true);
+      syncHorseHeadLockX();
+    }
+    function bindHorseHeadPin() {
+      if (!el.board || !el.boardX) return;
+      if (!horsePinBound) {
+        horsePinBound = true;
+        el.board.addEventListener("scroll", syncHorseHeadPin, { passive: true });
+      }
+      el.boardX.addEventListener("scroll", syncHorseHeadLockX, { passive: true });
+      syncHorseHeadPin();
     }
 
     function renderBoard() {
@@ -1498,16 +1472,13 @@
 
       el.boardMain.innerHTML =
         '<div class="board-horses" id="boardHorses">' +
-          '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
-          '<div class="board-x" id="boardX">' + body + "</div>" +
+          '<div class="board-x" id="boardX">' + head + body + "</div>" +
         "</div>" +
         renderQinPanelHtml();
-      el.boardHead = document.getElementById("boardHead");
       el.boardX = document.getElementById("boardX");
       fitScrollColWidths();
       fitQinTableWidths();
       if (el.boardX) el.boardX.scrollLeft = sl;
-      syncHorseHeadTransform();
       el.board.scrollTop = st;
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
@@ -1520,7 +1491,8 @@
         });
       });
       bindHorseSheetOpens();
-      bindHorseHeadScroll();
+      bindHorseHeadPin();
+      requestAnimationFrame(syncHorseHeadPin);
     }
 
     applyColFitRule();
@@ -1538,6 +1510,7 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
+      syncHorseHeadPin();
     });
   })();
   </script>
