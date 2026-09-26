@@ -726,11 +726,14 @@
     .qin-block {
       background: #fff;
       position: relative;
+      /* 裁切邊緣回彈時 sticky 標號「漂浮」溢出 */
+      overflow: hidden;
     }
     .qin-x {
       overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
+      /* 禁用彈性回彈／鏈式滾動，避免快滑到極限時首行／首列脫離表格 */
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: auto;
     }
     .qin-tbl {
       border-collapse: collapse;
@@ -1458,6 +1461,39 @@
         qinX.style.maxHeight = (cell * (rowsVisible + 1) + 2) + "px";
       }
     }
+    /* 擋掉連贏格邊緣回彈，避免 sticky 首行／首列視覺上「漂浮」 */
+    function bindQinOverscrollGuard() {
+      const qinX = document.getElementById("qinX");
+      if (!qinX || qinX.dataset.overscrollBound === "1") return;
+      qinX.dataset.overscrollBound = "1";
+      let startX = 0;
+      let startY = 0;
+      let startL = 0;
+      let startT = 0;
+      qinX.addEventListener("touchstart", function (ev) {
+        if (!ev.touches || !ev.touches[0]) return;
+        startX = ev.touches[0].clientX;
+        startY = ev.touches[0].clientY;
+        startL = qinX.scrollLeft;
+        startT = qinX.scrollTop;
+      }, { passive: true });
+      qinX.addEventListener("touchmove", function (ev) {
+        if (!ev.touches || !ev.touches[0]) return;
+        const dx = ev.touches[0].clientX - startX;
+        const dy = ev.touches[0].clientY - startY;
+        const maxL = Math.max(0, qinX.scrollWidth - qinX.clientWidth);
+        const maxT = Math.max(0, qinX.scrollHeight - qinX.clientHeight);
+        const horiz = Math.abs(dx) >= Math.abs(dy);
+        if (horiz) {
+          if ((startL <= 0 && dx > 0) || (startL >= maxL - 0.5 && dx < 0)) {
+            ev.preventDefault();
+          }
+        } else if ((startT <= 0 && dy > 0) || (startT >= maxT - 0.5 && dy < 0)) {
+          ev.preventDefault();
+        }
+      }, { passive: false });
+    }
+
     /* 豎向：board-head-pin CSS sticky；橫向：board-head-x.scrollLeft 跟隨 board-x（無 transform） */
     let headScrollBound = false;
     function syncHeadScrollLeft() {
@@ -1553,6 +1589,7 @@
       });
       bindHorseSheetOpens();
       bindHorseHeadScroll();
+      bindQinOverscrollGuard();
     }
 
     applyColFitRule();
