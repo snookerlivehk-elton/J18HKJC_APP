@@ -773,41 +773,16 @@
     .qin-tbl .qin-c.idx-g { background: #2ecc71; color: #fff; }
     .qin-tbl .qin-c.drop50,
     .qin-tbl .qin-c.idx-b { background: #c4a035; color: #fff; }
-
-    .qin-toggle-wrap {
-      display: flex;
-      justify-content: center;
-      padding: 6px 0 4px;
-      background: #eef1f5;
+    /* 下三角指數格：未上色時用淡底，與上三角賠率區分 */
+    .qin-tbl .qin-c.idx-cell {
+      background: #eef4fa;
+      color: #3d5a80;
     }
-    .qin-toggle {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1px;
-      min-width: 52px;
-      padding: 5px 12px 4px;
-      border: 0;
-      border-radius: 4px;
-      background: #f39c12;
+    .qin-tbl .qin-c.idx-cell.idx-r,
+    .qin-tbl .qin-c.idx-cell.idx-g,
+    .qin-tbl .qin-c.idx-cell.idx-b {
       color: #fff;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .06em;
-      cursor: pointer;
-      line-height: 1.1;
-      -webkit-tap-highlight-color: transparent;
     }
-    .qin-toggle:active { filter: brightness(.96); }
-    .qin-toggle .chev {
-      display: block;
-      font-size: 9px;
-      line-height: 1;
-      transform: translateY(-1px);
-    }
-    .qin-panel.is-idx-collapsed .qin-idx-block { display: none; }
-    .qin-panel.is-idx-collapsed .qin-toggle .chev { transform: rotate(180deg); }
 
     .qin-legend {
       padding: 8px 10px 2px;
@@ -949,7 +924,6 @@
     let currentRace = 1;
     let sortKey = "no";
     let sortDir = 1;
-    let qinIdxOpen = true;
     /* 0 = 跟本場出馬數；12/14/18 = 僅預覽連贏矩陣疏密 */
     let qinPreviewN = 0;
 
@@ -1304,47 +1278,48 @@
       if (n >= 13) return " qin-mid";
       return "";
     }
-    function renderQinTable(title, mode, qin) {
+    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數，對角＝馬號 */
+    function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
       if (n < 2) {
         return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
       }
       const dens = qinDensityClass(n);
-      let html = '<div class="qin-block"><table class="qin-tbl' + dens + '" aria-label="' + esc(title) + '"><thead><tr>';
-      html += '<th class="qin-title">' + esc(title) + "</th>";
-      for (let j = 1; j < n; j++) {
+      let html = '<div class="qin-block"><table class="qin-tbl' + dens +
+        '" aria-label="連贏賠率（上三角）與連贏指數（下三角）"><thead><tr>';
+      html += '<th class="qin-title">連/指</th>';
+      for (let j = 0; j < n; j++) {
         html += '<th class="qin-h">' + esc(nos[j]) + "</th>";
       }
       html += "</tr></thead><tbody>";
-      for (let i = 0; i < n - 1; i++) {
+      for (let i = 0; i < n; i++) {
         const rowHorse = nos[i];
         html += "<tr>";
         html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
-        for (let j = 1; j < n; j++) {
+        for (let j = 0; j < n; j++) {
           const colHorse = nos[j];
-          if (colHorse === rowHorse) {
+          if (i === j) {
             html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
-          } else if (colHorse < rowHorse) {
-            html += '<td class="qin-empty"></td>';
-          } else {
-            const key = qinPairKey(rowHorse, colHorse);
-            const od = qin.oddsMap[key];
+            continue;
+          }
+          const key = qinPairKey(rowHorse, colHorse);
+          const od = qin.oddsMap[key];
+          if (j > i) {
             let cls = "qin-c";
-            let text = "—";
-            if (mode === "odds") {
-              text = fmtQinOdds(od);
-              if (key === qin.hotKey) cls += " hot";
-              else {
-                const drop = qinDropClass(rowHorse, colHorse, currentRace);
-                if (drop) cls += " " + drop;
-              }
-            } else {
-              const idx = synthQinIndex(od);
-              text = idx == null ? "—" : String(idx);
-              const ic = qinIndexClass(idx);
-              if (ic) cls += " " + ic;
+            const text = fmtQinOdds(od);
+            if (key === qin.hotKey) cls += " hot";
+            else {
+              const drop = qinDropClass(rowHorse, colHorse, currentRace);
+              if (drop) cls += " " + drop;
             }
+            html += '<td class="' + cls + '">' + esc(text) + "</td>";
+          } else {
+            const idx = synthQinIndex(od);
+            let cls = "qin-c idx-cell";
+            const text = idx == null ? "—" : String(idx);
+            const ic = qinIndexClass(idx);
+            if (ic) cls += " " + ic;
             html += '<td class="' + cls + '">' + esc(text) + "</td>";
           }
         }
@@ -1357,16 +1332,18 @@
       return (
         '<div class="qin-legend">' +
           '<div class="qin-legend-row">' +
-            '<span class="lab">連贏</span>' +
-            '<span class="qin-leg"><span class="qin-swatch hot">00</span>賠率大熱</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>賠率下降20%</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>賠率下降50%</span>' +
+            '<span class="lab">上三角</span>' +
+            '<span class="qin-leg">連贏賠率</span>' +
+            '<span class="qin-leg"><span class="qin-swatch hot">00</span>大熱</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>降20%</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>降50%</span>' +
           "</div>" +
           '<div class="qin-legend-row">' +
-            '<span class="lab">指數</span>' +
+            '<span class="lab">下三角</span>' +
+            '<span class="qin-leg">連贏指數</span>' +
             '<span class="qin-leg"><span class="qin-swatch hot">00</span>85–86</span>' +
             '<span class="qin-leg"><span class="qin-swatch drop20">00</span>87–88</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89及以上</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89+</span>' +
           "</div>" +
         "</div>"
       );
@@ -1394,20 +1371,10 @@
     }
     function renderQinPanelHtml() {
       const qin = buildQinPairs();
-      const collapsed = qinIdxOpen ? "" : " is-idx-collapsed";
       return (
-        '<div class="qin-panel' + collapsed + '" id="qinPanel">' +
+        '<div class="qin-panel" id="qinPanel">' +
           renderQinPreviewBar(qin) +
-          renderQinTable("連贏", "odds", qin) +
-          '<div class="qin-toggle-wrap">' +
-            '<button type="button" class="qin-toggle" id="qinIdxToggle" aria-expanded="' +
-            (qinIdxOpen ? "true" : "false") +
-            '" aria-controls="qinIdxBlock">' +
-            "指數<span class=\"chev\" aria-hidden=\"true\">▲</span></button>" +
-          "</div>" +
-          '<div class="qin-idx-block" id="qinIdxBlock">' +
-            renderQinTable("連贏指數", "index", qin) +
-          "</div>" +
+          renderQinTable(qin) +
           renderQinLegend() +
         "</div>"
       );
@@ -1416,16 +1383,6 @@
       const panel = document.getElementById("qinPanel");
       if (!panel || !el.board) return;
       panel.style.width = el.board.clientWidth + "px";
-    }
-    function bindQinToggle() {
-      const btn = document.getElementById("qinIdxToggle");
-      const panel = document.getElementById("qinPanel");
-      if (!btn || !panel) return;
-      btn.addEventListener("click", function () {
-        qinIdxOpen = !qinIdxOpen;
-        panel.classList.toggle("is-idx-collapsed", !qinIdxOpen);
-        btn.setAttribute("aria-expanded", qinIdxOpen ? "true" : "false");
-      });
     }
     function bindQinPreview() {
       document.querySelectorAll("#qinPanel [data-qin-n]").forEach(function (btn) {
@@ -1498,7 +1455,6 @@
         });
       });
       bindHorseSheetOpens();
-      bindQinToggle();
       bindQinPreview();
     }
 
