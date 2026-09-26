@@ -648,6 +648,143 @@
     .silk-11 { background:#a8d08d; color:#1a3318; } .silk-12 { background:#7a1f2b; }
     .silk-13 { background:#fff; color:#111; box-shadow: inset 0 0 0 1px #999; }
     .silk-14 { background:#c5a028; color:#1a1408; }
+
+    /* 連贏／連贏指數矩陣（列表下方，橫滑時 sticky 貼齊視口） */
+    .qin-panel {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      box-sizing: border-box;
+      background: #eef1f5;
+      border-top: 8px solid #eef1f5;
+      padding: 0 0 10px;
+    }
+    .qin-block {
+      background: #fff;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .qin-tbl {
+      width: 100%;
+      min-width: 320px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums lining-nums;
+      line-height: 1;
+    }
+    .qin-tbl th,
+    .qin-tbl td {
+      border: 1px solid #cfd6e0;
+      text-align: center;
+      vertical-align: middle;
+      padding: 0;
+      height: 26px;
+      font-weight: 400;
+      color: var(--text);
+      background: #fff;
+    }
+    .qin-tbl .qin-title {
+      background: #8e99a8;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .qin-tbl .qin-h {
+      background: #5b8fc7;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .qin-tbl .qin-empty {
+      border-color: transparent;
+      background: transparent;
+    }
+    .qin-tbl .qin-c.hot,
+    .qin-tbl .qin-c.idx-r { background: #e74c3c; color: #fff; }
+    .qin-tbl .qin-c.drop20,
+    .qin-tbl .qin-c.idx-g { background: #2ecc71; color: #fff; }
+    .qin-tbl .qin-c.drop50,
+    .qin-tbl .qin-c.idx-b { background: #c4a035; color: #fff; }
+
+    .qin-toggle-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 6px 0 4px;
+      background: #eef1f5;
+    }
+    .qin-toggle {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      min-width: 52px;
+      padding: 5px 12px 4px;
+      border: 0;
+      border-radius: 4px;
+      background: #f39c12;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      cursor: pointer;
+      line-height: 1.1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .qin-toggle:active { filter: brightness(.96); }
+    .qin-toggle .chev {
+      display: block;
+      font-size: 9px;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
+    .qin-panel.is-idx-collapsed .qin-idx-block { display: none; }
+    .qin-panel.is-idx-collapsed .qin-toggle .chev { transform: rotate(180deg); }
+
+    .qin-legend {
+      padding: 8px 10px 2px;
+      background: #eef1f5;
+      font-size: 11px;
+      color: #5b6575;
+      line-height: 1.55;
+    }
+    .qin-legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      margin-bottom: 4px;
+    }
+    .qin-legend-row .lab {
+      flex: 0 0 auto;
+      min-width: 2.5em;
+      font-weight: 700;
+      color: #3d5a80;
+    }
+    .qin-leg {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .qin-swatch {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 16px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .qin-swatch.hot { background: #e74c3c; }
+    .qin-swatch.drop20 { background: #2ecc71; }
+    .qin-swatch.drop50 { background: #c4a035; }
   </style>
 </head>
 <body>
@@ -747,6 +884,7 @@
     let currentRace = 1;
     let sortKey = "no";
     let sortDir = 1;
+    let qinIdxOpen = true;
 
     function esc(s) {
       return String(s == null ? "" : s)
@@ -1017,6 +1155,172 @@
       });
     }
 
+    /* 連贏示意：由獨贏合成三角矩陣；日後可換成真實 QIN 盤 */
+    function qinPairKey(a, b) {
+      return a < b ? a + "-" + b : b + "-" + a;
+    }
+    function synthQinOdds(wa, wb) {
+      const a = numOrNull(wa), b = numOrNull(wb);
+      if (a == null || b == null) return null;
+      let v = a * b * 0.26;
+      if (v >= 999) return 999;
+      if (v >= 100) return Math.round(v);
+      if (v >= 20) return Math.round(v * 2) / 2;
+      return Math.round(v * 10) / 10;
+    }
+    function fmtQinOdds(v) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      if (n >= 100) return String(Math.round(n));
+      if (Number.isInteger(n)) return String(n);
+      return n.toFixed(1);
+    }
+    function synthQinIndex(odds) {
+      const n = numOrNull(odds);
+      if (n == null) return null;
+      const raw = 98 - Math.log10(Math.max(n, 1.05)) * 14;
+      return Math.max(70, Math.min(92, Math.round(raw)));
+    }
+    function qinDropClass(a, b, raceNum) {
+      const s = (a * 17 + b * 31 + raceNum * 13) % 23;
+      if (s === 0) return "drop50";
+      if (s === 1 || s === 2) return "drop20";
+      return "";
+    }
+    function qinIndexClass(idx) {
+      const n = numOrNull(idx);
+      if (n == null) return "";
+      if (n >= 89) return "idx-b";
+      if (n >= 87) return "idx-g";
+      if (n >= 85) return "idx-r";
+      return "";
+    }
+    function buildQinPairs() {
+      const runners = currentRunners()
+        .filter(function (r) { return !r.scratched && numOrNull(r.no) != null; })
+        .slice()
+        .sort(function (a, b) { return a.no - b.no; });
+      const nos = runners.map(function (r) { return r.no; });
+      const byNo = {};
+      runners.forEach(function (r) { byNo[r.no] = r; });
+      const oddsMap = {};
+      let hotKey = null;
+      let hotOdds = Infinity;
+      for (let i = 0; i < nos.length; i++) {
+        for (let j = i + 1; j < nos.length; j++) {
+          const a = nos[i], b = nos[j];
+          const key = qinPairKey(a, b);
+          const od = synthQinOdds(byNo[a].win, byNo[b].win);
+          oddsMap[key] = od;
+          if (od != null && od < hotOdds) {
+            hotOdds = od;
+            hotKey = key;
+          }
+        }
+      }
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey };
+    }
+    function renderQinTable(title, mode, qin) {
+      const nos = qin.nos;
+      const n = nos.length;
+      if (n < 2) {
+        return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
+      }
+      let html = '<div class="qin-block"><table class="qin-tbl" aria-label="' + esc(title) + '"><thead><tr>';
+      html += '<th class="qin-title">' + esc(title) + "</th>";
+      for (let j = 1; j < n; j++) {
+        html += '<th class="qin-h">' + esc(nos[j]) + "</th>";
+      }
+      html += "</tr></thead><tbody>";
+      for (let i = 0; i < n - 1; i++) {
+        const rowHorse = nos[i];
+        html += "<tr>";
+        html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
+        for (let j = 1; j < n; j++) {
+          const colHorse = nos[j];
+          if (colHorse === rowHorse) {
+            html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
+          } else if (colHorse < rowHorse) {
+            html += '<td class="qin-empty"></td>';
+          } else {
+            const key = qinPairKey(rowHorse, colHorse);
+            const od = qin.oddsMap[key];
+            let cls = "qin-c";
+            let text = "—";
+            if (mode === "odds") {
+              text = fmtQinOdds(od);
+              if (key === qin.hotKey) cls += " hot";
+              else {
+                const drop = qinDropClass(rowHorse, colHorse, currentRace);
+                if (drop) cls += " " + drop;
+              }
+            } else {
+              const idx = synthQinIndex(od);
+              text = idx == null ? "—" : String(idx);
+              const ic = qinIndexClass(idx);
+              if (ic) cls += " " + ic;
+            }
+            html += '<td class="' + cls + '">' + esc(text) + "</td>";
+          }
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table></div>";
+      return html;
+    }
+    function renderQinLegend() {
+      return (
+        '<div class="qin-legend">' +
+          '<div class="qin-legend-row">' +
+            '<span class="lab">連贏</span>' +
+            '<span class="qin-leg"><span class="qin-swatch hot">00</span>賠率大熱</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>賠率下降20%</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>賠率下降50%</span>' +
+          "</div>" +
+          '<div class="qin-legend-row">' +
+            '<span class="lab">指數</span>' +
+            '<span class="qin-leg"><span class="qin-swatch hot">00</span>85–86</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>87–88</span>' +
+            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89及以上</span>' +
+          "</div>" +
+        "</div>"
+      );
+    }
+    function renderQinPanelHtml() {
+      const qin = buildQinPairs();
+      const collapsed = qinIdxOpen ? "" : " is-idx-collapsed";
+      return (
+        '<div class="qin-panel' + collapsed + '" id="qinPanel">' +
+          renderQinTable("連贏", "odds", qin) +
+          '<div class="qin-toggle-wrap">' +
+            '<button type="button" class="qin-toggle" id="qinIdxToggle" aria-expanded="' +
+            (qinIdxOpen ? "true" : "false") +
+            '" aria-controls="qinIdxBlock">' +
+            "指數<span class=\"chev\" aria-hidden=\"true\">▲</span></button>" +
+          "</div>" +
+          '<div class="qin-idx-block" id="qinIdxBlock">' +
+            renderQinTable("連贏指數", "index", qin) +
+          "</div>" +
+          renderQinLegend() +
+        "</div>"
+      );
+    }
+    function fitQinPanelWidth() {
+      const panel = document.getElementById("qinPanel");
+      if (!panel || !el.board) return;
+      panel.style.width = el.board.clientWidth + "px";
+    }
+    function bindQinToggle() {
+      const btn = document.getElementById("qinIdxToggle");
+      const panel = document.getElementById("qinPanel");
+      if (!btn || !panel) return;
+      btn.addEventListener("click", function () {
+        qinIdxOpen = !qinIdxOpen;
+        panel.classList.toggle("is-idx-collapsed", !qinIdxOpen);
+        btn.setAttribute("aria-expanded", qinIdxOpen ? "true" : "false");
+      });
+    }
+
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
@@ -1062,8 +1366,9 @@
         return '<div class="hrow' + alt + scratch + '">' + lock + cells + "</div>";
       }).join("");
 
-      el.board.innerHTML = head + body;
+      el.board.innerHTML = head + body + renderQinPanelHtml();
       fitScrollColWidths();
+      fitQinPanelWidth();
       el.board.scrollLeft = sl;
       el.board.scrollTop = st;
 
@@ -1077,6 +1382,7 @@
         });
       });
       bindHorseSheetOpens();
+      bindQinToggle();
     }
 
     applyColFitRule();
@@ -1092,6 +1398,9 @@
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { renderBoard(); });
     }
+    window.addEventListener("resize", function () {
+      fitQinPanelWidth();
+    });
   })();
   </script>
 </body>
