@@ -649,7 +649,7 @@
     .silk-13 { background:#fff; color:#111; box-shadow: inset 0 0 0 1px #999; }
     .silk-14 { background:#c5a028; color:#1a1408; }
 
-    /* 連贏／連贏指數矩陣（列表下方，橫滑時 sticky 貼齊視口） */
+    /* 連贏區：縱向可跟列表一起滑；橫向手勢不得帶動上方馬匹表 */
     .qin-panel {
       position: sticky;
       left: 0;
@@ -658,6 +658,7 @@
       background: #eef1f5;
       border-top: 8px solid #eef1f5;
       padding: 0 0 10px;
+      touch-action: pan-y;
     }
     .qin-preview {
       display: flex;
@@ -697,7 +698,8 @@
       background: #fff;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior-x: contain;
+      overscroll-behavior: contain;
+      touch-action: pan-x pan-y;
     }
     .qin-tbl {
       width: max-content;
@@ -1393,6 +1395,45 @@
         });
       });
     }
+    /* 連贏區內的左右滑不得改變馬匹表的 scrollLeft */
+    const qinScrollGuard = { armed: false, lockSL: 0 };
+    let qinScrollBoardBound = false;
+    function bindQinScrollIsolate() {
+      const panel = document.getElementById("qinPanel");
+      if (!panel || !el.board) return;
+      function arm() {
+        qinScrollGuard.armed = true;
+        qinScrollGuard.lockSL = el.board.scrollLeft;
+      }
+      function disarm() { qinScrollGuard.armed = false; }
+      function holdX() {
+        if (!qinScrollGuard.armed) return;
+        if (el.board.scrollLeft !== qinScrollGuard.lockSL) {
+          el.board.scrollLeft = qinScrollGuard.lockSL;
+        }
+      }
+      panel.addEventListener("touchstart", arm, { passive: true, capture: true });
+      panel.addEventListener("touchmove", holdX, { passive: true, capture: true });
+      panel.addEventListener("touchend", disarm, { passive: true, capture: true });
+      panel.addEventListener("touchcancel", disarm, { passive: true, capture: true });
+      panel.addEventListener("pointerdown", function (ev) {
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;
+        arm();
+      }, { capture: true });
+      panel.addEventListener("pointerup", disarm, { capture: true });
+      panel.addEventListener("pointercancel", disarm, { capture: true });
+      panel.addEventListener("wheel", function (ev) {
+        if (Math.abs(ev.deltaX) <= Math.abs(ev.deltaY)) return;
+        const sl = el.board.scrollLeft;
+        requestAnimationFrame(function () {
+          el.board.scrollLeft = sl;
+        });
+      }, { passive: true, capture: true });
+      if (!qinScrollBoardBound) {
+        qinScrollBoardBound = true;
+        el.board.addEventListener("scroll", holdX, { passive: true });
+      }
+    }
 
     function renderBoard() {
       const hot = bestOdds();
@@ -1456,6 +1497,7 @@
       });
       bindHorseSheetOpens();
       bindQinPreview();
+      bindQinScrollIsolate();
     }
 
     applyColFitRule();
