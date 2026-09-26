@@ -879,6 +879,23 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    /* 退出駒：保留馬號座標，賠率／指數灰顯「—」（對齊列表退出態） */
+    .qin-tbl .qin-ch.scratch,
+    .qin-tbl .qin-rh.scratch,
+    .qin-tbl .qin-h.scratch {
+      opacity: .45;
+      text-decoration: line-through;
+    }
+    .qin-tbl .qin-c.scratch,
+    .qin-tbl .qin-c.idx-cell.scratch {
+      background: #f0f2f5;
+      color: #9aa3b0;
+      cursor: default;
+      font-weight: 400;
+    }
+    .qin-tbl .qin-c.scratch[data-qin-key] {
+      cursor: default;
+    }
     /* 輕點座標：賠率／指數對稱格同時高亮；持續呼吸便於掃視定位 */
     .qin-tbl .qin-c.is-qin-focus {
       position: relative;
@@ -1671,13 +1688,17 @@
     }
     function buildQinPairs() {
       let runners = currentRunners()
-        .filter(function (r) { return !r.scratched && numOrNull(r.no) != null; })
+        .filter(function (r) { return numOrNull(r.no) != null; })
         .slice()
         .sort(function (a, b) { return a.no - b.no; });
       if (runners.length > QIN_MAX_N) runners = runners.slice(0, QIN_MAX_N);
       const nos = runners.map(function (r) { return r.no; });
       const byNo = {};
-      runners.forEach(function (r) { byNo[r.no] = r; });
+      const scratch = {};
+      runners.forEach(function (r) {
+        byNo[r.no] = r;
+        if (r.scratched) scratch[r.no] = true;
+      });
       const oddsMap = {};
       let hotKey = null;
       let hotOdds = Infinity;
@@ -1686,6 +1707,10 @@
         for (let j = i + 1; j < nos.length; j++) {
           const a = nos[i], b = nos[j];
           const key = qinPairKey(a, b);
+          if (scratch[a] || scratch[b]) {
+            oddsMap[key] = null;
+            continue;
+          }
           const od = useQpl
             ? synthQplOdds(byNo[a].place, byNo[b].place)
             : synthQinOdds(byNo[a].win, byNo[b].win);
@@ -1696,7 +1721,13 @@
           }
         }
       }
-      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, mode: qinMode };
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, mode: qinMode, scratch: scratch };
+    }
+    function qinHorseScratched(qin, no) {
+      return !!(qin && qin.scratch && qin.scratch[no]);
+    }
+    function qinPairInvolvesScratch(qin, a, b) {
+      return qinHorseScratched(qin, a) || qinHorseScratched(qin, b);
     }
     function renderQinModeBtn(mode, label) {
       const on = qinMode === mode;
@@ -1725,7 +1756,8 @@
             '<th class="qin-title">連贏</th>' +
             '<th class="qin-ch qin-mode-cell">' + renderQinModeBtn("qin", "正Q") + "</th>";
       for (let j = 1; j < n; j++) {
-        html += '<th class="qin-ch">' + esc(nos[j]) + "</th>";
+        const sc = qinHorseScratched(qin, nos[j]) ? " scratch" : "";
+        html += '<th class="qin-ch' + sc + '">' + esc(nos[j]) + "</th>";
       }
       html += "</tr></thead><tbody>";
       for (let i = 0; i < n; i++) {
@@ -1735,36 +1767,51 @@
           html += '<th class="qin-rh qin-mode-cell" scope="row">' +
             renderQinModeBtn("qpl", "位置") + "</th>";
         } else {
-          html += '<th class="qin-rh" scope="row">' + esc(rowHorse) + "</th>";
+          const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
+          html += '<th class="qin-rh' + sc + '" scope="row">' + esc(rowHorse) + "</th>";
         }
         for (let j = 0; j < n; j++) {
           const colHorse = nos[j];
           if (i === j) {
-            html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
+            const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
+            html += '<th class="qin-h' + sc + '">' + esc(rowHorse) + "</th>";
             continue;
           }
           const key = qinPairKey(rowHorse, colHorse);
-          const od = qin.oddsMap[key];
+          const scratched = qinPairInvolvesScratch(qin, rowHorse, colHorse);
+          const od = scratched ? null : qin.oddsMap[key];
           if (j > i) {
             let cls = "qin-c";
-            const text = fmtQinOdds(od);
-            if (key === qin.hotKey) cls += " hot";
-            else {
-              const drop = qinDropClass(rowHorse, colHorse, currentRace);
-              if (drop) cls += " " + drop;
+            let text = "—";
+            let attrs = ' data-qin-key="' + esc(key) + '" data-qin-kind="odds"';
+            if (scratched) {
+              cls += " scratch";
+              attrs += ' data-qin-scratch="1" aria-disabled="true" aria-label="退出 ' + esc(key) + '"';
+            } else {
+              text = fmtQinOdds(od);
+              if (key === qin.hotKey) cls += " hot";
+              else {
+                const drop = qinDropClass(rowHorse, colHorse, currentRace);
+                if (drop) cls += " " + drop;
+              }
+              attrs += ' role="button" tabindex="0" aria-label="' + oddsLab + " " + esc(key) + '"';
             }
-            html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
-              '" data-qin-kind="odds" role="button" tabindex="0" aria-label="' + oddsLab + " " +
-              esc(key) + '">' + esc(text) + "</td>";
+            html += '<td class="' + cls + '"' + attrs + ">" + esc(text) + "</td>";
           } else {
-            const idx = synthQinIndex(od);
             let cls = "qin-c idx-cell";
-            const text = idx == null ? "—" : String(idx);
-            const ic = qinIndexClass(idx);
-            if (ic) cls += " " + ic;
-            html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
-              '" data-qin-kind="idx" role="button" tabindex="0" aria-label="' + idxLab + " " +
-              esc(key) + '">' + esc(text) + "</td>";
+            let text = "—";
+            let attrs = ' data-qin-key="' + esc(key) + '" data-qin-kind="idx"';
+            if (scratched) {
+              cls += " scratch";
+              attrs += ' data-qin-scratch="1" aria-disabled="true" aria-label="退出 ' + esc(key) + '"';
+            } else {
+              const idx = synthQinIndex(od);
+              text = idx == null ? "—" : String(idx);
+              const ic = qinIndexClass(idx);
+              if (ic) cls += " " + ic;
+              attrs += ' role="button" tabindex="0" aria-label="' + idxLab + " " + esc(key) + '"';
+            }
+            html += '<td class="' + cls + '"' + attrs + ">" + esc(text) + "</td>";
           }
         }
         html += "</tr>";
@@ -1833,11 +1880,26 @@
       tbl.querySelectorAll("td.qin-c[data-qin-key]").forEach(function (td) {
         const key = td.getAttribute("data-qin-key");
         const kind = td.getAttribute("data-qin-kind");
-        const od = qin.oddsMap[key];
         const parts = String(key || "").split("-");
         const a = Number(parts[0]);
         const b = Number(parts[1]);
-        const keptFocus = td.classList.contains("is-qin-focus");
+        const scratched = qinPairInvolvesScratch(qin, a, b);
+        const keptFocus = !scratched && td.classList.contains("is-qin-focus");
+        if (scratched) {
+          td.className = "qin-c" + (kind === "idx" ? " idx-cell" : "") + " scratch";
+          td.textContent = "—";
+          td.setAttribute("data-qin-scratch", "1");
+          td.setAttribute("aria-disabled", "true");
+          td.setAttribute("aria-label", "退出 " + key);
+          td.removeAttribute("role");
+          td.removeAttribute("tabindex");
+          return;
+        }
+        td.removeAttribute("data-qin-scratch");
+        td.removeAttribute("aria-disabled");
+        td.setAttribute("role", "button");
+        td.setAttribute("tabindex", "0");
+        const od = qin.oddsMap[key];
         if (kind === "odds") {
           let cls = "qin-c";
           if (key === qin.hotKey) cls += " hot";
@@ -1859,6 +1921,21 @@
           td.textContent = idx == null ? "—" : String(idx);
           td.setAttribute("aria-label", idxLab + " " + key);
         }
+      });
+
+      /* 表頭／對角退出態隨資料刷新（換場後結構不變時） */
+      const nos = qin.nos || [];
+      tbl.querySelectorAll("th.qin-ch:not(.qin-mode-cell)").forEach(function (th, idx) {
+        const no = nos[idx + 1];
+        th.classList.toggle("scratch", qinHorseScratched(qin, no));
+      });
+      tbl.querySelectorAll("th.qin-rh:not(.qin-mode-cell)").forEach(function (th, idx) {
+        const no = nos[idx + 1];
+        th.classList.toggle("scratch", qinHorseScratched(qin, no));
+      });
+      tbl.querySelectorAll("th.qin-h").forEach(function (th, idx) {
+        const no = nos[idx];
+        th.classList.toggle("scratch", qinHorseScratched(qin, no));
       });
 
       const legend = panel.querySelector(".qin-legend");
@@ -1952,6 +2029,7 @@
       }
       function onActivate(cell) {
         if (!cell) return;
+        if (cell.getAttribute("data-qin-scratch") === "1" || cell.classList.contains("scratch")) return;
         const key = cell.getAttribute("data-qin-key");
         if (!key) return;
         if (qinFocusKey === key) clearQinPairFocus(tbl);
