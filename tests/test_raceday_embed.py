@@ -204,6 +204,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("demoTrim8", r.text)
         self.assertIn("ensureRace7Has6Runners", r.text)
         self.assertIn("demoTrim6", r.text)
+        self.assertIn("ensureRace6Has10WithScratch7", r.text)
+        self.assertIn("demoTrim10Scratch7", r.text)
         self.assertIn("二十駒演示", r.text)
         self.assertIn("board-x", r.text)
         self.assertNotIn("qinPreviewN", r.text)
