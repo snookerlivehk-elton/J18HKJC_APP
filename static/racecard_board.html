@@ -879,19 +879,35 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
-    /* 輕點座標：賠率／指數對稱格同時高亮 */
+    /* 輕點座標：賠率／指數對稱格同時高亮；持續呼吸便於掃視定位 */
     .qin-tbl .qin-c.is-qin-focus {
       position: relative;
       z-index: 1;
-      outline: 2px solid #ffb020;
-      outline-offset: -2px;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85);
-      filter: brightness(1.08);
-      animation: qinFocusIn .18s ease-out;
+      outline: none;
+      box-shadow:
+        inset 0 0 0 2px #ff9a1a,
+        inset 0 0 0 3px rgba(255, 255, 255, .9);
+      animation: qinFocusPulse 1.05s ease-in-out infinite;
     }
-    @keyframes qinFocusIn {
-      from { outline-color: #ffe08a; }
-      to { outline-color: #ffb020; }
+    @keyframes qinFocusPulse {
+      0%, 100% {
+        box-shadow:
+          inset 0 0 0 2px #d97808,
+          inset 0 0 0 3px rgba(255, 255, 255, .4);
+      }
+      50% {
+        box-shadow:
+          inset 0 0 0 3px #ff3d00,
+          inset 0 0 0 5px #fff;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .qin-tbl .qin-c.is-qin-focus {
+        animation: none;
+        box-shadow:
+          inset 0 0 0 3px #ff4d00,
+          inset 0 0 0 5px #fff;
+      }
     }
 
     .qin-legend {

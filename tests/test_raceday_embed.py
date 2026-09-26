@@ -160,6 +160,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("is-qin-focus", r.text)
         self.assertIn("bindQinPairFocus", r.text)
         self.assertIn("setQinPairFocus", r.text)
+        self.assertIn("qinFocusPulse", r.text)
+        self.assertIn("prefers-reduced-motion", r.text)
         self.assertIn("qin-mode-btn", r.text)
         self.assertIn("data-qin-mode", r.text)
         self.assertIn("setQinMode", r.text)
