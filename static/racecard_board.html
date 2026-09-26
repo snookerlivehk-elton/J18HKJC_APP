@@ -985,7 +985,7 @@
     let currentRace = 1;
     let sortKey = "no";
     let sortDir = 1;
-    const QIN_FIT_N = 12;
+    const QIN_FIT_N = 14;
     const QIN_MAX_N = 20;
 
     /* 測試用：追加第 20 場（20 匹），點場次「20」可預覽連贏橫滑 */
@@ -1458,7 +1458,7 @@
         "</div>"
       );
     }
-    /* 格寬鎖定 12 匹視口：≤12 鋪滿；>12 同密度橫滑，最多 20；高度約 12 列可豎滑 */
+    /* 格寬鎖定 14 匹視口：≤14 鋪滿；>14 同密度橫滑，最多 20；高度約 14 列可豎滑 */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
@@ -1478,7 +1478,7 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
       if (qinX) {
-        /* 約鎖 12 列可視高度，超出（如 20 匹）在格內豎滑，首行 sticky 才會生效 */
+        /* 約鎖 14 列可視高度，超出（如 20 匹）在格內豎滑，首行 sticky 才會生效 */
         const rowsVisible = Math.min(n, QIN_FIT_N);
         qinX.style.maxHeight = (cell * (rowsVisible + 1) + 2) + "px";
       }
