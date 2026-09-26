@@ -162,6 +162,11 @@
     @supports not (overflow-y: clip) {
       .board-x { overflow-y: hidden; }
     }
+    /* 馬匹區塊：表頭僅在本區塊仍有內容入鏡時吸頂 */
+    .board-horses {
+      position: relative;
+      background: #fff;
+    }
 
     .horse-sheet {
       position: absolute;
@@ -342,12 +347,18 @@
     }
     .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
-      position: sticky; top: 0; z-index: 6;
+      position: relative;
+      top: auto;
+      z-index: 6;
       height: 47px;
       background: #eef3f8;
       color: #111;
       font-size: var(--head-fs); font-weight: 400;
       text-align: center;
+    }
+    .hrow.head.is-pinned {
+      position: sticky;
+      top: 0;
     }
     .hrow.head .lock-cluster {
       z-index: 8;
@@ -1363,6 +1374,25 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
     }
+    /* 條件吸頂：最後一匹馬資訊尚未離開視口時鎖定表頭；滾過後表頭隨馬匹區一起離開 */
+    function syncHorseHeadPin() {
+      const wrap = el.board;
+      const horses = document.getElementById("boardHorses");
+      const head = horses && horses.querySelector(".hrow.head");
+      if (!wrap || !horses || !head) return;
+      const wrapTop = wrap.getBoundingClientRect().top;
+      const horsesBottom = horses.getBoundingClientRect().bottom;
+      const headH = head.offsetHeight || 47;
+      const pin = horsesBottom > wrapTop + headH;
+      head.classList.toggle("is-pinned", pin);
+    }
+    let horsePinBound = false;
+    function bindHorseHeadPin() {
+      syncHorseHeadPin();
+      if (horsePinBound || !el.board) return;
+      horsePinBound = true;
+      el.board.addEventListener("scroll", syncHorseHeadPin, { passive: true });
+    }
 
     function renderBoard() {
       const hot = bestOdds();
@@ -1410,7 +1440,9 @@
       }).join("");
 
       el.boardMain.innerHTML =
-        '<div class="board-x" id="boardX">' + head + body + "</div>" +
+        '<div class="board-horses" id="boardHorses">' +
+          '<div class="board-x" id="boardX">' + head + body + "</div>" +
+        "</div>" +
         renderQinPanelHtml();
       el.boardX = document.getElementById("boardX");
       fitScrollColWidths();
@@ -1428,6 +1460,8 @@
         });
       });
       bindHorseSheetOpens();
+      bindHorseHeadPin();
+      requestAnimationFrame(syncHorseHeadPin);
     }
 
     applyColFitRule();
@@ -1445,6 +1479,7 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
+      syncHorseHeadPin();
     });
   })();
   </script>
