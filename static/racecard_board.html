@@ -771,6 +771,61 @@
       width: var(--qin-title-w);
       box-shadow: 3px 0 6px rgba(45, 62, 80, .12), 0 2px 4px rgba(45, 62, 80, .10);
     }
+    .qin-tbl .qin-title.qin-mode-cell {
+      padding: 0;
+      vertical-align: middle;
+    }
+    .qin-mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      width: 100%;
+      height: 100%;
+      min-height: var(--qin-cell);
+      gap: 1px;
+      box-sizing: border-box;
+      background: #cfd6e0;
+    }
+    .qin-mode-brand,
+    .qin-mode-btn,
+    .qin-mode-fill {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 0 1px;
+      border: 0;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      line-height: 1;
+      color: rgba(255, 255, 255, .88);
+      background: #8e99a8;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .qin-mode-brand {
+      cursor: default;
+      color: #fff;
+      background: #5b8fc7;
+    }
+    .qin-mode-btn {
+      cursor: pointer;
+      color: #fff;
+    }
+    .qin-mode-btn.on {
+      background: #3d5a80;
+    }
+    .qin-mode-btn:not(.on):active {
+      background: #7a8696;
+    }
+    .qin-mode-btn:focus-visible {
+      outline: 1px solid #fff;
+      outline-offset: -2px;
+    }
+    .qin-mode-fill {
+      pointer-events: none;
+    }
     .qin-tbl .qin-h {
       background: #5b8fc7;
       color: #fff;
@@ -1356,7 +1411,8 @@
       });
     }
 
-    /* 連贏示意：由獨贏合成三角矩陣；日後可換成真實 QIN 盤 */
+    /* 連贏示意：由獨贏／位置合成三角矩陣；日後可換成真實 QIN／QPL 盤 */
+    let qinMode = "qin"; /* qin=正Q；qpl=連贏位置 */
     function qinPairKey(a, b) {
       return a < b ? a + "-" + b : b + "-" + a;
     }
@@ -1364,6 +1420,15 @@
       const a = numOrNull(wa), b = numOrNull(wb);
       if (a == null || b == null) return null;
       let v = a * b * 0.26;
+      if (v >= 999) return 999;
+      if (v >= 100) return Math.round(v);
+      if (v >= 20) return Math.round(v * 2) / 2;
+      return Math.round(v * 10) / 10;
+    }
+    function synthQplOdds(pa, pb) {
+      const a = numOrNull(pa), b = numOrNull(pb);
+      if (a == null || b == null) return null;
+      let v = a * b * 0.62;
       if (v >= 999) return 999;
       if (v >= 100) return Math.round(v);
       if (v >= 20) return Math.round(v * 2) / 2;
@@ -1383,7 +1448,8 @@
       return Math.max(70, Math.min(92, Math.round(raw)));
     }
     function qinDropClass(a, b, raceNum) {
-      const s = (a * 17 + b * 31 + raceNum * 13) % 23;
+      const seed = qinMode === "qpl" ? 7 : 0;
+      const s = (a * 17 + b * 31 + (raceNum + seed) * 13) % 23;
       if (s === 0) return "drop50";
       if (s === 1 || s === 2) return "drop20";
       return "";
@@ -1408,11 +1474,14 @@
       const oddsMap = {};
       let hotKey = null;
       let hotOdds = Infinity;
+      const useQpl = qinMode === "qpl";
       for (let i = 0; i < nos.length; i++) {
         for (let j = i + 1; j < nos.length; j++) {
           const a = nos[i], b = nos[j];
           const key = qinPairKey(a, b);
-          const od = synthQinOdds(byNo[a].win, byNo[b].win);
+          const od = useQpl
+            ? synthQplOdds(byNo[a].place, byNo[b].place)
+            : synthQinOdds(byNo[a].win, byNo[b].win);
           oddsMap[key] = od;
           if (od != null && od < hotOdds) {
             hotOdds = od;
@@ -1420,22 +1489,40 @@
           }
         }
       }
-      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey };
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, mode: qinMode };
     }
-    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數；首行／首列 CSS sticky */
+    function renderQinModeTitle() {
+      const qinOn = qinMode === "qin";
+      return (
+        '<th class="qin-title qin-mode-cell">' +
+          '<div class="qin-mode-switch" role="group" aria-label="連贏盤種切換">' +
+            '<span class="qin-mode-brand">連贏</span>' +
+            '<button type="button" class="qin-mode-btn' + (qinOn ? " on" : "") +
+              '" data-qin-mode="qin" aria-pressed="' + (qinOn ? "true" : "false") + '">正Q</button>' +
+            '<button type="button" class="qin-mode-btn' + (qinOn ? "" : " on") +
+              '" data-qin-mode="qpl" aria-pressed="' + (qinOn ? "false" : "true") + '">位置</button>' +
+            '<span class="qin-mode-fill" aria-hidden="true"></span>' +
+          "</div>" +
+        "</th>"
+      );
+    }
+    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標切換正Q／連贏位置 */
     function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
+      const useQpl = qin.mode === "qpl";
+      const oddsLab = useQpl ? "連贏位置" : "連贏";
+      const idxLab = useQpl ? "位置指數" : "連贏指數";
       if (n < 2) {
         return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
       }
       let html =
         '<div class="qin-block">' +
           '<div class="qin-x" id="qinX">' +
-            '<table class="qin-tbl" data-n="' + n +
-            '" aria-label="連贏賠率（上三角）與連贏指數（下三角）">' +
+            '<table class="qin-tbl" data-n="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
+            '" aria-label="' + oddsLab + '賠率（上三角）與' + idxLab + '（下三角）">' +
             "<thead><tr>" +
-            '<th class="qin-title">連/指</th>';
+            renderQinModeTitle();
       for (let j = 0; j < n; j++) {
         html += '<th class="qin-ch">' + esc(nos[j]) + "</th>";
       }
@@ -1461,7 +1548,7 @@
               if (drop) cls += " " + drop;
             }
             html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
-              '" data-qin-kind="odds" role="button" tabindex="0" aria-label="連贏 ' +
+              '" data-qin-kind="odds" role="button" tabindex="0" aria-label="' + oddsLab + " " +
               esc(key) + '">' + esc(text) + "</td>";
           } else {
             const idx = synthQinIndex(od);
@@ -1470,7 +1557,7 @@
             const ic = qinIndexClass(idx);
             if (ic) cls += " " + ic;
             html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
-              '" data-qin-kind="idx" role="button" tabindex="0" aria-label="指數 ' +
+              '" data-qin-kind="idx" role="button" tabindex="0" aria-label="' + idxLab + " " +
               esc(key) + '">' + esc(text) + "</td>";
           }
         }
@@ -1480,18 +1567,19 @@
       return html;
     }
     function renderQinLegend() {
+      const useQpl = qinMode === "qpl";
       return (
         '<div class="qin-legend">' +
           '<div class="qin-legend-row">' +
             '<span class="lab">上三角</span>' +
-            '<span class="qin-leg">連贏賠率</span>' +
+            '<span class="qin-leg">' + (useQpl ? "連贏位置賠率" : "連贏賠率") + "</span>" +
             '<span class="qin-leg"><span class="qin-swatch hot">00</span>大熱</span>' +
             '<span class="qin-leg"><span class="qin-swatch drop20">00</span>降20%</span>' +
             '<span class="qin-leg"><span class="qin-swatch drop50">00</span>降50%</span>' +
           "</div>" +
           '<div class="qin-legend-row">' +
             '<span class="lab">下三角</span>' +
-            '<span class="qin-leg">連贏指數</span>' +
+            '<span class="qin-leg">' + (useQpl ? "連贏位置指數" : "連贏指數") + "</span>" +
             '<span class="qin-leg"><span class="qin-swatch hot">00</span>85–86</span>' +
             '<span class="qin-leg"><span class="qin-swatch drop20">00</span>87–88</span>' +
             '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89+</span>' +
@@ -1508,6 +1596,47 @@
         "</div>"
       );
     }
+    function refreshQinPanel() {
+      const panel = document.getElementById("qinPanel");
+      if (!panel || !el.boardMain) return;
+      const qinX = document.getElementById("qinX");
+      const sl = qinX ? qinX.scrollLeft : 0;
+      const st = qinX ? qinX.scrollTop : 0;
+      const keepFocus = qinFocusKey;
+      const next = document.createElement("div");
+      next.innerHTML = renderQinPanelHtml();
+      const fresh = next.firstElementChild;
+      if (!fresh) return;
+      panel.replaceWith(fresh);
+      fitQinTableWidths();
+      const nx = document.getElementById("qinX");
+      if (nx) {
+        nx.scrollLeft = sl;
+        nx.scrollTop = st;
+      }
+      qinFocusKey = keepFocus;
+      bindQinOverscrollGuard();
+      bindQinPairFocus();
+      bindQinModeSwitch();
+    }
+    function setQinMode(mode) {
+      if (mode !== "qin" && mode !== "qpl") return;
+      if (qinMode === mode) return;
+      qinMode = mode;
+      refreshQinPanel();
+    }
+    function bindQinModeSwitch() {
+      const panel = document.getElementById("qinPanel");
+      if (!panel || panel.dataset.modeBound === "1") return;
+      panel.dataset.modeBound = "1";
+      panel.addEventListener("click", function (ev) {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("button.qin-mode-btn[data-qin-mode]") : null;
+        if (!btn || !panel.contains(btn)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        setQinMode(btn.getAttribute("data-qin-mode"));
+      });
+    }
     /* 格寬鎖定 14 匹視口：≤14 鋪滿；>14 同密度橫滑，最多 20；高度約 14 列可豎滑 */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
@@ -1516,7 +1645,7 @@
       if (!panel || !tbl) return;
       const n = Number(tbl.getAttribute("data-n") || 0);
       if (n < 2) return;
-      const titleW = 40;
+      const titleW = 54;
       const avail = Math.max(panel.clientWidth, 200);
       const denom = Math.min(n, QIN_FIT_N);
       const cell = Math.max(18, Math.floor((avail - titleW) / denom));
@@ -1826,6 +1955,7 @@
       bindHorseHeadScroll();
       bindQinOverscrollGuard();
       bindQinPairFocus();
+      bindQinModeSwitch();
     }
 
     applyColFitRule();
