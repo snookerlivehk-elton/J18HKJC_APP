@@ -858,14 +858,21 @@
     .qin-tbl .qin-c.idx-g { background: #2ecc71; color: #fff; }
     .qin-tbl .qin-c.drop50,
     .qin-tbl .qin-c.idx-b { background: #c4a035; color: #fff; }
-    /* 下三角指數格：未上色時用淡底，與上三角賠率區分 */
+    /* 下三角指數格：未上色時用淡底；上色規則須壓過淡底（同特異度時後寫生效） */
     .qin-tbl .qin-c.idx-cell {
       background: #eef4fa;
       color: #3d5a80;
     }
-    .qin-tbl .qin-c.idx-cell.idx-r,
-    .qin-tbl .qin-c.idx-cell.idx-g,
+    .qin-tbl .qin-c.idx-cell.idx-r {
+      background: #e74c3c;
+      color: #fff;
+    }
+    .qin-tbl .qin-c.idx-cell.idx-g {
+      background: #2ecc71;
+      color: #fff;
+    }
     .qin-tbl .qin-c.idx-cell.idx-b {
+      background: #c4a035;
       color: #fff;
     }
     .qin-tbl .qin-c[data-qin-key] {
