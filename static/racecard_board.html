@@ -659,14 +659,49 @@
       border-top: 8px solid #eef1f5;
       padding: 0 0 10px;
     }
+    .qin-preview {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px 6px;
+      background: #eef1f5;
+      font-size: 12px;
+      color: #5b6575;
+    }
+    .qin-preview .hint { line-height: 1.3; }
+    .qin-preview .hint b { color: #3d5a80; font-weight: 700; }
+    .qin-preview-btns {
+      display: inline-flex;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    .qin-preview-btns button {
+      min-width: 36px;
+      height: 26px;
+      border: 1px solid #c5ced9;
+      border-radius: 6px;
+      background: #fff;
+      color: #3d5a80;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0 8px;
+    }
+    .qin-preview-btns button.on {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
     .qin-block {
       background: #fff;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
     }
     .qin-tbl {
-      width: 100%;
-      min-width: 320px;
+      width: max-content;
+      min-width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
       font-size: 12px;
@@ -680,6 +715,8 @@
       vertical-align: middle;
       padding: 0;
       height: 26px;
+      min-width: 24px;
+      width: 24px;
       font-weight: 400;
       color: var(--text);
       background: #fff;
@@ -691,6 +728,8 @@
       font-weight: 700;
       letter-spacing: .04em;
       white-space: nowrap;
+      min-width: 44px;
+      width: 44px;
     }
     .qin-tbl .qin-h {
       background: #5b8fc7;
@@ -698,6 +737,32 @@
       font-weight: 700;
       font-size: 12px;
     }
+    .qin-tbl.qin-mid th,
+    .qin-tbl.qin-mid td {
+      height: 24px;
+      min-width: 22px;
+      width: 22px;
+      font-size: 11px;
+    }
+    .qin-tbl.qin-mid .qin-title {
+      min-width: 40px;
+      width: 40px;
+      font-size: 10px;
+    }
+    .qin-tbl.qin-dense th,
+    .qin-tbl.qin-dense td {
+      height: 22px;
+      min-width: 20px;
+      width: 20px;
+      font-size: 10px;
+    }
+    .qin-tbl.qin-dense .qin-title {
+      min-width: 36px;
+      width: 36px;
+      font-size: 9px;
+      letter-spacing: 0;
+    }
+    .qin-tbl.qin-dense .qin-h { font-size: 10px; }
     .qin-tbl .qin-empty {
       border-color: transparent;
       background: transparent;
@@ -885,6 +950,8 @@
     let sortKey = "no";
     let sortDir = 1;
     let qinIdxOpen = true;
+    /* 0 = 跟本場出馬數；12/14/18 = 僅預覽連贏矩陣疏密 */
+    let qinPreviewN = 0;
 
     function esc(s) {
       return String(s == null ? "" : s)
@@ -1196,10 +1263,22 @@
       return "";
     }
     function buildQinPairs() {
-      const runners = currentRunners()
+      let runners = currentRunners()
         .filter(function (r) { return !r.scratched && numOrNull(r.no) != null; })
         .slice()
         .sort(function (a, b) { return a.no - b.no; });
+      const liveN = runners.length;
+      if (qinPreviewN >= 2) {
+        const src = runners;
+        runners = [];
+        for (let i = 1; i <= qinPreviewN; i++) {
+          const base = src[(i - 1) % Math.max(src.length, 1)] || { win: 8, place: 2.5 };
+          const win = numOrNull(base.win) != null
+            ? Math.max(2.2, Math.round((Number(base.win) * (0.7 + (i % 5) * 0.12) + i * 0.35) * 10) / 10)
+            : Math.round((3 + i * 1.35) * 10) / 10;
+          runners.push({ no: i, win: win, scratched: false });
+        }
+      }
       const nos = runners.map(function (r) { return r.no; });
       const byNo = {};
       runners.forEach(function (r) { byNo[r.no] = r; });
@@ -1218,7 +1297,12 @@
           }
         }
       }
-      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey };
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, liveN: liveN };
+    }
+    function qinDensityClass(n) {
+      if (n >= 16) return " qin-dense";
+      if (n >= 13) return " qin-mid";
+      return "";
     }
     function renderQinTable(title, mode, qin) {
       const nos = qin.nos;
@@ -1226,7 +1310,8 @@
       if (n < 2) {
         return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
       }
-      let html = '<div class="qin-block"><table class="qin-tbl" aria-label="' + esc(title) + '"><thead><tr>';
+      const dens = qinDensityClass(n);
+      let html = '<div class="qin-block"><table class="qin-tbl' + dens + '" aria-label="' + esc(title) + '"><thead><tr>';
       html += '<th class="qin-title">' + esc(title) + "</th>";
       for (let j = 1; j < n; j++) {
         html += '<th class="qin-h">' + esc(nos[j]) + "</th>";
@@ -1286,11 +1371,33 @@
         "</div>"
       );
     }
+    function renderQinPreviewBar(qin) {
+      const shown = qin.nos.length;
+      const pairs = shown < 2 ? 0 : (shown * (shown - 1)) / 2;
+      const live = qin.liveN || 0;
+      const modeLabel = qinPreviewN
+        ? ("預覽 <b>" + shown + "</b> 匹 · " + pairs + " 組")
+        : ("本場 <b>" + shown + "</b> 匹 · " + pairs + " 組");
+      function btn(n, label) {
+        const on = (n === 0 && !qinPreviewN) || (n > 0 && qinPreviewN === n) ? " on" : "";
+        return '<button type="button" data-qin-n="' + n + '" class="' + on.trim() + '">' +
+          esc(label) + "</button>";
+      }
+      return (
+        '<div class="qin-preview">' +
+          '<div class="hint">' + modeLabel + (live && qinPreviewN ? "（本場 " + live + "）" : "") + "</div>" +
+          '<div class="qin-preview-btns" role="group" aria-label="連贏馬數預覽">' +
+            btn(0, "本場") + btn(12, "12") + btn(14, "14") + btn(18, "18") +
+          "</div>" +
+        "</div>"
+      );
+    }
     function renderQinPanelHtml() {
       const qin = buildQinPairs();
       const collapsed = qinIdxOpen ? "" : " is-idx-collapsed";
       return (
         '<div class="qin-panel' + collapsed + '" id="qinPanel">' +
+          renderQinPreviewBar(qin) +
           renderQinTable("連贏", "odds", qin) +
           '<div class="qin-toggle-wrap">' +
             '<button type="button" class="qin-toggle" id="qinIdxToggle" aria-expanded="' +
@@ -1318,6 +1425,15 @@
         qinIdxOpen = !qinIdxOpen;
         panel.classList.toggle("is-idx-collapsed", !qinIdxOpen);
         btn.setAttribute("aria-expanded", qinIdxOpen ? "true" : "false");
+      });
+    }
+    function bindQinPreview() {
+      document.querySelectorAll("#qinPanel [data-qin-n]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const n = Number(btn.getAttribute("data-qin-n"));
+          qinPreviewN = Number.isFinite(n) ? n : 0;
+          renderBoard();
+        });
       });
     }
 
@@ -1383,6 +1499,7 @@
       });
       bindHorseSheetOpens();
       bindQinToggle();
+      bindQinPreview();
     }
 
     applyColFitRule();
