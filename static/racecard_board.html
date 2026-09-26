@@ -1155,6 +1155,65 @@
     }
     ensureRace9Has14Runners();
 
+    /* 測試用：第 8 場改為 8 匹，預覽少駒連贏矩陣鋪滿效果 */
+    function ensureRace8Has8Runners() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const race = MEETING.races.find(function (r) { return r.num === 8; });
+      if (!race || !Array.isArray(race.runners)) return;
+      const target = 8;
+      const sorted = race.runners.slice().sort(function (a, b) {
+        return (Number(a && a.no) || 0) - (Number(b && b.no) || 0);
+      });
+      if (sorted.length > target) {
+        race.runners = sorted.slice(0, target);
+      } else if (sorted.length < target) {
+        const srcList = sorted.slice();
+        let nextNo = 0;
+        sorted.forEach(function (r) {
+          const n = Number(r && r.no);
+          if (Number.isFinite(n) && n > nextNo) nextNo = n;
+        });
+        while (sorted.length < target) {
+          nextNo += 1;
+          const i = sorted.length;
+          const src = srcList[i % Math.max(srcList.length, 1)] || {};
+          sorted.push({
+            no: nextNo,
+            name: "演示馬" + nextNo,
+            draw: nextNo,
+            form6: src.form6 || "—",
+            jockey: src.jockey || "—",
+            trainer: src.trainer || "—",
+            age: src.age || 4,
+            rating: src.rating || 40,
+            rtgDelta: src.rtgDelta || "0",
+            hw: src.hw || 126,
+            bodyWt: src.bodyWt || 1100,
+            gear: src.gear || "",
+            career: src.career || "—",
+            recent: src.recent || "—",
+            rail: src.rail || "C",
+            dam: src.dam || "—",
+            sire: src.sire || "—",
+            damsire: src.damsire || "—",
+            owner: src.owner || "演示",
+            prize: src.prize || "0",
+            silk: src.silk || "",
+            scratched: false,
+            win: Math.max(2.4, Math.round((2.8 + nextNo * 0.95 + (nextNo % 4) * 0.3) * 10) / 10),
+            place: Math.max(1.2, Math.round((1.2 + nextNo * 0.18) * 10) / 10),
+            demo: true
+          });
+        }
+        race.runners = sorted;
+      } else {
+        race.runners = sorted;
+      }
+      race.meta = (race.meta || race.name || "第8場") + "　（演示 8 匹）";
+      race.demoTrim8 = true;
+    }
+    ensureRace8Has8Runners();
+
     function esc(s) {
       return String(s == null ? "" : s)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
