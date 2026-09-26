@@ -821,6 +821,24 @@
     .qin-tbl .qin-c.idx-cell.idx-b {
       color: #fff;
     }
+    .qin-tbl .qin-c[data-qin-key] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* 輕點座標：賠率／指數對稱格同時高亮 */
+    .qin-tbl .qin-c.is-qin-focus {
+      position: relative;
+      z-index: 1;
+      outline: 2px solid #ffb020;
+      outline-offset: -2px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85);
+      filter: brightness(1.08);
+      animation: qinFocusIn .18s ease-out;
+    }
+    @keyframes qinFocusIn {
+      from { outline-color: #ffe08a; }
+      to { outline-color: #ffb020; }
+    }
 
     .qin-legend {
       padding: 8px 10px 2px;
@@ -1392,14 +1410,18 @@
               const drop = qinDropClass(rowHorse, colHorse, currentRace);
               if (drop) cls += " " + drop;
             }
-            html += '<td class="' + cls + '">' + esc(text) + "</td>";
+            html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
+              '" data-qin-kind="odds" role="button" tabindex="0" aria-label="連贏 ' +
+              esc(key) + '">' + esc(text) + "</td>";
           } else {
             const idx = synthQinIndex(od);
             let cls = "qin-c idx-cell";
             const text = idx == null ? "—" : String(idx);
             const ic = qinIndexClass(idx);
             if (ic) cls += " " + ic;
-            html += '<td class="' + cls + '">' + esc(text) + "</td>";
+            html += '<td class="' + cls + '" data-qin-key="' + esc(key) +
+              '" data-qin-kind="idx" role="button" tabindex="0" aria-label="指數 ' +
+              esc(key) + '">' + esc(text) + "</td>";
           }
         }
         html += "</tr>";
@@ -1461,6 +1483,59 @@
         qinX.style.maxHeight = (cell * (rowsVisible + 1) + 2) + "px";
       }
     }
+    /* 輕點連贏格：同座標賠率／指數雙邊高亮提醒 */
+    let qinFocusKey = "";
+    function clearQinPairFocus(tbl) {
+      const root = tbl || document.querySelector("#qinPanel .qin-tbl");
+      if (!root) return;
+      root.querySelectorAll(".qin-c.is-qin-focus").forEach(function (el) {
+        el.classList.remove("is-qin-focus");
+      });
+      qinFocusKey = "";
+    }
+    function setQinPairFocus(key, tbl) {
+      const root = tbl || document.querySelector("#qinPanel .qin-tbl");
+      if (!root || !key) return;
+      clearQinPairFocus(root);
+      const nodes = root.querySelectorAll('.qin-c[data-qin-key="' + key + '"]');
+      if (!nodes.length) return;
+      nodes.forEach(function (el) { el.classList.add("is-qin-focus"); });
+      qinFocusKey = key;
+    }
+    function bindQinPairFocus() {
+      const tbl = document.querySelector("#qinPanel .qin-tbl");
+      const qinX = document.getElementById("qinX");
+      if (!tbl) return;
+      if (qinFocusKey) setQinPairFocus(qinFocusKey, tbl);
+      if (tbl.dataset.focusBound === "1") return;
+      tbl.dataset.focusBound = "1";
+      let tapMoved = false;
+      if (qinX) {
+        qinX.addEventListener("touchstart", function () { tapMoved = false; }, { passive: true });
+        qinX.addEventListener("touchmove", function () { tapMoved = true; }, { passive: true });
+      }
+      function onActivate(cell) {
+        if (!cell) return;
+        const key = cell.getAttribute("data-qin-key");
+        if (!key) return;
+        if (qinFocusKey === key) clearQinPairFocus(tbl);
+        else setQinPairFocus(key, tbl);
+      }
+      tbl.addEventListener("click", function (ev) {
+        if (tapMoved) return;
+        const cell = ev.target && ev.target.closest ? ev.target.closest("td.qin-c[data-qin-key]") : null;
+        if (!cell || !tbl.contains(cell)) return;
+        onActivate(cell);
+      });
+      tbl.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        const cell = ev.target && ev.target.closest ? ev.target.closest("td.qin-c[data-qin-key]") : null;
+        if (!cell || !tbl.contains(cell)) return;
+        ev.preventDefault();
+        onActivate(cell);
+      });
+    }
+
     /* 豎向觸邊 1:1 帶頁；松手短慣性且可被新觸摸立刻打斷；橫向觸邊只擋回彈 */
     function bindQinOverscrollGuard() {
       const qinX = document.getElementById("qinX");
@@ -1700,6 +1775,7 @@
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindQinOverscrollGuard();
+      bindQinPairFocus();
     }
 
     applyColFitRule();
