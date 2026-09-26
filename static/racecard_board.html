@@ -1461,7 +1461,7 @@
         qinX.style.maxHeight = (cell * (rowsVisible + 1) + 2) + "px";
       }
     }
-    /* 豎向觸邊 1:1 帶動整頁；松手按甩速慣性續滑；橫向觸邊只擋回彈 */
+    /* 豎向觸邊 1:1 帶頁；松手短慣性且可被新觸摸立刻打斷；橫向觸邊只擋回彈 */
     function bindQinOverscrollGuard() {
       const qinX = document.getElementById("qinX");
       const wrap = el.board;
@@ -1471,26 +1471,22 @@
       let startX = 0;
       let startY = 0;
       let lastY = 0;
-      let lastT = 0;
       let axis = "";
-      let touching = false;
       let samples = [];
-      let scrollVel = 0;
-      let lastSt = 0;
-      let lastStTs = 0;
-      let handedOff = false;
       let wrapInertiaRaf = 0;
-      const DECEl = 0.998;
+      let inertiaVel = 0;
+      const DECEl = 0.994;
 
       function stopWrapInertia() {
         if (!wrapInertiaRaf) return;
         cancelAnimationFrame(wrapInertiaRaf);
         wrapInertiaRaf = 0;
+        inertiaVel = 0;
       }
 
       function pushSample(y, t) {
         samples.push({ y: y, t: t });
-        while (samples.length > 1 && t - samples[0].t > 100) samples.shift();
+        while (samples.length > 1 && t - samples[0].t > 80) samples.shift();
       }
 
       function sampleFingerVel() {
@@ -1498,40 +1494,47 @@
         const a = samples[0];
         const b = samples[samples.length - 1];
         const dt = b.t - a.t;
-        if (dt < 10) return 0;
+        if (dt < 12) return 0;
         return (b.y - a.y) / dt;
       }
 
       function startWrapInertia(fingerVelY) {
         stopWrapInertia();
-        let v = fingerVelY * 1.08;
-        if (v > 3.2) v = 3.2;
-        else if (v < -3.2) v = -3.2;
-        if (Math.abs(v) < 0.05) return;
+        let v = fingerVelY;
+        if (v > 2.2) v = 2.2;
+        else if (v < -2.2) v = -2.2;
+        if (Math.abs(v) < 0.08) return;
+        inertiaVel = v;
         let prev = performance.now();
         function step(now) {
           const dt = Math.min(34, Math.max(0, now - prev));
           prev = now;
           v *= Math.pow(DECEl, dt);
+          inertiaVel = v;
           wrap.scrollTop -= v * dt;
-          if (Math.abs(v) > 0.03) wrapInertiaRaf = requestAnimationFrame(step);
-          else wrapInertiaRaf = 0;
+          if (Math.abs(v) > 0.04) wrapInertiaRaf = requestAnimationFrame(step);
+          else {
+            wrapInertiaRaf = 0;
+            inertiaVel = 0;
+          }
         }
         wrapInertiaRaf = requestAnimationFrame(step);
       }
 
+      /* 整頁任意新觸摸／滾輪立刻打斷慣性，避免頂掉用戶新操作 */
+      wrap.addEventListener("touchstart", stopWrapInertia, { passive: true, capture: true });
+      wrap.addEventListener("pointerdown", stopWrapInertia, { passive: true, capture: true });
+      wrap.addEventListener("wheel", stopWrapInertia, { passive: true, capture: true });
+
       qinX.addEventListener("touchstart", function (ev) {
         stopWrapInertia();
-        touching = true;
-        handedOff = false;
         axis = "";
         samples = [];
         if (!ev.touches || !ev.touches[0]) return;
         startX = ev.touches[0].clientX;
         startY = ev.touches[0].clientY;
         lastY = startY;
-        lastT = performance.now();
-        pushSample(startY, lastT);
+        pushSample(startY, performance.now());
       }, { passive: true });
 
       qinX.addEventListener("touchmove", function (ev) {
@@ -1543,8 +1546,10 @@
         const dy = y - startY;
         const deltaY = y - lastY;
         lastY = y;
-        lastT = now;
         pushSample(y, now);
+
+        /* 慣性進行中一旦再拖，立刻交出控制權 */
+        if (wrapInertiaRaf) stopWrapInertia();
 
         if (!axis) {
           if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
@@ -1569,47 +1574,25 @@
         }
       }, { passive: false });
 
-      function onTouchEnd() {
-        touching = false;
+      qinX.addEventListener("touchend", function () {
         const maxT = Math.max(0, qinX.scrollHeight - qinX.clientHeight);
         const st = qinX.scrollTop;
         const atTop = st <= 0;
         const atBottom = st >= maxT - 0.5;
         const vel = sampleFingerVel();
-        if (axis === "v" && ((atTop && vel > 0.04) || (atBottom && vel < -0.04))) {
-          handedOff = true;
-          startWrapInertia(vel);
+        /* 僅在手指仍觸邊松手時給很短續滑；不再把表內原生慣性自動甩到整頁 */
+        if (axis === "v" && ((atTop && vel > 0.1) || (atBottom && vel < -0.1))) {
+          startWrapInertia(vel * 0.85);
         }
         samples = [];
-      }
-      qinX.addEventListener("touchend", onTouchEnd, { passive: true });
+      }, { passive: true });
       qinX.addEventListener("touchcancel", function () {
-        touching = false;
         samples = [];
         stopWrapInertia();
       }, { passive: true });
 
-      qinX.addEventListener("scroll", function () {
-        if (touching) return;
-        const now = performance.now();
-        const st = qinX.scrollTop;
-        const maxT = Math.max(0, qinX.scrollHeight - qinX.clientHeight);
-        if (lastStTs) {
-          const rawV = (st - lastSt) / Math.max(1, now - lastStTs);
-          if (st > 1 && st < maxT - 1) {
-            scrollVel = rawV;
-            handedOff = false;
-          } else if (!handedOff && Math.abs(scrollVel) > 0.06) {
-            handedOff = true;
-            startWrapInertia(-scrollVel);
-            scrollVel = 0;
-          }
-        }
-        lastSt = st;
-        lastStTs = now;
-      }, { passive: true });
-
       qinX.addEventListener("wheel", function (ev) {
+        stopWrapInertia();
         const maxT = Math.max(0, qinX.scrollHeight - qinX.clientHeight);
         const st = qinX.scrollTop;
         const atTop = st <= 0;
