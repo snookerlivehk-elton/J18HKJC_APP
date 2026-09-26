@@ -164,6 +164,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("data-qin-mode", r.text)
         self.assertIn("setQinMode", r.text)
         self.assertIn("refreshQinPanel", r.text)
+        self.assertIn("就地改數值", r.text)
+        self.assertIn("el.board.scrollTop = boardSt", r.text)
         self.assertIn("bindQinModeSwitch", r.text)
         self.assertIn("synthQplOdds", r.text)
         self.assertIn("連贏位置", r.text)

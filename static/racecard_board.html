@@ -149,6 +149,7 @@
       overflow-x: clip;
       overflow-y: auto;
       overscroll-behavior: none;
+      overflow-anchor: none;
       -webkit-overflow-scrolling: touch;
       background: #fff;
     }
@@ -1588,26 +1589,77 @@
     }
     function refreshQinPanel() {
       const panel = document.getElementById("qinPanel");
-      if (!panel || !el.boardMain) return;
+      const tbl = panel && panel.querySelector(".qin-tbl");
+      if (!panel || !tbl || !el.boardMain) return;
+
+      /* 就地改數值／按鈕態，不拆 qinX，避免 replace 瞬間撐高把整頁捲動上推 */
+      const boardSt = el.board.scrollTop;
       const qinX = document.getElementById("qinX");
       const sl = qinX ? qinX.scrollLeft : 0;
       const st = qinX ? qinX.scrollTop : 0;
       const keepFocus = qinFocusKey;
-      const next = document.createElement("div");
-      next.innerHTML = renderQinPanelHtml();
-      const fresh = next.firstElementChild;
-      if (!fresh) return;
-      panel.replaceWith(fresh);
-      fitQinTableWidths();
-      const nx = document.getElementById("qinX");
-      if (nx) {
-        nx.scrollLeft = sl;
-        nx.scrollTop = st;
+      const active = document.activeElement;
+      if (active && panel.contains(active) && typeof active.blur === "function") active.blur();
+
+      const qin = buildQinPairs();
+      const useQpl = qin.mode === "qpl";
+      const oddsLab = useQpl ? "連贏位置" : "連贏";
+      const idxLab = useQpl ? "位置指數" : "連贏指數";
+
+      tbl.setAttribute("data-qin-mode", qin.mode || "qin");
+      tbl.setAttribute("aria-label", oddsLab + "賠率（上三角）與" + idxLab + "（下三角）");
+
+      panel.querySelectorAll("button.qin-mode-btn[data-qin-mode]").forEach(function (btn) {
+        const on = btn.getAttribute("data-qin-mode") === qinMode;
+        btn.classList.toggle("on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+
+      tbl.querySelectorAll("td.qin-c[data-qin-key]").forEach(function (td) {
+        const key = td.getAttribute("data-qin-key");
+        const kind = td.getAttribute("data-qin-kind");
+        const od = qin.oddsMap[key];
+        const parts = String(key || "").split("-");
+        const a = Number(parts[0]);
+        const b = Number(parts[1]);
+        const keptFocus = td.classList.contains("is-qin-focus");
+        if (kind === "odds") {
+          let cls = "qin-c";
+          if (key === qin.hotKey) cls += " hot";
+          else {
+            const drop = qinDropClass(a, b, currentRace);
+            if (drop) cls += " " + drop;
+          }
+          if (keptFocus) cls += " is-qin-focus";
+          td.className = cls;
+          td.textContent = fmtQinOdds(od);
+          td.setAttribute("aria-label", oddsLab + " " + key);
+        } else {
+          const idx = synthQinIndex(od);
+          let cls = "qin-c idx-cell";
+          const ic = qinIndexClass(idx);
+          if (ic) cls += " " + ic;
+          if (keptFocus) cls += " is-qin-focus";
+          td.className = cls;
+          td.textContent = idx == null ? "—" : String(idx);
+          td.setAttribute("aria-label", idxLab + " " + key);
+        }
+      });
+
+      const legend = panel.querySelector(".qin-legend");
+      if (legend) {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = renderQinLegend();
+        if (wrap.firstElementChild) legend.replaceWith(wrap.firstElementChild);
       }
+
+      if (qinX) {
+        qinX.scrollLeft = sl;
+        qinX.scrollTop = st;
+      }
+      el.board.scrollTop = boardSt;
       qinFocusKey = keepFocus;
-      bindQinOverscrollGuard();
-      bindQinPairFocus();
-      bindQinModeSwitch();
+      if (keepFocus) setQinPairFocus(keepFocus, tbl);
     }
     function setQinMode(mode) {
       if (mode !== "qin" && mode !== "qpl") return;
