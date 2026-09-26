@@ -751,6 +751,9 @@
       box-sizing: border-box;
     }
     .qin-tbl .qin-title {
+      position: sticky;
+      left: 0;
+      z-index: 4;
       background: #8e99a8;
       color: #fff;
       font-size: 11px;
@@ -759,12 +762,26 @@
       white-space: nowrap;
       min-width: var(--qin-title-w);
       width: var(--qin-title-w);
+      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
     }
     .qin-tbl .qin-h {
       background: #5b8fc7;
       color: #fff;
       font-weight: 700;
       font-size: 12px;
+    }
+    /* 20 匹橫滑時鎖定最左馬號列 */
+    .qin-tbl .qin-rh {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #5b8fc7;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      min-width: var(--qin-title-w);
+      width: var(--qin-title-w);
+      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
     }
     .qin-tbl .qin-empty {
       border-color: transparent;
@@ -1319,7 +1336,7 @@
       }
       return { nos: nos, oddsMap: oddsMap, hotKey: hotKey };
     }
-    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數，對角＝馬號 */
+    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數，對角＝馬號；首列 sticky 橫滑鎖定 */
     function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
@@ -1336,7 +1353,7 @@
       for (let i = 0; i < n; i++) {
         const rowHorse = nos[i];
         html += "<tr>";
-        html += '<th class="qin-h">' + esc(rowHorse) + "</th>";
+        html += '<th class="qin-rh" scope="row">' + esc(rowHorse) + "</th>";
         for (let j = 0; j < n; j++) {
           const colHorse = nos[j];
           if (i === j) {
