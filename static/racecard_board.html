@@ -165,28 +165,11 @@
     @supports not (overflow-y: clip) {
       .board-x { overflow-y: hidden; }
     }
-    /* 馬匹區塊：左鎖獨立 sticky；右表頭在 board-x 內原生橫滑（無果凍）；豎向 translateY 吸頂 */
+    /* 馬匹區塊：board-x 用 overflow-y:clip，表頭 sticky top 可穿透到 board-wrap；
+       橫滑原生、豎吸頂原生，無需 JS transform 同步 */
     .board-horses {
       position: relative;
       background: #fff;
-    }
-    .board-lock-pin {
-      position: sticky;
-      top: 0;
-      z-index: 8;
-      width: var(--pin-w);
-      height: 47px;
-      margin-bottom: -47px;
-      background: #eef3f8;
-      box-shadow: 6px 0 8px rgba(45, 62, 80, .10);
-      overflow: hidden;
-    }
-    .board-lock-pin .hrow.head {
-      width: var(--pin-w);
-      min-width: var(--pin-w);
-    }
-    .board-x .hrow.head .lock-cluster {
-      visibility: hidden;
     }
 
     .horse-sheet {
@@ -368,24 +351,14 @@
     }
     .hrow.alt .lock-cluster { background: #f4f6f8; }
     .hrow.head {
-      position: relative;
-      z-index: 6;
+      position: sticky;
+      top: 0;
+      z-index: 7;
       height: 47px;
       background: #eef3f8;
       color: #111;
       font-size: var(--head-fs); font-weight: 400;
       text-align: center;
-    }
-    .hrow.head.is-vpinned {
-      z-index: 7;
-      will-change: transform;
-    }
-    .board-lock-pin .hrow.head .lock-cluster {
-      position: relative;
-      left: auto;
-      z-index: 8;
-      background: #eef3f8;
-      visibility: visible;
     }
     .hrow.head .lock-cluster {
       z-index: 8;
@@ -906,8 +879,6 @@
       board: document.getElementById("board"),
       boardMain: document.getElementById("boardMain"),
       boardX: null,
-      boardLockPin: null,
-      boardHeadRow: null,
       sheet: document.getElementById("horseSheet"),
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
@@ -1403,68 +1374,6 @@
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
     }
-    /* 左鎖 sticky 覆蓋；右表頭在 board-x 原生橫滑；豎向用 scrollTop 推算 translateY */
-    let horsePinBound = false;
-    let pinRaf = 0;
-    let lastPinY = -1;
-    const pinGeo = { bodyTop: 0, bodyH: 0, headH: 47, valid: false };
-    function measureHorsePinGeometry() {
-      const wrap = el.board;
-      const body = el.boardX;
-      const head = el.boardHeadRow || (body && body.querySelector(".hrow.head"));
-      if (!wrap || !body || !head) {
-        pinGeo.valid = false;
-        return false;
-      }
-      const wrapRect = wrap.getBoundingClientRect();
-      const bodyRect = body.getBoundingClientRect();
-      pinGeo.bodyTop = bodyRect.top - wrapRect.top + wrap.scrollTop;
-      pinGeo.bodyH = body.offsetHeight;
-      pinGeo.headH = head.offsetHeight || 47;
-      pinGeo.valid = true;
-      lastPinY = -1;
-      el.boardHeadRow = head;
-      return true;
-    }
-    function syncHorseHeadPin() {
-      const wrap = el.board;
-      const body = el.boardX;
-      if (!wrap || !body) return;
-      if (!pinGeo.valid && !measureHorsePinGeometry()) return;
-      const head = el.boardHeadRow || body.querySelector(".hrow.head");
-      if (!head) return;
-      const maxPin = Math.max(0, pinGeo.bodyH - pinGeo.headH);
-      let pinY = wrap.scrollTop - pinGeo.bodyTop;
-      if (pinY < 0) pinY = 0;
-      else if (pinY > maxPin) pinY = maxPin;
-      pinY = pinY < 0.5 ? 0 : Math.round(pinY);
-      if (pinY === lastPinY) return;
-      lastPinY = pinY;
-      if (pinY > 0) {
-        head.style.transform = "translate3d(0," + pinY + "px,0)";
-        head.classList.add("is-vpinned");
-      } else {
-        head.style.transform = "";
-        head.classList.remove("is-vpinned");
-      }
-    }
-    function onBoardVScroll() {
-      if (pinRaf) return;
-      pinRaf = requestAnimationFrame(function () {
-        pinRaf = 0;
-        syncHorseHeadPin();
-      });
-    }
-    function bindHorseHeadPin() {
-      if (!el.board || !el.boardX) return;
-      measureHorsePinGeometry();
-      if (!horsePinBound) {
-        horsePinBound = true;
-        el.board.addEventListener("scroll", onBoardVScroll, { passive: true });
-      }
-      syncHorseHeadPin();
-    }
-
     function renderBoard() {
       const hot = bestOdds();
       const rows = sortedRows();
@@ -1485,7 +1394,7 @@
       const scrollHeadCells = SCROLL_COLS.map((c) =>
         '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
       ).join("");
-      const head = '<div class="hrow head" id="boardHeadRow">' + lockHead + scrollHeadCells + "</div>";
+      const head = '<div class="hrow head">' + lockHead + scrollHeadCells + "</div>";
 
       const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
@@ -1512,16 +1421,10 @@
 
       el.boardMain.innerHTML =
         '<div class="board-horses" id="boardHorses">' +
-          '<div class="board-lock-pin" id="boardLockPin">' +
-            '<div class="hrow head">' + lockHead + "</div>" +
-          "</div>" +
           '<div class="board-x" id="boardX">' + head + body + "</div>" +
         "</div>" +
         renderQinPanelHtml();
-      el.boardLockPin = document.getElementById("boardLockPin");
       el.boardX = document.getElementById("boardX");
-      el.boardHeadRow = document.getElementById("boardHeadRow");
-      pinGeo.valid = false;
       fitScrollColWidths();
       fitQinTableWidths();
       if (el.boardX) el.boardX.scrollLeft = sl;
@@ -1537,8 +1440,6 @@
         });
       });
       bindHorseSheetOpens();
-      bindHorseHeadPin();
-      requestAnimationFrame(syncHorseHeadPin);
     }
 
     applyColFitRule();
@@ -1556,8 +1457,6 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
-      measureHorsePinGeometry();
-      syncHorseHeadPin();
     });
   })();
   </script>
