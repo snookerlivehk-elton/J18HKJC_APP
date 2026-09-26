@@ -711,7 +711,7 @@
     .silk-13 { background:#fff; color:#111; box-shadow: inset 0 0 0 1px #999; }
     .silk-14 { background:#c5a028; color:#1a1408; }
 
-    /* 連贏區：與馬匹橫滑容器分離；格寬按 12 匹鎖定，超出可橫滑，最多 20 匹 */
+    /* 連贏區：表內橫豎滾動；首行／首列 CSS sticky（20 匹可鎖定標號） */
     .qin-panel {
       position: relative;
       z-index: 2;
@@ -720,12 +720,17 @@
       background: #eef1f5;
       border-top: 8px solid #eef1f5;
       padding: 0 0 10px;
+      --qin-cell: 24px;
+      --qin-title-w: 40px;
     }
     .qin-block {
       background: #fff;
-      overflow-x: auto;
+      position: relative;
+    }
+    .qin-x {
+      overflow: auto;
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior-x: contain;
+      overscroll-behavior: contain;
     }
     .qin-tbl {
       border-collapse: collapse;
@@ -733,8 +738,6 @@
       font-size: 12px;
       font-variant-numeric: tabular-nums lining-nums;
       line-height: 1;
-      --qin-cell: 24px;
-      --qin-title-w: 40px;
     }
     .qin-tbl th,
     .qin-tbl td {
@@ -752,6 +755,7 @@
     }
     .qin-tbl .qin-title {
       position: sticky;
+      top: 0;
       left: 0;
       z-index: 4;
       background: #8e99a8;
@@ -762,7 +766,7 @@
       white-space: nowrap;
       min-width: var(--qin-title-w);
       width: var(--qin-title-w);
-      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
+      box-shadow: 3px 0 6px rgba(45, 62, 80, .12), 0 2px 4px rgba(45, 62, 80, .10);
     }
     .qin-tbl .qin-h {
       background: #5b8fc7;
@@ -770,7 +774,18 @@
       font-weight: 700;
       font-size: 12px;
     }
-    /* 20 匹橫滑時鎖定最左馬號列 */
+    /* 首行馬號：豎滑鎖定 */
+    .qin-tbl .qin-ch {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #5b8fc7;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      box-shadow: 0 2px 4px rgba(45, 62, 80, .10);
+    }
+    /* 首列馬號：橫滑鎖定 */
     .qin-tbl .qin-rh {
       position: sticky;
       left: 0;
@@ -1336,18 +1351,22 @@
       }
       return { nos: nos, oddsMap: oddsMap, hotKey: hotKey };
     }
-    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數，對角＝馬號；首列 sticky 橫滑鎖定 */
+    /* 單一矩陣：上三角＝連贏賠率，下三角＝連贏指數；首行／首列 CSS sticky */
     function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
       if (n < 2) {
         return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
       }
-      let html = '<div class="qin-block"><table class="qin-tbl" data-n="' + n +
-        '" aria-label="連贏賠率（上三角）與連贏指數（下三角）"><thead><tr>';
-      html += '<th class="qin-title">連/指</th>';
+      let html =
+        '<div class="qin-block">' +
+          '<div class="qin-x" id="qinX">' +
+            '<table class="qin-tbl" data-n="' + n +
+            '" aria-label="連贏賠率（上三角）與連贏指數（下三角）">' +
+            "<thead><tr>" +
+            '<th class="qin-title">連/指</th>';
       for (let j = 0; j < n; j++) {
-        html += '<th class="qin-h">' + esc(nos[j]) + "</th>";
+        html += '<th class="qin-ch">' + esc(nos[j]) + "</th>";
       }
       html += "</tr></thead><tbody>";
       for (let i = 0; i < n; i++) {
@@ -1382,7 +1401,7 @@
         }
         html += "</tr>";
       }
-      html += "</tbody></table></div>";
+      html += "</tbody></table></div></div>";
       return html;
     }
     function renderQinLegend() {
@@ -1414,10 +1433,11 @@
         "</div>"
       );
     }
-    /* 格寬鎖定 12 匹視口：≤12 鋪滿；>12 同密度橫滑，最多 20 */
+    /* 格寬鎖定 12 匹視口：≤12 鋪滿；>12 同密度橫滑，最多 20；高度約 12 列可豎滑 */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
+      const qinX = document.getElementById("qinX");
       if (!panel || !tbl) return;
       const n = Number(tbl.getAttribute("data-n") || 0);
       if (n < 2) return;
@@ -1426,12 +1446,17 @@
       const denom = Math.min(n, QIN_FIT_N);
       const cell = Math.max(18, Math.floor((avail - titleW) / denom));
       const total = titleW + n * cell;
-      tbl.style.setProperty("--qin-title-w", titleW + "px");
-      tbl.style.setProperty("--qin-cell", cell + "px");
+      panel.style.setProperty("--qin-title-w", titleW + "px");
+      panel.style.setProperty("--qin-cell", cell + "px");
       tbl.style.width = total + "px";
       tbl.style.minWidth = total + "px";
       const fs = cell >= 24 ? 12 : cell >= 20 ? 11 : 10;
       tbl.style.fontSize = fs + "px";
+      if (qinX) {
+        /* 約鎖 12 列可視高度，超出（如 20 匹）在格內豎滑，首行 sticky 才會生效 */
+        const rowsVisible = Math.min(n, QIN_FIT_N);
+        qinX.style.maxHeight = (cell * (rowsVisible + 1) + 2) + "px";
+      }
     }
     /* 豎向：board-head-pin CSS sticky；橫向：board-head-x.scrollLeft 跟隨 board-x（無 transform） */
     let headScrollBound = false;
