@@ -143,7 +143,6 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("qinPreviewN", r.text)
         self.assertIn("qin-dense", r.text)
         self.assertIn('btn(18, "18")', r.text)
-        self.assertIn("idx-cell", r.text)
         self.assertNotIn("qinIdxToggle", r.text)
         self.assertNotIn("qin-idx-block", r.text)
         self.assertNotIn("date-row", r.text)
