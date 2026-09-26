@@ -172,6 +172,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("synthQinOdds", r.text)
         self.assertIn("buildQinPairs", r.text)
         self.assertIn("QIN_FIT_N", r.text)
+        self.assertIn("const QIN_FIT_N = 14", r.text)
         self.assertIn("QIN_MAX_N", r.text)
         self.assertIn("fitQinTableWidths", r.text)
         self.assertIn("ensureQinDemo20Race", r.text)
