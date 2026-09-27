@@ -1008,30 +1008,42 @@
     .scroll-col .rs-tri:not(.on) polygon {
       fill: #fff;
     }
-    /* 近六賽績＋班次升降：上文字、下圖例（升▲／平－／降▼） */
+    /* 近六賽績＋班次升降：每個近績數字正下方緊跟對應升／平／降圖例 */
     .scroll-col .v.form-class {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      display: inline-flex;
+      flex-direction: row;
+      align-items: flex-start;
       justify-content: center;
-      gap: 3px;
+      gap: 0;
       white-space: nowrap;
       line-height: 1.05;
     }
-    .scroll-col .v.form-class .nm {
+    .scroll-col .fc-seg {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 2px;
+      min-width: 1.05em;
+    }
+    .scroll-col .fc-seg .fc-num {
       display: block;
       font: inherit;
       color: inherit;
-      line-height: inherit;
+      line-height: 1.05;
       font-variant-numeric: tabular-nums;
+      text-align: center;
     }
-    .scroll-col .fc-marks {
-      display: flex;
+    .scroll-col .fc-sep {
+      display: inline-flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 2px;
-      height: 9px;
-      line-height: 0;
+      justify-content: flex-start;
+      padding: 0 1px;
+      font: inherit;
+      color: inherit;
+      line-height: 1.05;
+      user-select: none;
     }
     .scroll-col .fc-m {
       display: block;
@@ -2065,37 +2077,44 @@
         "</span>"
       );
     }
-    function cellForm6(r) {
-      const form = fmt(r.form6 != null ? r.form6 : r.recent);
-      const moves = Array.isArray(r.class6Moves) ? r.class6Moves : classMovesFrom(r.class6);
-      if (form === "—" && (!moves || !moves.length)) return '<span class="v">—</span>';
-      let marks = '<span class="fc-marks" aria-hidden="true" title="班次：綠▲升　灰－平　紅▼降">';
-      (moves || []).forEach(function (m) {
-        const kind = m === "up" || m === "down" ? m : "flat";
-        if (kind === "flat") {
-          marks +=
-            '<svg class="fc-m flat" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
-              '<rect x="0.8" y="3.2" width="6.4" height="1.6" rx="0.6" />' +
-            "</svg>";
-        } else if (kind === "up") {
-          marks +=
-            '<svg class="fc-m up" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
-              '<polygon points="4,0.8 7.2,7.1 0.8,7.1" />' +
-            "</svg>";
-        } else {
-          marks +=
-            '<svg class="fc-m down" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
-              '<polygon points="0.8,0.9 7.2,0.9 4,7.2" />' +
-            "</svg>";
-        }
-      });
-      marks += "</span>";
+    function fcMarkSvg(kind) {
+      if (kind === "up") {
+        return (
+          '<svg class="fc-m up" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+            '<polygon points="4,0.8 7.2,7.1 0.8,7.1" />' +
+          "</svg>"
+        );
+      }
+      if (kind === "down") {
+        return (
+          '<svg class="fc-m down" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+            '<polygon points="0.8,0.9 7.2,0.9 4,7.2" />' +
+          "</svg>"
+        );
+      }
       return (
-        '<span class="v form-class">' +
-          '<span class="nm">' + esc(form) + "</span>" +
-          marks +
-        "</span>"
+        '<svg class="fc-m flat" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+          '<rect x="0.8" y="3.2" width="6.4" height="1.6" rx="0.6" />' +
+        "</svg>"
       );
+    }
+    function cellForm6(r) {
+      const raw = r.form6 != null ? r.form6 : r.recent;
+      const parts = parseSlashParts(raw);
+      const moves = Array.isArray(r.class6Moves) ? r.class6Moves : classMovesFrom(r.class6);
+      if (!parts.length) return '<span class="v">—</span>';
+      let html = '<span class="v form-class" title="每位近績下：綠▲升　灰－平　紅▼降">';
+      parts.forEach(function (p, i) {
+        if (i) html += '<span class="fc-sep">/</span>';
+        const kind = moves[i] === "up" || moves[i] === "down" ? moves[i] : "flat";
+        html +=
+          '<span class="fc-seg">' +
+            '<span class="fc-num">' + esc(p) + "</span>" +
+            fcMarkSvg(kind) +
+          "</span>";
+      });
+      html += "</span>";
+      return html;
     }
 
     function esc(s) {
