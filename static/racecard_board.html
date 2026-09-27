@@ -376,15 +376,15 @@
     .hrow.alt { background: #f4f6f8; }
     .hrow.scratched .hname { text-decoration: line-through; }
     .hrow.scratched .cell { opacity: .45; }
-    /* 小旗標記整行：一按藍、再按橙、三按復原 */
-    .hrow.mark-1 { background: #d7ebf8; }
-    .hrow.mark-1 .lock-cluster { background: #d7ebf8; }
-    .hrow.mark-2 { background: #fde8cc; }
-    .hrow.mark-2 .lock-cluster { background: #fde8cc; }
-    .hrow.alt.mark-1 { background: #cce4f5; }
-    .hrow.alt.mark-1 .lock-cluster { background: #cce4f5; }
-    .hrow.alt.mark-2 { background: #f7dcb8; }
-    .hrow.alt.mark-2 .lock-cluster { background: #f7dcb8; }
+    /* 小旗標記整行：一按黃、再按綠、三按復原 */
+    .hrow.mark-1 { background: #fde8cc; }
+    .hrow.mark-1 .lock-cluster { background: #fde8cc; }
+    .hrow.mark-2 { background: #d4efdf; }
+    .hrow.mark-2 .lock-cluster { background: #d4efdf; }
+    .hrow.alt.mark-1 { background: #f7dcb8; }
+    .hrow.alt.mark-1 .lock-cluster { background: #f7dcb8; }
+    .hrow.alt.mark-2 { background: #c5e8d3; }
+    .hrow.alt.mark-2 .lock-cluster { background: #c5e8d3; }
 
     .lock-cluster {
       position: sticky;
@@ -669,10 +669,10 @@
       background: rgba(45, 62, 80, .08);
     }
     .row-flag[data-mark="1"] {
-      color: #3b8fd4;
+      color: var(--orange);
     }
     .row-flag[data-mark="2"] {
-      color: var(--orange);
+      color: var(--green);
     }
     .draw-no {
       display: grid;
@@ -1170,7 +1170,7 @@
       "</svg>";
     function renderRowFlag(no, mark) {
       const m = mark === 1 || mark === 2 ? mark : 0;
-      const lab = m === 1 ? "藍標，再點改橙標" : m === 2 ? "橙標，再點取消" : "標記此馬";
+      const lab = m === 1 ? "黃標，再點改綠標" : m === 2 ? "綠標，再點取消" : "標記此馬";
       return (
         '<button type="button" class="row-flag" data-no="' + esc(no) +
           '" data-mark="' + m + '" aria-pressed="' + (m ? "true" : "false") +
@@ -2427,7 +2427,7 @@
         btn.setAttribute("aria-pressed", mark ? "true" : "false");
         btn.setAttribute(
           "aria-label",
-          mark === 1 ? "藍標，再點改橙標" : mark === 2 ? "橙標，再點取消" : "標記此馬"
+          mark === 1 ? "黃標，再點改綠標" : mark === 2 ? "綠標，再點取消" : "標記此馬"
         );
         const row = btn.closest(".hrow");
         applyRowMarkClass(row, mark);
