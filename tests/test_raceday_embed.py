@@ -182,7 +182,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("近六", r.text)
         self.assertIn("賽績", r.text)
         self.assertIn("班次", r.text)
-        self.assertIn("近六賽績\\n班次", r.text)
+        self.assertIn("近六賽績\\n班次升降", r.text)
         self.assertIn("ensureClass6Demo", r.text)
         self.assertIn("cellForm6", r.text)
         self.assertIn("fc-seg", r.text)
