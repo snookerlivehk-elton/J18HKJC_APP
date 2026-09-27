@@ -904,15 +904,55 @@
     .qin-mode-switch:active .qin-sw-thumb {
       filter: brightness(.96);
     }
-    /* 首列「1」位改靜態「指數」標籤，非按鈕 */
+    /* 首列「1」位：豎排「指數」灰底＋右側 1/3 藍底馬號，非按鈕 */
     .qin-tbl .qin-rh.qin-idx-lab {
+      padding: 0;
       background: #cfd5de;
       color: #5b6575;
-      font-weight: 700;
-      font-size: 11px;
-      letter-spacing: .04em;
       cursor: default;
       user-select: none;
+      overflow: hidden;
+    }
+    .qin-idx-inner {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      height: 100%;
+      min-height: var(--qin-cell);
+    }
+    .qin-idx-txt {
+      flex: 2 1 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 1px 0;
+      background: #cfd5de;
+      color: #5b6575;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      line-height: 1.05;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      white-space: nowrap;
+    }
+    .qin-idx-no {
+      flex: 1 1 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-width: 0;
+      background: #5b8fc7;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .qin-tbl .qin-rh.qin-idx-lab.scratch .qin-idx-no {
+      background: #9aa3af;
+      color: #e8eaed;
     }
     .qin-tbl .qin-h {
       background: #5b8fc7;
@@ -1893,7 +1933,12 @@
         const rowHorse = nos[i];
         html += "<tr>";
         if (i === 0) {
-          html += '<th class="qin-rh qin-idx-lab" scope="row">指數</th>';
+          const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
+          html += '<th class="qin-rh qin-idx-lab' + sc + '" scope="row">' +
+            '<span class="qin-idx-inner">' +
+              '<span class="qin-idx-txt">指數</span>' +
+              '<span class="qin-idx-no">' + esc(rowHorse) + "</span>" +
+            "</span></th>";
         } else {
           const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
           html += '<th class="qin-rh' + sc + '" scope="row">' + esc(rowHorse) + "</th>";
@@ -2057,6 +2102,13 @@
         const no = nos[idx + 1];
         th.classList.toggle("scratch", qinHorseScratched(qin, no));
       });
+      const idxLabTh = tbl.querySelector("th.qin-rh.qin-idx-lab");
+      if (idxLabTh) {
+        const no0 = nos[0];
+        idxLabTh.classList.toggle("scratch", qinHorseScratched(qin, no0));
+        const noEl = idxLabTh.querySelector(".qin-idx-no");
+        if (noEl && no0 != null) noEl.textContent = String(no0);
+      }
       tbl.querySelectorAll("th.qin-rh:not(.qin-idx-lab)").forEach(function (th, idx) {
         const no = nos[idx + 1];
         th.classList.toggle("scratch", qinHorseScratched(qin, no));
