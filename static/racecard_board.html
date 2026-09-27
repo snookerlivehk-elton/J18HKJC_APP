@@ -1112,6 +1112,8 @@
       min-width: calc(var(--qin-title-w) + var(--qin-cell));
       width: calc(var(--qin-title-w) + var(--qin-cell));
       box-shadow: 0 2px 4px rgba(45, 62, 80, .10), 3px 0 6px rgba(45, 62, 80, .12);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
     .qin-mode-switch {
       display: block;
@@ -2676,18 +2678,17 @@
       const panel = document.getElementById("qinPanel");
       if (!panel || panel.dataset.modeBound === "1") return;
       panel.dataset.modeBound = "1";
-      panel.addEventListener("click", function (ev) {
-        const btn = ev.target && ev.target.closest ? ev.target.closest("button.qin-mode-switch") : null;
-        if (!btn || !panel.contains(btn)) return;
+      /* 整塊角標任意點擊均切換（馬多格小時不必精準點中某一側文字） */
+      function toggleQinMode(ev) {
+        const hit = ev.target && ev.target.closest
+          ? (ev.target.closest(".qin-switch-cell") || ev.target.closest("button.qin-mode-switch"))
+          : null;
+        if (!hit || !panel.contains(hit)) return;
         ev.preventDefault();
         ev.stopPropagation();
-        const lab = ev.target.closest ? ev.target.closest(".qin-sw-lab[data-qin-mode]") : null;
-        if (lab && btn.contains(lab)) {
-          setQinMode(lab.getAttribute("data-qin-mode"));
-          return;
-        }
         setQinMode(qinMode === "qin" ? "qpl" : "qin");
-      });
+      }
+      panel.addEventListener("click", toggleQinMode);
     }
     /* 連贏格寬規矩：
        - 任何時候（含字體縮放後）首列與各數據列等寬均分
