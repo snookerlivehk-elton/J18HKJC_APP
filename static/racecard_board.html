@@ -1008,6 +1008,53 @@
     .scroll-col .rs-tri:not(.on) polygon {
       fill: #fff;
     }
+    /* 近六賽績＋班次升降：上文字、下圖例（升▲／平－／降▼） */
+    .scroll-col .v.form-class {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      white-space: nowrap;
+      line-height: 1.05;
+    }
+    .scroll-col .v.form-class .nm {
+      display: block;
+      font: inherit;
+      color: inherit;
+      line-height: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+    .scroll-col .fc-marks {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      height: 9px;
+      line-height: 0;
+    }
+    .scroll-col .fc-m {
+      display: block;
+      width: 7px;
+      height: 8px;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+    .scroll-col .fc-m.up polygon {
+      fill: #1e8e3e;
+      stroke: #1e8e3e;
+      stroke-width: 0.6;
+      stroke-linejoin: round;
+    }
+    .scroll-col .fc-m.down polygon {
+      fill: #c0392b;
+      stroke: #c0392b;
+      stroke-width: 0.6;
+      stroke-linejoin: round;
+    }
+    .scroll-col .fc-m.flat rect {
+      fill: #8a93a0;
+    }
     /* 水位／流量：獨贏上、位置下；與 .odds 同字號／行高／位移，邊距同為約 8px */
     .scroll-col .wp {
       display: flex;
@@ -1346,21 +1393,21 @@
 
     .qin-legend {
       position: relative;
-      padding: 8px 10px 2px 8px; /* 左 8px：兩行圖例相對原位左移 2px */
+      padding: 8px 10px 2px 5px; /* 左 5px：圖例再左移 3px */
       background: #eef1f5;
       font-size: 11px;
       color: #5b6575;
       line-height: 1.55;
     }
     .qin-legend-main {
-      /* 右側預留開關寬＋右緣 6px＋少量間隙，避免圖例換行 */
-      padding-right: 74px;
+      /* 右側預留開關寬＋右緣＋間隙，避免圖例換行 */
+      padding-right: 76px;
       box-sizing: border-box;
     }
     .qin-legend-actions {
       position: absolute;
       top: 8px; /* 與「上三角」距表底同為 legend padding-top */
-      right: 6px; /* 距顯示邊緣 6px */
+      right: 8px; /* 原 6px，按鈕左移 2px */
       display: flex;
       align-items: flex-start;
     }
@@ -1509,8 +1556,7 @@
       { key: "trainer", label: "練馬師", cls: "scroll-col txt" },
       { key: "age", label: "年齡", cls: "scroll-col num" },
       { key: "runStyle", label: "預計\n跑法", cls: "scroll-col txt" },
-      { key: "form6", label: "近六\n賽績", cls: "scroll-col form txt" },
-      { key: "class6", label: "近六\n班次", cls: "scroll-col form txt" },
+      { key: "form6", label: "近六賽績\n班次", cls: "scroll-col form txt" },
       { key: "placeIn", label: "入圍數｜%", cls: "scroll-col num" },
       { key: "rating", label: "評分", cls: "scroll-col num" },
       { key: "career", label: "歷季\n出賽", cls: "scroll-col form txt muted" },
@@ -1945,6 +1991,54 @@
     }
     ensureRunStyleDemo();
 
+    function parseSlashParts(s) {
+      return String(s == null ? "" : s)
+        .split("/")
+        .map(function (x) { return String(x).trim(); })
+        .filter(function (x) { return x && x !== "—" && x !== "-"; });
+    }
+    /* 班次序（左＝最近）：相對上一仗 升／降／平 */
+    function classMovesFrom(class6) {
+      const parts = parseSlashParts(class6).map(function (x) {
+        const n = Number(x);
+        return Number.isFinite(n) ? n : null;
+      });
+      return parts.map(function (c, i) {
+        const prev = parts[i + 1];
+        if (c == null || prev == null) return "flat";
+        if (c < prev) return "up";
+        if (c > prev) return "down";
+        return "flat";
+      });
+    }
+    /* 演示：合成近六班次，並算出升降平，供合併列圖例 */
+    function ensureClass6Demo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r) return;
+          const formParts = parseSlashParts(r.form6 != null ? r.form6 : r.recent);
+          const n = Math.max(formParts.length, 1);
+          if (r.class6 == null || String(r.class6).trim() === "") {
+            const base = 3 + ((Number(r.no) || 0) + raceNum) % 3; /* 3–5 班 */
+            const arr = [];
+            let cur = base;
+            for (let i = 0; i < n; i++) {
+              arr.push(cur);
+              const roll = (Number(r.no) * 17 + raceNum * 13 + i * 9) % 5;
+              if (roll <= 1) cur = Math.max(1, Math.min(5, cur - 1));
+              else if (roll >= 3) cur = Math.max(1, Math.min(5, cur + 1));
+            }
+            r.class6 = arr.join("/");
+          }
+          r.class6Moves = classMovesFrom(r.class6);
+        });
+      });
+    }
+    ensureClass6Demo();
+
     function runStyleIndex(style) {
       const lab = String(style == null ? "" : style).trim();
       const i = RUN_STYLES.indexOf(lab);
@@ -1967,6 +2061,38 @@
       return (
         '<span class="v run-style">' +
           '<span class="nm">' + esc(lab) + "</span>" +
+          marks +
+        "</span>"
+      );
+    }
+    function cellForm6(r) {
+      const form = fmt(r.form6 != null ? r.form6 : r.recent);
+      const moves = Array.isArray(r.class6Moves) ? r.class6Moves : classMovesFrom(r.class6);
+      if (form === "—" && (!moves || !moves.length)) return '<span class="v">—</span>';
+      let marks = '<span class="fc-marks" aria-hidden="true" title="班次：綠▲升　灰－平　紅▼降">';
+      (moves || []).forEach(function (m) {
+        const kind = m === "up" || m === "down" ? m : "flat";
+        if (kind === "flat") {
+          marks +=
+            '<svg class="fc-m flat" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+              '<rect x="0.8" y="3.2" width="6.4" height="1.6" rx="0.6" />' +
+            "</svg>";
+        } else if (kind === "up") {
+          marks +=
+            '<svg class="fc-m up" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+              '<polygon points="4,0.8 7.2,7.1 0.8,7.1" />' +
+            "</svg>";
+        } else {
+          marks +=
+            '<svg class="fc-m down" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+              '<polygon points="0.8,0.9 7.2,0.9 4,7.2" />' +
+            "</svg>";
+        }
+      });
+      marks += "</span>";
+      return (
+        '<span class="v form-class">' +
+          '<span class="nm">' + esc(form) + "</span>" +
           marks +
         "</span>"
       );
@@ -2089,6 +2215,9 @@
       }
       if (c.key === "runStyle") {
         return cellRunStyle(r.runStyle);
+      }
+      if (c.key === "form6") {
+        return cellForm6(r);
       }
       if (c.key === "jockey") {
         const p = splitNameAllow(r.jockey);
