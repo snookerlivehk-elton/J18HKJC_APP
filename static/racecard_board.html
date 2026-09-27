@@ -966,6 +966,48 @@
     }
     .scroll-col .v.stacked .sub.delta-pos { color: #c0392b; }
     .scroll-col .v.stacked .sub.delta-neg { color: #1e8e3e; }
+    /* 預計跑法：文字 + 四枚向左三角（實心位＝跑法） */
+    .scroll-col .v.run-style {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      white-space: nowrap;
+      line-height: 1.05;
+    }
+    .scroll-col .v.run-style .nm {
+      display: block;
+      font: inherit;
+      color: inherit;
+      line-height: inherit;
+    }
+    .scroll-col .rs-marks {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      height: 9px;
+      line-height: 0;
+    }
+    .scroll-col .rs-tri {
+      display: block;
+      width: 7px;
+      height: 8px;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+    .scroll-col .rs-tri polygon {
+      stroke: #2a5f8f;
+      stroke-width: 1.1;
+      stroke-linejoin: round;
+    }
+    .scroll-col .rs-tri.on polygon {
+      fill: #2a5f8f;
+    }
+    .scroll-col .rs-tri:not(.on) polygon {
+      fill: #fff;
+    }
     /* 水位／流量：獨贏上、位置下；與 .odds 同字號／行高／位移，邊距同為約 8px */
     .scroll-col .wp {
       display: flex;
@@ -1857,6 +1899,33 @@
     }
     ensureRunStyleDemo();
 
+    function runStyleIndex(style) {
+      const lab = String(style == null ? "" : style).trim();
+      const i = RUN_STYLES.indexOf(lab);
+      return i >= 0 ? i : -1;
+    }
+    function cellRunStyle(style) {
+      const lab = String(style == null ? "" : style).trim();
+      const active = runStyleIndex(lab);
+      if (!lab) return '<span class="v">—</span>';
+      let marks = '<span class="rs-marks" aria-hidden="true">';
+      for (let i = 0; i < 4; i++) {
+        const on = i === active ? " on" : "";
+        /* 向左等邊三角：右上／左尖／右下 */
+        marks +=
+          '<svg class="rs-tri' + on + '" viewBox="0 0 8 8" width="7" height="8" focusable="false">' +
+            '<polygon points="7.2,0.6 0.9,4 7.2,7.4" />' +
+          "</svg>";
+      }
+      marks += "</span>";
+      return (
+        '<span class="v run-style">' +
+          '<span class="nm">' + esc(lab) + "</span>" +
+          marks +
+        "</span>"
+      );
+    }
+
     function esc(s) {
       return String(s == null ? "" : s)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -1971,6 +2040,9 @@
       }
       if (c.key === "flow") {
         return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow);
+      }
+      if (c.key === "runStyle") {
+        return cellRunStyle(r.runStyle);
       }
       if (c.key === "jockey") {
         const p = splitNameAllow(r.jockey);
