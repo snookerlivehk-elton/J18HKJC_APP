@@ -1560,8 +1560,18 @@
     function splitNameAllow(s) {
       const t = String(s == null ? "" : s).trim();
       const m = t.match(/^(.*?)[\s\u3000]*([(\uFF08][+\-]?\d+[)\uFF09])$/);
-      if (!m || !String(m[1]).trim()) return { name: t, allow: "" };
-      return { name: m[1].trim(), allow: m[2] };
+      if (!m || !String(m[1]).trim()) return { name: t, allow: "", delta: "" };
+      const allow = m[2];
+      const dm = String(allow).match(/([+\-]?\d+)/);
+      const n = dm ? numOrNull(dm[1]) : null;
+      /* 騎師括號多為可減磅；正數亦按原文符號，無符號時視為減磅 */
+      let delta = "";
+      if (n != null && n !== 0) {
+        if (/^[(\uFF08]\+/.test(allow)) delta = fmtDelta(n);
+        else if (/^[(\uFF08]-/.test(allow) || n < 0) delta = fmtDelta(n);
+        else delta = fmtDelta(-Math.abs(n));
+      }
+      return { name: m[1].trim(), allow: allow, delta: delta };
     }
     function fmtDelta(v) {
       if (v == null || v === "" || v === "—" || v === "-") return "";
@@ -1626,10 +1636,7 @@
     function cellValue(c, r) {
       if (c.key === "jockey") {
         const p = splitNameAllow(r.jockey);
-        if (p.allow) {
-          return '<span class="v stacked"><span class="nm">' + esc(fmt(p.name)) +
-            '</span><span class="sub">' + esc(p.allow) + "</span></span>";
-        }
+        return cellStackedMainDelta(p.name || r.jockey, p.delta);
       }
       if (c.key === "hw") {
         return cellStackedMainDelta(r.hw, hwDeltaOf(r) || r.hwDelta || r.overWt);
@@ -1862,7 +1869,7 @@
         '<div class="horse-sheet-grid">' +
           sheetItem("近績", r.form6) +
           sheetItem("往績", r.recent) +
-          sheetItem("騎師", j.allow ? (j.name + " " + j.allow) : r.jockey) +
+          sheetItem("騎師", j.delta ? (j.name + "（" + j.delta + "）") : (j.name || r.jockey)) +
           sheetItem("練馬師", r.trainer) +
           sheetItem("年齡", r.age) +
           sheetItem("評分", (function () {

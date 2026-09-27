@@ -293,6 +293,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("splitNameAllow", r.text)
         self.assertIn("v stacked", r.text)
         self.assertIn("v.stacked .sub", r.text)
+        self.assertIn("p.delta", r.text)
+        self.assertIn('c.key === "jockey"', r.text)
         self.assertIn("font: inherit", r.text)
         self.assertIn("fitScrollColWidths", r.text)
         self.assertIn("applyMeeting", r.text)
