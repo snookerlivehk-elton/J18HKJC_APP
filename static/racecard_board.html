@@ -56,10 +56,122 @@
       height: 44px; padding: 0 10px;
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
       color: #fff; z-index: 30;
+      position: relative;
     }
-    .topbar .side { width: 64px; font-size: 15px; font-weight: 700; }
-    .topbar .side.r { text-align: right; opacity: .9; }
+    .topbar .side {
+      min-width: 64px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .topbar .side.l {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .topbar .side.r {
+      position: relative;
+      display: flex;
+      justify-content: flex-end;
+      text-align: right;
+    }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
+    .topbar .nav-back,
+    .topbar .nav-menu-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      margin: 0;
+      padding: 6px 4px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .topbar .nav-back:active,
+    .topbar .nav-menu-btn:active,
+    .topbar .nav-menu-btn[aria-expanded="true"] {
+      background: rgba(255, 255, 255, .14);
+    }
+    .topbar .nav-back .chev {
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1;
+      margin-top: -1px;
+    }
+    .topbar .nav-menu-btn .lab { letter-spacing: .04em; }
+    .topbar .nav-menu-btn .caret {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      opacity: .95;
+      transition: transform .18s ease;
+    }
+    .topbar .nav-menu-btn[aria-expanded="true"] .caret {
+      transform: rotate(180deg);
+    }
+    .topbar-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      z-index: 40;
+      min-width: 168px;
+      padding: 6px 0;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 10px 28px rgba(45, 62, 80, .22), 0 0 0 1px rgba(45, 62, 80, .08);
+      transform-origin: top right;
+      animation: topbarMenuIn .16s ease-out;
+    }
+    .topbar-menu[hidden] { display: none; }
+    @keyframes topbarMenuIn {
+      from { opacity: 0; transform: translateY(-4px) scale(.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .topbar-menu { animation: none; }
+      .topbar .nav-menu-btn .caret { transition: none; }
+    }
+    .topbar-menu button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin: 0;
+      padding: 11px 14px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.2;
+      text-align: left;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .topbar-menu button:active {
+      background: #eef3f8;
+    }
+    .topbar-menu button .menu-tag {
+      margin-left: auto;
+      padding-left: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .topbar-menu .sep {
+      height: 1px;
+      margin: 6px 10px;
+      background: var(--line);
+    }
 
     /* 頁眉下公告跑馬燈（隨列表滾動，不鎖定） */
     .anno {
@@ -1119,9 +1231,28 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="side">‹ 返回</div>
+    <div class="side l">
+      <button type="button" class="nav-back" id="navBack" aria-label="返回">
+        <span class="chev" aria-hidden="true">‹</span>
+        <span>返回</span>
+      </button>
+    </div>
     <h1>排位</h1>
-    <div class="side r">?</div>
+    <div class="side r">
+      <button type="button" class="nav-menu-btn" id="navMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="navMenu">
+        <span class="lab">選單</span>
+        <span class="caret" aria-hidden="true">▼</span>
+      </button>
+      <div class="topbar-menu" id="navMenu" role="menu" aria-label="頁面選單" hidden>
+        <button type="button" role="menuitem" data-nav="today">今日賽事</button>
+        <button type="button" role="menuitem" data-nav="history">歷史排位</button>
+        <button type="button" role="menuitem" data-nav="fav">我的收藏</button>
+        <div class="sep" role="separator"></div>
+        <button type="button" role="menuitem" data-nav="help">使用說明</button>
+        <button type="button" role="menuitem" data-nav="service">聯繫客服<span class="menu-tag">客服</span></button>
+        <button type="button" role="menuitem" data-nav="about">關於 J18</button>
+      </div>
+    </div>
   </header>
 
   <div class="board-shell">
@@ -2644,9 +2775,64 @@
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
     }
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") closeHorseSheet();
-    });
+    (function bindTopbarMenu() {
+      const btn = document.getElementById("navMenuBtn");
+      const menu = document.getElementById("navMenu");
+      const back = document.getElementById("navBack");
+      if (!btn || !menu) return;
+      function setOpen(on) {
+        if (on) {
+          menu.removeAttribute("hidden");
+          btn.setAttribute("aria-expanded", "true");
+        } else {
+          menu.setAttribute("hidden", "");
+          btn.setAttribute("aria-expanded", "false");
+        }
+      }
+      function isOpen() {
+        return btn.getAttribute("aria-expanded") === "true";
+      }
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setOpen(!isOpen());
+      });
+      menu.addEventListener("click", function (ev) {
+        const item = ev.target && ev.target.closest ? ev.target.closest("button[data-nav]") : null;
+        if (!item || !menu.contains(item)) return;
+        ev.preventDefault();
+        setOpen(false);
+        /* 示意：先關閉選單；日後可接路由／彈層 */
+        const act = item.getAttribute("data-nav");
+        if (act === "service") {
+          const anno = document.querySelector(".anno");
+          if (anno && typeof anno.scrollIntoView === "function") {
+            anno.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
+        }
+      });
+      document.addEventListener("click", function (ev) {
+        if (!isOpen()) return;
+        if (btn.contains(ev.target) || menu.contains(ev.target)) return;
+        setOpen(false);
+      });
+      if (back) {
+        back.addEventListener("click", function () {
+          setOpen(false);
+          if (window.history.length > 1) window.history.back();
+        });
+      }
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") {
+          if (isOpen()) {
+            setOpen(false);
+            btn.focus();
+            return;
+          }
+          closeHorseSheet();
+        }
+      });
+    })();
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { renderBoard(); });
     }
