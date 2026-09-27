@@ -803,6 +803,13 @@
       font-variant-numeric: tabular-nums lining-nums;
       line-height: 1;
     }
+    /* 明確列寬，避免角標 colspan=2 把首兩列均分導致右側留白 */
+    .qin-tbl col.qin-col-rh {
+      width: var(--qin-title-w);
+    }
+    .qin-tbl col.qin-col-c {
+      width: var(--qin-cell);
+    }
     .qin-tbl th,
     .qin-tbl td {
       border: 1px solid #cfd6e0;
@@ -1922,6 +1929,10 @@
           '<div class="qin-x" id="qinX">' +
             '<table class="qin-tbl" data-n="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
             '" aria-label="' + oddsLab + '賠率（上三角）與' + idxLab + '（下三角）">' +
+            '<colgroup><col class="qin-col-rh" />';
+      for (let c = 0; c < n; c++) html += '<col class="qin-col-c" />';
+      html +=
+            "</colgroup>" +
             '<thead><tr role="group" aria-label="連贏盤種切換">' +
             renderQinModeSwitch();
       for (let j = 1; j < n; j++) {
@@ -2156,7 +2167,7 @@
         setQinMode(qinMode === "qin" ? "qpl" : "qin");
       });
     }
-    /* 格寬鎖定 14 匹視口：≤14 鋪滿；>14 同密度橫滑，最多 20；高度約 14 列可豎滑 */
+    /* 格寬：≤14 鋪滿可用寬（餘數併入首列，避免右側留白）；>14 按 14 匹密度橫滑，最多 20 */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
@@ -2164,11 +2175,20 @@
       if (!panel || !tbl) return;
       const n = Number(tbl.getAttribute("data-n") || 0);
       if (n < 2) return;
-      const titleW = 40;
+      const titleW0 = 40;
       const avail = Math.max(panel.clientWidth, 200);
-      const denom = Math.min(n, QIN_FIT_N);
-      const cell = Math.max(18, Math.floor((avail - titleW) / denom));
-      const total = titleW + n * cell;
+      let titleW;
+      let cell;
+      let total;
+      if (n <= QIN_FIT_N) {
+        cell = Math.max(18, Math.floor((avail - titleW0) / n));
+        titleW = Math.max(titleW0, avail - n * cell);
+        total = avail;
+      } else {
+        cell = Math.max(18, Math.floor((avail - titleW0) / QIN_FIT_N));
+        titleW = titleW0;
+        total = titleW + n * cell;
+      }
       panel.style.setProperty("--qin-title-w", titleW + "px");
       panel.style.setProperty("--qin-cell", cell + "px");
       tbl.style.width = total + "px";
