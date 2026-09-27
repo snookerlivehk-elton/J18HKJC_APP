@@ -882,26 +882,29 @@
     }
     .scroll-col .v.stacked .sub.delta-pos { color: #c0392b; }
     .scroll-col .v.stacked .sub.delta-neg { color: #1e8e3e; }
-    /* 水位／流量：獨贏上、位置下（對齊賠率欄層級） */
+    /* 水位／流量：獨贏上、位置下；兩數間距對齊左側賠率（.odds gap 2px + win/pla 相對位移 6px） */
     .scroll-col .wp {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 1px;
-      line-height: 1.05;
+      gap: 2px;
+      line-height: 1.02;
       font-variant-numeric: tabular-nums lining-nums;
       white-space: nowrap;
     }
     .scroll-col .wp .w {
-      color: var(--text);
-      font: inherit;
+      font-size: 14px;
       font-weight: 400;
+      color: var(--text);
+      line-height: 1.02;
     }
     .scroll-col .wp .p {
-      color: #7b8494;
-      font: inherit;
+      font-size: 14px;
       font-weight: 400;
+      color: #7b8494;
+      line-height: 1.02;
+      margin-top: -6px;
     }
 
     .silk-1 { background:#e10600; } .silk-2 { background:#111; }
