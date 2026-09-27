@@ -1345,11 +1345,25 @@
     }
 
     .qin-legend {
-      padding: 8px 10px 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 14px;
+      padding: 8px 10px 10px;
       background: #eef1f5;
       font-size: 11px;
       color: #5b6575;
       line-height: 1.55;
+    }
+    .qin-legend-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .qin-legend-actions {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      align-self: stretch;
     }
     .qin-legend-row {
       display: flex;
@@ -1357,6 +1371,9 @@
       align-items: center;
       gap: 4px 10px;
       margin-bottom: 4px;
+    }
+    .qin-legend-main .qin-legend-row:last-child {
+      margin-bottom: 0;
     }
     .qin-legend-row .lab {
       flex: 0 0 auto;
@@ -1385,6 +1402,44 @@
     .qin-swatch.hot { background: #e74c3c; }
     .qin-swatch.drop20 { background: #2ecc71; }
     .qin-swatch.drop50 { background: #c4a035; }
+    /* 圖例右側大號開關（與角標聯動） */
+    .qin-mode-switch-lg {
+      width: 148px;
+      min-width: 148px;
+      height: 44px;
+      min-height: 44px;
+      padding: 4px;
+      border-radius: 10px;
+      background: #d5dbe3;
+      box-shadow: inset 0 0 0 1px #b8c0cb;
+    }
+    .qin-mode-switch-lg .qin-sw-track {
+      min-height: 36px;
+      border-radius: 8px;
+      background: #9aa5b4;
+    }
+    .qin-mode-switch-lg .qin-sw-thumb {
+      border-radius: 7px;
+      box-shadow: 0 2px 4px rgba(45, 62, 80, .22);
+    }
+    .qin-mode-switch-lg .qin-sw-lab {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    @media (max-width: 360px) {
+      .qin-legend {
+        flex-wrap: wrap;
+      }
+      .qin-legend-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .qin-mode-switch-lg {
+        width: 100%;
+        min-width: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -2422,19 +2477,25 @@
     function qinPairInvolvesScratch(qin, a, b) {
       return qinHorseScratched(qin, a) || qinHorseScratched(qin, b);
     }
-    function renderQinModeSwitch() {
+    function renderQinModeSwitchBtn(extraClass) {
       const side = qinMode === "qpl" ? "qpl" : "qin";
+      const cls = "qin-mode-switch" + (extraClass ? " " + extraClass : "");
+      return (
+        '<button type="button" class="' + cls + '" data-qin-side="' + side +
+          '" role="switch" aria-checked="' + (side === "qin" ? "true" : "false") +
+          '" aria-label="連贏盤種：位置Q或正Q">' +
+          '<span class="qin-sw-track" aria-hidden="true">' +
+            '<span class="qin-sw-thumb"></span>' +
+            '<span class="qin-sw-lab" data-qin-mode="qpl">位置Q</span>' +
+            '<span class="qin-sw-lab" data-qin-mode="qin">正Q</span>' +
+          "</span>" +
+        "</button>"
+      );
+    }
+    function renderQinModeSwitch() {
       return (
         '<th class="qin-switch-cell" colspan="2">' +
-          '<button type="button" class="qin-mode-switch" data-qin-side="' + side +
-            '" role="switch" aria-checked="' + (side === "qin" ? "true" : "false") +
-            '" aria-label="連贏盤種：位置Q或正Q">' +
-            '<span class="qin-sw-track" aria-hidden="true">' +
-              '<span class="qin-sw-thumb"></span>' +
-              '<span class="qin-sw-lab" data-qin-mode="qpl">位置Q</span>' +
-              '<span class="qin-sw-lab" data-qin-mode="qin">正Q</span>' +
-            "</span>" +
-          "</button>" +
+          renderQinModeSwitchBtn() +
         "</th>"
       );
     }
@@ -2531,19 +2592,24 @@
       const useQpl = qinMode === "qpl";
       return (
         '<div class="qin-legend">' +
-          '<div class="qin-legend-row">' +
-            '<span class="lab">上三角</span>' +
-            '<span class="qin-leg">' + (useQpl ? "連贏位置賠率" : "連贏賠率") + "</span>" +
-            '<span class="qin-leg"><span class="qin-swatch hot">00</span>大熱</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>降20%</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>降50%</span>' +
+          '<div class="qin-legend-main">' +
+            '<div class="qin-legend-row">' +
+              '<span class="lab">上三角</span>' +
+              '<span class="qin-leg">' + (useQpl ? "連贏位置賠率" : "連贏賠率") + "</span>" +
+              '<span class="qin-leg"><span class="qin-swatch hot">00</span>大熱</span>' +
+              '<span class="qin-leg"><span class="qin-swatch drop20">00</span>降20%</span>' +
+              '<span class="qin-leg"><span class="qin-swatch drop50">00</span>降50%</span>' +
+            "</div>" +
+            '<div class="qin-legend-row">' +
+              '<span class="lab">下三角</span>' +
+              '<span class="qin-leg">' + (useQpl ? "連贏位置指數" : "連贏指數") + "</span>" +
+              '<span class="qin-leg"><span class="qin-swatch hot">00</span>85–86</span>' +
+              '<span class="qin-leg"><span class="qin-swatch drop20">00</span>87–88</span>' +
+              '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89+</span>' +
+            "</div>" +
           "</div>" +
-          '<div class="qin-legend-row">' +
-            '<span class="lab">下三角</span>' +
-            '<span class="qin-leg">' + (useQpl ? "連贏位置指數" : "連贏指數") + "</span>" +
-            '<span class="qin-leg"><span class="qin-swatch hot">00</span>85–86</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop20">00</span>87–88</span>' +
-            '<span class="qin-leg"><span class="qin-swatch drop50">00</span>89+</span>' +
+          '<div class="qin-legend-actions">' +
+            renderQinModeSwitchBtn("qin-mode-switch-lg") +
           "</div>" +
         "</div>"
       );
@@ -2678,10 +2744,12 @@
       const panel = document.getElementById("qinPanel");
       if (!panel || panel.dataset.modeBound === "1") return;
       panel.dataset.modeBound = "1";
-      /* 整塊角標任意點擊均切換（馬多格小時不必精準點中某一側文字） */
+      /* 整塊角標或圖例右側大號開關，任意點擊均切換（與角標聯動） */
       function toggleQinMode(ev) {
         const hit = ev.target && ev.target.closest
-          ? (ev.target.closest(".qin-switch-cell") || ev.target.closest("button.qin-mode-switch"))
+          ? (ev.target.closest(".qin-switch-cell") ||
+             ev.target.closest("button.qin-mode-switch") ||
+             ev.target.closest(".qin-legend-actions"))
           : null;
         if (!hit || !panel.contains(hit)) return;
         ev.preventDefault();
