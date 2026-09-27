@@ -132,7 +132,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("font-size: var(--head-fs); font-weight: 400", r.text)
         self.assertIn(".head-static {\n      display: block;\n      font-size: var(--head-fs); font-weight: 400", r.text)
         self.assertIn(".scroll-col.num {\n      font-variant-numeric: tabular-nums;\n      font-weight: 400", r.text)
-        self.assertIn(".odds {\n      display: flex;\n      flex-direction: column;\n      align-items: center;\n      justify-content: flex-end;\n      gap: 2px", r.text)
+        self.assertIn(".odds {\n      display: flex;\n      flex-direction: column;\n      align-items: flex-end;\n      justify-content: flex-end;\n      gap: 2px", r.text)
         self.assertNotIn("pin-draw", r.text)
         self.assertNotIn("draw-dot", r.text)
         self.assertNotIn("draw-pct", r.text)
