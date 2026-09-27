@@ -1345,10 +1345,7 @@
     }
 
     .qin-legend {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px 12px;
+      position: relative;
       padding: 8px 10px 2px;
       background: #eef1f5;
       font-size: 11px;
@@ -1356,13 +1353,16 @@
       line-height: 1.55;
     }
     .qin-legend-main {
-      flex: 1 1 auto;
-      min-width: 0;
+      /* 兩行圖例維持原排版；右側預留開關寬＋間距 */
+      padding-right: 90px;
+      box-sizing: border-box;
     }
     .qin-legend-actions {
-      flex: 0 0 auto;
+      position: absolute;
+      top: 8px; /* 與「上三角」距表底同為 legend padding-top */
+      right: 10px; /* 距顯示邊緣 10px */
       display: flex;
-      align-items: center;
+      align-items: flex-start;
     }
     .qin-legend-row {
       display: flex;
@@ -1401,7 +1401,7 @@
     .qin-swatch.hot { background: #e74c3c; }
     .qin-swatch.drop20 { background: #2ecc71; }
     .qin-swatch.drop50 { background: #c4a035; }
-    /* 圖例右側緊湊開關（不擠佔兩行圖例排版；與角標聯動） */
+    /* 圖例右上緊湊開關（貼表底 8px、貼右緣 10px；與角標聯動） */
     .qin-mode-switch-lg {
       width: 80px;
       min-width: 80px;
