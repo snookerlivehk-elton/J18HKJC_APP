@@ -1838,6 +1838,25 @@
     }
     ensureWaterFlowDemo();
 
+    /* 演示：預計跑法四選一（每匹僅一種）— 前領／跟前／中置／後上 */
+    const RUN_STYLES = ["前領", "跟前", "中置", "後上"];
+    function ensureRunStyleDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r) return;
+          if (r.runStyle != null && String(r.runStyle).trim() !== "") return;
+          const no = Number(r.no) || 0;
+          const nameLen = r.name ? String(r.name).length : 0;
+          const idx = Math.abs(no * 17 + raceNum * 31 + nameLen * 3) % RUN_STYLES.length;
+          r.runStyle = RUN_STYLES[idx];
+        });
+      });
+    }
+    ensureRunStyleDemo();
+
     function esc(s) {
       return String(s == null ? "" : s)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
