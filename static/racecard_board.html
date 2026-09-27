@@ -882,6 +882,27 @@
     }
     .scroll-col .v.stacked .sub.delta-pos { color: #c0392b; }
     .scroll-col .v.stacked .sub.delta-neg { color: #1e8e3e; }
+    /* 水位／流量：獨贏上、位置下（對齊賠率欄層級） */
+    .scroll-col .wp {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      line-height: 1.05;
+      font-variant-numeric: tabular-nums lining-nums;
+      white-space: nowrap;
+    }
+    .scroll-col .wp .w {
+      color: var(--text);
+      font: inherit;
+      font-weight: 400;
+    }
+    .scroll-col .wp .p {
+      color: #7b8494;
+      font: inherit;
+      font-weight: 400;
+    }
 
     .silk-1 { background:#e10600; } .silk-2 { background:#111; }
     .silk-3 { background:#0057b8; } .silk-4 { background:#ffd100; color:#222; }
@@ -1294,6 +1315,8 @@
   (function () {
     const SILK_N = 14;
     const SCROLL_COLS = [
+      { key: "water", label: "水位", cls: "scroll-col num" },
+      { key: "flow", label: "流量", cls: "scroll-col num" },
       { key: "hw", label: "負磅", cls: "scroll-col num" },
       { key: "jockey", label: "騎師", cls: "scroll-col txt" },
       { key: "trainer", label: "練馬師", cls: "scroll-col txt" },
@@ -1678,6 +1701,44 @@
     }
     ensureHwDeltaDemo();
 
+    /* 演示：水位／流量（獨贏上、位置下）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
+    function ensureWaterFlowDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r || r.scratched) return;
+          const no = Number(r.no) || 0;
+          const win = numOrNull(r.win);
+          const pla = numOrNull(r.place);
+          if (r.winWater == null && win != null) {
+            /* 熱門偏高水位；由賠率反推示意 40–99 */
+            r.winWater = Math.max(40, Math.min(99, Math.round(100 - Math.min(win, 40) * 1.6 + ((no * 3 + raceNum) % 7))));
+          }
+          if (r.placeWater == null && pla != null) {
+            const base = r.winWater != null ? r.winWater : 70;
+            r.placeWater = Math.max(35, Math.min(99, base - 2 - (no % 4)));
+          }
+          if (r.winFlow == null && win != null) {
+            r.winFlow = Math.max(1, Math.min(30, Math.round(28 / Math.max(win, 1.2) + ((no + raceNum) % 5))));
+          }
+          if (r.placeFlow == null && pla != null) {
+            const wf = r.winFlow != null ? r.winFlow : 8;
+            r.placeFlow = Math.max(1, Math.min(25, Math.round(wf * 0.55) + (no % 3)));
+          }
+          /* 對照參考：第1場 9號 */
+          if (raceNum === 1 && no === 9) {
+            r.winWater = 86;
+            r.placeWater = 84;
+            r.winFlow = 10;
+            r.placeFlow = 5;
+          }
+        });
+      });
+    }
+    ensureWaterFlowDemo();
+
     function esc(s) {
       return String(s == null ? "" : s)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -1746,6 +1807,8 @@
       if (key === "prizePair") {
         return row.prizeTotal != null ? row.prizeTotal : row.prize;
       }
+      if (key === "water") return row.winWater;
+      if (key === "flow") return row.winFlow;
       return row[key];
     }
     function fmtPctCell(v) {
@@ -1756,6 +1819,26 @@
       if (n != null) return n.toFixed(n % 1 === 0 ? 0 : 1) + "%";
       return s;
     }
+    function fmtWater(v) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      return String(Math.round(n));
+    }
+    function fmtFlow(v) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      return String(Math.max(0, Math.round(n))).padStart(2, "0");
+    }
+    function cellWinPlacePair(r, winKey, plaKey, fmtFn) {
+      if (r && r.scratched) return '<span class="v">—</span>';
+      const w = r ? r[winKey] : null;
+      const p = r ? r[plaKey] : null;
+      if ((w == null || w === "") && (p == null || p === "")) return '<span class="v">—</span>';
+      return (
+        '<span class="wp"><span class="w">' + esc(fmtFn(w)) +
+          '</span><span class="p">' + esc(fmtFn(p)) + "</span></span>"
+      );
+    }
     function cellStackedMainDelta(main, deltaStr) {
       const d = fmtDelta(deltaStr);
       if (!d) return '<span class="v">' + esc(fmt(main)) + "</span>";
@@ -1765,6 +1848,12 @@
       );
     }
     function cellValue(c, r) {
+      if (c.key === "water") {
+        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater);
+      }
+      if (c.key === "flow") {
+        return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow);
+      }
       if (c.key === "jockey") {
         const p = splitNameAllow(r.jockey);
         return cellStackedMainDelta(p.name || r.jockey, p.delta);
