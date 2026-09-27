@@ -52,14 +52,97 @@
 
     .topbar {
       flex: 0 0 auto;
+      position: relative;
       display: flex; align-items: center; justify-content: space-between;
       height: 44px; padding: 0 10px;
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
-      color: #fff; z-index: 30;
+      color: #fff; z-index: 50;
     }
-    .topbar .side { width: 64px; font-size: 15px; font-weight: 700; }
-    .topbar .side.r { text-align: right; opacity: .9; }
+    .topbar .side {
+      min-width: 64px; font-size: 15px; font-weight: 700;
+      display: flex; align-items: center;
+    }
+    .topbar .side.r { justify-content: flex-end; }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
+
+    .topbar-menu {
+      position: relative;
+    }
+    .topbar-menu-btn {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 4px 2px 4px 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      line-height: 1;
+      opacity: .95;
+      border-radius: 6px;
+    }
+    .topbar-menu-btn:active,
+    .topbar-menu.open .topbar-menu-btn {
+      background: rgba(255,255,255,.14);
+      opacity: 1;
+    }
+    .topbar-menu-btn .caret {
+      display: inline-block;
+      font-size: 11px;
+      line-height: 1;
+      transform: translateY(1px);
+      transition: transform .18s ease;
+    }
+    .topbar-menu.open .topbar-menu-btn .caret {
+      transform: translateY(1px) rotate(180deg);
+    }
+    .topbar-menu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 168px;
+      padding: 6px 0;
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(30, 45, 70, .22), 0 0 0 1px rgba(45, 62, 80, .08);
+      transform-origin: top right;
+      animation: topbarMenuIn .16s ease-out;
+      z-index: 60;
+    }
+    .topbar-menu-panel[hidden] { display: none !important; }
+    @keyframes topbarMenuIn {
+      from { opacity: 0; transform: translateY(-6px) scale(.98); }
+      to { opacity: 1; transform: none; }
+    }
+    .topbar-menu-panel button {
+      display: block;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 11px 16px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .topbar-menu-panel button:active,
+    .topbar-menu-panel button:hover {
+      background: #eef3f8;
+    }
+    .topbar-menu-panel .hint {
+      padding: 8px 16px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
 
     /* 頁眉下公告跑馬燈（隨列表滾動，不鎖定） */
     .anno {
@@ -1113,7 +1196,19 @@
   <header class="topbar">
     <div class="side">‹ 返回</div>
     <h1>排位</h1>
-    <div class="side r">?</div>
+    <div class="side r">
+      <div class="topbar-menu" id="topbarMenu">
+        <button type="button" class="topbar-menu-btn" id="topbarMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="topbarMenuPanel">
+          菜單 <span class="caret" aria-hidden="true">▼</span>
+        </button>
+        <div class="topbar-menu-panel" id="topbarMenuPanel" role="menu" hidden>
+          <div class="hint">稍後再改內容</div>
+          <button type="button" role="menuitem">項目一（佔位）</button>
+          <button type="button" role="menuitem">項目二（佔位）</button>
+          <button type="button" role="menuitem">項目三（佔位）</button>
+        </div>
+      </div>
+    </div>
   </header>
 
   <div class="board-shell">
@@ -2533,10 +2628,50 @@
       });
     }
 
+    function bindTopbarMenu() {
+      const wrap = document.getElementById("topbarMenu");
+      const btn = document.getElementById("topbarMenuBtn");
+      const panel = document.getElementById("topbarMenuPanel");
+      if (!wrap || !btn || !panel) return;
+
+      function setOpen(open) {
+        wrap.classList.toggle("open", open);
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      function toggle() {
+        setOpen(panel.hidden);
+      }
+
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggle();
+      });
+      panel.addEventListener("click", function (ev) {
+        const item = ev.target && ev.target.closest ? ev.target.closest("[role='menuitem']") : null;
+        if (!item) return;
+        ev.preventDefault();
+        setOpen(false);
+      });
+      document.addEventListener("click", function (ev) {
+        if (!wrap.classList.contains("open")) return;
+        if (wrap.contains(ev.target)) return;
+        setOpen(false);
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && wrap.classList.contains("open")) {
+          setOpen(false);
+          btn.focus();
+        }
+      });
+    }
+
     applyColFitRule();
     renderPills();
     renderMeta();
     renderBoard();
+    bindTopbarMenu();
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
     }
