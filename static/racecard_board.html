@@ -293,10 +293,33 @@
       padding: 8px 10px 10px;
     }
 
-    .race-pills { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    /* 場次：單行不換行；寬度不夠時左右滑選 */
+    .race-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+      scrollbar-width: thin;
+      padding: 1px 2px 4px;
+    }
+    .race-pills::-webkit-scrollbar {
+      height: 3px;
+    }
+    .race-pills::-webkit-scrollbar-thumb {
+      background: #c5ced9;
+      border-radius: 2px;
+    }
     .race-pills button {
+      flex: 0 0 auto;
       width: 32px; height: 26px; border: 0; border-radius: 6px; cursor: pointer;
       font-weight: 800; font-size: 13px; color: #fff; background: var(--green);
+      -webkit-tap-highlight-color: transparent;
     }
     .race-pills button.active { background: var(--blue); }
     .race-pills button.demo { background: var(--orange); }
@@ -2063,6 +2086,14 @@
           renderBoard();
         });
       });
+      const active = el.pills.querySelector("button.active");
+      if (active && typeof active.scrollIntoView === "function") {
+        try {
+          active.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+        } catch (e) {
+          active.scrollIntoView(false);
+        }
+      }
     }
 
     function headBtn(key, label, withIco) {
