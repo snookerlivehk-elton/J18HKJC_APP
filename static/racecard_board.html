@@ -1155,37 +1155,27 @@
   (function () {
     const SILK_N = 14;
     const SCROLL_COLS = [
-      { key: "form6", label: "近績", cls: "scroll-col form txt" },
+      { key: "hw", label: "負磅", cls: "scroll-col num" },
       { key: "jockey", label: "騎師", cls: "scroll-col txt" },
       { key: "trainer", label: "練馬師", cls: "scroll-col txt" },
-      { key: "score", label: "賽前\n綜合分", cls: "scroll-col num" },
-      { key: "value", label: "身價", cls: "scroll-col num" },
       { key: "age", label: "年齡", cls: "scroll-col num" },
+      { key: "runStyle", label: "預計\n跑法", cls: "scroll-col txt" },
+      { key: "form6", label: "近六\n賽績", cls: "scroll-col form txt" },
+      { key: "class6", label: "近六\n班次", cls: "scroll-col form txt" },
+      { key: "placeIn", label: "入圍次｜%", cls: "scroll-col num" },
       { key: "rating", label: "評分", cls: "scroll-col num" },
-      { key: "rtgDelta", label: "評分+/-", cls: "scroll-col num" },
-      { key: "hw", label: "負磅", cls: "scroll-col num" },
-      { key: "bodyWt", label: "排位\n體重", cls: "scroll-col num" },
-      { key: "gear", label: "配備", cls: "scroll-col txt" },
-      { key: "peerBest", label: "同期\n較佳", cls: "scroll-col num" },
-      { key: "peer", label: "同期", cls: "scroll-col num" },
-      { key: "placeN", label: "入位\n次數", cls: "scroll-col num" },
-      { key: "career", label: "出道\n至今", cls: "scroll-col form txt muted" },
-      { key: "gold2", label: "黃金\n2歲", cls: "scroll-col txt" },
-      { key: "gatePct", label: "入閘%", cls: "scroll-col num" },
-      { key: "season", label: "本季", cls: "scroll-col form txt muted" },
-      { key: "early", label: "早走", cls: "scroll-col num" },
-      { key: "late", label: "後上", cls: "scroll-col num" },
-      { key: "peerTrack", label: "同期\n場地", cls: "scroll-col num" },
-      { key: "firm", label: "快地", cls: "scroll-col num" },
-      { key: "soft", label: "濕地", cls: "scroll-col num" },
-      { key: "rail", label: "跑道", cls: "scroll-col txt" },
-      { key: "recent", label: "往績", cls: "scroll-col form txt" },
-      { key: "comment", label: "評語", cls: "scroll-col txt comment" },
+      { key: "career", label: "歷季\n出賽", cls: "scroll-col form txt muted" },
+      { key: "sameClass", label: "同班賽", cls: "scroll-col num" },
+      { key: "sameCourseDist", label: "同場\n同程", cls: "scroll-col num" },
+      { key: "sameDist", label: "同程", cls: "scroll-col num" },
+      { key: "layoff", label: "久休\n復出", cls: "scroll-col txt" },
+      { key: "lastOdds", label: "上仗\n水位", cls: "scroll-col num" },
+      { key: "gear", label: "裝備\n變更", cls: "scroll-col txt" },
       { key: "dam", label: "母系", cls: "scroll-col txt" },
       { key: "sire", label: "父系", cls: "scroll-col txt" },
       { key: "damsire", label: "外祖父", cls: "scroll-col txt" },
-      { key: "owner", label: "馬主", cls: "scroll-col txt" },
-      { key: "prize", label: "獎金", cls: "scroll-col num" }
+      { key: "prizePair", label: "今季獎金\n／總獎金", cls: "scroll-col num" },
+      { key: "owner", label: "馬主", cls: "scroll-col txt" }
     ];
 
     /* 排位右滑列寬規則：列寬 = max(表頭, 該列最長數據)，數據到分隔線固定 2px。
@@ -1551,7 +1541,23 @@
     }
     function sortVal(row, key) {
       if (key === "jockey") return splitNameAllow(row.jockey).name;
+      if (key === "placeIn") {
+        const n = row.placeInN != null ? row.placeInN : row.placeN;
+        if (n != null && n !== "") return n;
+        return row.placeInPct != null ? row.placeInPct : row.gatePct;
+      }
+      if (key === "prizePair") {
+        return row.prizeTotal != null ? row.prizeTotal : row.prize;
+      }
       return row[key];
+    }
+    function fmtPctCell(v) {
+      if (v == null || v === "") return "—";
+      const s = String(v);
+      if (s.indexOf("%") >= 0) return s;
+      const n = numOrNull(v);
+      if (n != null) return n.toFixed(n % 1 === 0 ? 0 : 1) + "%";
+      return s;
     }
     function cellValue(c, r) {
       if (c.key === "jockey") {
@@ -1560,6 +1566,22 @@
           return '<span class="v stacked"><span class="nm">' + esc(fmt(p.name)) +
             '</span><span class="sub">' + esc(p.allow) + "</span></span>";
         }
+      }
+      if (c.key === "placeIn") {
+        const n = r.placeInN != null ? r.placeInN : r.placeN;
+        const pct = r.placeInPct != null ? r.placeInPct : r.gatePct;
+        const left = fmt(n);
+        const right = fmtPctCell(pct);
+        if (left === "—" && right === "—") return '<span class="v">—</span>';
+        return '<span class="v">' + esc(left + "｜" + right) + "</span>";
+      }
+      if (c.key === "prizePair") {
+        const season = r.prizeSeason;
+        const total = r.prizeTotal != null ? r.prizeTotal : r.prize;
+        return (
+          '<span class="v stacked"><span class="nm">' + esc(fmt(season)) +
+            '</span><span class="sub">' + esc(fmt(total)) + "</span></span>"
+        );
       }
       return '<span class="v">' + esc(fmt(r[c.key])) + "</span>";
     }
