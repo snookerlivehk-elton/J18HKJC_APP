@@ -172,6 +172,67 @@
       margin: 6px 10px;
       background: var(--line);
     }
+    .topbar-menu .menu-zoom {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px 10px;
+    }
+    .topbar-menu .menu-zoom .zoom-lab {
+      flex: 0 0 auto;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: .04em;
+      user-select: none;
+    }
+    .topbar-menu .menu-zoom .zoom-btn,
+    .topbar-menu .menu-zoom .zoom-reset {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: auto;
+      min-width: 32px;
+      height: 32px;
+      margin: 0;
+      padding: 0 10px;
+      border: 1px solid #c5ced9;
+      border-radius: 8px;
+      background: #f4f7fa;
+      color: var(--text);
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .topbar-menu .menu-zoom .zoom-reset {
+      margin-left: 2px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: .04em;
+    }
+    .topbar-menu .menu-zoom .zoom-btn:active,
+    .topbar-menu .menu-zoom .zoom-reset:active {
+      background: #e8eef4;
+    }
+    .topbar-menu .menu-zoom .zoom-btn:disabled,
+    .topbar-menu .menu-zoom .zoom-reset:disabled {
+      opacity: .38;
+      cursor: default;
+    }
+    /* 馬匹列表等比例縮放（字／格／圖一併）；每級 +10%（對應 +10px／100px） */
+    #boardMain {
+      transform-origin: top left;
+      zoom: var(--list-zoom, 1);
+    }
+    @supports not (zoom: 1) {
+      #boardMain {
+        transform: scale(var(--list-zoom, 1));
+        width: calc(100% / var(--list-zoom, 1));
+      }
+    }
 
     /* 頁眉下公告跑馬燈（隨列表滾動，不鎖定） */
     .anno {
@@ -1270,17 +1331,23 @@
     <h1>排位</h1>
     <div class="side r">
       <button type="button" class="nav-menu-btn" id="navMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="navMenu">
-        <span class="lab">選單</span>
+        <span class="lab">菜單</span>
         <span class="caret" aria-hidden="true">▼</span>
       </button>
-      <div class="topbar-menu" id="navMenu" role="menu" aria-label="頁面選單" hidden>
+      <div class="topbar-menu" id="navMenu" role="menu" aria-label="頁面菜單" hidden>
         <button type="button" role="menuitem" data-nav="today">今日賽事</button>
         <button type="button" role="menuitem" data-nav="history">歷史排位</button>
         <button type="button" role="menuitem" data-nav="fav">我的收藏</button>
         <div class="sep" role="separator"></div>
         <button type="button" role="menuitem" data-nav="help">使用說明</button>
         <button type="button" role="menuitem" data-nav="service">聯繫客服<span class="menu-tag">客服</span></button>
-        <button type="button" role="menuitem" data-nav="about">關於 J18</button>
+        <div class="sep" role="separator"></div>
+        <div class="menu-zoom" role="group" aria-label="列表縮放">
+          <button type="button" class="zoom-btn" data-zoom-step="-1" aria-label="縮小">−</button>
+          <span class="zoom-lab">字體</span>
+          <button type="button" class="zoom-btn" data-zoom-step="1" aria-label="放大">+</button>
+          <button type="button" class="zoom-reset" data-zoom-step="0" aria-label="復原為預設大小">復原</button>
+        </div>
       </div>
     </div>
   </header>
@@ -2878,10 +2945,48 @@
       const menu = document.getElementById("navMenu");
       const back = document.getElementById("navBack");
       if (!btn || !menu) return;
+      /* 列表縮放：每級 +10px／100px＝+10%，最多 2 級；復原回 0 */
+      const LIST_ZOOM_MAX = 2;
+      const LIST_ZOOM_STEP_PX = 10;
+      let listZoomLevel = 0;
+      function listZoomFactor(level) {
+        return 1 + (Number(level) || 0) * (LIST_ZOOM_STEP_PX / 100);
+      }
+      function syncZoomButtons() {
+        menu.querySelectorAll("[data-zoom-step]").forEach(function (b) {
+          const step = Number(b.getAttribute("data-zoom-step"));
+          if (step === 0) b.disabled = listZoomLevel === 0;
+          else if (step < 0) b.disabled = listZoomLevel <= 0;
+          else b.disabled = listZoomLevel >= LIST_ZOOM_MAX;
+        });
+      }
+      function applyListZoom() {
+        const main = document.getElementById("boardMain");
+        const z = listZoomFactor(listZoomLevel);
+        if (main) {
+          main.style.setProperty("--list-zoom", String(z));
+          /* 部分 WebKit 對 CSS 變數 zoom 支援不穩，同步寫入 */
+          try { main.style.zoom = String(z); } catch (e) {}
+        }
+        syncZoomButtons();
+        fitScrollColWidths();
+        fitQinTableWidths();
+        syncHeadScrollLeft();
+      }
+      function setListZoomLevel(next) {
+        const n = Math.max(0, Math.min(LIST_ZOOM_MAX, Number(next) || 0));
+        if (n === listZoomLevel) {
+          syncZoomButtons();
+          return;
+        }
+        listZoomLevel = n;
+        applyListZoom();
+      }
       function setOpen(on) {
         if (on) {
           menu.removeAttribute("hidden");
           btn.setAttribute("aria-expanded", "true");
+          syncZoomButtons();
         } else {
           menu.setAttribute("hidden", "");
           btn.setAttribute("aria-expanded", "false");
@@ -2896,11 +3001,20 @@
         setOpen(!isOpen());
       });
       menu.addEventListener("click", function (ev) {
+        const zoomBtn = ev.target && ev.target.closest ? ev.target.closest("[data-zoom-step]") : null;
+        if (zoomBtn && menu.contains(zoomBtn)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const step = Number(zoomBtn.getAttribute("data-zoom-step"));
+          if (step === 0) setListZoomLevel(0);
+          else setListZoomLevel(listZoomLevel + step);
+          return;
+        }
         const item = ev.target && ev.target.closest ? ev.target.closest("button[data-nav]") : null;
         if (!item || !menu.contains(item)) return;
         ev.preventDefault();
         setOpen(false);
-        /* 示意：先關閉選單；日後可接路由／彈層 */
+        /* 示意：先關閉菜單；日後可接路由／彈層 */
         const act = item.getAttribute("data-nav");
         if (act === "service") {
           const anno = document.querySelector(".anno");
@@ -2930,6 +3044,19 @@
           closeHorseSheet();
         }
       });
+      syncZoomButtons();
+      /* renderBoard 重繪後重算欄寬（縮放仍掛在 #boardMain） */
+      const main = document.getElementById("boardMain");
+      if (main) {
+        const mo = new MutationObserver(function () {
+          if (listZoomLevel > 0) {
+            fitScrollColWidths();
+            fitQinTableWidths();
+            syncHeadScrollLeft();
+          }
+        });
+        mo.observe(main, { childList: true });
+      }
     })();
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { renderBoard(); });
