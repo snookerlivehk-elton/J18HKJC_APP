@@ -25,7 +25,7 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖兩欄：馬號上馬名下；獨贏上位置下左、檔位豎排右 */
       --pin-id: 57px;
-      --pin-odds: 56px;
+      --pin-odds: 62px;
       --pin-w: calc(var(--pin-id) + var(--pin-odds));
       --head-fs: 13px;
       /* 右滑列規則：最長數據到分隔線固定 2px（JS COL_FIT 同步） */
@@ -900,9 +900,41 @@
       padding: 0;
       transform: translateX(2px);
     }
-    .odds .win { font-size: 14px; font-weight: 400; color: var(--text); transform: translateY(-9px); }
-    .odds .pla { font-size: 14px; font-weight: 400; color: #7b8494; transform: translateY(-6px); }
+    .odds .win,
+    .odds .pla {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.02;
+      white-space: nowrap;
+    }
+    .odds .win { color: var(--text); transform: translateY(-9px); }
+    .odds .pla { color: #7b8494; transform: translateY(-6px); }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
+    .odds .od-n { font: inherit; color: inherit; }
+    /* 近 5 分鐘賠率漲跌：▲漲／▼跌 */
+    .odds .od-tick {
+      display: block;
+      width: 6px;
+      height: 7px;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+    .odds .od-tick.up polygon {
+      fill: #c0392b;
+      stroke: #c0392b;
+      stroke-width: 0.4;
+      stroke-linejoin: round;
+    }
+    .odds .od-tick.down polygon {
+      fill: #1e8e3e;
+      stroke: #1e8e3e;
+      stroke-width: 0.4;
+      stroke-linejoin: round;
+    }
     .odds .na { color: var(--muted); font-size: 14px; }
 
     .muted { color: var(--muted); font-weight: 400; }
@@ -1984,6 +2016,28 @@
     }
     ensureWaterFlowDemo();
 
+    /* 演示：近 5 分鐘獨贏／位置賠率漲跌（日後可接真實 tick） */
+    function ensureOddsTickDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r || r.scratched) return;
+          const no = Number(r.no) || 0;
+          if (r.winTick == null && numOrNull(r.win) != null) {
+            const roll = (no * 5 + raceNum * 3) % 3;
+            r.winTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+          if (r.placeTick == null && numOrNull(r.place) != null) {
+            const roll = (no * 7 + raceNum * 11) % 3;
+            r.placeTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+        });
+      });
+    }
+    ensureOddsTickDemo();
+
     /* 演示：預計跑法四選一（每匹僅一種）— 前領／跟前／中置／後上 */
     const RUN_STYLES = ["前領", "跟前", "中置", "後上"];
     function ensureRunStyleDemo() {
@@ -2276,6 +2330,36 @@
       if (n == null) return "—";
       if (kind === "place") return n.toFixed(1);
       return Number.isInteger(n) ? String(n) : String(n);
+    }
+    /* 近 5 分鐘賠率漲跌箭頭（▲漲／▼跌） */
+    function oddsTickSvg(dir) {
+      if (dir === "up") {
+        return (
+          '<svg class="od-tick up" viewBox="0 0 8 8" width="6" height="7" aria-hidden="true" focusable="false">' +
+            '<polygon points="4,0.7 7.3,7.2 0.7,7.2" />' +
+          "</svg>"
+        );
+      }
+      if (dir === "down") {
+        return (
+          '<svg class="od-tick down" viewBox="0 0 8 8" width="6" height="7" aria-hidden="true" focusable="false">' +
+            '<polygon points="0.7,0.8 7.3,0.8 4,7.3" />' +
+          "</svg>"
+        );
+      }
+      return "";
+    }
+    function oddsLineHtml(cls, value, kind, hotCls, tick) {
+      const n = fmtOdds(value, kind);
+      if (n === "—") return '<span class="' + cls + '"><span class="od-n">—</span></span>';
+      const dir = tick === "up" || tick === "down" ? tick : "";
+      const label = dir === "up" ? "近5分鐘漲" : dir === "down" ? "近5分鐘跌" : "";
+      return (
+        '<span class="' + cls + hotCls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
+          '<span class="od-n">' + esc(n) + "</span>" +
+          oddsTickSvg(dir) +
+        "</span>"
+      );
     }
     /* 示意：同檔同場同一勝率，各場略轉一檔，方便先看版面 */
     const DRAW_WIN_DEMO = [10.8, 9.9, 9.4, 8.7, 8.2, 7.8, 7.4, 7.1, 7.6, 7.3, 8.0, 7.8];
@@ -3182,8 +3266,10 @@
         const plaHot = !r.scratched && r.place === hot.minP ? " hot" : "";
         const odds = r.scratched || r.win == null
           ? '<div class="odds"><span class="na">—</span></div>'
-          : '<div class="odds"><span class="win' + winHot + '">' + esc(fmtOdds(r.win, "win")) +
-            '</span><span class="pla' + plaHot + '">' + esc(fmtOdds(r.place, "place")) + "</span></div>";
+          : '<div class="odds">' +
+              oddsLineHtml("win", r.win, "win", winHot, r.winTick) +
+              oddsLineHtml("pla", r.place, "place", plaHot, r.placeTick) +
+            "</div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
         const lock =
           '<div class="lock-cluster">' +
