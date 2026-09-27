@@ -817,84 +817,102 @@
       background: #fff;
       box-sizing: border-box;
     }
-    /* 角標切換：連贏兩字＋當前盤種同色連成 L，與選中臂無陰影隔斷 */
-    .qin-tbl .qin-title {
+    /* 角標：位置Q／正Q 左右波動開關（橫跨首列＋原「1」位） */
+    .qin-tbl .qin-switch-cell {
       position: sticky;
       top: 0;
       left: 0;
       z-index: 4;
-      background: var(--orange);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .06em;
-      white-space: nowrap;
-      min-width: var(--qin-title-w);
-      width: var(--qin-title-w);
-      line-height: 1;
-      box-shadow: none;
-    }
-    /* 與當前選中臂消縫，L 形讀成一塊；陰影只打在非相接邊，避免隔斷閱讀 */
-    .qin-tbl[data-qin-mode="qin"] .qin-title {
-      border-right-color: var(--orange);
-      box-shadow: 0 2px 4px rgba(45, 62, 80, .10);
-    }
-    .qin-tbl[data-qin-mode="qin"] .qin-ch.qin-mode-cell {
-      border-left-color: var(--orange);
-    }
-    .qin-tbl[data-qin-mode="qpl"] .qin-title {
-      border-bottom-color: var(--orange);
-      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
-    }
-    .qin-tbl[data-qin-mode="qpl"] .qin-rh.qin-mode-cell {
-      border-top-color: var(--orange);
-    }
-    .qin-tbl .qin-mode-cell {
       padding: 0;
       vertical-align: middle;
+      background: #cfd5de;
+      min-width: calc(var(--qin-title-w) + var(--qin-cell));
+      width: calc(var(--qin-title-w) + var(--qin-cell));
+      box-shadow: 0 2px 4px rgba(45, 62, 80, .10), 3px 0 6px rgba(45, 62, 80, .12);
     }
-    .qin-tbl .qin-ch.qin-mode-cell,
-    .qin-tbl .qin-rh.qin-mode-cell {
-      background: transparent;
-      box-shadow: none;
-    }
-    .qin-mode-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .qin-mode-switch {
+      display: block;
       width: 100%;
       height: 100%;
       min-height: var(--qin-cell);
       margin: 0;
-      padding: 0 1px;
+      padding: 2px;
       border: 0;
+      background: transparent;
+      cursor: pointer;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .qin-sw-track {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+      width: 100%;
+      height: 100%;
+      min-height: calc(var(--qin-cell) - 4px);
+      border-radius: 3px;
+      background: #b8c0cb;
+      overflow: hidden;
+    }
+    .qin-sw-thumb {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
+      background: var(--orange);
+      border-radius: 2px;
+      box-shadow: 0 1px 2px rgba(45, 62, 80, .18);
+      transform: translateX(0);
+      transition: transform .22s cubic-bezier(.4, .0, .2, 1);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .qin-tbl[data-qin-mode="qin"] .qin-sw-thumb,
+    .qin-mode-switch[data-qin-side="qin"] .qin-sw-thumb {
+      transform: translateX(100%);
+    }
+    .qin-sw-lab {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 1px;
       font: inherit;
-      font-size: inherit;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: .02em;
+      letter-spacing: .01em;
       line-height: 1.05;
       color: #5b6575;
-      background: #cfd5de;
-      cursor: pointer;
-      box-shadow: none;
-      -webkit-tap-highlight-color: transparent;
-      transition: background .15s ease, color .15s ease;
+      white-space: nowrap;
+      transition: color .18s ease;
+      user-select: none;
     }
-    .qin-mode-btn.on {
+    .qin-tbl[data-qin-mode="qpl"] .qin-sw-lab[data-qin-mode="qpl"],
+    .qin-tbl[data-qin-mode="qin"] .qin-sw-lab[data-qin-mode="qin"],
+    .qin-mode-switch[data-qin-side="qpl"] .qin-sw-lab[data-qin-mode="qpl"],
+    .qin-mode-switch[data-qin-side="qin"] .qin-sw-lab[data-qin-mode="qin"] {
       color: #fff;
-      background: var(--orange);
       font-weight: 800;
-      box-shadow: none;
     }
-    .qin-mode-btn:not(.on):active {
-      background: #b8c0cb;
-    }
-    .qin-mode-btn.on:active {
-      background: #d4781f;
-    }
-    .qin-mode-btn:focus-visible {
+    .qin-mode-switch:focus-visible {
       outline: 2px solid #fff;
       outline-offset: -3px;
+    }
+    .qin-mode-switch:active .qin-sw-thumb {
+      filter: brightness(.96);
+    }
+    /* 首列「1」位改靜態「指數」標籤，非按鈕 */
+    .qin-tbl .qin-rh.qin-idx-lab {
+      background: #cfd5de;
+      color: #5b6575;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: .04em;
+      cursor: default;
+      user-select: none;
     }
     .qin-tbl .qin-h {
       background: #5b8fc7;
@@ -1833,18 +1851,23 @@
     function qinPairInvolvesScratch(qin, a, b) {
       return qinHorseScratched(qin, a) || qinHorseScratched(qin, b);
     }
-    function renderQinModeBtn(mode, label) {
-      const on = qinMode === mode;
+    function renderQinModeSwitch() {
+      const side = qinMode === "qpl" ? "qpl" : "qin";
       return (
-        '<button type="button" class="qin-mode-btn' + (on ? " on" : "") +
-          '" data-qin-mode="' + mode + '" aria-pressed="' + (on ? "true" : "false") + '">' +
-          label + "</button>"
+        '<th class="qin-switch-cell" colspan="2">' +
+          '<button type="button" class="qin-mode-switch" data-qin-side="' + side +
+            '" role="switch" aria-checked="' + (side === "qin" ? "true" : "false") +
+            '" aria-label="連贏盤種：位置Q或正Q">' +
+            '<span class="qin-sw-track" aria-hidden="true">' +
+              '<span class="qin-sw-thumb"></span>' +
+              '<span class="qin-sw-lab" data-qin-mode="qpl">位置Q</span>' +
+              '<span class="qin-sw-lab" data-qin-mode="qin">正Q</span>' +
+            "</span>" +
+          "</button>" +
+        "</th>"
       );
     }
-    function renderQinTitle() {
-      return '<th class="qin-title">連贏</th>';
-    }
-    /* 單一矩陣：上三角＝賠率，下三角＝指數；首行/首列的「1」位分別放正Q、位置 */
+    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標開關切正Q／位置Q；首列「1」位為靜態指數 */
     function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
@@ -1860,8 +1883,7 @@
             '<table class="qin-tbl" data-n="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
             '" aria-label="' + oddsLab + '賠率（上三角）與' + idxLab + '（下三角）">' +
             '<thead><tr role="group" aria-label="連贏盤種切換">' +
-            renderQinTitle() +
-            '<th class="qin-ch qin-mode-cell">' + renderQinModeBtn("qin", "正Q") + "</th>";
+            renderQinModeSwitch();
       for (let j = 1; j < n; j++) {
         const sc = qinHorseScratched(qin, nos[j]) ? " scratch" : "";
         html += '<th class="qin-ch' + sc + '">' + esc(nos[j]) + "</th>";
@@ -1871,8 +1893,7 @@
         const rowHorse = nos[i];
         html += "<tr>";
         if (i === 0) {
-          html += '<th class="qin-rh qin-mode-cell" scope="row">' +
-            renderQinModeBtn("qpl", "位置") + "</th>";
+          html += '<th class="qin-rh qin-idx-lab" scope="row">指數</th>';
         } else {
           const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
           html += '<th class="qin-rh' + sc + '" scope="row">' + esc(rowHorse) + "</th>";
@@ -1978,10 +1999,10 @@
       tbl.setAttribute("data-qin-mode", qin.mode || "qin");
       tbl.setAttribute("aria-label", oddsLab + "賠率（上三角）與" + idxLab + "（下三角）");
 
-      panel.querySelectorAll("button.qin-mode-btn[data-qin-mode]").forEach(function (btn) {
-        const on = btn.getAttribute("data-qin-mode") === qinMode;
-        btn.classList.toggle("on", on);
-        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      const side = qinMode === "qpl" ? "qpl" : "qin";
+      panel.querySelectorAll("button.qin-mode-switch").forEach(function (btn) {
+        btn.setAttribute("data-qin-side", side);
+        btn.setAttribute("aria-checked", side === "qin" ? "true" : "false");
       });
 
       tbl.querySelectorAll("td.qin-c[data-qin-key]").forEach(function (td) {
@@ -2032,11 +2053,11 @@
 
       /* 表頭／對角退出態隨資料刷新（換場後結構不變時） */
       const nos = qin.nos || [];
-      tbl.querySelectorAll("th.qin-ch:not(.qin-mode-cell)").forEach(function (th, idx) {
+      tbl.querySelectorAll("th.qin-ch").forEach(function (th, idx) {
         const no = nos[idx + 1];
         th.classList.toggle("scratch", qinHorseScratched(qin, no));
       });
-      tbl.querySelectorAll("th.qin-rh:not(.qin-mode-cell)").forEach(function (th, idx) {
+      tbl.querySelectorAll("th.qin-rh:not(.qin-idx-lab)").forEach(function (th, idx) {
         const no = nos[idx + 1];
         th.classList.toggle("scratch", qinHorseScratched(qin, no));
       });
@@ -2071,11 +2092,16 @@
       if (!panel || panel.dataset.modeBound === "1") return;
       panel.dataset.modeBound = "1";
       panel.addEventListener("click", function (ev) {
-        const btn = ev.target && ev.target.closest ? ev.target.closest("button.qin-mode-btn[data-qin-mode]") : null;
+        const btn = ev.target && ev.target.closest ? ev.target.closest("button.qin-mode-switch") : null;
         if (!btn || !panel.contains(btn)) return;
         ev.preventDefault();
         ev.stopPropagation();
-        setQinMode(btn.getAttribute("data-qin-mode"));
+        const lab = ev.target.closest ? ev.target.closest(".qin-sw-lab[data-qin-mode]") : null;
+        if (lab && btn.contains(lab)) {
+          setQinMode(lab.getAttribute("data-qin-mode"));
+          return;
+        }
+        setQinMode(qinMode === "qin" ? "qpl" : "qin");
       });
     }
     /* 格寬鎖定 14 匹視口：≤14 鋪滿；>14 同密度橫滑，最多 20；高度約 14 列可豎滑 */
