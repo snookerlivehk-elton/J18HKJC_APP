@@ -25,10 +25,9 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖兩欄：馬號上馬名下；獨贏上位置下左、檔位豎排右 */
       --pin-id: 57px;
-      --pin-odds: 72px;
+      --pin-odds: 58px;
       --pin-w: calc(var(--pin-id) + var(--pin-odds));
-      --pin-flag: 24px;
-      --pin-tick: 7px;
+      --pin-flag: 22px;
       --head-fs: 13px;
       /* 右滑列規則：最長數據到分隔線固定 2px（JS COL_FIT 同步） */
       --scroll-col-gap: 2px;
@@ -703,14 +702,14 @@
       grid-column: 2; grid-row: 1 / span 2;
       align-self: center;
     }
-    /* 獨贏／位置左、檔位豎排右，同一格；嚴格落在 --pin-odds 內不出血 */
+    /* 獨贏／位置＋燕尾／檔位：一體橫排，數字與漲跌箭頭內聯融合 */
     .hrow.head .cell.pin-odds,
     .hrow:not(.head) .cell.pin-odds {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) var(--pin-flag);
-      align-items: end;
-      justify-items: stretch;
-      column-gap: 2px;
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
       width: 100%;
       max-width: 100%;
       min-width: 0;
@@ -720,20 +719,22 @@
     }
     .hrow.head .cell.pin-odds {
       align-items: center;
-      padding: 0 2px 0 3px;
+      padding: 0 2px;
     }
     .odds-labs {
       display: flex;
       flex-direction: column;
-      align-items: flex-end;
+      align-items: center;
       justify-content: center;
       gap: 0;
-      line-height: 1.02;
-      width: 100%;
+      line-height: 1.05;
+      flex: 1 1 auto;
       min-width: 0;
-      padding-right: calc(var(--pin-tick) + 2px);
-      box-sizing: border-box;
-      overflow: hidden;
+    }
+    .hrow.head .cell.pin-odds .draw-sort,
+    .hrow.head .cell.pin-odds .draw-lab {
+      flex: 0 0 var(--pin-flag);
+      width: var(--pin-flag);
     }
     .draw-sort {
       display: inline-flex;
@@ -839,16 +840,17 @@
       letter-spacing: -.02em;
     }
 
-    /* 右欄：上旗下檔位；寬度嚴格 = --pin-flag，不溢出 */
+    /* 右欄：燕尾上、檔位下，與賠率列底對齊 */
     .draw-flag-col {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-end;
+      flex: 0 0 var(--pin-flag);
       width: var(--pin-flag);
       min-width: var(--pin-flag);
       max-width: var(--pin-flag);
-      gap: 1px;
+      gap: 2px;
       padding: 0;
       overflow: hidden;
       box-sizing: border-box;
@@ -857,8 +859,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: var(--pin-flag);
-      height: var(--pin-flag);
+      width: 20px;
+      height: 20px;
       margin: 0;
       padding: 0;
       border: 0;
@@ -871,8 +873,8 @@
       flex: 0 0 auto;
     }
     .row-flag svg {
-      width: 18px;
-      height: 20px;
+      width: 15px;
+      height: 17px;
       display: block;
     }
     .row-flag:active {
@@ -905,63 +907,59 @@
       box-sizing: border-box;
     }
 
+    /* 賠率：數字＋箭頭內聯融合；去掉 translateY，避免畫出格子／擠燕尾 */
     .odds {
       display: flex;
       flex-direction: column;
-      align-items: stretch;
+      align-items: center;
       justify-content: flex-end;
-      gap: 2px;
-      line-height: 1.02;
-      padding: 0;
+      gap: 3px;
+      line-height: 1.05;
+      padding: 0 0 1px;
+      flex: 1 1 auto;
       min-width: 0;
-      max-width: 100%;
-      width: 100%;
       overflow: hidden;
       box-sizing: border-box;
     }
     .odds .win,
     .odds .pla {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) var(--pin-tick);
+      display: inline-flex;
+      flex-direction: row;
       align-items: center;
-      column-gap: 1px;
-      width: 100%;
+      justify-content: center;
+      gap: 1px;
       max-width: 100%;
-      min-width: 0;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 400;
       line-height: 1.05;
       white-space: nowrap;
-      overflow: hidden;
-      box-sizing: border-box;
     }
-    .odds .win { color: var(--text); transform: translateY(-9px); }
-    .odds .pla { color: #7b8494; transform: translateY(-6px); }
+    .odds .win { color: var(--text); }
+    .odds .pla { color: #7b8494; }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
     .odds .od-n {
       font: inherit;
       color: inherit;
       font-variant-numeric: tabular-nums lining-nums;
-      text-align: right;
-      justify-self: end;
-      min-width: 0;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: clip;
+      line-height: 1;
     }
-    /* 近 5 分鐘賠率漲跌：固定槽位，不撐開欄寬 */
     .odds .od-tick,
     .odds .od-tick-slot {
-      display: block;
-      width: var(--pin-tick);
-      height: 8px;
-      justify-self: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 0.55em;
+      height: 0.85em;
+      flex: 0 0 0.55em;
       overflow: hidden;
-      flex: none;
+      line-height: 0;
     }
-    .odds .od-tick-slot {
-      visibility: hidden;
+    .odds .od-tick svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
+    .odds .od-tick-slot { visibility: hidden; }
     .odds .od-tick.up polygon {
       fill: #c0392b;
       stroke: #c0392b;
@@ -975,12 +973,9 @@
       stroke-linejoin: round;
     }
     .odds .na {
-      display: block;
       color: var(--muted);
-      font-size: 13px;
-      text-align: right;
-      padding-right: calc(var(--pin-tick) + 1px);
-      overflow: hidden;
+      font-size: 14px;
+      line-height: 1.05;
     }
 
     .muted { color: var(--muted); font-weight: 400; }
@@ -1151,9 +1146,9 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-end;
-      gap: 2px;
-      line-height: 1.02;
-      padding: 0;
+      gap: 3px;
+      line-height: 1.05;
+      padding: 0 0 1px;
       font-variant-numeric: tabular-nums lining-nums;
       white-space: nowrap;
     }
@@ -1161,15 +1156,13 @@
       font-size: 14px;
       font-weight: 400;
       color: var(--text);
-      line-height: 1.02;
-      transform: translateY(-9px);
+      line-height: 1.05;
     }
     .scroll-col .wp .p {
       font-size: 14px;
       font-weight: 400;
       color: #7b8494;
-      line-height: 1.02;
-      transform: translateY(-6px);
+      line-height: 1.05;
     }
     .scroll-col:has(.wp) {
       overflow: visible;
@@ -2381,19 +2374,18 @@
     function oddsTickSvg(dir) {
       if (dir === "up") {
         return (
-          '<svg class="od-tick up" viewBox="0 0 8 8" width="7" height="8" aria-hidden="true" focusable="false">' +
-            '<polygon points="4,0.7 7.3,7.2 0.7,7.2" />' +
-          "</svg>"
+          '<span class="od-tick up" aria-hidden="true">' +
+            '<svg viewBox="0 0 8 8" focusable="false"><polygon points="4,0.7 7.3,7.2 0.7,7.2" /></svg>' +
+          "</span>"
         );
       }
       if (dir === "down") {
         return (
-          '<svg class="od-tick down" viewBox="0 0 8 8" width="7" height="8" aria-hidden="true" focusable="false">' +
-            '<polygon points="0.7,0.8 7.3,0.8 4,7.3" />' +
-          "</svg>"
+          '<span class="od-tick down" aria-hidden="true">' +
+            '<svg viewBox="0 0 8 8" focusable="false"><polygon points="0.7,0.8 7.3,0.8 4,7.3" /></svg>' +
+          "</span>"
         );
       }
-      /* 無漲跌也佔位，避免左右列寬跳動擠壓燕尾標 */
       return '<span class="od-tick-slot" aria-hidden="true"></span>';
     }
     function oddsLineHtml(cls, value, kind, hotCls, tick) {
