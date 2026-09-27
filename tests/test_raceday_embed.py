@@ -129,6 +129,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("cellStackedMainDelta", r.text)
         self.assertIn("delta-pos", r.text)
         self.assertIn("delta-neg", r.text)
+        self.assertIn(".scroll-col .v.stacked .sub.delta {\n      font-size: 12px", r.text)
         self.assertIn("ensureHwDeltaDemo", r.text)
         self.assertIn("預計", r.text)
         self.assertIn("近六", r.text)
