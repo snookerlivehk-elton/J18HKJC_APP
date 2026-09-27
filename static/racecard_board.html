@@ -992,8 +992,8 @@
       background: #eef1f5;
       border-top: 8px solid #eef1f5;
       padding: 0 0 10px;
-      --qin-cell: 35px;
-      --qin-title-w: 35px;
+      --qin-cell: 24px;
+      --qin-title-w: 24px;
     }
     .qin-block {
       background: #fff;
@@ -1441,8 +1441,6 @@
     let sortDir = 1;
     const QIN_FIT_N = 14;
     const QIN_MAX_N = 20;
-    /* 連贏格最小邊長（>14 匹橫滑模式）；首列與數據列等寬 */
-    const QIN_MIN_CELL = 35;
     /* 小旗整行標記：0 無／1 藍／2 橙；鍵＝場次:馬號 */
     let rowMarks = {};
     function rowMarkKey(no) {
@@ -2572,7 +2570,7 @@
     /* 連贏格寬規矩：
        - 任何時候（含字體縮放後）首列與各數據列等寬均分
        - ≤14 匹：等分鋪滿可用寬
-       - >14 匹：鎖定首行／首列，橫滑看其餘；列寬仍等寬，且 ≥ QIN_MIN_CELL（20 匹亦不低於 35px） */
+       - >14 匹：鎖定首行／首列，橫滑看其餘；列寬仍等寬（按 14 匹＋首列密度） */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
@@ -2588,7 +2586,7 @@
         cell = avail / colCount;
         total = avail;
       } else {
-        cell = Math.max(QIN_MIN_CELL, Math.floor(avail / (QIN_FIT_N + 1)));
+        cell = Math.max(1, Math.floor(avail / (QIN_FIT_N + 1)));
         total = cell * colCount;
       }
       const titleW = cell; /* 與數據列同寬 */
