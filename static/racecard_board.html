@@ -627,19 +627,19 @@
 
     .hrow:not(.head) .cell.pin-odds {
       flex-direction: row;
-      align-items: stretch;
+      align-items: flex-end;
       justify-content: center;
       gap: 4px;
       padding: 2px 3px 2px 2px;
     }
-    /* 右欄：上旗下檔位；檔位與位置賠率齊平 */
+    /* 右欄：上旗下檔位；檔位底邊與位置賠率齊平 */
     .draw-flag-col {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       flex: 0 0 auto;
-      align-self: stretch;
+      gap: 2px;
       min-width: 22px;
       padding: 0;
     }
@@ -647,8 +647,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 20px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       margin: 0;
       padding: 0;
       border: 0;
@@ -660,7 +660,7 @@
       line-height: 0;
     }
     .row-flag svg {
-      width: 12px;
+      width: 11px;
       height: 14px;
       display: block;
     }
@@ -693,7 +693,15 @@
       text-align: center;
     }
 
-    .odds { display: flex; flex-direction: column; align-items: center; justify-content: space-between; align-self: stretch; gap: 0; line-height: 1.02; padding: 0; }
+    .odds {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+      line-height: 1.02;
+      padding: 0;
+    }
     .odds .win { font-size: 14px; font-weight: 400; color: var(--text); }
     .odds .pla { font-size: 14px; font-weight: 400; color: #7b8494; }
     .odds .win.hot, .odds .pla.hot { color: var(--red); }
@@ -1156,7 +1164,8 @@
     }
     const ROW_FLAG_SVG =
       '<svg viewBox="0 0 12 14" aria-hidden="true" focusable="false">' +
-        '<path fill="currentColor" d="M2.2 1.2v11.6h1.2V8.2h.2c.2 0 .4-.05.7-.2 1.1-.55 2-.9 3.3-.9 1.15 0 2.05.35 2.7.55.35.1.55.15.7.15V2.95c-.2 0-.45-.05-.8-.15C9 2.55 8.05 2.2 6.9 2.2c-1.2 0-2.05.35-3.1.9-.3.15-.55.25-.9.25H3.4V1.2H2.2z"/>' +
+        /* 書籤／燕尾旗：頂平、底中凹三角缺口 */
+        '<path fill="currentColor" d="M2 1h8v9.2L6 7.4 2 10.2V1z"/>' +
       "</svg>";
     function renderRowFlag(no, mark) {
       const m = mark === 1 || mark === 2 ? mark : 0;
