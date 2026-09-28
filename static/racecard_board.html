@@ -25,7 +25,7 @@
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖兩欄：馬號上馬名下；獨贏上位置下左、檔位豎排右 */
       --pin-id: 57px;
-      --pin-odds: 64px;
+      --pin-odds: 56px;
       --pin-w: calc(var(--pin-id) + var(--pin-odds));
       --head-fs: 13px;
       /* 右滑列規則：最長數據到分隔線固定 2px（JS COL_FIT 同步） */
@@ -828,7 +828,7 @@
       justify-content: center;
       gap: 4px;
       padding: 2px 3px 2px 6px;
-      overflow: visible;
+      overflow: hidden;
     }
     /* 右欄：上旗下檔位；檔位底邊與位置賠率齊平 */
     .draw-flag-col {
@@ -902,19 +902,22 @@
       padding: 0;
       transform: translateX(2px);
       font-variant-numeric: tabular-nums lining-nums;
+    }
+    /* 內層賠率棧：與外層 cell.odds 分開，避免整格被當 .odds 撐變形 */
+    .cell.pin-odds > .odds {
+      flex: 0 0 auto;
+      max-width: calc(100% - 36px);
       overflow: visible;
     }
     .odds .win,
     .odds .pla {
-      display: inline-flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0;
+      position: relative;
+      display: block;
       font-size: 14px;
       font-weight: 400;
       line-height: 1.02;
       white-space: nowrap;
+      text-align: right;
     }
     .odds .win { color: var(--text); transform: translateY(-7px); }
     .odds .pla { color: #7b8494; transform: translateY(-4px); }
@@ -923,25 +926,23 @@
       font: inherit;
       color: inherit;
       font-variant-numeric: tabular-nums lining-nums;
-      text-align: right;
       line-height: 1;
     }
-    /* 近5分鐘漲跌：字符箭頭▲升／▼降；固定槽寬，flat 隱形佔位，數字右緣不晃 */
+    /* 字符箭頭絕對貼數字右側，不佔版面寬度，不擠馬名／燕尾 */
     .odds .od-tick {
-      display: inline-block;
-      flex: 0 0 0.72em;
-      width: 0.72em;
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      margin-top: -0.45em;
       margin-left: 1px;
       font-size: 9px;
       font-weight: 700;
       line-height: 1;
-      text-align: center;
-      vertical-align: middle;
+      pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
     .odds .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down { color: #c0392b; }
-    .odds .od-tick.flat { visibility: hidden; }
     .odds .na { color: var(--muted); font-size: 14px; }
 
     .muted { color: var(--muted); font-weight: 400; }
@@ -2338,23 +2339,16 @@
       if (kind === "place") return n.toFixed(1);
       return Number.isInteger(n) ? String(n) : String(n);
     }
-    /* 近5分鐘漲跌字符箭頭：▲升／▼降；flat 同寬隱形佔位 */
+    /* 近5分鐘漲跌字符箭頭：▲升／▼降；絕對定位不佔寬 */
     function oddsTickHtml(tick) {
-      const dir = tick === "up" || tick === "down" ? tick : "flat";
-      const ch = dir === "down" ? "▼" : "▲";
-      return '<span class="od-tick ' + dir + '" aria-hidden="true">' + ch + "</span>";
+      if (tick !== "up" && tick !== "down") return "";
+      const ch = tick === "down" ? "▼" : "▲";
+      return '<span class="od-tick ' + tick + '" aria-hidden="true">' + ch + "</span>";
     }
     function oddsLineHtml(cls, value, kind, hotCls, tick) {
       const n = fmtOdds(value, kind);
-      if (n === "—") {
-        return (
-          '<span class="' + cls + '">' +
-            '<span class="od-n">—</span>' +
-            oddsTickHtml("flat") +
-          "</span>"
-        );
-      }
-      const dir = tick === "up" || tick === "down" ? tick : "flat";
+      if (n === "—") return '<span class="' + cls + '"><span class="od-n">—</span></span>';
+      const dir = tick === "up" || tick === "down" ? tick : "";
       const label = dir === "up" ? "近5分鐘升" : dir === "down" ? "近5分鐘降" : "";
       return (
         '<span class="' + cls + hotCls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
