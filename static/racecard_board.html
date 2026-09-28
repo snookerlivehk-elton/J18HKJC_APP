@@ -929,8 +929,9 @@
       font-variant-numeric: tabular-nums lining-nums;
       line-height: 1;
     }
-    /* 字符箭頭絕對貼數字右側，不佔版面寬度，不擠馬名／燕尾 */
-    .odds .od-tick {
+    /* 字符箭頭絕對貼數字右側，不佔版面寬度（賠率／水位／流量共用） */
+    .odds .od-tick,
+    .scroll-col .wp .od-tick {
       position: absolute;
       left: 100%;
       top: 50%;
@@ -942,8 +943,10 @@
       pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
-    .odds .od-tick.up { color: #1e8e3e; }
-    .odds .od-tick.down { color: #c0392b; }
+    .odds .od-tick.up,
+    .scroll-col .wp .od-tick.up { color: #1e8e3e; }
+    .odds .od-tick.down,
+    .scroll-col .wp .od-tick.down { color: #c0392b; }
     .odds .na { color: var(--muted); font-size: 14px; }
 
     .muted { color: var(--muted); font-weight: 400; }
@@ -1108,31 +1111,40 @@
     .scroll-col .fc-m.flat rect {
       fill: #8a93a0;
     }
-    /* 水位／流量：獨贏上、位置下；與 .odds 同字號／行高／位移，邊距同為約 8px */
+    /* 水位／流量：獨贏上、位置下；右對齊＋▲▼（與賠率欄同款，零占位） */
     .scroll-col .wp {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-end;
       justify-content: flex-end;
       gap: 2px;
       line-height: 1.02;
       padding: 0;
       font-variant-numeric: tabular-nums lining-nums;
       white-space: nowrap;
+      overflow: visible;
     }
-    .scroll-col .wp .w {
+    .scroll-col .wp .w,
+    .scroll-col .wp .p {
+      position: relative;
+      display: block;
       font-size: 14px;
       font-weight: 400;
-      color: var(--text);
       line-height: 1.02;
+      text-align: right;
+    }
+    .scroll-col .wp .w {
+      color: var(--text);
       transform: translateY(-8px);
     }
     .scroll-col .wp .p {
-      font-size: 14px;
-      font-weight: 400;
       color: #7b8494;
-      line-height: 1.02;
       transform: translateY(-5px);
+    }
+    .scroll-col .wp .od-n {
+      font: inherit;
+      color: inherit;
+      line-height: 1;
     }
     .scroll-col:has(.wp) {
       overflow: visible;
@@ -2047,6 +2059,36 @@
     }
     ensureOddsTickDemo();
 
+    /* 演示：近 5 分鐘水位／流量漲跌（與賠率箭頭同款，日後可接真實 tick） */
+    function ensureWaterFlowTickDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r || r.scratched) return;
+          const no = Number(r.no) || 0;
+          if (r.winWaterTick == null && numOrNull(r.winWater) != null) {
+            const roll = (no * 11 + raceNum * 5) % 3;
+            r.winWaterTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+          if (r.placeWaterTick == null && numOrNull(r.placeWater) != null) {
+            const roll = (no * 13 + raceNum * 7) % 3;
+            r.placeWaterTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+          if (r.winFlowTick == null && numOrNull(r.winFlow) != null) {
+            const roll = (no * 17 + raceNum * 9) % 3;
+            r.winFlowTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+          if (r.placeFlowTick == null && numOrNull(r.placeFlow) != null) {
+            const roll = (no * 19 + raceNum * 13) % 3;
+            r.placeFlowTick = roll === 0 ? "up" : roll === 1 ? "down" : "flat";
+          }
+        });
+      });
+    }
+    ensureWaterFlowTickDemo();
+
     /* 演示：預計跑法四選一（每匹僅一種）— 前領／跟前／中置／後上 */
     const RUN_STYLES = ["前領", "跟前", "中置", "後上"];
     function ensureRunStyleDemo() {
@@ -2270,14 +2312,28 @@
       if (n == null) return "—";
       return String(Math.max(0, Math.round(n))).padStart(2, "0");
     }
-    function cellWinPlacePair(r, winKey, plaKey, fmtFn) {
+    function cellWinPlacePair(r, winKey, plaKey, fmtFn, winTickKey, plaTickKey) {
       if (r && r.scratched) return '<span class="v">—</span>';
       const w = r ? r[winKey] : null;
       const p = r ? r[plaKey] : null;
       if ((w == null || w === "") && (p == null || p === "")) return '<span class="v">—</span>';
+      const wTick = winTickKey && r ? r[winTickKey] : "";
+      const pTick = plaTickKey && r ? r[plaTickKey] : "";
       return (
-        '<span class="wp"><span class="w">' + esc(fmtFn(w)) +
-          '</span><span class="p">' + esc(fmtFn(p)) + "</span></span>"
+        '<span class="wp">' +
+          wpLineHtml("w", fmtFn(w), wTick) +
+          wpLineHtml("p", fmtFn(p), pTick) +
+        "</span>"
+      );
+    }
+    function wpLineHtml(cls, text, tick) {
+      const dir = tick === "up" || tick === "down" ? tick : "";
+      const label = dir === "up" ? "近5分鐘升" : dir === "down" ? "近5分鐘降" : "";
+      return (
+        '<span class="' + cls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
+          '<span class="od-n">' + esc(text) + "</span>" +
+          oddsTickHtml(dir) +
+        "</span>"
       );
     }
     function cellStackedMainDelta(main, deltaStr) {
@@ -2290,10 +2346,10 @@
     }
     function cellValue(c, r) {
       if (c.key === "water") {
-        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater);
+        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater, "winWaterTick", "placeWaterTick");
       }
       if (c.key === "flow") {
-        return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow);
+        return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow, "winFlowTick", "placeFlowTick");
       }
       if (c.key === "runStyle") {
         return cellRunStyle(r.runStyle);
