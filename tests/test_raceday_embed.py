@@ -118,6 +118,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("letter-spacing: 0", r.text)
         self.assertIn("width: 17px; height: 17px", r.text)
         self.assertIn("--pin-id: 57px", r.text)
+        self.assertIn("--pin-odds: 64px", r.text)
         self.assertIn("width: 22px;\n      height: 22px", r.text)
         self.assertIn("width: 21px;\n      height: 21px", r.text)
         self.assertIn("background: var(--nav)", r.text)
