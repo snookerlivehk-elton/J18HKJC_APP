@@ -105,6 +105,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("align-items: flex-end", r.text)
         self.assertIn("padding: 2px 3px 2px 6px", r.text)
         self.assertIn("row-flag", r.text)
+        self.assertIn("transform: translateX(3px)", r.text)
         self.assertIn("cycleRowMark", r.text)
         self.assertIn("M2 1h8v9.2L6 7.4 2 10.2V1z", r.text)
         self.assertIn("draw-sort sortable", r.text)
