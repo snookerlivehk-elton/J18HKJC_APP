@@ -1001,6 +1001,16 @@
       font-variant-numeric: tabular-nums;
       font-weight: 400;
     }
+    /* 入圍數｜% 等：數據靠右 */
+    .scroll-col.end {
+      justify-content: flex-end;
+      text-align: right;
+    }
+    .scroll-col.end .v {
+      display: block;
+      width: 100%;
+      text-align: right;
+    }
     .scroll-col .v {
       display: block;
       min-width: 0;
@@ -1650,7 +1660,7 @@
       { key: "runStyle", label: "預計\n跑法", cls: "scroll-col txt" },
       { key: "bestTime", label: "最佳\n時間", cls: "scroll-col num" },
       { key: "form6", label: "近六賽績\n班次升降", cls: "scroll-col form txt" },
-      { key: "placeIn", label: "入圍數｜%", cls: "scroll-col num" },
+      { key: "placeIn", label: "入圍數｜%", cls: "scroll-col num end" },
       { key: "rating", label: "評分", cls: "scroll-col num" },
       { key: "career", label: "歷季\n出賽", cls: "scroll-col form txt muted" },
       { key: "sameClass", label: "同班賽", cls: "scroll-col num" },

@@ -217,6 +217,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("form-class", r.text)
         self.assertNotIn('key: "class6"', r.text)
         self.assertIn("入圍數｜%", r.text)
+        self.assertIn('cls: "scroll-col num end"', r.text)
+        self.assertIn(".scroll-col.end {\n      justify-content: flex-end;\n      text-align: right", r.text)
         self.assertIn("ensurePlaceInDemo", r.text)
         self.assertIn("fmtPlaceInLeft", r.text)
         self.assertIn("cellPlaceIn", r.text)
