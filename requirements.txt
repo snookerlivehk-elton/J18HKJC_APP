@@ -8,6 +8,9 @@ python-dotenv>=1.0.0
 pandas>=2.0.0
 streamlit>=1.40.0
 sqlalchemy>=2.0.25
+# SQLAlchemy 2.1+ defaults postgresql:// to the psycopg3 dialect (import psycopg).
+# Keep psycopg2-binary for modules that import psycopg2 directly (crawlers).
+psycopg[binary]>=3.1.0
 psycopg2-binary>=2.9.9
 numpy>=1.24.0
 beautifulsoup4>=4.12.0
