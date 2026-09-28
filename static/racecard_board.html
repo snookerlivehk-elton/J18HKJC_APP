@@ -2081,6 +2081,46 @@
     }
     ensurePlaceInDemo();
 
+    /* 演示：同班賽／同場同程／同程 — 出賽（冠-亞-季），例 23（6-4-5） */
+    function ensureSameTrackDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const keys = ["sameClass", "sameCourseDist", "sameDist"];
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r) return;
+          if (r.scratched) {
+            keys.forEach(function (k) {
+              if (r[k] == null) r[k] = null;
+            });
+            return;
+          }
+          const no = Number(r.no) || 0;
+          keys.forEach(function (key, ki) {
+            if (r[key] != null && r[key] !== "") return;
+            const seed = no * (13 + ki * 5) + raceNum * (7 + ki * 3) + ki * 17;
+            const runs = 2 + (seed % 29); /* 2～30 */
+            let first = seed % (Math.floor(runs / 2) + 1);
+            let second = (seed * 3) % (Math.floor(runs / 3) + 1);
+            let third = (seed * 5) % (Math.floor(runs / 4) + 1);
+            if (first + second + third > runs) {
+              third = Math.max(0, runs - first - second);
+            }
+            r[key] = { runs: runs, first: first, second: second, third: third };
+          });
+        });
+        /* 範例錨點：第1場 1號同班賽 → 23（6-4-5） */
+        if (raceNum === 1) {
+          race.runners.forEach(function (r) {
+            if (!r || Number(r.no) !== 1 || r.scratched) return;
+            r.sameClass = { runs: 23, first: 6, second: 4, third: 5 };
+          });
+        }
+      });
+    }
+    ensureSameTrackDemo();
+
     /* 演示：水位／流量（獨贏上、位置下）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
     function ensureWaterFlowDemo() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
@@ -2451,6 +2491,9 @@
       if (key === "water") return row.winWater;
       if (key === "flow") return row.winFlow;
       if (key === "bestTime") return bestTimeSeconds(row.bestTime);
+      if (key === "sameClass" || key === "sameCourseDist" || key === "sameDist") {
+        return recordTripleRuns(row[key]);
+      }
       return row[key];
     }
     function fmtPctCell(v) {
@@ -2481,6 +2524,35 @@
       const right = fmtPctCell(pct);
       if (left === "—" && right === "—") return '<span class="v">—</span>';
       return '<span class="v">' + esc(left + "｜" + right) + "</span>";
+    }
+    /* 同班／同場同程／同程：出賽（冠-亞-季），例 23（6-4-5） */
+    function recordTripleRuns(v) {
+      if (v == null || v === "" || v === "—") return null;
+      if (typeof v === "object") {
+        const n = numOrNull(v.runs != null ? v.runs : v.n);
+        return n;
+      }
+      const m = String(v).trim().match(/^(\d+)\s*[（(]/);
+      return m ? numOrNull(m[1]) : numOrNull(v);
+    }
+    function fmtRecordTriple(v) {
+      if (v == null || v === "" || v === "—") return "—";
+      if (typeof v === "object") {
+        const runs = v.runs != null ? v.runs : v.n;
+        if (runs == null || runs === "") return "—";
+        const a = v.first != null ? v.first : (v.w != null ? v.w : 0);
+        const b = v.second != null ? v.second : (v.p != null ? v.p : 0);
+        const c = v.third != null ? v.third : (v.s != null ? v.s : 0);
+        return String(runs) + "（" + String(a) + "-" + String(b) + "-" + String(c) + "）";
+      }
+      const s = String(v).trim();
+      const m = s.match(/^(\d+)\s*[（(]\s*(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)\s*[）)]$/);
+      if (m) return m[1] + "（" + m[2] + "-" + m[3] + "-" + m[4] + "）";
+      return s || "—";
+    }
+    function cellRecordTriple(r, key) {
+      if (r && r.scratched) return '<span class="v">—</span>';
+      return '<span class="v">' + esc(fmtRecordTriple(r ? r[key] : null)) + "</span>";
     }
     function fmtWater(v) {
       const n = numOrNull(v);
@@ -2552,6 +2624,9 @@
       }
       if (c.key === "placeIn") {
         return cellPlaceIn(r);
+      }
+      if (c.key === "sameClass" || c.key === "sameCourseDist" || c.key === "sameDist") {
+        return cellRecordTriple(r, c.key);
       }
       if (c.key === "prizePair") {
         const season = r.prizeSeason;
