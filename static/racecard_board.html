@@ -24,7 +24,7 @@
       --line: #e4e7ec;
       --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
       /* 左鎖兩欄：馬號上馬名下；獨贏上位置下左、檔位豎排右 */
-      --pin-id: 57px;
+      --pin-id: 74px;
       --pin-odds: 58px;
       --pin-w: calc(var(--pin-id) + var(--pin-odds));
       --head-fs: 13px;
@@ -626,14 +626,15 @@
       gap: 1px;
       padding: 1px 2px;
     }
-    /* 資料列：彩衣左上出血，不蓋馬號／馬名 */
+    /* 資料列：彩衣｜馬號｜騎／練姓氏首字（上騎下練）；馬名跨底 */
     .hrow:not(.head) .cell.pin-id {
       display: grid;
-      grid-template-columns: 25px minmax(0, 1fr);
+      grid-template-columns: 25px 22px 15px;
       grid-template-rows: 31px minmax(0, 1fr);
+      column-gap: 2px;
       align-items: stretch;
       justify-items: stretch;
-      padding: 0;
+      padding: 0 2px 0 0;
       overflow: visible;
       position: relative;
       cursor: pointer;
@@ -674,6 +675,32 @@
       font-variant-numeric: tabular-nums lining-nums;
       transform: translateY(-0.08em);
     }
+    /* 馬號右側：上＝騎師姓氏首字，下＝練馬師姓氏首字 */
+    .hrow:not(.head) .cell.pin-id .jt-ini {
+      grid-column: 3;
+      grid-row: 1;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      align-self: center;
+      justify-self: center;
+      line-height: 1;
+      min-width: 0;
+      pointer-events: none;
+    }
+    .jt-ini .j-ini,
+    .jt-ini .t-ini {
+      display: block;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.05;
+      text-align: center;
+    }
+    .jt-ini .j-ini { color: var(--text); }
+    .jt-ini .t-ini { color: #7b8494; }
     .hrow:not(.head) .cell.pin-id .hname {
       grid-column: 1 / -1;
       grid-row: 2;
@@ -2286,6 +2313,29 @@
       if (v == null || v === "") return "—";
       return v;
     }
+    /* 姓氏首字：中文取首字，西文取首字母；騎師先去掉讓磅括號 */
+    function nameInitial(name) {
+      const s = String(name == null ? "" : name).trim();
+      if (!s || s === "—" || s === "-") return "—";
+      return s.charAt(0);
+    }
+    function jockeyInitial(jockey) {
+      const p = splitNameAllow(jockey);
+      return nameInitial(p.name || jockey);
+    }
+    function trainerInitial(trainer) {
+      return nameInitial(trainer);
+    }
+    function jtInitialsHtml(r) {
+      const j = jockeyInitial(r && r.jockey);
+      const t = trainerInitial(r && r.trainer);
+      return (
+        '<span class="jt-ini" aria-hidden="true">' +
+          '<span class="j-ini">' + esc(j) + "</span>" +
+          '<span class="t-ini">' + esc(t) + "</span>" +
+        "</span>"
+      );
+    }
     function splitNameAllow(s) {
       const t = String(s == null ? "" : s).trim();
       const m = t.match(/^(.*?)[\s\u3000]*([(\uFF08][+\-]?\d+[)\uFF09])$/);
@@ -3385,7 +3435,9 @@
         const lock =
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '" data-no="' + esc(r.no) + '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 詳情">' + silkTag(r) +
-            '<span class="hno"><span>' + esc(r.no) + "</span></span>" + name + "</div>" +
+            '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
+            jtInitialsHtml(r) +
+            name + "</div>" +
             '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
             '<div class="draw-flag-col">' +
               renderRowFlag(r.no, mark) +
