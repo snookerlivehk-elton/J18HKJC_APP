@@ -168,6 +168,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn(".scroll-col .wp .w", r.text)
         self.assertIn("transform: translateY(-7px)", r.text)
         self.assertIn("transform: translateY(-4px)", r.text)
+        self.assertIn("transform: translateY(-8px)", r.text)
+        self.assertIn("transform: translateY(-5px)", r.text)
         self.assertNotIn(".odds .pla { font-size: 14px; font-weight: 400; color: #7b8494; transform: translateY(-3px); }", r.text)
         self.assertIn(".scroll-col:has(.wp)", r.text)
         self.assertIn("padStart(2, \"0\")", r.text)
