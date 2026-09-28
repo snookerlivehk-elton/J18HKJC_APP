@@ -1621,6 +1621,7 @@
       { key: "trainer", label: "練馬師", cls: "scroll-col txt" },
       { key: "age", label: "年齡", cls: "scroll-col num" },
       { key: "runStyle", label: "預計\n跑法", cls: "scroll-col txt" },
+      { key: "bestTime", label: "最佳\n時間", cls: "scroll-col num" },
       { key: "form6", label: "近六賽績\n班次升降", cls: "scroll-col form txt" },
       { key: "placeIn", label: "入圍數｜%", cls: "scroll-col num" },
       { key: "rating", label: "評分", cls: "scroll-col num" },
@@ -2108,6 +2109,59 @@
     }
     ensureRunStyleDemo();
 
+    /* 演示：同等跑道歷史最佳用時（分:秒.百分秒，例 1:10.17） */
+    function parseRaceDistM(race) {
+      const m = String((race && (race.meta || race.name)) || "").match(/(\d{3,4})\s*米/);
+      return m ? Number(m[1]) : 1200;
+    }
+    function bestTimeBaseCs(dist) {
+      const map = {
+        1000: 5620, 1200: 6905, 1400: 8210, 1600: 9425,
+        1650: 9910, 1800: 10740, 2000: 12120, 2200: 13450
+      };
+      if (map[dist] != null) return map[dist];
+      return Math.round(6905 + (dist - 1200) * 6.2);
+    }
+    function fmtRaceTimeCs(cs) {
+      if (cs == null || !Number.isFinite(cs) || cs < 0) return null;
+      let total = Math.round(cs);
+      const min = Math.floor(total / 6000);
+      total -= min * 6000;
+      const sec = Math.floor(total / 100);
+      const hun = total % 100;
+      return min + ":" + String(sec).padStart(2, "0") + "." + String(hun).padStart(2, "0");
+    }
+    function bestTimeSeconds(v) {
+      if (v == null || v === "" || v === "—") return null;
+      const m = String(v).trim().match(/^(\d+):(\d{1,2})\.(\d{1,2})$/);
+      if (!m) return null;
+      return Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 100;
+    }
+    function ensureBestTimeDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        const base = bestTimeBaseCs(parseRaceDistM(race));
+        race.runners.forEach(function (r) {
+          if (!r || r.bestTime != null) return;
+          if (r.scratched) {
+            r.bestTime = null;
+            return;
+          }
+          const no = Number(r.no) || 0;
+          /* 少數無同場紀錄 */
+          if ((no * 3 + raceNum * 5) % 13 === 0) {
+            r.bestTime = null;
+            return;
+          }
+          const delta = ((no * 7 + raceNum * 11) % 48) - 10; /* -10～+37 百分秒 */
+          r.bestTime = fmtRaceTimeCs(base + delta);
+        });
+      });
+    }
+    ensureBestTimeDemo();
+
     function parseSlashParts(s) {
       return String(s == null ? "" : s)
         .split("/")
@@ -2292,6 +2346,7 @@
       }
       if (key === "water") return row.winWater;
       if (key === "flow") return row.winFlow;
+      if (key === "bestTime") return bestTimeSeconds(row.bestTime);
       return row[key];
     }
     function fmtPctCell(v) {
@@ -2353,6 +2408,9 @@
       }
       if (c.key === "runStyle") {
         return cellRunStyle(r.runStyle);
+      }
+      if (c.key === "bestTime") {
+        return '<span class="v">' + esc(fmt(r.bestTime)) + "</span>";
       }
       if (c.key === "form6") {
         return cellForm6(r);
