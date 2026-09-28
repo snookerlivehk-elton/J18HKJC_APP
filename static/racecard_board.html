@@ -2027,6 +2027,50 @@
     }
     ensureHwDeltaDemo();
 
+    /* 演示：入圍數｜%（例 16/32｜50%）— 入圍次數／出賽次數｜入圍率 */
+    function ensurePlaceInDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r) return;
+          if (r.scratched) {
+            if (r.placeInN == null) r.placeInN = null;
+            if (r.placeInTotal == null) r.placeInTotal = null;
+            if (r.placeInPct == null) r.placeInPct = null;
+            return;
+          }
+          if (r.placeInN != null && r.placeInTotal != null) {
+            if (r.placeInPct == null && Number(r.placeInTotal) > 0) {
+              r.placeInPct = Math.round((Number(r.placeInN) / Number(r.placeInTotal)) * 100);
+            }
+            return;
+          }
+          const no = Number(r.no) || 0;
+          /* 出賽 6～36；入圍率約 20%～70% */
+          const total = 6 + ((no * 5 + raceNum * 7) % 31);
+          const rate = 20 + ((no * 11 + raceNum * 3) % 51);
+          let n = Math.round(total * rate / 100);
+          if (n < 0) n = 0;
+          if (n > total) n = total;
+          r.placeInN = n;
+          r.placeInTotal = total;
+          r.placeInPct = total ? Math.round((n / total) * 100) : 0;
+        });
+        /* 範例錨點：第1場 1號 → 16/32｜50% */
+        if (raceNum === 1) {
+          race.runners.forEach(function (r) {
+            if (!r || Number(r.no) !== 1 || r.scratched) return;
+            r.placeInN = 16;
+            r.placeInTotal = 32;
+            r.placeInPct = 50;
+          });
+        }
+      });
+    }
+    ensurePlaceInDemo();
+
     /* 演示：水位／流量（獨贏上、位置下）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
     function ensureWaterFlowDemo() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
@@ -2407,6 +2451,27 @@
       if (n != null) return n.toFixed(n % 1 === 0 ? 0 : 1) + "%";
       return s;
     }
+    function fmtPlaceInLeft(r) {
+      if (!r) return "—";
+      const n = r.placeInN != null ? r.placeInN : r.placeN;
+      const tot = r.placeInTotal != null ? r.placeInTotal : r.placeTotal;
+      if (n == null || n === "") return "—";
+      if (tot == null || tot === "") return String(n);
+      return String(n) + "/" + String(tot);
+    }
+    function cellPlaceIn(r) {
+      if (r && r.scratched) return '<span class="v">—</span>';
+      const left = fmtPlaceInLeft(r);
+      let pct = r ? (r.placeInPct != null ? r.placeInPct : r.gatePct) : null;
+      if ((pct == null || pct === "") && r) {
+        const n = numOrNull(r.placeInN != null ? r.placeInN : r.placeN);
+        const tot = numOrNull(r.placeInTotal != null ? r.placeInTotal : r.placeTotal);
+        if (n != null && tot != null && tot > 0) pct = Math.round((n / tot) * 100);
+      }
+      const right = fmtPctCell(pct);
+      if (left === "—" && right === "—") return '<span class="v">—</span>';
+      return '<span class="v">' + esc(left + "｜" + right) + "</span>";
+    }
     function fmtWater(v) {
       const n = numOrNull(v);
       if (n == null) return "—";
@@ -2476,12 +2541,7 @@
         return cellStackedMainDelta(r.rating, r.rtgDelta);
       }
       if (c.key === "placeIn") {
-        const n = r.placeInN != null ? r.placeInN : r.placeN;
-        const pct = r.placeInPct != null ? r.placeInPct : r.gatePct;
-        const left = fmt(n);
-        const right = fmtPctCell(pct);
-        if (left === "—" && right === "—") return '<span class="v">—</span>';
-        return '<span class="v">' + esc(left + "｜" + right) + "</span>";
+        return cellPlaceIn(r);
       }
       if (c.key === "prizePair") {
         const season = r.prizeSeason;
