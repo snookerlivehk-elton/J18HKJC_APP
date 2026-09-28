@@ -2121,6 +2121,46 @@
     }
     ensureSameTrackDemo();
 
+    /* 演示：久休復出＝是／否；上仗水位＝獨贏上、位置下（例 82／78） */
+    function ensureLayoffLastOddsDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      MEETING.races.forEach(function (race) {
+        if (!race || !Array.isArray(race.runners)) return;
+        const raceNum = Number(race.num) || 1;
+        race.runners.forEach(function (r) {
+          if (!r) return;
+          if (r.scratched) {
+            if (r.layoff == null) r.layoff = null;
+            if (r.lastWinOdds == null) r.lastWinOdds = null;
+            if (r.lastPlaceOdds == null) r.lastPlaceOdds = null;
+            return;
+          }
+          const no = Number(r.no) || 0;
+          if (r.layoff == null || r.layoff === "") {
+            r.layoff = ((no * 3 + raceNum * 5) % 5 === 0) ? "是" : "否";
+          } else {
+            r.layoff = fmtLayoff(r.layoff);
+          }
+          if (r.lastWinOdds == null && r.lastPlaceOdds == null) {
+            const win = 35 + ((no * 11 + raceNum * 7) % 60); /* 35～94 */
+            const pla = Math.max(18, win - 2 - ((no + raceNum) % 8));
+            r.lastWinOdds = win;
+            r.lastPlaceOdds = pla;
+          }
+        });
+        /* 範例錨點：第1場 1號 → 上仗水位 82／78，久休復出 否 */
+        if (raceNum === 1) {
+          race.runners.forEach(function (r) {
+            if (!r || Number(r.no) !== 1 || r.scratched) return;
+            r.layoff = "否";
+            r.lastWinOdds = 82;
+            r.lastPlaceOdds = 78;
+          });
+        }
+      });
+    }
+    ensureLayoffLastOddsDemo();
+
     /* 演示：水位／流量（獨贏上、位置下）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
     function ensureWaterFlowDemo() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
@@ -2494,6 +2534,11 @@
       if (key === "sameClass" || key === "sameCourseDist" || key === "sameDist") {
         return recordTripleRuns(row[key]);
       }
+      if (key === "lastOdds") return row.lastWinOdds != null ? row.lastWinOdds : row.lastOdds;
+      if (key === "layoff") {
+        const v = fmtLayoff(row.layoff);
+        return v === "是" ? 1 : v === "否" ? 0 : null;
+      }
       return row[key];
     }
     function fmtPctCell(v) {
@@ -2553,6 +2598,19 @@
     function cellRecordTriple(r, key) {
       if (r && r.scratched) return '<span class="v">—</span>';
       return '<span class="v">' + esc(fmtRecordTriple(r ? r[key] : null)) + "</span>";
+    }
+    function fmtLayoff(v) {
+      if (v == null || v === "" || v === "—") return "—";
+      if (v === true || v === 1 || v === "1" || v === "是" || v === "Y" || v === "y" || v === "yes" || v === "YES") return "是";
+      if (v === false || v === 0 || v === "0" || v === "否" || v === "N" || v === "n" || v === "no" || v === "NO") return "否";
+      const s = String(v).trim();
+      if (s === "是" || s === "否") return s;
+      return "—";
+    }
+    function fmtLastOdds(v) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      return String(Math.round(n));
     }
     function fmtWater(v) {
       const n = numOrNull(v);
@@ -2627,6 +2685,13 @@
       }
       if (c.key === "sameClass" || c.key === "sameCourseDist" || c.key === "sameDist") {
         return cellRecordTriple(r, c.key);
+      }
+      if (c.key === "layoff") {
+        if (r && r.scratched) return '<span class="v">—</span>';
+        return '<span class="v">' + esc(fmtLayoff(r.layoff)) + "</span>";
+      }
+      if (c.key === "lastOdds") {
+        return cellWinPlacePair(r, "lastWinOdds", "lastPlaceOdds", fmtLastOdds);
       }
       if (c.key === "prizePair") {
         const season = r.prizeSeason;
