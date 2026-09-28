@@ -1662,7 +1662,7 @@
       { key: "form6", label: "近六賽績\n班次升降", cls: "scroll-col form txt" },
       { key: "placeIn", label: "入圍數｜%", cls: "scroll-col num end" },
       { key: "rating", label: "評分", cls: "scroll-col num" },
-      { key: "career", label: "歷季\n出賽", cls: "scroll-col form txt muted" },
+      { key: "career", label: "歷季\n出賽", cls: "scroll-col num" },
       { key: "sameClass", label: "同班賽", cls: "scroll-col num" },
       { key: "sameCourseDist", label: "同場\n同程", cls: "scroll-col num" },
       { key: "sameDist", label: "同程", cls: "scroll-col num" },
@@ -2534,6 +2534,10 @@
       if (key === "sameClass" || key === "sameCourseDist" || key === "sameDist") {
         return recordTripleRuns(row[key]);
       }
+      if (key === "career") {
+        const o = parseCareerRecord(row.career);
+        return o ? o.runs : null;
+      }
       if (key === "lastOdds") return row.lastWinOdds != null ? row.lastWinOdds : row.lastOdds;
       if (key === "layoff") {
         const v = fmtLayoff(row.layoff);
@@ -2598,6 +2602,36 @@
     function cellRecordTriple(r, key) {
       if (r && r.scratched) return '<span class="v">—</span>';
       return '<span class="v">' + esc(fmtRecordTriple(r ? r[key] : null)) + "</span>";
+    }
+    /* 歷季出賽：HKJC「冠-亞-季-出賽」→「出賽（冠-亞-季）」，與同班賽同款 */
+    function parseCareerRecord(v) {
+      if (v == null || v === "" || v === "—") return null;
+      if (typeof v === "object") {
+        const runs = v.runs != null ? v.runs : v.n;
+        if (runs == null) return null;
+        return {
+          runs: runs,
+          first: v.first != null ? v.first : (v.w != null ? v.w : 0),
+          second: v.second != null ? v.second : (v.p != null ? v.p : 0),
+          third: v.third != null ? v.third : (v.s != null ? v.s : 0)
+        };
+      }
+      const s = String(v).trim();
+      const mNew = s.match(/^(\d+)\s*[（(]\s*(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)\s*[）)]$/);
+      if (mNew) {
+        return { runs: Number(mNew[1]), first: Number(mNew[2]), second: Number(mNew[3]), third: Number(mNew[4]) };
+      }
+      /* 原格式：wins-2nds-3rds-starts，如 2-0-2-20 */
+      const mOld = s.match(/^(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)$/);
+      if (mOld) {
+        return { runs: Number(mOld[4]), first: Number(mOld[1]), second: Number(mOld[2]), third: Number(mOld[3]) };
+      }
+      return null;
+    }
+    function fmtCareer(v) {
+      const o = parseCareerRecord(v);
+      if (!o) return v == null || v === "" ? "—" : String(v);
+      return fmtRecordTriple(o);
     }
     function fmtLayoff(v) {
       if (v == null || v === "" || v === "—") return "—";
@@ -2685,6 +2719,10 @@
       }
       if (c.key === "sameClass" || c.key === "sameCourseDist" || c.key === "sameDist") {
         return cellRecordTriple(r, c.key);
+      }
+      if (c.key === "career") {
+        if (r && r.scratched) return '<span class="v">—</span>';
+        return '<span class="v">' + esc(fmtCareer(r.career)) + "</span>";
       }
       if (c.key === "layoff") {
         if (r && r.scratched) return '<span class="v">—</span>';
@@ -2949,7 +2987,7 @@
           })()) +
           sheetItem("排位體重", r.bodyWt) +
           sheetItem("配備", r.gear) +
-          sheetItem("出道至今", r.career) +
+          sheetItem("出道至今", fmtCareer(r.career)) +
           sheetItem("跑道", r.rail) +
           sheetItem("父系", r.sire) +
           sheetItem("母系", r.dam) +
