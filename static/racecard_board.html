@@ -523,17 +523,16 @@
       letter-spacing: .02em;
     }
     .water-hint b { color: #2f5649; font-weight: 700; }
-    /* 左鎖：馬號名｜賠率；右滑時段等寬；數字共用行高橫向齊平 */
+    /* 左鎖：馬號名｜賠率；右滑時段等寬；水位箭頭在數字前同行，行高壓到數字本身 */
     .water-board {
       --wh-num-fs: 14px;
       --wh-num-lh: 1.05;
-      --wh-arr-fs: 9px;
-      --wh-arr-h: 0.68em;
-      --wh-metric-gap: 0px;
-      --wh-line-gap: 1px;
-      --wh-pad-y: 3px;
-      --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh) + var(--wh-metric-gap) + var(--wh-arr-h));
-      --wh-col-w: 50px;
+      --wh-arr-fs: 10px;
+      --wh-arr-w: 0.78em;
+      --wh-line-gap: 2px;
+      --wh-pad-y: 4px;
+      --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh));
+      --wh-col-w: 54px;
       --wh-odds-w: 37px;
       --wh-pin-w: 73px;
       min-width: max-content;
@@ -757,48 +756,67 @@
     }
     .wh-line {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: center;
-      gap: 3px;
+      gap: 2px;
       width: 100%;
       height: var(--wh-line-h);
       min-height: var(--wh-line-h);
       line-height: var(--wh-num-lh);
       white-space: nowrap;
     }
+    /* 水位＝箭頭＋數字同行；流量＝僅數字 */
     .wh-metric {
-      display: flex;
-      flex-direction: column;
+      display: inline-flex;
+      flex-direction: row;
       align-items: center;
-      justify-content: flex-start;
-      gap: var(--wh-metric-gap);
+      justify-content: flex-end;
+      gap: 0;
+      min-width: 0;
+      height: var(--wh-line-h);
+    }
+    .wh-metric:not(.no-arr) {
+      flex: 0 0 auto;
+      min-width: calc(var(--wh-arr-w) + 1.25em);
+    }
+    .wh-metric.no-arr {
+      flex: 0 0 1.3em;
       width: 1.3em;
-      min-width: 1.3em;
+      justify-content: center;
     }
     .wh-line .wv,
     .wh-line .fv {
       display: block;
-      width: 100%;
       font-size: var(--wh-num-fs);
       font-weight: 400;
       text-align: center;
       line-height: var(--wh-num-lh);
-      height: calc(var(--wh-num-fs) * var(--wh-num-lh));
+      height: var(--wh-line-h);
       font-variant-numeric: tabular-nums lining-nums;
     }
-    .wh-line .wv { color: var(--text); }
-    .wh-line .fv { color: #5b6575; }
+    .wh-line .wv {
+      width: 1.25em;
+      min-width: 1.25em;
+      color: var(--text);
+    }
+    .wh-line .fv {
+      width: 100%;
+      color: #5b6575;
+    }
     .wh-line.pla .wv,
     .wh-line.pla .fv { color: #7b8494; }
     .wh-line .muted { color: var(--muted); }
-    /* 升＝綠↖，降＝紅↙（右→左斜向，不靠旋轉以免看反） */
+    /* 升＝綠↖，降＝紅↙；貼在水位數字左側，與數字垂直居中 */
     .wh-arr {
-      display: block;
-      width: 100%;
-      height: var(--wh-arr-h);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 var(--wh-arr-w);
+      width: var(--wh-arr-w);
+      height: var(--wh-line-h);
       font-size: var(--wh-arr-fs);
       font-weight: 700;
-      line-height: var(--wh-arr-h);
+      line-height: 1;
       text-align: center;
       pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
@@ -2108,7 +2126,7 @@
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
-        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　水位綠升紅降</div>
+        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　水位前綠升紅降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
     </div>
@@ -3572,18 +3590,20 @@
       const ch = dir === "up" ? "↖" : "↙";
       return '<span class="wh-arr ' + dir + '" title="' + label + '" aria-hidden="true">' + ch + "</span>";
     }
-    /* showArrow：水位保留趨勢箭頭；流量不顯示箭頭 */
+    /* showArrow：水位箭頭在數字前；流量不顯示箭頭 */
     function waterMetricHtml(cls, val, fmtFn, earlierVal, showArrow) {
       const empty = val == null;
-      const arrowHtml = showArrow
-        ? waterTrendArrowHtml(waterTrendDir(val, earlierVal))
-        : "";
+      const numHtml =
+        '<span class="' + cls + (empty ? " muted" : "") + '">' +
+          esc(empty ? "—" : fmtFn(val)) +
+        "</span>";
+      if (!showArrow) {
+        return '<span class="wh-metric no-arr">' + numHtml + "</span>";
+      }
       return (
-        '<span class="wh-metric' + (showArrow ? "" : " no-arr") + '">' +
-          '<span class="' + cls + (empty ? " muted" : "") + '">' +
-            esc(empty ? "—" : fmtFn(val)) +
-          "</span>" +
-          arrowHtml +
+        '<span class="wh-metric">' +
+          waterTrendArrowHtml(waterTrendDir(val, earlierVal)) +
+          numHtml +
         "</span>"
       );
     }
