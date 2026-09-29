@@ -806,7 +806,7 @@
     .wh-line.pla .wv,
     .wh-line.pla .fv { color: #7b8494; }
     .wh-line .muted { color: var(--muted); }
-    /* 升＝綠↖，降＝紅↙；貼在水位數字左側，與數字垂直居中 */
+    /* 升＝綠↖，降＝紅↙；預設隱藏佔位，僅十字高亮行／列顯示，減少眼花 */
     .wh-arr {
       display: inline-flex;
       align-items: center;
@@ -819,11 +819,15 @@
       line-height: 1;
       text-align: center;
       pointer-events: none;
+      visibility: hidden;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
     .wh-arr.up { color: #1e8e3e; }
     .wh-arr.down { color: #c0392b; }
-    .wh-arr.none { visibility: hidden; }
+    .water-row.is-wh-cross-row .wh-arr:not(.none),
+    .whour.is-wh-cross-col .wh-arr:not(.none) {
+      visibility: visible;
+    }
     /* 水位表十字定位：點選時段格 → 整行＋整列高亮，交叉為焦點 */
     .water-row:not(.head) .whour[data-wh-col] {
       cursor: pointer;
@@ -2126,7 +2130,7 @@
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
-        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　水位前綠升紅降</div>
+        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　點格高亮後見水位升降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
     </div>

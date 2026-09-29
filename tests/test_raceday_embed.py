@@ -191,6 +191,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("十字高亮：沿用水位頂欄綠系", r.text)
         self.assertIn("#dce9e2", r.text)
         self.assertIn("#a8c9b6", r.text)
+        self.assertIn(".water-row.is-wh-cross-row .wh-arr:not(.none)", r.text)
+        self.assertIn("點格高亮後見水位升降", r.text)
         self.assertIn("waterMetricHtml", r.text)
         self.assertIn('waterMetricHtml("fv"', r.text)
         self.assertIn("no-arr", r.text)
