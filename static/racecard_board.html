@@ -222,15 +222,15 @@
       opacity: .38;
       cursor: default;
     }
-    /* 馬匹列表／水位彈窗等比例縮放（字／格／圖一併）；每級 +10%（對應 +10px／100px） */
+    /* 馬匹列表／水位彈窗內容等比例縮放；水位殼本身不 zoom，避免 top 對齊被放大帶偏 */
     #boardMain,
-    #waterSheet {
+    #waterSheetZoom {
       transform-origin: top left;
       zoom: var(--list-zoom, 1);
     }
     @supports not (zoom: 1) {
       #boardMain,
-      #waterSheet {
+      #waterSheetZoom {
         transform: scale(var(--list-zoom, 1));
         width: calc(100% / var(--list-zoom, 1));
       }
@@ -437,15 +437,22 @@
       left: 0;
       right: 0;
       bottom: 0;
-      top: 0; /* JS 對齊 board-main 頂 */
+      top: 0; /* JS 對齊 board-main 頂（不受內部 zoom 影響） */
       z-index: 35;
       display: flex;
       flex-direction: column;
       background: #fff;
       box-shadow: inset 0 1px 0 rgba(45, 62, 80, .08);
       animation: horseSheetIn .22s ease-out;
+      overflow: hidden;
     }
     .water-sheet[hidden] { display: none !important; }
+    #waterSheetZoom {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
     .water-sheet-bar {
       position: relative;
       flex: 0 0 auto;
@@ -1943,15 +1950,17 @@
       <div class="board-main" id="boardMain"></div>
     </div>
     <div class="water-sheet" id="waterSheet" hidden aria-hidden="true" role="dialog" aria-modal="false" aria-labelledby="waterSheetTitle">
-      <div class="water-sheet-bar">
-        <div class="water-sheet-title">
-          <span class="nm" id="waterSheetTitle">水位彈窗</span>
-          <span class="sub" id="waterSheetRace"></span>
+      <div id="waterSheetZoom">
+        <div class="water-sheet-bar">
+          <div class="water-sheet-title">
+            <span class="nm" id="waterSheetTitle">水位彈窗</span>
+            <span class="sub" id="waterSheetRace"></span>
+          </div>
+          <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
-        <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
+        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠</div>
+        <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
-      <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠</div>
-      <div class="water-sheet-body" id="waterSheetBody"></div>
     </div>
     <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
       <div class="horse-sheet-bar">
@@ -3339,6 +3348,7 @@
     function syncWaterSheetTop() {
       if (!el.waterSheet || !el.boardMain || !el.boardShell) return;
       if (el.board) el.board.scrollTop = 0;
+      /* 殼不 zoom，按 boardMain 視覺頂對齊即可（boardMain zoom 原點為左上，頂邊不變） */
       const shellRect = el.boardShell.getBoundingClientRect();
       const mainRect = el.boardMain.getBoundingClientRect();
       const top = Math.max(0, Math.round(mainRect.top - shellRect.top));
@@ -4358,7 +4368,7 @@
         const z = listZoomFactor(listZoomLevel);
         const targets = [
           document.getElementById("boardMain"),
-          document.getElementById("waterSheet")
+          document.getElementById("waterSheetZoom")
         ];
         targets.forEach(function (node) {
           if (!node) return;
@@ -4370,7 +4380,13 @@
         fitScrollColWidths();
         fitQinTableWidths();
         syncHeadScrollLeft();
-        if (isWaterSheetOpen()) syncWaterSheetTop();
+        /* 殼不 zoom，放大後仍鎖在馬匹列表頂 */
+        if (isWaterSheetOpen()) {
+          requestAnimationFrame(function () {
+            syncWaterSheetTop();
+            requestAnimationFrame(syncWaterSheetTop);
+          });
+        }
       }
       function setListZoomLevel(next) {
         const n = Math.max(0, Math.min(LIST_ZOOM_MAX, Number(next) || 0));
