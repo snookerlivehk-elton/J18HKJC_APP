@@ -2268,21 +2268,50 @@
     html[data-theme="dark"] .hrow.alt .lock-cluster {
       background: #252b34;
     }
-    html[data-theme="dark"] .hrow.mark-1,
+    /* 燕尾標整行：呼應淺色黃／綠，提高飽和並加左側色條更醒目 */
+    html[data-theme="dark"] .hrow.mark-1 {
+      background: #6b4f1c;
+      box-shadow: inset 3px 0 0 #e8b04a;
+    }
     html[data-theme="dark"] .hrow.mark-1 .lock-cluster {
-      background: #3a2f22;
+      background: #6b4f1c;
+      box-shadow: inset 3px 0 0 #e8b04a, 6px 0 8px rgba(0, 0, 0, .28);
     }
-    html[data-theme="dark"] .hrow.mark-2,
-    html[data-theme="dark"] .hrow.mark-2 .lock-cluster {
-      background: #24362c;
+    html[data-theme="dark"] .hrow.alt.mark-1 {
+      background: #7a5a22;
+      box-shadow: inset 3px 0 0 #e8b04a;
     }
-    html[data-theme="dark"] .hrow.alt.mark-1,
     html[data-theme="dark"] .hrow.alt.mark-1 .lock-cluster {
-      background: #443628;
+      background: #7a5a22;
+      box-shadow: inset 3px 0 0 #e8b04a, 6px 0 8px rgba(0, 0, 0, .28);
     }
-    html[data-theme="dark"] .hrow.alt.mark-2,
+    html[data-theme="dark"] .hrow.mark-2 {
+      background: #1f5c3e;
+      box-shadow: inset 3px 0 0 #5dce7a;
+    }
+    html[data-theme="dark"] .hrow.mark-2 .lock-cluster {
+      background: #1f5c3e;
+      box-shadow: inset 3px 0 0 #5dce7a, 6px 0 8px rgba(0, 0, 0, .28);
+    }
+    html[data-theme="dark"] .hrow.alt.mark-2 {
+      background: #256b48;
+      box-shadow: inset 3px 0 0 #5dce7a;
+    }
     html[data-theme="dark"] .hrow.alt.mark-2 .lock-cluster {
-      background: #2a4034;
+      background: #256b48;
+      box-shadow: inset 3px 0 0 #5dce7a, 6px 0 8px rgba(0, 0, 0, .28);
+    }
+    html[data-theme="dark"] .hrow.mark-1 .draw-no,
+    html[data-theme="dark"] .hrow.alt.mark-1 .draw-no {
+      background: #4a3814;
+      border-color: #c9a04a;
+      color: #fff6e0;
+    }
+    html[data-theme="dark"] .hrow.mark-2 .draw-no,
+    html[data-theme="dark"] .hrow.alt.mark-2 .draw-no {
+      background: #164530;
+      border-color: #5dce7a;
+      color: #e8fff0;
     }
     html[data-theme="dark"] .sortable,
     html[data-theme="dark"] .head-static {
