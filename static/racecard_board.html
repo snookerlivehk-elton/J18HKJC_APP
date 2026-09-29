@@ -532,7 +532,7 @@
     .water-row {
       display: flex;
       align-items: stretch;
-      min-height: 56px;
+      min-height: 64px;
       border-bottom: 1px solid var(--line);
     }
     .water-row.alt .water-pin,
@@ -559,21 +559,21 @@
       flex: 0 0 118px;
       width: 118px;
       box-sizing: border-box;
-      padding: 4px 6px 4px 4px;
+      padding: 5px 6px 4px 4px;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 3px;
       background: #fff;
       border-right: 1px solid #d5e2db;
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
       overflow: visible;
     }
-    .water-row.head .water-pin { z-index: 6; }
+    .water-row.head .water-pin { z-index: 6; justify-content: center; }
     /* 上行：馬號＋騎練全名（右對齊）＋賠率；下行：馬名獨佔整寬 */
     .wp-top {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 3px;
       min-width: 0;
       padding-right: 0;
@@ -622,11 +622,12 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       align-items: flex-end;
       gap: 2px;
       margin-right: 2px;
       padding-right: 2px;
+      padding-top: 1px;
     }
     .wp-jname,
     .wp-tname {
@@ -642,14 +643,14 @@
       color: var(--text);
     }
     .wp-tname { color: #5b6575; }
-    /* 與外層 .odds 同色／箭頭；右側預留箭頭寬，數字左移離邊框 */
+    /* 賠率字號與水位／流量一致；靠上對齊；右側預留升降箭頭 */
     .wp-odds {
       flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      justify-content: center;
-      gap: 2px;
+      justify-content: flex-start;
+      gap: 6px;
       margin-left: 0;
       padding-right: 9px;
       box-sizing: content-box;
@@ -660,7 +661,7 @@
     .wp-odds .pla {
       position: relative;
       display: block;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 400;
       line-height: 1.1;
       white-space: nowrap;
@@ -683,15 +684,15 @@
       line-height: 1.2;
     }
     .whour {
-      flex: 0 0 72px;
-      width: 72px;
+      flex: 0 0 76px;
+      width: 76px;
       box-sizing: border-box;
-      padding: 6px 10px 6px 8px;
+      padding: 5px 10px 4px 6px;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       align-items: flex-end;
-      gap: 3px;
+      gap: 4px;
       background: #fff;
       border-right: 1px solid #eef1f4;
     }
@@ -702,29 +703,58 @@
     }
     .wh-line {
       display: flex;
-      align-items: baseline;
+      align-items: flex-start;
       justify-content: flex-end;
-      gap: 6px;
+      gap: 8px;
       line-height: 1.1;
       white-space: nowrap;
     }
-    .wh-line .wv {
+    .wh-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+      min-width: 1.5em;
+    }
+    .wh-line .wv,
+    .wh-line .fv {
+      display: block;
       font-size: 14px;
       font-weight: 400;
-      color: var(--text);
-      min-width: 1.5em;
-      text-align: right;
-    }
-    .wh-line .fv {
-      font-size: 13px;
-      font-weight: 400;
-      color: #5b6575;
       min-width: 1.35em;
       text-align: right;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums lining-nums;
     }
+    .wh-line .wv { color: var(--text); }
+    .wh-line .fv { color: #5b6575; }
     .wh-line.pla .wv,
     .wh-line.pla .fv { color: #7b8494; }
     .wh-line .muted { color: var(--muted); }
+    /* 較早時段→本時段：右到左斜箭；升綠／降紅，傾角 30° */
+    .wh-arr {
+      display: block;
+      width: 1.1em;
+      height: 0.85em;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 0.85em;
+      text-align: center;
+      transform-origin: center center;
+      pointer-events: none;
+      font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
+    }
+    .wh-arr.up {
+      color: #1e8e3e;
+      transform: rotate(-30deg);
+    }
+    .wh-arr.down {
+      color: #c0392b;
+      transform: rotate(30deg);
+    }
+    .wh-arr.none {
+      visibility: hidden;
+    }
     /* 點水位數字打開詳情；表頭「水位」仍負責排序 */
     .hrow:not(.head) .cell.scroll-col[data-open="water"] {
       cursor: pointer;
@@ -3421,24 +3451,57 @@
       const plaF = plaF0 == null ? null : clampInt(plaF0 - Math.max(0, hourIdx - 1) + ((no * 2 + hourIdx) % 3), 0, 40);
       return { winW: winW, winF: winF, plaW: plaW, plaF: plaF };
     }
-    function waterHourCellHtml(sample) {
-      if (!sample || (sample.winW == null && sample.plaW == null)) {
+    /* 本時段 vs 更早時段：大→綠上斜，小→紅下斜；箭頭字形 ← 再旋轉 ±30° */
+    function waterTrendDir(cur, earlier) {
+      const a = numOrNull(cur);
+      const b = numOrNull(earlier);
+      if (a == null || b == null || a === b) return "";
+      return a > b ? "up" : "down";
+    }
+    function waterTrendArrowHtml(dir) {
+      if (dir !== "up" && dir !== "down") {
+        return '<span class="wh-arr none" aria-hidden="true">←</span>';
+      }
+      const label = dir === "up" ? "高於更早時段" : "低於更早時段";
+      return '<span class="wh-arr ' + dir + '" title="' + label + '" aria-hidden="true">←</span>';
+    }
+    function waterMetricHtml(cls, val, fmtFn, earlierVal) {
+      const empty = val == null;
+      const dir = waterTrendDir(val, earlierVal);
+      return (
+        '<span class="wh-metric">' +
+          '<span class="' + cls + (empty ? " muted" : "") + '">' +
+            esc(empty ? "—" : fmtFn(val)) +
+          "</span>" +
+          waterTrendArrowHtml(dir) +
+        "</span>"
+      );
+    }
+    function waterHourCellHtml(sample, earlier) {
+      const early = earlier || {};
+      if (!sample || (sample.winW == null && sample.plaW == null && sample.winF == null && sample.plaF == null)) {
         return (
           '<div class="whour">' +
-            '<div class="wh-line win"><span class="wv muted">—</span><span class="fv muted">—</span></div>' +
-            '<div class="wh-line pla"><span class="wv muted">—</span><span class="fv muted">—</span></div>' +
+            '<div class="wh-line win">' +
+              waterMetricHtml("wv", null, fmtWater, null) +
+              waterMetricHtml("fv", null, fmtFlow, null) +
+            "</div>" +
+            '<div class="wh-line pla">' +
+              waterMetricHtml("wv", null, fmtWater, null) +
+              waterMetricHtml("fv", null, fmtFlow, null) +
+            "</div>" +
           "</div>"
         );
       }
       return (
         '<div class="whour">' +
           '<div class="wh-line win">' +
-            '<span class="wv">' + esc(fmtWater(sample.winW)) + "</span>" +
-            '<span class="fv">' + esc(fmtFlow(sample.winF)) + "</span>" +
+            waterMetricHtml("wv", sample.winW, fmtWater, early.winW) +
+            waterMetricHtml("fv", sample.winF, fmtFlow, early.winF) +
           "</div>" +
           '<div class="wh-line pla">' +
-            '<span class="wv">' + esc(fmtWater(sample.plaW)) + "</span>" +
-            '<span class="fv">' + esc(fmtFlow(sample.plaF)) + "</span>" +
+            waterMetricHtml("wv", sample.plaW, fmtWater, early.plaW) +
+            waterMetricHtml("fv", sample.plaF, fmtFlow, early.plaF) +
           "</div>" +
         "</div>"
       );
@@ -3483,8 +3546,12 @@
             "</div>" +
             '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
           "</div>";
-        const hourCells = hours.map(function (_lab, hi) {
-          return waterHourCellHtml(waterHourSample(r, hi));
+        const samples = hours.map(function (_lab, hi) {
+          return waterHourSample(r, hi);
+        });
+        const hourCells = samples.map(function (sample, hi) {
+          const earlier = hi + 1 < samples.length ? samples[hi + 1] : null;
+          return waterHourCellHtml(sample, earlier);
         }).join("");
         return '<div class="water-row' + alt + scratch + '" data-no="' + esc(r.no) + '">' + pin + hourCells + "</div>";
       }).join("");
