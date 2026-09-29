@@ -523,8 +523,16 @@
       letter-spacing: .02em;
     }
     .water-hint b { color: #2f5649; font-weight: 700; }
-    /* 首列置左鎖；時段列橫滑：最近 → 更早 */
+    /* 首列置左鎖；時段列橫滑：早 → 近；等寬居中 */
     .water-board {
+      --wh-num-fs: 14px;
+      --wh-num-lh: 1.1;
+      --wh-arr-fs: 10px;
+      --wh-arr-h: 0.9em;
+      --wh-metric-gap: 1px;
+      --wh-line-gap: 4px;
+      --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh) + var(--wh-metric-gap) + var(--wh-arr-h));
+      --wh-col-w: 60px;
       min-width: max-content;
       background: #fff;
       font-variant-numeric: tabular-nums lining-nums;
@@ -542,7 +550,7 @@
       position: sticky;
       top: 0;
       z-index: 5;
-      min-height: 34px;
+      min-height: 32px;
       border-bottom: 1px solid #c9d9d1;
     }
     .water-row.head .water-pin,
@@ -569,7 +577,7 @@
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
       overflow: visible;
     }
-    .water-row.head .water-pin { z-index: 6; justify-content: center; }
+    .water-row.head .water-pin { z-index: 6; justify-content: center; align-items: center; }
     /* 上行：馬號＋騎練全名（右對齊）＋賠率；下行：馬名獨佔整寬 */
     .wp-top {
       display: flex;
@@ -643,16 +651,16 @@
       color: var(--text);
     }
     .wp-tname { color: #5b6575; }
-    /* 賠率字號與水位／流量一致；靠上對齊；右側預留升降箭頭 */
+    /* 賠率與水位同字號／同行高，與時段列數字橫向對齊 */
     .wp-odds {
       flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       justify-content: flex-start;
-      gap: 6px;
+      gap: var(--wh-line-gap);
       margin-left: 0;
-      padding-right: 9px;
+      padding-right: 8px;
       box-sizing: content-box;
       overflow: visible;
       font-variant-numeric: tabular-nums lining-nums;
@@ -660,10 +668,14 @@
     .wp-odds .win,
     .wp-odds .pla {
       position: relative;
-      display: block;
-      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      box-sizing: border-box;
+      min-height: var(--wh-line-h);
+      font-size: var(--wh-num-fs);
       font-weight: 400;
-      line-height: 1.1;
+      line-height: var(--wh-num-lh);
       white-space: nowrap;
       text-align: right;
     }
@@ -673,57 +685,65 @@
     .wp-odds .pla.hot { color: var(--red); }
     .wp-odds .od-n {
       font: inherit;
+      font-size: var(--wh-num-fs);
+      line-height: var(--wh-num-lh);
       color: inherit;
       font-variant-numeric: tabular-nums lining-nums;
-      line-height: 1;
     }
     .water-pin .pin-lab {
       font-size: 11px;
       font-weight: 700;
       color: #355a4c;
       line-height: 1.2;
+      text-align: center;
+      width: 100%;
     }
+    /* 時段列：等寬居中，夠放兩位數＋箭頭，不浪費 */
     .whour {
-      flex: 0 0 76px;
-      width: 76px;
+      flex: 0 0 var(--wh-col-w);
+      width: var(--wh-col-w);
       box-sizing: border-box;
-      padding: 5px 10px 4px 6px;
+      padding: 5px 2px 4px;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      align-items: flex-end;
-      gap: 4px;
+      align-items: center;
+      gap: var(--wh-line-gap);
       background: #fff;
       border-right: 1px solid #eef1f4;
     }
     .water-row.head .whour {
-      text-align: right;
+      text-align: center;
       justify-content: center;
-      letter-spacing: .02em;
+      align-items: center;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums lining-nums;
     }
     .wh-line {
       display: flex;
       align-items: flex-start;
-      justify-content: flex-end;
-      gap: 8px;
-      line-height: 1.1;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      min-height: var(--wh-line-h);
+      line-height: var(--wh-num-lh);
       white-space: nowrap;
     }
     .wh-metric {
       display: flex;
       flex-direction: column;
-      align-items: flex-end;
-      gap: 1px;
-      min-width: 1.5em;
+      align-items: center;
+      gap: var(--wh-metric-gap);
+      min-width: 1.35em;
     }
     .wh-line .wv,
     .wh-line .fv {
       display: block;
-      font-size: 14px;
+      font-size: var(--wh-num-fs);
       font-weight: 400;
       min-width: 1.35em;
-      text-align: right;
-      line-height: 1.1;
+      text-align: center;
+      line-height: var(--wh-num-lh);
       font-variant-numeric: tabular-nums lining-nums;
     }
     .wh-line .wv { color: var(--text); }
@@ -734,11 +754,11 @@
     /* 較早時段→本時段：右到左斜箭；升綠／降紅，傾角 30° */
     .wh-arr {
       display: block;
-      width: 1.1em;
-      height: 0.85em;
-      font-size: 11px;
+      width: 1em;
+      height: var(--wh-arr-h);
+      font-size: var(--wh-arr-fs);
       font-weight: 700;
-      line-height: 0.85em;
+      line-height: var(--wh-arr-h);
       text-align: center;
       transform-origin: center center;
       pointer-events: none;
