@@ -547,14 +547,14 @@
       position: sticky;
       left: 0;
       z-index: 3;
-      flex: 0 0 128px;
-      width: 128px;
+      flex: 0 0 118px;
+      width: 118px;
       box-sizing: border-box;
-      padding: 6px 8px;
+      padding: 5px 5px 5px 6px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 3px;
+      gap: 2px;
       background: #fff;
       border-right: 1px solid #d5e2db;
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
@@ -563,18 +563,18 @@
     .wp-line {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 3px;
       min-width: 0;
-      line-height: 1.15;
+      line-height: 1.1;
     }
     .wp-line .hno {
       flex: 0 0 auto;
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: var(--nav);
       color: #fff;
-      font-size: 12px;
+      font-size: 11px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -585,16 +585,44 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text);
+    }
+    /* 騎／練標記：白字藍底；後接姓氏首字 */
+    .wp-jt {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+    .wp-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .wp-ini {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1;
     }
     .wp-line .od {
       flex: 0 0 auto;
       margin-left: auto;
       text-align: right;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 400;
-      min-width: 2.4em;
+      min-width: 2em;
     }
     .wp-line .od.win { color: var(--text); }
     .wp-line .od.pla { color: #7b8494; }
@@ -603,9 +631,10 @@
       display: block;
       width: 100%;
       text-align: left;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: #355a4c;
+      line-height: 1.2;
     }
     .whour {
       flex: 0 0 72px;
@@ -3368,10 +3397,20 @@
         const scratch = r.scratched ? " scratched" : "";
         const winOd = r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win");
         const plaOd = r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place");
+        const jIni = jockeyInitial(r.jockey);
+        const tIni = trainerInitial(r.trainer);
         const pin =
           '<div class="water-pin">' +
             '<div class="wp-line top">' +
               '<span class="hno">' + esc(r.no) + "</span>" +
+              '<span class="wp-jt" title="騎師">' +
+                '<span class="wp-tag">騎</span>' +
+                '<span class="wp-ini">' + esc(jIni) + "</span>" +
+              "</span>" +
+              '<span class="wp-jt" title="練馬師">' +
+                '<span class="wp-tag">練</span>' +
+                '<span class="wp-ini">' + esc(tIni) + "</span>" +
+              "</span>" +
               '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
             "</div>" +
             '<div class="wp-line bot">' +
