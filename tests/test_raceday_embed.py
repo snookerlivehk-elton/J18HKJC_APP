@@ -189,6 +189,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("data-wh-col", r.text)
         self.assertIn(".water-row.is-wh-cross-row .water-pin", r.text)
         self.assertIn("waterMetricHtml", r.text)
+        self.assertIn('waterMetricHtml("fv"', r.text)
+        self.assertIn("no-arr", r.text)
         self.assertIn("高於更早時段（升）", r.text)
         self.assertIn("低於更早時段（降）", r.text)
         self.assertIn("時段由近到遠", r.text)

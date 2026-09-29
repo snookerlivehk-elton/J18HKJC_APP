@@ -2108,7 +2108,7 @@
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
-        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　綠升紅降</div>
+        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上行獨贏／下行位置　時段由近到遠　水位綠升紅降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
     </div>
@@ -3572,15 +3572,18 @@
       const ch = dir === "up" ? "↖" : "↙";
       return '<span class="wh-arr ' + dir + '" title="' + label + '" aria-hidden="true">' + ch + "</span>";
     }
-    function waterMetricHtml(cls, val, fmtFn, earlierVal) {
+    /* showArrow：水位保留趨勢箭頭；流量不顯示箭頭 */
+    function waterMetricHtml(cls, val, fmtFn, earlierVal, showArrow) {
       const empty = val == null;
-      const dir = waterTrendDir(val, earlierVal);
+      const arrowHtml = showArrow
+        ? waterTrendArrowHtml(waterTrendDir(val, earlierVal))
+        : "";
       return (
-        '<span class="wh-metric">' +
+        '<span class="wh-metric' + (showArrow ? "" : " no-arr") + '">' +
           '<span class="' + cls + (empty ? " muted" : "") + '">' +
             esc(empty ? "—" : fmtFn(val)) +
           "</span>" +
-          waterTrendArrowHtml(dir) +
+          arrowHtml +
         "</span>"
       );
     }
@@ -3591,12 +3594,12 @@
         return (
           '<div class="whour"' + colAttr + ' role="button" tabindex="0">' +
             '<div class="wh-line win">' +
-              waterMetricHtml("wv", null, fmtWater, null) +
-              waterMetricHtml("fv", null, fmtFlow, null) +
+              waterMetricHtml("wv", null, fmtWater, null, true) +
+              waterMetricHtml("fv", null, fmtFlow, null, false) +
             "</div>" +
             '<div class="wh-line pla">' +
-              waterMetricHtml("wv", null, fmtWater, null) +
-              waterMetricHtml("fv", null, fmtFlow, null) +
+              waterMetricHtml("wv", null, fmtWater, null, true) +
+              waterMetricHtml("fv", null, fmtFlow, null, false) +
             "</div>" +
           "</div>"
         );
@@ -3604,12 +3607,12 @@
       return (
         '<div class="whour"' + colAttr + ' role="button" tabindex="0">' +
           '<div class="wh-line win">' +
-            waterMetricHtml("wv", sample.winW, fmtWater, e.winW) +
-            waterMetricHtml("fv", sample.winF, fmtFlow, e.winF) +
+            waterMetricHtml("wv", sample.winW, fmtWater, e.winW, true) +
+            waterMetricHtml("fv", sample.winF, fmtFlow, e.winF, false) +
           "</div>" +
           '<div class="wh-line pla">' +
-            waterMetricHtml("wv", sample.plaW, fmtWater, e.plaW) +
-            waterMetricHtml("fv", sample.plaF, fmtFlow, e.plaF) +
+            waterMetricHtml("wv", sample.plaW, fmtWater, e.plaW, true) +
+            waterMetricHtml("fv", sample.plaF, fmtFlow, e.plaF, false) +
           "</div>" +
         "</div>"
       );
