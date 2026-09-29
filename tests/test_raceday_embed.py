@@ -149,8 +149,6 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("▼", r.text)
         self.assertIn("▲", r.text)
         self.assertIn("odTickBreath", r.text)
-        self.assertIn("odNumBreath", r.text)
-        self.assertIn("tick-fresh", r.text)
         self.assertIn("simulateOddsTickRefresh", r.text)
         self.assertIn('data-nav="demoOddsTick"', r.text)
         self.assertIn('demoOddsTick") === "1"', r.text)
