@@ -523,16 +523,19 @@
       letter-spacing: .02em;
     }
     .water-hint b { color: #2f5649; font-weight: 700; }
-    /* 首列置左鎖；時段列橫滑：早 → 近；等寬居中 */
+    /* 左鎖：馬號名｜賠率；右滑時段等寬；數字共用行高橫向齊平 */
     .water-board {
       --wh-num-fs: 14px;
-      --wh-num-lh: 1.1;
-      --wh-arr-fs: 10px;
-      --wh-arr-h: 0.9em;
-      --wh-metric-gap: 1px;
-      --wh-line-gap: 4px;
+      --wh-num-lh: 1.05;
+      --wh-arr-fs: 9px;
+      --wh-arr-h: 0.72em;
+      --wh-metric-gap: 0px;
+      --wh-line-gap: 2px;
+      --wh-pad-y: 4px;
       --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh) + var(--wh-metric-gap) + var(--wh-arr-h));
-      --wh-col-w: 60px;
+      --wh-col-w: 50px;
+      --wh-odds-w: 32px;
+      --wh-pin-w: 70px;
       min-width: max-content;
       background: #fff;
       font-variant-numeric: tabular-nums lining-nums;
@@ -540,51 +543,63 @@
     .water-row {
       display: flex;
       align-items: stretch;
-      min-height: 64px;
+      min-height: 0;
       border-bottom: 1px solid var(--line);
     }
+    .water-row.alt .water-lock,
     .water-row.alt .water-pin,
+    .water-row.alt .wp-odds,
     .water-row.alt .whour { background: #f4f6f8; }
     .water-row.scratched { opacity: .45; }
     .water-row.head {
       position: sticky;
       top: 0;
       z-index: 5;
-      min-height: 32px;
+      min-height: 28px;
       border-bottom: 1px solid #c9d9d1;
     }
+    .water-row.head .water-lock,
     .water-row.head .water-pin,
+    .water-row.head .wp-odds,
     .water-row.head .whour {
       background: #e8f0ec;
       color: #355a4c;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
     }
-    .water-pin {
+    /* 馬號名＋賠率一起 sticky，橫滑時段時數字列不丟 */
+    .water-lock {
       position: sticky;
       left: 0;
       z-index: 3;
-      flex: 0 0 118px;
-      width: 118px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: stretch;
+      background: #fff;
+      box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
+    }
+    .water-row.head .water-lock { z-index: 6; }
+    .water-pin {
+      flex: 0 0 var(--wh-pin-w);
+      width: var(--wh-pin-w);
       box-sizing: border-box;
-      padding: 5px 6px 4px 4px;
+      padding: var(--wh-pad-y) 3px var(--wh-pad-y) 4px;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      gap: 3px;
+      gap: 2px;
       background: #fff;
-      border-right: 1px solid #d5e2db;
-      box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
-      overflow: visible;
+      overflow: hidden;
     }
-    .water-row.head .water-pin { z-index: 6; justify-content: center; align-items: center; }
-    /* 上行：馬號＋騎練全名（右對齊）＋賠率；下行：馬名獨佔整寬 */
-    .wp-top {
+    .water-row.head .water-pin {
+      justify-content: center;
+      align-items: center;
+    }
+    .wp-id {
       display: flex;
       align-items: flex-start;
-      gap: 3px;
+      gap: 2px;
       min-width: 0;
-      padding-right: 0;
     }
     /* 與外層馬匹列表 .hno 同尺（22×22／15px） */
     .water-pin .hno {
@@ -623,8 +638,8 @@
       font-size: 12px;
       color: var(--text);
       line-height: 1.15;
+      padding-left: 1px;
     }
-    /* 騎上／練下：全名、無標記、統一右對齊；略離賠率／邊框 */
     .wp-jt-col {
       flex: 1 1 auto;
       min-width: 0;
@@ -632,9 +647,7 @@
       flex-direction: column;
       justify-content: flex-start;
       align-items: flex-end;
-      gap: 2px;
-      margin-right: 2px;
-      padding-right: 2px;
+      gap: 1px;
       padding-top: 1px;
     }
     .wp-jname,
@@ -645,25 +658,32 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       text-align: right;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 400;
-      line-height: 1.1;
+      line-height: 1.05;
       color: var(--text);
     }
     .wp-tname { color: #5b6575; }
-    /* 賠率與水位同字號／同行高，與時段列數字橫向對齊 */
+    /* 賠率獨立列：與時段水位同行高、同頂邊，橫向齊平 */
     .wp-odds {
-      flex: 0 0 auto;
+      flex: 0 0 var(--wh-odds-w);
+      width: var(--wh-odds-w);
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       justify-content: flex-start;
       gap: var(--wh-line-gap);
-      margin-left: 0;
-      padding-right: 8px;
-      box-sizing: content-box;
+      padding: var(--wh-pad-y) 6px var(--wh-pad-y) 2px;
+      background: #fff;
+      border-right: 1px solid #d5e2db;
       overflow: visible;
       font-variant-numeric: tabular-nums lining-nums;
+    }
+    .water-row.head .wp-odds {
+      justify-content: center;
+      align-items: center;
+      padding-right: 4px;
     }
     .wp-odds .win,
     .wp-odds .pla {
@@ -672,6 +692,7 @@
       align-items: flex-start;
       justify-content: flex-end;
       box-sizing: border-box;
+      height: var(--wh-line-h);
       min-height: var(--wh-line-h);
       font-size: var(--wh-num-fs);
       font-weight: 400;
@@ -690,7 +711,8 @@
       color: inherit;
       font-variant-numeric: tabular-nums lining-nums;
     }
-    .water-pin .pin-lab {
+    .water-pin .pin-lab,
+    .wp-odds .pin-lab {
       font-size: 11px;
       font-weight: 700;
       color: #355a4c;
@@ -698,12 +720,12 @@
       text-align: center;
       width: 100%;
     }
-    /* 時段列：等寬居中，夠放兩位數＋箭頭，不浪費 */
+    /* 時段列：等寬收緊、內容居中對齊 */
     .whour {
       flex: 0 0 var(--wh-col-w);
       width: var(--wh-col-w);
       box-sizing: border-box;
-      padding: 5px 2px 4px;
+      padding: var(--wh-pad-y) 1px;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -723,8 +745,9 @@
       display: flex;
       align-items: flex-start;
       justify-content: center;
-      gap: 6px;
+      gap: 3px;
       width: 100%;
+      height: var(--wh-line-h);
       min-height: var(--wh-line-h);
       line-height: var(--wh-num-lh);
       white-space: nowrap;
@@ -733,17 +756,20 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: flex-start;
       gap: var(--wh-metric-gap);
-      min-width: 1.35em;
+      width: 1.3em;
+      min-width: 1.3em;
     }
     .wh-line .wv,
     .wh-line .fv {
       display: block;
+      width: 100%;
       font-size: var(--wh-num-fs);
       font-weight: 400;
-      min-width: 1.35em;
       text-align: center;
       line-height: var(--wh-num-lh);
+      height: calc(var(--wh-num-fs) * var(--wh-num-lh));
       font-variant-numeric: tabular-nums lining-nums;
     }
     .wh-line .wv { color: var(--text); }
@@ -751,10 +777,10 @@
     .wh-line.pla .wv,
     .wh-line.pla .fv { color: #7b8494; }
     .wh-line .muted { color: var(--muted); }
-    /* 較早時段→本時段：右到左斜箭；升綠／降紅，傾角 30° */
+    /* 右→左斜箭；升綠／降紅，傾角 30° */
     .wh-arr {
       display: block;
-      width: 1em;
+      width: 100%;
       height: var(--wh-arr-h);
       font-size: var(--wh-arr-fs);
       font-weight: 700;
@@ -3538,7 +3564,10 @@
       });
       const head =
         '<div class="water-row head">' +
-          '<div class="water-pin"><span class="pin-lab">馬號／馬名</span></div>' +
+          '<div class="water-lock">' +
+            '<div class="water-pin"><span class="pin-lab">馬號／馬名</span></div>' +
+            '<div class="wp-odds"><span class="pin-lab">賠率</span></div>' +
+          "</div>" +
           hours.map(function (lab) {
             return '<div class="whour">' + esc(lab) + "</div>";
           }).join("") +
@@ -3553,20 +3582,22 @@
         const tFull = (r.trainer != null && String(r.trainer).trim() !== "") ? String(r.trainer).trim() : "—";
         const jShow = shortWaterJtName(jFull);
         const tShow = shortWaterJtName(tFull);
-        const pin =
-          '<div class="water-pin">' +
-            '<div class="wp-top">' +
-              '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
-              '<span class="wp-jt-col">' +
-                '<span class="wp-jname" title="' + esc(jFull) + '">' + esc(jShow) + "</span>" +
-                '<span class="wp-tname" title="' + esc(tFull) + '">' + esc(tShow) + "</span>" +
-              "</span>" +
-              '<span class="wp-odds">' +
-                oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
-                oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
-              "</span>" +
+        const lock =
+          '<div class="water-lock">' +
+            '<div class="water-pin">' +
+              '<div class="wp-id">' +
+                '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
+                '<span class="wp-jt-col">' +
+                  '<span class="wp-jname" title="' + esc(jFull) + '">' + esc(jShow) + "</span>" +
+                  '<span class="wp-tname" title="' + esc(tFull) + '">' + esc(tShow) + "</span>" +
+                "</span>" +
+              "</div>" +
+              '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
             "</div>" +
-            '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
+            '<div class="wp-odds">' +
+              oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
+              oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
+            "</div>" +
           "</div>";
         const nHours = hours.length;
         /* 左＝最早（hourAgo 大），右＝最近（hourAgo 0）；與左鄰比升降 */
@@ -3577,7 +3608,7 @@
           const prev = hi > 0 ? samples[hi - 1] : null;
           return waterHourCellHtml(sample, prev);
         }).join("");
-        return '<div class="water-row' + alt + scratch + '" data-no="' + esc(r.no) + '">' + pin + hourCells + "</div>";
+        return '<div class="water-row' + alt + scratch + '" data-no="' + esc(r.no) + '">' + lock + hourCells + "</div>";
       }).join("");
       el.waterSheetBody.innerHTML = '<div class="water-board">' + head + body + "</div>";
     }
