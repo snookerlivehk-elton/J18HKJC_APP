@@ -534,7 +534,7 @@
       --wh-pad-y: 4px;
       --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh) + var(--wh-metric-gap) + var(--wh-arr-h));
       --wh-col-w: 50px;
-      --wh-odds-w: 35px;
+      --wh-odds-w: 37px;
       --wh-pin-w: 70px;
       min-width: max-content;
       background: #fff;
@@ -1361,6 +1361,12 @@
       pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
+    /* 彈窗賠率行高含水位箭頭位，升降箭改對齊數字中線 */
+    .wp-odds .od-tick {
+      top: calc(var(--wh-num-fs) * var(--wh-num-lh) / 2);
+      margin-top: 0;
+      transform: translateY(-50%);
+    }
     .odds .od-tick.up,
     .scroll-col .wp .od-tick.up,
     .wp-odds .od-tick.up { color: #1e8e3e; }
@@ -1374,10 +1380,18 @@
       animation: odTickBreath .65s ease-in-out 3;
       transform-origin: center center;
     }
+    .wp-odds .od-tick.fresh {
+      animation-name: odTickBreathWp;
+    }
     @keyframes odTickBreath {
       0%, 100% { opacity: 1; transform: scale(1); }
       40% { opacity: .22; transform: scale(1.45); }
       75% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes odTickBreathWp {
+      0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+      40% { opacity: .22; transform: translateY(-50%) scale(1.45); }
+      75% { opacity: 1; transform: translateY(-50%) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
       .odds .od-tick.fresh,
