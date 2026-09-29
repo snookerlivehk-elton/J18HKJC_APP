@@ -4046,7 +4046,7 @@
           const openWater = c.key === "water"
             ? ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位詳情"'
             : "";
-          return '<div class="cell ' + c.cls + colOn(c.key) + openWater + '">' + cellValue(c, r) + "</div>";
+          return '<div class="cell ' + c.cls + colOn(c.key) + '"' + openWater + ">" + cellValue(c, r) + "</div>";
         }).join("");
         return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
       }).join("");
