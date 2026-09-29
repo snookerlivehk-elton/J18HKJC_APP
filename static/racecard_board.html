@@ -674,7 +674,8 @@
       align-items: flex-end;
       justify-content: flex-start;
       gap: var(--wh-line-gap);
-      padding: var(--wh-pad-y) 6px var(--wh-pad-y) 2px;
+      /* 右框較前版外拓 3px；數字／箭頭再左移 2px */
+      padding: var(--wh-pad-y) 8px var(--wh-pad-y) 2px;
       background: #fff;
       border-right: 1px solid #d5e2db;
       overflow: visible;
@@ -683,7 +684,7 @@
     .water-row.head .wp-odds {
       justify-content: center;
       align-items: center;
-      padding-right: 4px;
+      padding-right: 6px;
     }
     .wp-odds .win,
     .wp-odds .pla {
@@ -699,6 +700,7 @@
       line-height: var(--wh-num-lh);
       white-space: nowrap;
       text-align: right;
+      transform: translateX(-2px);
     }
     .wp-odds .win { color: var(--text); }
     .wp-odds .pla { color: #7b8494; }
