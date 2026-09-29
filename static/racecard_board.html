@@ -547,27 +547,28 @@
       position: sticky;
       left: 0;
       z-index: 3;
-      flex: 0 0 98px;
-      width: 98px;
+      flex: 0 0 104px;
+      width: 104px;
       box-sizing: border-box;
-      padding: 4px 4px 4px 5px;
+      padding: 4px 5px;
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      justify-content: center;
       gap: 3px;
       background: #fff;
       border-right: 1px solid #d5e2db;
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
     }
     .water-row.head .water-pin { z-index: 6; }
-    .wp-id {
-      flex: 1 1 auto;
-      min-width: 0;
+    /* 上行：馬號＋騎練＋賠率；下行：馬名獨佔整寬 */
+    .wp-top {
       display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 2px;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
     }
     .water-pin .hno {
+      flex: 0 0 auto;
       width: 18px;
       height: 18px;
       border-radius: 50%;
@@ -579,13 +580,15 @@
       justify-content: center;
     }
     .water-pin .nm {
+      display: block;
+      width: 100%;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 12px;
       color: var(--text);
-      line-height: 1.1;
+      line-height: 1.15;
     }
     /* 騎上／練下疊放 */
     .wp-jt-col {
@@ -3411,24 +3414,24 @@
         const tIni = trainerInitial(r.trainer);
         const pin =
           '<div class="water-pin">' +
-            '<div class="wp-id">' +
+            '<div class="wp-top">' +
               '<span class="hno">' + esc(r.no) + "</span>" +
-              '<span class="nm">' + esc(r.name) + "</span>" +
+              '<span class="wp-jt-col">' +
+                '<span class="wp-jt" title="騎師">' +
+                  '<span class="wp-tag">騎</span>' +
+                  '<span class="wp-ini">' + esc(jIni) + "</span>" +
+                "</span>" +
+                '<span class="wp-jt" title="練馬師">' +
+                  '<span class="wp-tag">練</span>' +
+                  '<span class="wp-ini">' + esc(tIni) + "</span>" +
+                "</span>" +
+              "</span>" +
+              '<span class="wp-odds">' +
+                '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
+                '<span class="od pla' + (plaOd === "—" ? " muted" : "") + '">' + esc(plaOd) + "</span>" +
+              "</span>" +
             "</div>" +
-            '<span class="wp-jt-col">' +
-              '<span class="wp-jt" title="騎師">' +
-                '<span class="wp-tag">騎</span>' +
-                '<span class="wp-ini">' + esc(jIni) + "</span>" +
-              "</span>" +
-              '<span class="wp-jt" title="練馬師">' +
-                '<span class="wp-tag">練</span>' +
-                '<span class="wp-ini">' + esc(tIni) + "</span>" +
-              "</span>" +
-            "</span>" +
-            '<span class="wp-odds">' +
-              '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
-              '<span class="od pla' + (plaOd === "—" ? " muted" : "") + '">' + esc(plaOd) + "</span>" +
-            "</span>" +
+            '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
           "</div>";
         const hourCells = hours.map(function (_lab, hi) {
           return waterHourCellHtml(waterHourSample(r, hi));
