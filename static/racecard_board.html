@@ -812,15 +812,16 @@
       -webkit-tap-highlight-color: transparent;
       position: relative;
     }
+    /* 首列在 .water-lock 內，需一路命中 pin／odds */
     .water-row.is-wh-cross-row > .water-lock,
-    .water-row.is-wh-cross-row > .water-pin,
-    .water-row.is-wh-cross-row > .wp-odds,
+    .water-row.is-wh-cross-row .water-pin,
+    .water-row.is-wh-cross-row .wp-odds,
     .water-row.is-wh-cross-row > .whour {
       background: #e3eef8;
     }
     .water-row.alt.is-wh-cross-row > .water-lock,
-    .water-row.alt.is-wh-cross-row > .water-pin,
-    .water-row.alt.is-wh-cross-row > .wp-odds,
+    .water-row.alt.is-wh-cross-row .water-pin,
+    .water-row.alt.is-wh-cross-row .wp-odds,
     .water-row.alt.is-wh-cross-row > .whour {
       background: #d9e8f5;
     }
@@ -3653,6 +3654,10 @@
       waterCrossFocus = { no: String(no), col: Number(col) };
       applyWaterCrossFocus();
     }
+    function clearWaterCrossFocusState() {
+      waterCrossFocus = null;
+      clearWaterCrossFocus();
+    }
     function bindWaterCrossFocus() {
       const body = el.waterSheetBody;
       if (!body || body.dataset.crossBound === "1") return;
@@ -3667,6 +3672,15 @@
         const no = row.getAttribute("data-no");
         const col = cell.getAttribute("data-wh-col");
         if (no == null || col == null) return;
+        /* 再點同一格：取消十字高亮 */
+        if (
+          waterCrossFocus &&
+          String(waterCrossFocus.no) === String(no) &&
+          Number(waterCrossFocus.col) === Number(col)
+        ) {
+          clearWaterCrossFocusState();
+          return;
+        }
         setWaterCrossFocus(no, col);
       }
       body.addEventListener("click", function (ev) {
