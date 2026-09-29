@@ -567,6 +567,7 @@
       background: #fff;
       border-right: 1px solid #d5e2db;
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
+      overflow: visible;
     }
     .water-row.head .water-pin { z-index: 6; }
     /* 上行：馬號＋騎練全名（右對齊）＋賠率；下行：馬名獨佔整寬 */
@@ -638,6 +639,7 @@
       color: var(--text);
     }
     .wp-tname { color: #5b6575; }
+    /* 與外層 .odds 同色／箭頭；略小字號以適配窄首列 */
     .wp-odds {
       flex: 0 0 auto;
       display: flex;
@@ -646,17 +648,29 @@
       justify-content: center;
       gap: 2px;
       margin-left: 0;
+      overflow: visible;
+      font-variant-numeric: tabular-nums lining-nums;
     }
-    .water-pin .od {
-      text-align: right;
+    .wp-odds .win,
+    .wp-odds .pla {
+      position: relative;
+      display: block;
       font-size: 13px;
       font-weight: 400;
-      min-width: 2em;
       line-height: 1.1;
+      white-space: nowrap;
+      text-align: right;
     }
-    .water-pin .od.win { color: var(--text); }
-    .water-pin .od.pla { color: #7b8494; }
-    .water-pin .od.muted { color: var(--muted); }
+    .wp-odds .win { color: var(--text); }
+    .wp-odds .pla { color: #7b8494; }
+    .wp-odds .win.hot,
+    .wp-odds .pla.hot { color: var(--red); }
+    .wp-odds .od-n {
+      font: inherit;
+      color: inherit;
+      font-variant-numeric: tabular-nums lining-nums;
+      line-height: 1;
+    }
     .water-pin .pin-lab {
       font-size: 11px;
       font-weight: 700;
@@ -1246,9 +1260,10 @@
       font-variant-numeric: tabular-nums lining-nums;
       line-height: 1;
     }
-    /* 字符箭頭絕對貼數字右側，不佔版面寬度（賠率／水位／流量共用） */
+    /* 字符箭頭絕對貼數字右側，不佔版面寬度（外層賠率／水位流量／彈窗賠率共用） */
     .odds .od-tick,
-    .scroll-col .wp .od-tick {
+    .scroll-col .wp .od-tick,
+    .wp-odds .od-tick {
       position: absolute;
       left: 100%;
       top: 50%;
@@ -1261,12 +1276,15 @@
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
     .odds .od-tick.up,
-    .scroll-col .wp .od-tick.up { color: #1e8e3e; }
+    .scroll-col .wp .od-tick.up,
+    .wp-odds .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down,
-    .scroll-col .wp .od-tick.down { color: #c0392b; }
+    .scroll-col .wp .od-tick.down,
+    .wp-odds .od-tick.down { color: #c0392b; }
     /* 賠率刷新後：箭頭呼吸 3 次提示升降更新 */
     .odds .od-tick.fresh,
-    .scroll-col .wp .od-tick.fresh {
+    .scroll-col .wp .od-tick.fresh,
+    .wp-odds .od-tick.fresh {
       animation: odTickBreath .65s ease-in-out 3;
       transform-origin: center center;
     }
@@ -1277,7 +1295,8 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .odds .od-tick.fresh,
-      .scroll-col .wp .od-tick.fresh { animation: none; opacity: 1; }
+      .scroll-col .wp .od-tick.fresh,
+      .wp-odds .od-tick.fresh { animation: none; opacity: 1; }
     }
     .odds .na { color: var(--muted); font-size: 14px; }
 
@@ -3431,11 +3450,12 @@
             return '<div class="whour">' + esc(lab) + "</div>";
           }).join("") +
         "</div>";
+      const hot = bestOdds();
       const body = rows.map(function (r, i) {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
-        const winOd = r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win");
-        const plaOd = r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place");
+        const winHot = !r.scratched && r.win === hot.minW ? " hot" : "";
+        const plaHot = !r.scratched && r.place === hot.minP ? " hot" : "";
         const jFull = (splitNameAllow(r.jockey).name || r.jockey || "—");
         const tFull = (r.trainer != null && String(r.trainer).trim() !== "") ? String(r.trainer).trim() : "—";
         const jShow = shortWaterJtName(jFull);
@@ -3449,8 +3469,8 @@
                 '<span class="wp-tname" title="' + esc(tFull) + '">' + esc(tShow) + "</span>" +
               "</span>" +
               '<span class="wp-odds">' +
-                '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
-                '<span class="od pla' + (plaOd === "—" ? " muted" : "") + '">' + esc(plaOd) + "</span>" +
+                oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
+                oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
               "</span>" +
             "</div>" +
             '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
