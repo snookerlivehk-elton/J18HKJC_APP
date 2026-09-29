@@ -2284,7 +2284,27 @@
       color: #707888;
     }
     html[data-theme="dark"] .sortable.on {
-      color: #8ec4ef;
+      color: #9ec8ef;
+    }
+    /* 排序中表頭：深色藍底＋淺字，避免淺底淺字（含馬名等 head-static） */
+    html[data-theme="dark"] .hrow.head .cell.sort-on {
+      background: #3a5168;
+      box-shadow: inset 0 -2px 0 #6eb3e0;
+      color: #eef5fb;
+    }
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sortable,
+    html[data-theme="dark"] .hrow.head .cell.sort-on .head-static,
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sortable.on,
+    html[data-theme="dark"] .hrow.head .cell.sort-on .draw-lab {
+      color: #eef5fb;
+    }
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sort-ico .u,
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sort-ico .d {
+      color: #8a9aab;
+    }
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sort-ico .u.on,
+    html[data-theme="dark"] .hrow.head .cell.sort-on .sort-ico .d.on {
+      color: #f0a84a;
     }
     html[data-theme="dark"] .cell.sort-col {
       background: rgba(110, 179, 224, .16);
