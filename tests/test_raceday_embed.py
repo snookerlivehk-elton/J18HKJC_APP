@@ -192,7 +192,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("water-lock", r.text)
         self.assertIn("--wh-pin-w: 70px", r.text)
         self.assertIn("--wh-odds-w: 37px", r.text)
-        self.assertIn("transform: translateX(-2px)", r.text)
+        self.assertIn("transform: translateX(-5px)", r.text)
         self.assertIn("odTickBreathWp", r.text)
         self.assertIn("top: calc(var(--wh-num-fs) * var(--wh-num-lh) / 2)", r.text)
         self.assertIn(".wp-odds .win.hot,", r.text)
