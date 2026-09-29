@@ -976,6 +976,21 @@
     .scroll-col .wp .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down,
     .scroll-col .wp .od-tick.down { color: #c0392b; }
+    /* 賠率刷新後：箭頭呼吸 3 次提示升降更新 */
+    .odds .od-tick.fresh,
+    .scroll-col .wp .od-tick.fresh {
+      animation: odTickBreath .65s ease-in-out 3;
+      transform-origin: center center;
+    }
+    @keyframes odTickBreath {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      40% { opacity: .22; transform: scale(1.45); }
+      75% { opacity: 1; transform: scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .odds .od-tick.fresh,
+      .scroll-col .wp .od-tick.fresh { animation: none; opacity: 1; }
+    }
     .odds .na { color: var(--muted); font-size: 14px; }
 
     .muted { color: var(--muted); font-weight: 400; }
@@ -1603,6 +1618,7 @@
         <div class="sep" role="separator"></div>
         <button type="button" role="menuitem" data-nav="help">使用說明</button>
         <button type="button" role="menuitem" data-nav="service">聯繫客服<span class="menu-tag">客服</span></button>
+        <button type="button" role="menuitem" data-nav="demoOddsTick">演示賠率漲跌<span class="menu-tag">演示</span></button>
         <div class="sep" role="separator"></div>
         <div class="menu-zoom" role="group" aria-label="列表縮放">
           <button type="button" class="zoom-btn" data-zoom-step="-1" aria-label="縮小">−</button>
@@ -2754,13 +2770,13 @@
       if (kind === "place") return n.toFixed(1);
       return Number.isInteger(n) ? String(n) : String(n);
     }
-    /* 近5分鐘漲跌字符箭頭：▲升／▼降；絕對定位不佔寬 */
-    function oddsTickHtml(tick) {
+    /* 近5分鐘漲跌字符箭頭：▲升／▼降；絕對定位不佔寬；fresh＝剛刷新呼吸 */
+    function oddsTickHtml(tick, fresh) {
       if (tick !== "up" && tick !== "down") return "";
       const ch = tick === "down" ? "▼" : "▲";
-      return '<span class="od-tick ' + tick + '" aria-hidden="true">' + ch + "</span>";
+      return '<span class="od-tick ' + tick + (fresh ? " fresh" : "") + '" aria-hidden="true">' + ch + "</span>";
     }
-    function oddsLineHtml(cls, value, kind, hotCls, tick) {
+    function oddsLineHtml(cls, value, kind, hotCls, tick, fresh) {
       const n = fmtOdds(value, kind);
       if (n === "—") return '<span class="' + cls + '"><span class="od-n">—</span></span>';
       const dir = tick === "up" || tick === "down" ? tick : "";
@@ -2768,9 +2784,62 @@
       return (
         '<span class="' + cls + hotCls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
           '<span class="od-n">' + esc(n) + "</span>" +
-          oddsTickHtml(dir) +
+          oddsTickHtml(dir, !!fresh) +
         "</span>"
       );
+    }
+    /* 無實時數據時：模擬一次刷新，翻轉箭頭並觸發呼吸燈 */
+    function flipOddsTick(cur) {
+      if (cur === "up") return "down";
+      if (cur === "down") return "up";
+      return Math.random() < 0.5 ? "up" : "down";
+    }
+    function nudgeOdds(v, tick, kind) {
+      const n = numOrNull(v);
+      if (n == null) return v;
+      const step = kind === "place" ? (0.1 + Math.random() * 0.3) : (0.5 + Math.random() * 1.2);
+      const next = tick === "up" ? n + step : n - step;
+      const rounded = Math.round(Math.max(1.01, next) * 10) / 10;
+      return kind === "place" ? rounded : (Number.isInteger(rounded) ? rounded : rounded);
+    }
+    let oddsTickFreshTimer = 0;
+    function clearOddsTickFreshFlags(race) {
+      if (!race || !Array.isArray(race.runners)) return;
+      race.runners.forEach(function (r) {
+        if (!r) return;
+        delete r._winTickFresh;
+        delete r._placeTickFresh;
+      });
+      document.querySelectorAll(".od-tick.fresh").forEach(function (node) {
+        node.classList.remove("fresh");
+      });
+    }
+    function simulateOddsTickRefresh() {
+      const race = currentMeet();
+      if (!race || !Array.isArray(race.runners)) return;
+      if (oddsTickFreshTimer) {
+        clearTimeout(oddsTickFreshTimer);
+        oddsTickFreshTimer = 0;
+      }
+      race.runners.forEach(function (r) {
+        if (!r || r.scratched) return;
+        if (numOrNull(r.win) != null) {
+          r.winTick = flipOddsTick(r.winTick);
+          r.win = nudgeOdds(r.win, r.winTick, "win");
+          r._winTickFresh = true;
+        }
+        if (numOrNull(r.place) != null) {
+          r.placeTick = flipOddsTick(r.placeTick);
+          r.place = nudgeOdds(r.place, r.placeTick, "place");
+          r._placeTickFresh = true;
+        }
+      });
+      renderBoard();
+      /* 呼吸約 3×0.65s；結束後清 fresh，避免整表重繪再閃一次 */
+      oddsTickFreshTimer = setTimeout(function () {
+        oddsTickFreshTimer = 0;
+        clearOddsTickFreshFlags(race);
+      }, 2100);
     }
     /* 示意：同檔同場同一勝率，各場略轉一檔，方便先看版面 */
     const DRAW_WIN_DEMO = [10.8, 9.9, 9.4, 8.7, 8.2, 7.8, 7.4, 7.1, 7.6, 7.3, 8.0, 7.8];
@@ -3678,8 +3747,8 @@
         const odds = r.scratched || r.win == null
           ? '<div class="odds"><span class="na">—</span></div>'
           : '<div class="odds">' +
-              oddsLineHtml("win", r.win, "win", winHot, r.winTick) +
-              oddsLineHtml("pla", r.place, "place", plaHot, r.placeTick) +
+              oddsLineHtml("win", r.win, "win", winHot, r.winTick, r._winTickFresh) +
+              oddsLineHtml("pla", r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
             "</div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
         const lock =
@@ -3849,6 +3918,8 @@
           if (anno && typeof anno.scrollIntoView === "function") {
             anno.scrollIntoView({ block: "nearest", behavior: "smooth" });
           }
+        } else if (act === "demoOddsTick") {
+          simulateOddsTickRefresh();
         }
       });
       document.addEventListener("click", function (ev) {
