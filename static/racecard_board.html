@@ -586,10 +586,13 @@
     .water-cell .od-tick.up { color: #1e8e3e; }
     .water-cell .od-tick.down { color: #c0392b; }
     .water-tbl .muted { color: var(--muted); }
-    .hrow.head .odds-sort[data-open="water"] .lab {
-      text-decoration: underline;
-      text-decoration-color: rgba(44, 95, 138, .35);
-      text-underline-offset: 2px;
+    /* 點水位數字打開詳情；表頭「水位」仍負責排序 */
+    .hrow:not(.head) .cell.scroll-col[data-open="water"] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hrow:not(.head) .cell.scroll-col[data-open="water"]:active {
+      background: rgba(47, 86, 73, .08);
     }
     .horse-sheet-bar {
       position: relative;
@@ -3134,10 +3137,6 @@
       const on = sortKey === key;
       const htmlLabel = esc(label).replace(/\n/g, "<br>");
       const aria = on ? (sortDir > 0 ? "ascending" : "descending") : "none";
-      if (key === "water") {
-        return '<button type="button" class="odds-sort" data-open="water" aria-label="查看水位詳情">' +
-          '<span class="lab">' + htmlLabel + "</span></button>";
-      }
       return '<button type="button" class="odds-sort sortable' + (on ? " on" : "") +
         '" data-sort="' + key + '" aria-sort="' + aria + '">' +
         '<span class="lab">' + htmlLabel + "</span>" +
@@ -3344,6 +3343,21 @@
           if (ev.key === "Enter" || ev.key === " ") {
             ev.preventDefault();
             openHorseSheet(cell.getAttribute("data-no"));
+          }
+        });
+      });
+    }
+    function bindWaterSheetOpens() {
+      document.querySelectorAll('#board .hrow:not(.head) .cell[data-open="water"]').forEach(function (cell) {
+        cell.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openWaterSheet();
+        });
+        cell.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            openWaterSheet();
           }
         });
       });
@@ -4028,9 +4042,12 @@
               '<span class="draw-no"><span>' + esc(r.draw) + "</span></span>" +
             "</div></div>" +
           "</div>";
-        const cells = SCROLL_COLS.map((c) =>
-          '<div class="cell ' + c.cls + colOn(c.key) + '">' + cellValue(c, r) + "</div>"
-        ).join("");
+        const cells = SCROLL_COLS.map((c) => {
+          const openWater = c.key === "water"
+            ? ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位詳情"'
+            : "";
+          return '<div class="cell ' + c.cls + colOn(c.key) + openWater + '">' + cellValue(c, r) + "</div>";
+        }).join("");
         return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
       }).join("");
 
@@ -4058,13 +4075,7 @@
           renderBoard();
         });
       });
-      document.querySelectorAll('#board [data-open="water"]').forEach(function (btn) {
-        btn.addEventListener("click", function (ev) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          openWaterSheet();
-        });
-      });
+      bindWaterSheetOpens();
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindRowFlags();
