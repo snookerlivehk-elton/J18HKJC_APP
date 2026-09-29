@@ -2286,6 +2286,18 @@
     html[data-theme="dark"] .sortable.on {
       color: #9ec8ef;
     }
+    /* 檔位圓圈：深底淺字，避免白底＋淺字看不清 */
+    html[data-theme="dark"] .draw-no {
+      background: #3a4452;
+      border-color: #6a7688;
+      color: #f0f3f7;
+    }
+    html[data-theme="dark"] .row-flag {
+      color: #8a93a3;
+    }
+    html[data-theme="dark"] .row-flag:active {
+      background: rgba(255, 255, 255, .08);
+    }
     /* 排序中表頭：深色藍底＋淺字，避免淺底淺字（含馬名等 head-static） */
     html[data-theme="dark"] .hrow.head .cell.sort-on {
       background: #3a5168;

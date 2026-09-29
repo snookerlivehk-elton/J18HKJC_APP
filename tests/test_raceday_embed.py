@@ -152,6 +152,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('html[data-theme="dark"] .head-static', r.text)
         self.assertIn('html[data-theme="dark"] .hrow.head .cell.sort-on', r.text)
         self.assertIn("排序中表頭：深色藍底＋淺字", r.text)
+        self.assertIn('html[data-theme="dark"] .draw-no', r.text)
+        self.assertIn("檔位圓圈：深底淺字", r.text)
         self.assertIn(".scroll-col.num {\n      font-variant-numeric: tabular-nums;\n      font-weight: 400", r.text)
         self.assertIn(".odds {\n      display: flex;\n      flex-direction: column;\n      align-items: flex-end;\n      justify-content: flex-end;\n      gap: 2px", r.text)
         self.assertIn("ensureOddsTickDemo", r.text)
