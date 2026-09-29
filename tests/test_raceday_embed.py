@@ -176,6 +176,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("water-board", r.text)
         self.assertIn("wh-line", r.text)
         self.assertIn("wp-tag", r.text)
+        self.assertIn("wp-jt-col", r.text)
         self.assertIn(">騎</span>", r.text)
         self.assertIn(">練</span>", r.text)
         self.assertIn('data-open="water"', r.text)

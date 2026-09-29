@@ -547,28 +547,27 @@
       position: sticky;
       left: 0;
       z-index: 3;
-      flex: 0 0 118px;
-      width: 118px;
+      flex: 0 0 98px;
+      width: 98px;
       box-sizing: border-box;
-      padding: 5px 5px 5px 6px;
+      padding: 4px 4px 4px 5px;
       display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 2px;
+      align-items: center;
+      gap: 3px;
       background: #fff;
       border-right: 1px solid #d5e2db;
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
     }
     .water-row.head .water-pin { z-index: 6; }
-    .wp-line {
-      display: flex;
-      align-items: center;
-      gap: 3px;
+    .wp-id {
+      flex: 1 1 auto;
       min-width: 0;
-      line-height: 1.1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
     }
-    .wp-line .hno {
-      flex: 0 0 auto;
+    .water-pin .hno {
       width: 18px;
       height: 18px;
       border-radius: 50%;
@@ -579,29 +578,35 @@
       align-items: center;
       justify-content: center;
     }
-    .wp-line .nm {
-      flex: 1 1 auto;
+    .water-pin .nm {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 12px;
       color: var(--text);
+      line-height: 1.1;
     }
-    /* 騎／練標記：白字藍底；後接姓氏首字 */
+    /* 騎上／練下疊放 */
+    .wp-jt-col {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
     .wp-jt {
       display: inline-flex;
       align-items: center;
       gap: 2px;
-      flex: 0 0 auto;
-      min-width: 0;
+      line-height: 1;
     }
     .wp-tag {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 14px;
-      height: 14px;
+      width: 13px;
+      height: 13px;
       border-radius: 2px;
       background: var(--blue-2);
       color: #fff;
@@ -616,21 +621,26 @@
       color: var(--text);
       line-height: 1;
     }
-    .wp-line .od {
+    .wp-odds {
       flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
       margin-left: auto;
+    }
+    .water-pin .od {
       text-align: right;
       font-size: 13px;
       font-weight: 400;
       min-width: 2em;
+      line-height: 1.1;
     }
-    .wp-line .od.win { color: var(--text); }
-    .wp-line .od.pla { color: #7b8494; }
-    .wp-line .od.muted { color: var(--muted); }
+    .water-pin .od.win { color: var(--text); }
+    .water-pin .od.pla { color: #7b8494; }
+    .water-pin .od.muted { color: var(--muted); }
     .water-pin .pin-lab {
-      display: block;
-      width: 100%;
-      text-align: left;
       font-size: 11px;
       font-weight: 700;
       color: #355a4c;
@@ -3401,8 +3411,11 @@
         const tIni = trainerInitial(r.trainer);
         const pin =
           '<div class="water-pin">' +
-            '<div class="wp-line top">' +
+            '<div class="wp-id">' +
               '<span class="hno">' + esc(r.no) + "</span>" +
+              '<span class="nm">' + esc(r.name) + "</span>" +
+            "</div>" +
+            '<span class="wp-jt-col">' +
               '<span class="wp-jt" title="騎師">' +
                 '<span class="wp-tag">騎</span>' +
                 '<span class="wp-ini">' + esc(jIni) + "</span>" +
@@ -3411,12 +3424,11 @@
                 '<span class="wp-tag">練</span>' +
                 '<span class="wp-ini">' + esc(tIni) + "</span>" +
               "</span>" +
+            "</span>" +
+            '<span class="wp-odds">' +
               '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
-            "</div>" +
-            '<div class="wp-line bot">' +
-              '<span class="nm">' + esc(r.name) + "</span>" +
               '<span class="od pla' + (plaOd === "—" ? " muted" : "") + '">' + esc(plaOd) + "</span>" +
-            "</div>" +
+            "</span>" +
           "</div>";
         const hourCells = hours.map(function (_lab, hi) {
           return waterHourCellHtml(waterHourSample(r, hi));
