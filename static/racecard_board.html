@@ -976,20 +976,32 @@
     .scroll-col .wp .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down,
     .scroll-col .wp .od-tick.down { color: #c0392b; }
-    /* 賠率刷新後：箭頭呼吸 3 次提示升降更新 */
+    /* 賠率刷新後：箭頭＋數字同步呼吸，提示剛更新 */
     .odds .od-tick.fresh,
     .scroll-col .wp .od-tick.fresh {
-      animation: odTickBreath .65s ease-in-out 3;
-      transform-origin: center center;
+      animation: odTickBreath .55s ease-in-out 4;
+      transform-origin: left center;
+      z-index: 3;
+    }
+    .odds .win.tick-fresh .od-n,
+    .odds .pla.tick-fresh .od-n,
+    .scroll-col .wp.tick-fresh .od-n {
+      animation: odNumBreath .55s ease-in-out 4;
     }
     @keyframes odTickBreath {
       0%, 100% { opacity: 1; transform: scale(1); }
-      40% { opacity: .22; transform: scale(1.45); }
-      75% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0; transform: scale(1.7); }
+    }
+    @keyframes odNumBreath {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .28; }
     }
     @media (prefers-reduced-motion: reduce) {
       .odds .od-tick.fresh,
-      .scroll-col .wp .od-tick.fresh { animation: none; opacity: 1; }
+      .scroll-col .wp .od-tick.fresh,
+      .odds .win.tick-fresh .od-n,
+      .odds .pla.tick-fresh .od-n,
+      .scroll-col .wp.tick-fresh .od-n { animation: none; opacity: 1; transform: none; }
     }
     .odds .na { color: var(--muted); font-size: 14px; }
 
@@ -2782,7 +2794,7 @@
       const dir = tick === "up" || tick === "down" ? tick : "";
       const label = dir === "up" ? "近5分鐘升" : dir === "down" ? "近5分鐘降" : "";
       return (
-        '<span class="' + cls + hotCls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
+        '<span class="' + cls + hotCls + (fresh ? " tick-fresh" : "") + '"' + (label ? ' title="' + label + '"' : "") + ">" +
           '<span class="od-n">' + esc(n) + "</span>" +
           oddsTickHtml(dir, !!fresh) +
         "</span>"
@@ -2813,6 +2825,9 @@
       document.querySelectorAll(".od-tick.fresh").forEach(function (node) {
         node.classList.remove("fresh");
       });
+      document.querySelectorAll(".tick-fresh").forEach(function (node) {
+        node.classList.remove("tick-fresh");
+      });
     }
     function simulateOddsTickRefresh() {
       const race = currentMeet();
@@ -2835,11 +2850,11 @@
         }
       });
       renderBoard();
-      /* 呼吸約 3×0.65s；結束後清 fresh，避免整表重繪再閃一次 */
+      /* 呼吸約 4×0.55s；結束後清 fresh，避免整表重繪再閃一次 */
       oddsTickFreshTimer = setTimeout(function () {
         oddsTickFreshTimer = 0;
         clearOddsTickFreshFlags(race);
-      }, 2100);
+      }, 2400);
     }
     /* 示意：同檔同場同一勝率，各場略轉一檔，方便先看版面 */
     const DRAW_WIN_DEMO = [10.8, 9.9, 9.4, 8.7, 8.2, 7.8, 7.4, 7.1, 7.6, 7.3, 8.0, 7.8];
