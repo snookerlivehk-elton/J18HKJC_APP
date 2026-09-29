@@ -222,13 +222,15 @@
       opacity: .38;
       cursor: default;
     }
-    /* 馬匹列表等比例縮放（字／格／圖一併）；每級 +10%（對應 +10px／100px） */
-    #boardMain {
+    /* 馬匹列表／水位彈窗等比例縮放（字／格／圖一併）；每級 +10%（對應 +10px／100px） */
+    #boardMain,
+    #waterSheet {
       transform-origin: top left;
       zoom: var(--list-zoom, 1);
     }
     @supports not (zoom: 1) {
-      #boardMain {
+      #boardMain,
+      #waterSheet {
         transform: scale(var(--list-zoom, 1));
         width: calc(100% / var(--list-zoom, 1));
       }
@@ -567,17 +569,32 @@
       gap: 3px;
       min-width: 0;
     }
+    /* 與外層馬匹列表 .hno 同尺（22×22／15px） */
     .water-pin .hno {
       flex: 0 0 auto;
-      width: 21px;
-      height: 21px;
+      display: grid;
+      place-items: center;
+      place-content: center;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       background: var(--nav);
       color: #fff;
-      font-size: 14px;
-      display: inline-flex;
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 0;
+      padding: 0;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+    .water-pin .hno > span {
+      display: flex;
       align-items: center;
       justify-content: center;
+      height: 1em;
+      line-height: 1;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums lining-nums;
+      transform: translateY(-0.08em);
     }
     .water-pin .nm {
       display: block;
@@ -3415,7 +3432,7 @@
         const pin =
           '<div class="water-pin">' +
             '<div class="wp-top">' +
-              '<span class="hno">' + esc(r.no) + "</span>" +
+              '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
               '<span class="wp-jt-col">' +
                 '<span class="wp-jt" title="騎師">' +
                   '<span class="wp-tag">騎</span>' +
@@ -4338,17 +4355,22 @@
         });
       }
       function applyListZoom() {
-        const main = document.getElementById("boardMain");
         const z = listZoomFactor(listZoomLevel);
-        if (main) {
-          main.style.setProperty("--list-zoom", String(z));
+        const targets = [
+          document.getElementById("boardMain"),
+          document.getElementById("waterSheet")
+        ];
+        targets.forEach(function (node) {
+          if (!node) return;
+          node.style.setProperty("--list-zoom", String(z));
           /* 部分 WebKit 對 CSS 變數 zoom 支援不穩，同步寫入 */
-          try { main.style.zoom = String(z); } catch (e) {}
-        }
+          try { node.style.zoom = String(z); } catch (e) {}
+        });
         syncZoomButtons();
         fitScrollColWidths();
         fitQinTableWidths();
         syncHeadScrollLeft();
+        if (isWaterSheetOpen()) syncWaterSheetTop();
       }
       function setListZoomLevel(next) {
         const n = Math.max(0, Math.min(LIST_ZOOM_MAX, Number(next) || 0));
@@ -4402,11 +4424,15 @@
           simulateOddsTickRefresh();
         }
       });
-      document.addEventListener("click", function (ev) {
+      /* 點擊菜單外任意位置（含水位彈窗）立即收回；capture 以免被 stopPropagation 擋住 */
+      function closeMenuIfOutside(ev) {
         if (!isOpen()) return;
-        if (btn.contains(ev.target) || menu.contains(ev.target)) return;
+        const t = ev.target;
+        if (btn.contains(t) || menu.contains(t)) return;
         setOpen(false);
-      });
+      }
+      document.addEventListener("pointerdown", closeMenuIfOutside, true);
+      document.addEventListener("click", closeMenuIfOutside, true);
       if (back) {
         back.addEventListener("click", function () {
           setOpen(false);
