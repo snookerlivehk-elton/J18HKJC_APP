@@ -528,14 +528,14 @@
       --wh-num-fs: 14px;
       --wh-num-lh: 1.05;
       --wh-arr-fs: 9px;
-      --wh-arr-h: 0.72em;
+      --wh-arr-h: 0.68em;
       --wh-metric-gap: 0px;
-      --wh-line-gap: 2px;
-      --wh-pad-y: 4px;
+      --wh-line-gap: 1px;
+      --wh-pad-y: 3px;
       --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh) + var(--wh-metric-gap) + var(--wh-arr-h));
       --wh-col-w: 50px;
       --wh-odds-w: 37px;
-      --wh-pin-w: 70px;
+      --wh-pin-w: 73px;
       min-width: max-content;
       background: #fff;
       font-variant-numeric: tabular-nums lining-nums;
@@ -583,11 +583,12 @@
       flex: 0 0 var(--wh-pin-w);
       width: var(--wh-pin-w);
       box-sizing: border-box;
-      padding: var(--wh-pad-y) 3px var(--wh-pad-y) 4px;
+      padding: var(--wh-pad-y) 4px var(--wh-pad-y) 4px;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
-      gap: 2px;
+      justify-content: center;
+      align-items: stretch;
+      gap: 0;
       background: #fff;
       overflow: hidden;
     }
@@ -595,10 +596,18 @@
       justify-content: center;
       align-items: center;
     }
+    /* 馬號＋騎練＋馬名收成一塊垂直居中，避免名下大片留白 */
+    .wp-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+      width: 100%;
+    }
     .wp-id {
       display: flex;
-      align-items: flex-start;
-      gap: 2px;
+      align-items: center;
+      gap: 4px;
       min-width: 0;
     }
     /* 與外層馬匹列表 .hno 同尺（22×22／15px） */
@@ -636,19 +645,20 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 12px;
+      font-weight: 400;
       color: var(--text);
-      line-height: 1.15;
-      padding-left: 1px;
+      line-height: 1.1;
+      padding-left: 0;
+      letter-spacing: -.01em;
     }
     .wp-jt-col {
       flex: 1 1 auto;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
-      align-items: flex-end;
+      justify-content: center;
+      align-items: flex-start;
       gap: 1px;
-      padding-top: 1px;
     }
     .wp-jname,
     .wp-tname {
@@ -657,7 +667,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      text-align: right;
+      text-align: left;
       font-size: 11px;
       font-weight: 400;
       line-height: 1.05;
@@ -3601,14 +3611,16 @@
         const lock =
           '<div class="water-lock">' +
             '<div class="water-pin">' +
-              '<div class="wp-id">' +
-                '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
-                '<span class="wp-jt-col">' +
-                  '<span class="wp-jname" title="' + esc(jFull) + '">' + esc(jShow) + "</span>" +
-                  '<span class="wp-tname" title="' + esc(tFull) + '">' + esc(tShow) + "</span>" +
-                "</span>" +
+              '<div class="wp-stack">' +
+                '<div class="wp-id">' +
+                  '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
+                  '<span class="wp-jt-col">' +
+                    '<span class="wp-jname" title="' + esc(jFull) + '">' + esc(jShow) + "</span>" +
+                    '<span class="wp-tname" title="' + esc(tFull) + '">' + esc(tShow) + "</span>" +
+                  "</span>" +
+                "</div>" +
+                '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
               "</div>" +
-              '<span class="nm" title="' + esc(r.name) + '">' + esc(r.name) + "</span>" +
             "</div>" +
             '<div class="wp-odds">' +
               oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
