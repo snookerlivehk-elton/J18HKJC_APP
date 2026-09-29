@@ -2,6 +2,14 @@
 <html lang="zh-HK">
 <head>
   <meta charset="utf-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("j18-racecard-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="robots" content="noindex" />
   <title>排位 · J18</title>
@@ -221,6 +229,85 @@
     .topbar-menu .menu-zoom .zoom-reset:disabled {
       opacity: .38;
       cursor: default;
+    }
+
+    /* 顯示模式：字體調整上方的滑動開關（淺／深） */
+    .topbar-menu .menu-theme {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px 6px;
+      user-select: none;
+    }
+    .topbar-menu .menu-theme .theme-lab {
+      flex: 0 0 auto;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: .04em;
+    }
+    .topbar-menu .menu-theme .theme-lab.is-on {
+      color: #2f5649;
+      font-weight: 700;
+    }
+    .topbar-menu .menu-theme .theme-switch {
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 4px 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      min-width: 0;
+      width: auto;
+    }
+    .topbar-menu .menu-theme .theme-track {
+      position: relative;
+      display: block;
+      width: 46px;
+      height: 26px;
+      border-radius: 13px;
+      background: #c5ced9;
+      box-shadow: inset 0 1px 2px rgba(45, 62, 80, .18);
+      transition: background .22s ease;
+      overflow: hidden;
+    }
+    .topbar-menu .menu-theme .theme-track::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.28) 42%, transparent 70%);
+      transform: translateX(-60%);
+      transition: transform .35s ease;
+      pointer-events: none;
+    }
+    .topbar-menu .menu-theme .theme-switch[aria-pressed="true"] .theme-track {
+      background: linear-gradient(180deg, #3d6b5c 0%, #2f5649 100%);
+    }
+    .topbar-menu .menu-theme .theme-switch[aria-pressed="true"] .theme-track::before {
+      transform: translateX(60%);
+    }
+    .topbar-menu .menu-theme .theme-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(45, 62, 80, .28);
+      transition: transform .22s ease;
+    }
+    .topbar-menu .menu-theme .theme-switch[aria-pressed="true"] .theme-thumb {
+      transform: translateX(20px);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .topbar-menu .menu-theme .theme-track,
+      .topbar-menu .menu-theme .theme-track::before,
+      .topbar-menu .menu-theme .theme-thumb { transition: none; }
     }
     /* 馬匹列表／水位彈窗內容等比例縮放；水位殼本身不 zoom，避免 top 對齊被放大帶偏 */
     #boardMain,
@@ -2065,6 +2152,331 @@
       font-weight: 800;
       letter-spacing: 0;
     }
+
+    /* ========== 深色模式：佈局不變，僅換色（密表護眼） ========== */
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --nav: #6a86a8;
+      --nav-2: #2a3d58;
+      --page: #1a1f27;
+      --text: #e6eaf0;
+      --muted: #9aa3b2;
+      --blue: #6eb3e0;
+      --blue-2: #5a9fd4;
+      --green: #5cb86a;
+      --orange: #e39a45;
+      --red: #ff7a6e;
+      --place: #4caf6a;
+      --line: #3a4250;
+    }
+    html[data-theme="dark"],
+    html[data-theme="dark"] body {
+      background: #12161c;
+      color: var(--text);
+    }
+    html[data-theme="dark"] body {
+      background: var(--page);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+    }
+    html[data-theme="dark"] .topbar {
+      background: linear-gradient(180deg, #3a5474 0%, #2a3d58 100%);
+    }
+    html[data-theme="dark"] .topbar-menu {
+      background: #252b34;
+      color: var(--text);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .06);
+    }
+    html[data-theme="dark"] .topbar-menu button:active {
+      background: #323a46;
+    }
+    html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-btn,
+    html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-reset {
+      border-color: #4a5564;
+      background: #2f3742;
+      color: var(--text);
+    }
+    html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-btn:active,
+    html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-reset:active {
+      background: #3a4452;
+    }
+    html[data-theme="dark"] .topbar-menu .menu-theme .theme-lab.is-on {
+      color: #8fc4a8;
+    }
+    html[data-theme="dark"] .topbar-menu .menu-theme .theme-track {
+      background: #4a5564;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+    }
+    html[data-theme="dark"] .topbar-menu .menu-theme .theme-thumb {
+      background: #eef2f6;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+    }
+
+    html[data-theme="dark"] .anno {
+      background: #3a3220;
+      border-bottom-color: #5a4a28;
+    }
+    html[data-theme="dark"] .anno-lab {
+      background: #6b5828;
+      color: #f0e2b0;
+    }
+    html[data-theme="dark"] .anno-run {
+      color: #ff8a80;
+    }
+
+    html[data-theme="dark"] .subhead {
+      background: #222831;
+      border-bottom-color: var(--line);
+    }
+    html[data-theme="dark"] .meta {
+      color: #9aa3b2;
+    }
+    html[data-theme="dark"] .race-pills::-webkit-scrollbar-thumb {
+      background: #4a5564;
+    }
+
+    html[data-theme="dark"] .board-wrap,
+    html[data-theme="dark"] .board-x,
+    html[data-theme="dark"] .board-horses {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .board-head-pin,
+    html[data-theme="dark"] .board-head-pin .lock-cluster,
+    html[data-theme="dark"] .hrow.head,
+    html[data-theme="dark"] .hrow.head .lock-cluster {
+      background: #2c3542;
+      color: #e8ecf2;
+    }
+    html[data-theme="dark"] .hrow {
+      background: #1e242d;
+      border-bottom-color: var(--line);
+    }
+    html[data-theme="dark"] .hrow.alt {
+      background: #252b34;
+    }
+    html[data-theme="dark"] .lock-cluster {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .hrow.alt .lock-cluster {
+      background: #252b34;
+    }
+    html[data-theme="dark"] .hrow.mark-1,
+    html[data-theme="dark"] .hrow.mark-1 .lock-cluster {
+      background: #3a2f22;
+    }
+    html[data-theme="dark"] .hrow.mark-2,
+    html[data-theme="dark"] .hrow.mark-2 .lock-cluster {
+      background: #24362c;
+    }
+    html[data-theme="dark"] .hrow.alt.mark-1,
+    html[data-theme="dark"] .hrow.alt.mark-1 .lock-cluster {
+      background: #443628;
+    }
+    html[data-theme="dark"] .hrow.alt.mark-2,
+    html[data-theme="dark"] .hrow.alt.mark-2 .lock-cluster {
+      background: #2a4034;
+    }
+    html[data-theme="dark"] .sortable {
+      color: #d5dbe4;
+    }
+    html[data-theme="dark"] .sortable .caret {
+      color: #707888;
+    }
+    html[data-theme="dark"] .sortable.on {
+      color: #8ec4ef;
+    }
+    html[data-theme="dark"] .cell.sort-col {
+      background: rgba(110, 179, 224, .16);
+    }
+    html[data-theme="dark"] .hrow.alt .cell.sort-col {
+      background: rgba(110, 179, 224, .22);
+    }
+    html[data-theme="dark"] .odds .pla,
+    html[data-theme="dark"] .wp-odds .pla,
+    html[data-theme="dark"] .wh-line .fv,
+    html[data-theme="dark"] .wp-tname {
+      color: #9aa3b2;
+    }
+    html[data-theme="dark"] .wh-line.pla .wv,
+    html[data-theme="dark"] .wh-line.pla .fv,
+    html[data-theme="dark"] .wp-odds .pla {
+      color: #8b93a0;
+    }
+    html[data-theme="dark"] .comment {
+      color: #b0b8c4;
+    }
+    html[data-theme="dark"] .wh-arr.up,
+    html[data-theme="dark"] .od-tick.up,
+    html[data-theme="dark"] .wp-odds .od-tick.up {
+      color: #5dce7a;
+    }
+    html[data-theme="dark"] .wh-arr.down,
+    html[data-theme="dark"] .od-tick.down,
+    html[data-theme="dark"] .wp-odds .od-tick.down {
+      color: #ff8a80;
+    }
+    html[data-theme="dark"] .scroll-col .v.stacked .sub.delta-pos { color: #ff8a80; }
+    html[data-theme="dark"] .scroll-col .v.stacked .sub.delta-neg { color: #5dce7a; }
+
+    html[data-theme="dark"] .horse-sheet,
+    html[data-theme="dark"] .water-sheet {
+      background: #1e242d;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+    }
+    html[data-theme="dark"] .horse-sheet-bar {
+      background: linear-gradient(180deg, #3a5474 0%, #2a3d58 100%);
+    }
+    html[data-theme="dark"] .water-sheet-bar {
+      background: linear-gradient(180deg, #3d6b5c 0%, #2f5649 100%);
+    }
+    html[data-theme="dark"] .water-sheet-body,
+    html[data-theme="dark"] .horse-sheet-body {
+      background: #181d24;
+    }
+    html[data-theme="dark"] .water-hint {
+      color: #a8b8ae;
+      background: #24302a;
+      border-bottom-color: #354840;
+    }
+    html[data-theme="dark"] .water-hint b {
+      color: #9fd0b4;
+    }
+    html[data-theme="dark"] .water-board {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .water-row {
+      border-bottom-color: var(--line);
+    }
+    html[data-theme="dark"] .water-lock,
+    html[data-theme="dark"] .water-pin,
+    html[data-theme="dark"] .wp-odds,
+    html[data-theme="dark"] .whour {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .water-row.alt .water-lock,
+    html[data-theme="dark"] .water-row.alt .water-pin,
+    html[data-theme="dark"] .water-row.alt .wp-odds,
+    html[data-theme="dark"] .water-row.alt .whour {
+      background: #252b34;
+    }
+    html[data-theme="dark"] .water-row.head .water-lock,
+    html[data-theme="dark"] .water-row.head .water-pin,
+    html[data-theme="dark"] .water-row.head .wp-odds,
+    html[data-theme="dark"] .water-row.head .whour {
+      background: #2a3831;
+      color: #b8d4c4;
+      border-bottom-color: #3d5448;
+    }
+    html[data-theme="dark"] .water-pin .pin-lab,
+    html[data-theme="dark"] .wp-odds .pin-lab {
+      color: #b8d4c4;
+    }
+    html[data-theme="dark"] .water-pin .nm {
+      color: var(--text);
+    }
+    html[data-theme="dark"] .whour {
+      border-right-color: #323a46;
+    }
+    html[data-theme="dark"] .wp-odds {
+      border-right-color: #3d5448;
+    }
+    html[data-theme="dark"] .water-row.is-wh-cross-row > .water-lock,
+    html[data-theme="dark"] .water-row.is-wh-cross-row .water-pin,
+    html[data-theme="dark"] .water-row.is-wh-cross-row .wp-odds,
+    html[data-theme="dark"] .water-row.is-wh-cross-row > .whour,
+    html[data-theme="dark"] .water-board .whour.is-wh-cross-col {
+      background: #2f4a3c;
+    }
+    html[data-theme="dark"] .water-row.alt.is-wh-cross-row > .water-lock,
+    html[data-theme="dark"] .water-row.alt.is-wh-cross-row .water-pin,
+    html[data-theme="dark"] .water-row.alt.is-wh-cross-row .wp-odds,
+    html[data-theme="dark"] .water-row.alt.is-wh-cross-row > .whour,
+    html[data-theme="dark"] .water-row.alt .whour.is-wh-cross-col {
+      background: #355445;
+    }
+    html[data-theme="dark"] .water-row.head .whour.is-wh-cross-col {
+      background: #3d5c4c;
+      box-shadow: inset 0 -2px 0 #8fc4a8;
+      color: #d4efe2;
+    }
+    html[data-theme="dark"] .water-board .whour.is-wh-cross-cell {
+      background: #4a7a60;
+      box-shadow: inset 0 0 0 1.5px #8fc4a8;
+    }
+    html[data-theme="dark"] .water-row.is-wh-cross-row > .water-lock {
+      box-shadow: 2px 0 4px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(143, 196, 168, .45);
+    }
+
+    html[data-theme="dark"] .horse-sheet-body {
+      background: #181d24;
+    }
+    html[data-theme="dark"] .horse-sheet-odds .box,
+    html[data-theme="dark"] .horse-sheet-grid .item {
+      background: #252b34;
+      border-color: var(--line);
+    }
+    html[data-theme="dark"] .horse-sheet-grid {
+      background: var(--line);
+      border-color: var(--line);
+    }
+    html[data-theme="dark"] .scroll-col::after {
+      background: #3a4250;
+    }
+    html[data-theme="dark"] .hrow:not(.head) .cell.pin-id:active {
+      background: rgba(110, 179, 224, .18);
+    }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="water"]:active {
+      background: rgba(143, 196, 168, .14);
+    }
+
+    html[data-theme="dark"] .qin-panel,
+    html[data-theme="dark"] .qin-legend {
+      background: #1a1f27;
+      border-top-color: #1a1f27;
+      color: #9aa3b2;
+    }
+    html[data-theme="dark"] .qin-block {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .qin-tbl th,
+    html[data-theme="dark"] .qin-tbl td {
+      border-color: #3a4250;
+      color: var(--text);
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .qin-tbl .qin-switch-cell {
+      background: #323a46;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, .3), 3px 0 6px rgba(0, 0, 0, .28);
+    }
+    html[data-theme="dark"] .qin-sw-track {
+      background: #3a4250;
+    }
+    html[data-theme="dark"] .qin-tbl .qin-c.scratch,
+    html[data-theme="dark"] .qin-tbl .qin-c.idx-cell.scratch {
+      background: #2a313c;
+      color: #707888;
+    }
+    html[data-theme="dark"] .qin-tbl .qin-ch,
+    html[data-theme="dark"] .qin-tbl .qin-rh,
+    html[data-theme="dark"] .qin-tbl .qin-h {
+      background: #4a7aad;
+      color: #fff;
+    }
+    html[data-theme="dark"] .qin-tbl .qin-c.idx-cell {
+      background: #243040;
+      color: #9ec0e0;
+    }
+    html[data-theme="dark"] .qin-tbl .qin-c.hot,
+    html[data-theme="dark"] .qin-tbl .qin-c.idx-r { background: #c94a3d; color: #fff; }
+    html[data-theme="dark"] .qin-tbl .qin-c.drop20,
+    html[data-theme="dark"] .qin-tbl .qin-c.idx-g { background: #2f9e5a; color: #fff; }
+    html[data-theme="dark"] .qin-tbl .qin-c.drop50,
+    html[data-theme="dark"] .qin-tbl .qin-c.idx-b { background: #a88a2e; color: #fff; }
+    html[data-theme="dark"] .silk-13 {
+      background: #e8e8e8;
+      color: #111;
+      box-shadow: inset 0 0 0 1px #888;
+    }
+
   </style>
 </head>
 <body>
@@ -2090,6 +2502,13 @@
         <button type="button" role="menuitem" data-nav="service">聯繫客服<span class="menu-tag">客服</span></button>
         <button type="button" role="menuitem" data-nav="demoOddsTick">演示賠率漲跌<span class="menu-tag">演示</span></button>
         <div class="sep" role="separator"></div>
+        <div class="menu-theme" role="group" aria-label="顯示模式">
+          <span class="theme-lab" id="themeLabLight">淺色</span>
+          <button type="button" class="theme-switch" id="themeSwitch" aria-pressed="false" aria-label="切換深色模式">
+            <span class="theme-track" aria-hidden="true"><span class="theme-thumb"></span></span>
+          </button>
+          <span class="theme-lab" id="themeLabDark">深色</span>
+        </div>
         <div class="menu-zoom" role="group" aria-label="列表縮放">
           <button type="button" class="zoom-btn" data-zoom-step="-1" aria-label="縮小">−</button>
           <span class="zoom-lab">字體</span>
@@ -4671,6 +5090,40 @@
       const menu = document.getElementById("navMenu");
       const back = document.getElementById("navBack");
       if (!btn || !menu) return;
+      const themeSwitch = document.getElementById("themeSwitch");
+      const themeLabLight = document.getElementById("themeLabLight");
+      const themeLabDark = document.getElementById("themeLabDark");
+      const THEME_KEY = "j18-racecard-theme";
+      function currentTheme() {
+        return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      }
+      function syncThemeSwitch() {
+        const dark = currentTheme() === "dark";
+        if (themeSwitch) {
+          themeSwitch.setAttribute("aria-pressed", dark ? "true" : "false");
+          themeSwitch.setAttribute("aria-label", dark ? "切換淺色模式" : "切換深色模式");
+        }
+        if (themeLabLight) themeLabLight.classList.toggle("is-on", !dark);
+        if (themeLabDark) themeLabDark.classList.toggle("is-on", dark);
+      }
+      function setTheme(mode) {
+        const dark = mode === "dark";
+        if (dark) document.documentElement.setAttribute("data-theme", "dark");
+        else document.documentElement.removeAttribute("data-theme");
+        try { localStorage.setItem(THEME_KEY, dark ? "dark" : "light"); } catch (e) {}
+        syncThemeSwitch();
+      }
+      function toggleTheme() {
+        setTheme(currentTheme() === "dark" ? "light" : "dark");
+      }
+      syncThemeSwitch();
+      if (themeSwitch) {
+        themeSwitch.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleTheme();
+        });
+      }
       /* 列表縮放：每級 +10px／100px＝+10%，最多 2 級；復原回 0 */
       const LIST_ZOOM_MAX = 2;
       const LIST_ZOOM_STEP_PX = 10;
@@ -4724,6 +5177,7 @@
           menu.removeAttribute("hidden");
           btn.setAttribute("aria-expanded", "true");
           syncZoomButtons();
+          syncThemeSwitch();
         } else {
           menu.setAttribute("hidden", "");
           btn.setAttribute("aria-expanded", "false");
