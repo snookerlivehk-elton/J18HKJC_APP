@@ -212,7 +212,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('oddsLineHtml("win", r.scratched ? null : r.win', r.text)
         self.assertIn('"↖"', r.text)
         self.assertIn('"↙"', r.text)
-        self.assertIn("--wh-col-w: 50px", r.text)
+        self.assertIn("--wh-col-w: 54px", r.text)
         self.assertIn("--wh-num-fs: 14px", r.text)
         self.assertIn("height: var(--wh-line-h)", r.text)
         self.assertIn('pin-lab">賠率', r.text)
