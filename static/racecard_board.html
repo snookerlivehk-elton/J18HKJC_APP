@@ -559,7 +559,7 @@
       flex: 0 0 118px;
       width: 118px;
       box-sizing: border-box;
-      padding: 4px 5px;
+      padding: 4px 6px 4px 4px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -574,8 +574,9 @@
     .wp-top {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       min-width: 0;
+      padding-right: 0;
     }
     /* 與外層馬匹列表 .hno 同尺（22×22／15px） */
     .water-pin .hno {
@@ -615,7 +616,7 @@
       color: var(--text);
       line-height: 1.15;
     }
-    /* 騎上／練下：全名、無標記、統一右對齊 */
+    /* 騎上／練下：全名、無標記、統一右對齊；略離賠率／邊框 */
     .wp-jt-col {
       flex: 1 1 auto;
       min-width: 0;
@@ -624,6 +625,8 @@
       justify-content: center;
       align-items: flex-end;
       gap: 2px;
+      margin-right: 2px;
+      padding-right: 2px;
     }
     .wp-jname,
     .wp-tname {
@@ -639,7 +642,7 @@
       color: var(--text);
     }
     .wp-tname { color: #5b6575; }
-    /* 與外層 .odds 同色／箭頭；略小字號以適配窄首列 */
+    /* 與外層 .odds 同色／箭頭；右側預留箭頭寬，數字左移離邊框 */
     .wp-odds {
       flex: 0 0 auto;
       display: flex;
@@ -648,6 +651,8 @@
       justify-content: center;
       gap: 2px;
       margin-left: 0;
+      padding-right: 9px;
+      box-sizing: content-box;
       overflow: visible;
       font-variant-numeric: tabular-nums lining-nums;
     }
