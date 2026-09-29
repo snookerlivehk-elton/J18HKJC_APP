@@ -426,6 +426,171 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: none; }
     }
+    /* 水位頁：只蓋住馬匹列表（board-main 起），不遮場次／賽道信息 */
+    .board-shell.is-water-open #board {
+      overflow: hidden;
+    }
+    .water-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: 0; /* JS 對齊 board-main 頂 */
+      z-index: 35;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      box-shadow: inset 0 1px 0 rgba(45, 62, 80, .08);
+      animation: horseSheetIn .22s ease-out;
+    }
+    .water-sheet[hidden] { display: none !important; }
+    .water-sheet-bar {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 44px 10px 12px;
+      background: linear-gradient(180deg, #3d6b5c 0%, #2f5649 100%);
+      color: #fff;
+    }
+    .water-sheet-title {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .water-sheet-title .nm {
+      display: block;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      line-height: 1.15;
+    }
+    .water-sheet-title .sub {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      opacity: .9;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .water-sheet-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(255,255,255,.14);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .water-sheet-close:active { background: rgba(255,255,255,.28); }
+    .water-sheet-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 0;
+      background: #f4f6f8;
+    }
+    .water-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+    .water-tbl thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #e8f0ec;
+      color: #355a4c;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: right;
+      padding: 8px 10px;
+      border-bottom: 1px solid #c9d9d1;
+      white-space: nowrap;
+    }
+    .water-tbl thead th.horse { text-align: left; }
+    .water-tbl tbody td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text);
+      text-align: right;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .water-tbl tbody tr.alt td { background: #f4f6f8; }
+    .water-tbl tbody tr.scratched td { opacity: .45; }
+    .water-tbl tbody td.horse {
+      text-align: left;
+      min-width: 0;
+    }
+    .water-horse {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .water-horse .hno {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--nav);
+      color: #fff;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .water-horse .nm {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    .water-cell {
+      position: relative;
+      display: inline-block;
+      text-align: right;
+      line-height: 1;
+    }
+    .water-cell .od-tick {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      margin-top: -0.45em;
+      margin-left: 1px;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      pointer-events: none;
+    }
+    .water-cell .od-tick.up { color: #1e8e3e; }
+    .water-cell .od-tick.down { color: #c0392b; }
+    .water-tbl .muted { color: var(--muted); }
+    .hrow.head .odds-sort[data-open="water"] .lab {
+      text-decoration: underline;
+      text-decoration-color: rgba(44, 95, 138, .35);
+      text-underline-offset: 2px;
+    }
     .horse-sheet-bar {
       position: relative;
       flex: 0 0 auto;
@@ -1651,6 +1816,16 @@
 
       <div class="board-main" id="boardMain"></div>
     </div>
+    <div class="water-sheet" id="waterSheet" hidden aria-hidden="true" role="dialog" aria-modal="false" aria-labelledby="waterSheetTitle">
+      <div class="water-sheet-bar">
+        <div class="water-sheet-title">
+          <span class="nm" id="waterSheetTitle">水位</span>
+          <span class="sub" id="waterSheetRace"></span>
+        </div>
+        <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
+      </div>
+      <div class="water-sheet-body" id="waterSheetBody"></div>
+    </div>
     <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
       <div class="horse-sheet-bar">
         <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
@@ -1704,6 +1879,7 @@
       pills: document.getElementById("racePills"),
       board: document.getElementById("board"),
       boardMain: document.getElementById("boardMain"),
+      boardShell: document.querySelector(".board-shell"),
       boardX: null,
       boardHeadX: null,
       sheet: document.getElementById("horseSheet"),
@@ -1713,6 +1889,10 @@
       sheetRace: document.getElementById("horseSheetRace"),
       sheetBody: document.getElementById("horseSheetBody"),
       sheetClose: document.getElementById("horseSheetClose"),
+      waterSheet: document.getElementById("waterSheet"),
+      waterSheetRace: document.getElementById("waterSheetRace"),
+      waterSheetBody: document.getElementById("waterSheetBody"),
+      waterSheetClose: document.getElementById("waterSheetClose"),
     };
     let currentRace = 5; /* 暫開第五場（11 匹）方便驗顯示 */
     let sortKey = "no";
@@ -2933,6 +3113,11 @@
           renderPills();
           renderMeta();
           renderBoard();
+          /* 水位頁保持打開：切場次即刷新該場水位，無需退出 */
+          if (isWaterSheetOpen()) {
+            syncWaterSheetTop();
+            fillWaterSheet();
+          }
         });
       });
       const active = el.pills.querySelector("button.active");
@@ -2949,6 +3134,10 @@
       const on = sortKey === key;
       const htmlLabel = esc(label).replace(/\n/g, "<br>");
       const aria = on ? (sortDir > 0 ? "ascending" : "descending") : "none";
+      if (key === "water") {
+        return '<button type="button" class="odds-sort" data-open="water" aria-label="查看水位詳情">' +
+          '<span class="lab">' + htmlLabel + "</span></button>";
+      }
       return '<button type="button" class="odds-sort sortable' + (on ? " on" : "") +
         '" data-sort="' + key + '" aria-sort="' + aria + '">' +
         '<span class="lab">' + htmlLabel + "</span>" +
@@ -3021,7 +3210,83 @@
       el.sheet.setAttribute("hidden", "");
       el.sheet.setAttribute("aria-hidden", "true");
     }
+    function isWaterSheetOpen() {
+      return !!(el.waterSheet && !el.waterSheet.hasAttribute("hidden"));
+    }
+    function syncWaterSheetTop() {
+      if (!el.waterSheet || !el.boardMain || !el.boardShell) return;
+      if (el.board) el.board.scrollTop = 0;
+      const shellRect = el.boardShell.getBoundingClientRect();
+      const mainRect = el.boardMain.getBoundingClientRect();
+      const top = Math.max(0, Math.round(mainRect.top - shellRect.top));
+      el.waterSheet.style.top = top + "px";
+    }
+    function waterTickSpan(tick) {
+      if (tick !== "up" && tick !== "down") return "";
+      return '<span class="od-tick ' + tick + '" aria-hidden="true">' + (tick === "down" ? "▼" : "▲") + "</span>";
+    }
+    function fillWaterSheet() {
+      if (!el.waterSheetBody || !el.waterSheetRace) return;
+      const meet = currentMeet();
+      el.waterSheetRace.textContent = meet.meta || ("第" + currentRace + "場");
+      const rows = currentRunners().slice().sort(function (a, b) {
+        return (Number(a.no) || 0) - (Number(b.no) || 0);
+      });
+      const body = rows.map(function (r, i) {
+        const alt = i % 2 ? " alt" : "";
+        const scratch = r.scratched ? " scratched" : "";
+        const w = r.scratched ? "—" : fmtWater(r.winWater);
+        const p = r.scratched ? "—" : fmtWater(r.placeWater);
+        const winOd = r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win");
+        const plaOd = r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place");
+        return (
+          '<tr class="' + (alt + scratch).trim() + '" data-no="' + esc(r.no) + '">' +
+            '<td class="horse"><div class="water-horse">' +
+              '<span class="hno">' + esc(r.no) + "</span>" +
+              '<span class="nm">' + esc(r.name) + "</span>" +
+            "</div></td>" +
+            '<td><span class="water-cell' + (w === "—" ? " muted" : "") + '">' +
+              esc(w) + waterTickSpan(r.winWaterTick) + "</span></td>" +
+            '<td><span class="water-cell' + (p === "—" ? " muted" : "") + '">' +
+              esc(p) + waterTickSpan(r.placeWaterTick) + "</span></td>" +
+            '<td class="' + (winOd === "—" ? "muted" : "") + '">' + esc(winOd) + "</td>" +
+            '<td class="' + (plaOd === "—" ? "muted" : "") + '">' + esc(plaOd) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+      el.waterSheetBody.innerHTML =
+        '<table class="water-tbl">' +
+          "<thead><tr>" +
+            '<th class="horse">馬匹</th>' +
+            "<th>獨贏水位</th><th>位置水位</th><th>獨贏</th><th>位置</th>" +
+          "</tr></thead>" +
+          "<tbody>" + body + "</tbody>" +
+        "</table>";
+    }
+    function closeWaterSheet() {
+      if (!el.waterSheet || el.waterSheet.hasAttribute("hidden")) return;
+      el.waterSheet.setAttribute("hidden", "");
+      el.waterSheet.setAttribute("aria-hidden", "true");
+      if (el.boardShell) el.boardShell.classList.remove("is-water-open");
+    }
+    function openWaterSheet() {
+      if (!el.waterSheet) return;
+      closeHorseSheet();
+      if (el.board) el.board.scrollTop = 0;
+      if (el.boardShell) el.boardShell.classList.add("is-water-open");
+      fillWaterSheet();
+      el.waterSheet.removeAttribute("hidden");
+      el.waterSheet.setAttribute("aria-hidden", "false");
+      syncWaterSheetTop();
+      /* overflow 鎖定後再量一次，避免頂邊差 1–2px */
+      requestAnimationFrame(function () {
+        syncWaterSheetTop();
+        requestAnimationFrame(syncWaterSheetTop);
+      });
+      if (el.waterSheetClose) el.waterSheetClose.focus();
+    }
     function openHorseSheet(no) {
+      closeWaterSheet();
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       const meet = currentMeet();
@@ -3793,12 +4058,23 @@
           renderBoard();
         });
       });
+      document.querySelectorAll('#board [data-open="water"]').forEach(function (btn) {
+        btn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openWaterSheet();
+        });
+      });
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindRowFlags();
       bindQinOverscrollGuard();
       bindQinPairFocus();
       bindQinModeSwitch();
+      if (isWaterSheetOpen()) {
+        syncWaterSheetTop();
+        fillWaterSheet();
+      }
     }
 
     function applyRowMarkClass(row, mark) {
@@ -3846,6 +4122,12 @@
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
     }
+    if (el.waterSheetClose) {
+      el.waterSheetClose.addEventListener("click", closeWaterSheet);
+    }
+    window.addEventListener("resize", function () {
+      if (isWaterSheetOpen()) syncWaterSheetTop();
+    });
     (function bindTopbarMenu() {
       const btn = document.getElementById("navMenuBtn");
       const menu = document.getElementById("navMenu");
@@ -3947,6 +4229,10 @@
           if (isOpen()) {
             setOpen(false);
             btn.focus();
+            return;
+          }
+          if (isWaterSheetOpen()) {
+            closeWaterSheet();
             return;
           }
           closeHorseSheet();
