@@ -2182,13 +2182,21 @@
     html[data-theme="dark"] .topbar {
       background: linear-gradient(180deg, #3a5474 0%, #2a3d58 100%);
     }
+    /* 菜單浮層：抬高底色＋亮邊＋陰影，與深色頁面分開 */
     html[data-theme="dark"] .topbar-menu {
-      background: #252b34;
+      background: #323a46;
       color: var(--text);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .06);
+      border: 1px solid rgba(210, 222, 236, .28);
+      box-shadow:
+        0 14px 36px rgba(0, 0, 0, .58),
+        0 0 0 1px rgba(0, 0, 0, .4),
+        inset 0 1px 0 rgba(255, 255, 255, .1);
+    }
+    html[data-theme="dark"] .topbar-menu .sep {
+      background: rgba(210, 222, 236, .18);
     }
     html[data-theme="dark"] .topbar-menu button:active {
-      background: #323a46;
+      background: #3e4754;
     }
     html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-btn,
     html[data-theme="dark"] .topbar-menu .menu-zoom .zoom-reset {
