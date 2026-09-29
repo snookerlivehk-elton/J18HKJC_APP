@@ -556,8 +556,8 @@
       position: sticky;
       left: 0;
       z-index: 3;
-      flex: 0 0 104px;
-      width: 104px;
+      flex: 0 0 128px;
+      width: 128px;
       box-sizing: border-box;
       padding: 4px 5px;
       display: flex;
@@ -569,11 +569,11 @@
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06);
     }
     .water-row.head .water-pin { z-index: 6; }
-    /* 上行：馬號＋騎練＋賠率；下行：馬名獨佔整寬 */
+    /* 上行：馬號＋騎練全名（右對齊）＋賠率；下行：馬名獨佔整寬 */
     .wp-top {
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
       min-width: 0;
     }
     /* 與外層馬匹列表 .hno 同尺（22×22／15px） */
@@ -614,40 +614,30 @@
       color: var(--text);
       line-height: 1.15;
     }
-    /* 騎上／練下疊放 */
+    /* 騎上／練下：全名、無標記、統一右對齊 */
     .wp-jt-col {
-      flex: 0 0 auto;
+      flex: 1 1 auto;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       justify-content: center;
+      align-items: flex-end;
       gap: 2px;
     }
-    .wp-jt {
-      display: inline-flex;
-      align-items: center;
-      gap: 2px;
-      line-height: 1;
-    }
-    .wp-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 13px;
-      height: 13px;
-      border-radius: 2px;
-      background: var(--blue-2);
-      color: #fff;
-      font-size: 9px;
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: 0;
-    }
-    .wp-ini {
+    .wp-jname,
+    .wp-tname {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
       font-size: 12px;
       font-weight: 400;
+      line-height: 1.1;
       color: var(--text);
-      line-height: 1;
     }
+    .wp-tname { color: #5b6575; }
     .wp-odds {
       flex: 0 0 auto;
       display: flex;
@@ -655,7 +645,7 @@
       align-items: flex-end;
       justify-content: center;
       gap: 2px;
-      margin-left: auto;
+      margin-left: 0;
     }
     .water-pin .od {
       text-align: right;
@@ -3437,21 +3427,15 @@
         const scratch = r.scratched ? " scratched" : "";
         const winOd = r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win");
         const plaOd = r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place");
-        const jIni = jockeyInitial(r.jockey);
-        const tIni = trainerInitial(r.trainer);
+        const jFull = (splitNameAllow(r.jockey).name || r.jockey || "—");
+        const tFull = (r.trainer != null && String(r.trainer).trim() !== "") ? String(r.trainer).trim() : "—";
         const pin =
           '<div class="water-pin">' +
             '<div class="wp-top">' +
               '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
               '<span class="wp-jt-col">' +
-                '<span class="wp-jt" title="騎師">' +
-                  '<span class="wp-tag">騎</span>' +
-                  '<span class="wp-ini">' + esc(jIni) + "</span>" +
-                "</span>" +
-                '<span class="wp-jt" title="練馬師">' +
-                  '<span class="wp-tag">練</span>' +
-                  '<span class="wp-ini">' + esc(tIni) + "</span>" +
-                "</span>" +
+                '<span class="wp-jname" title="騎師">' + esc(jFull) + "</span>" +
+                '<span class="wp-tname" title="練馬師">' + esc(tFull) + "</span>" +
               "</span>" +
               '<span class="wp-odds">' +
                 '<span class="od win' + (winOd === "—" ? " muted" : "") + '">' + esc(winOd) + "</span>" +
