@@ -2829,14 +2829,14 @@
       }
       return { name: m[1].trim(), allow: allow, delta: delta };
     }
-    /* 水位彈窗：外文名超過 4 字只顯示前 4 字＋…；中文全名 */
+    /* 水位彈窗：外文名超過 4 字只顯示前 4 字（不加省略號）；中文全名 */
     function shortWaterJtName(name) {
       const s = String(name == null ? "" : name).trim();
       if (!s || s === "—" || s === "-") return s || "—";
       if (!/[A-Za-z]/.test(s)) return s;
       const chars = Array.from(s);
       if (chars.length <= 4) return s;
-      return chars.slice(0, 4).join("") + "…";
+      return chars.slice(0, 4).join("");
     }
     function fmtDelta(v) {
       if (v == null || v === "" || v === "—" || v === "-") return "";
