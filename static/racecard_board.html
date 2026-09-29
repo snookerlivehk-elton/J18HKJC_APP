@@ -1314,7 +1314,8 @@
     .head-static {
       display: block;
       font-size: var(--head-fs); font-weight: 400; line-height: 1.02;
-      color: #111; cursor: default; user-select: none;
+      /* 隨表頭主題色（淺／深），與可排序欄文字一致 */
+      color: inherit; cursor: default; user-select: none;
     }
     .odds-sort {
       display: inline-flex; flex-direction: row;
@@ -2275,7 +2276,8 @@
     html[data-theme="dark"] .hrow.alt.mark-2 .lock-cluster {
       background: #2a4034;
     }
-    html[data-theme="dark"] .sortable {
+    html[data-theme="dark"] .sortable,
+    html[data-theme="dark"] .head-static {
       color: #d5dbe4;
     }
     html[data-theme="dark"] .sortable .caret {

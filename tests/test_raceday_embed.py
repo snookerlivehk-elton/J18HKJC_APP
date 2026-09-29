@@ -148,6 +148,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn("color: #6b7380", r.text)
         self.assertIn("font-size: var(--head-fs); font-weight: 400", r.text)
         self.assertIn(".head-static {\n      display: block;\n      font-size: var(--head-fs); font-weight: 400", r.text)
+        self.assertIn("color: inherit; cursor: default; user-select: none;", r.text)
+        self.assertIn('html[data-theme="dark"] .head-static', r.text)
         self.assertIn(".scroll-col.num {\n      font-variant-numeric: tabular-nums;\n      font-weight: 400", r.text)
         self.assertIn(".odds {\n      display: flex;\n      flex-direction: column;\n      align-items: flex-end;\n      justify-content: flex-end;\n      gap: 2px", r.text)
         self.assertIn("ensureOddsTickDemo", r.text)
