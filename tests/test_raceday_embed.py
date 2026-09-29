@@ -183,6 +183,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("wh-arr", r.text)
         self.assertIn("waterTrendDir", r.text)
         self.assertIn("waterMetricHtml", r.text)
+        self.assertIn("高於前一時段（升）", r.text)
+        self.assertIn("低於前一時段（降）", r.text)
         self.assertIn("wp-jt-col", r.text)
         self.assertIn("wp-jname", r.text)
         self.assertIn("wp-tname", r.text)
