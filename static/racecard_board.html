@@ -806,6 +806,43 @@
     .wh-arr.up { color: #1e8e3e; }
     .wh-arr.down { color: #c0392b; }
     .wh-arr.none { visibility: hidden; }
+    /* 水位表十字定位：點選時段格 → 整行＋整列高亮，交叉為焦點 */
+    .water-row:not(.head) .whour[data-wh-col] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .water-row.is-wh-cross-row > .water-lock,
+    .water-row.is-wh-cross-row > .water-pin,
+    .water-row.is-wh-cross-row > .wp-odds,
+    .water-row.is-wh-cross-row > .whour {
+      background: #e3eef8;
+    }
+    .water-row.alt.is-wh-cross-row > .water-lock,
+    .water-row.alt.is-wh-cross-row > .water-pin,
+    .water-row.alt.is-wh-cross-row > .wp-odds,
+    .water-row.alt.is-wh-cross-row > .whour {
+      background: #d9e8f5;
+    }
+    .water-board .whour.is-wh-cross-col {
+      background: #e3eef8;
+    }
+    .water-row.alt .whour.is-wh-cross-col {
+      background: #d9e8f5;
+    }
+    .water-row.head .whour.is-wh-cross-col {
+      background: #c5dced;
+      box-shadow: inset 0 -2px 0 #3b8fd4;
+      color: #1e4a6e;
+    }
+    .water-board .whour.is-wh-cross-cell {
+      background: #b7d6ef;
+      box-shadow: inset 0 0 0 1.5px #3b8fd4;
+      z-index: 2;
+    }
+    .water-row.is-wh-cross-row > .water-lock {
+      box-shadow: 2px 0 4px rgba(45, 62, 80, .06), inset 0 0 0 1px rgba(59, 143, 212, .35);
+    }
     /* 點水位數字打開詳情；表頭「水位」仍負責排序 */
     .hrow:not(.head) .cell.scroll-col[data-open="water"] {
       cursor: pointer;
@@ -3366,6 +3403,7 @@
           currentRace = Number(btn.getAttribute("data-n"));
           sortKey = "no";
           sortDir = 1;
+          waterCrossFocus = null;
           closeHorseSheet();
           renderPills();
           renderMeta();
@@ -3545,11 +3583,12 @@
         "</span>"
       );
     }
-    function waterHourCellHtml(sample, earlier) {
+    function waterHourCellHtml(sample, earlier, colIdx) {
       const e = earlier || {};
+      const colAttr = ' data-wh-col="' + esc(String(colIdx)) + '"';
       if (!sample || (sample.winW == null && sample.plaW == null && sample.winF == null && sample.plaF == null)) {
         return (
-          '<div class="whour">' +
+          '<div class="whour"' + colAttr + ' role="button" tabindex="0">' +
             '<div class="wh-line win">' +
               waterMetricHtml("wv", null, fmtWater, null) +
               waterMetricHtml("fv", null, fmtFlow, null) +
@@ -3562,7 +3601,7 @@
         );
       }
       return (
-        '<div class="whour">' +
+        '<div class="whour"' + colAttr + ' role="button" tabindex="0">' +
           '<div class="wh-line win">' +
             waterMetricHtml("wv", sample.winW, fmtWater, e.winW) +
             waterMetricHtml("fv", sample.winF, fmtFlow, e.winF) +
@@ -3573,6 +3612,80 @@
           "</div>" +
         "</div>"
       );
+    }
+    /* 水位表十字焦點：{ no, col }；滑動不清除，點其他格切換 */
+    let waterCrossFocus = null;
+    function clearWaterCrossFocus() {
+      const board = el.waterSheetBody && el.waterSheetBody.querySelector(".water-board");
+      if (!board) return;
+      board.querySelectorAll(".is-wh-cross-row").forEach(function (n) {
+        n.classList.remove("is-wh-cross-row");
+      });
+      board.querySelectorAll(".is-wh-cross-col, .is-wh-cross-cell").forEach(function (n) {
+        n.classList.remove("is-wh-cross-col");
+        n.classList.remove("is-wh-cross-cell");
+      });
+    }
+    function applyWaterCrossFocus() {
+      clearWaterCrossFocus();
+      if (!waterCrossFocus) return;
+      const board = el.waterSheetBody && el.waterSheetBody.querySelector(".water-board");
+      if (!board) return;
+      const no = String(waterCrossFocus.no);
+      const col = Number(waterCrossFocus.col);
+      if (!Number.isFinite(col)) {
+        waterCrossFocus = null;
+        return;
+      }
+      const row = board.querySelector('.water-row[data-no="' + no.replace(/"/g, "") + '"]');
+      if (!row) {
+        waterCrossFocus = null;
+        return;
+      }
+      row.classList.add("is-wh-cross-row");
+      board.querySelectorAll('.whour[data-wh-col="' + col + '"]').forEach(function (cell) {
+        cell.classList.add("is-wh-cross-col");
+      });
+      const hit = row.querySelector('.whour[data-wh-col="' + col + '"]');
+      if (hit) hit.classList.add("is-wh-cross-cell");
+    }
+    function setWaterCrossFocus(no, col) {
+      waterCrossFocus = { no: String(no), col: Number(col) };
+      applyWaterCrossFocus();
+    }
+    function bindWaterCrossFocus() {
+      const body = el.waterSheetBody;
+      if (!body || body.dataset.crossBound === "1") return;
+      body.dataset.crossBound = "1";
+      let tapMoved = false;
+      body.addEventListener("touchstart", function () { tapMoved = false; }, { passive: true });
+      body.addEventListener("touchmove", function () { tapMoved = true; }, { passive: true });
+      function activateFrom(cell) {
+        if (!cell) return;
+        const row = cell.closest(".water-row[data-no]");
+        if (!row || row.classList.contains("head")) return;
+        const no = row.getAttribute("data-no");
+        const col = cell.getAttribute("data-wh-col");
+        if (no == null || col == null) return;
+        setWaterCrossFocus(no, col);
+      }
+      body.addEventListener("click", function (ev) {
+        if (tapMoved) return;
+        const cell = ev.target && ev.target.closest
+          ? ev.target.closest(".water-row:not(.head) .whour[data-wh-col]")
+          : null;
+        if (!cell || !body.contains(cell)) return;
+        activateFrom(cell);
+      });
+      body.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        const cell = ev.target && ev.target.closest
+          ? ev.target.closest(".water-row:not(.head) .whour[data-wh-col]")
+          : null;
+        if (!cell || !body.contains(cell)) return;
+        ev.preventDefault();
+        activateFrom(cell);
+      });
     }
     function fillWaterSheet() {
       if (!el.waterSheetBody || !el.waterSheetRace) return;
@@ -3588,8 +3701,8 @@
             '<div class="water-pin"><span class="pin-lab">馬號／馬名</span></div>' +
             '<div class="wp-odds"><span class="pin-lab">賠率</span></div>' +
           "</div>" +
-          hours.map(function (lab) {
-            return '<div class="whour">' + esc(lab) + "</div>";
+          hours.map(function (lab, hi) {
+            return '<div class="whour" data-wh-col="' + hi + '">' + esc(lab) + "</div>";
           }).join("") +
         "</div>";
       const hot = bestOdds();
@@ -3627,11 +3740,13 @@
         });
         const hourCells = samples.map(function (sample, hi) {
           const earlier = hi + 1 < samples.length ? samples[hi + 1] : null;
-          return waterHourCellHtml(sample, earlier);
+          return waterHourCellHtml(sample, earlier, hi);
         }).join("");
         return '<div class="water-row' + alt + scratch + '" data-no="' + esc(r.no) + '">' + lock + hourCells + "</div>";
       }).join("");
       el.waterSheetBody.innerHTML = '<div class="water-board">' + head + body + "</div>";
+      bindWaterCrossFocus();
+      applyWaterCrossFocus();
     }
     function closeWaterSheet() {
       if (!el.waterSheet || el.waterSheet.hasAttribute("hidden")) return;
