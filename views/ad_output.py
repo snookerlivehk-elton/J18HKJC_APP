@@ -38,6 +38,7 @@ inject_admin_css()
 page_header(
     "廣告輸出",
     f"賽前：海報（{PRIMARY_TRACK_LABEL}）＋社交文案 · "
+    "賽前歷史戰績三幅圖 · "
     "賽後：命中評估＋宣傳文案 · 重產：由快照重畫海報",
 )
 
