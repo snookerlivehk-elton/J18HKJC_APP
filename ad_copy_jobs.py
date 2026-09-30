@@ -1038,6 +1038,320 @@ def redo_archive_job(
     return {"ok": False, "error": f"unknown kind: {kind}"}
 
 
+def pre_race_cascade_enabled() -> bool:
+    """Form AI／快照完成後是否自動接海報＋社交文案＋ingest（預設開）。"""
+    return (os.getenv("MEETING_PRE_RACE_AD_CASCADE", "true") or "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def form_ai_ready_for_cascade(racing_date: str, course: str) -> Tuple[bool, str]:
+    """FORM_AI 覆蓋 ≥80% 才允許正式快照／廣告鏈。"""
+    try:
+        from meeting_pipeline import MeetingPipeline, STATUS_OK
+
+        st, detail = MeetingPipeline().check_form_ai(
+            str(racing_date)[:10], str(course or "").upper()
+        )
+        return st == STATUS_OK, str(detail or st)
+    except Exception as exc:
+        return False, f"check_form_ai failed: {exc}"
+
+
+def snapshot_ready_for_cascade(racing_date: str, course: str) -> Tuple[bool, str]:
+    try:
+        from meeting_pipeline import MeetingPipeline, STATUS_OK
+
+        st, detail = MeetingPipeline().check_snapshot(
+            str(racing_date)[:10], str(course or "").upper()
+        )
+        return st == STATUS_OK, str(detail or st)
+    except Exception as exc:
+        return False, f"check_snapshot failed: {exc}"
+
+
+def run_pre_race_ad_cascade(
+    *,
+    racing_date: str,
+    course: str,
+    batch_id: Optional[str] = None,
+    output_root: Optional[Path] = None,
+    force: bool = False,
+    dry_run: bool = False,
+    ensure_snapshot: bool = True,
+    ensure_ads: bool = True,
+    ensure_social: bool = True,
+    require_form_ai: bool = True,
+) -> Dict[str, Any]:
+    """
+    賽前一站式：FORM_AI 齊 → snapshot（含海報）→ social_copy → publish/ingest。
+
+    供 Form AI 背景 job 完成、作戰室一鍵快照、tick 補洞共用。
+    失敗不回滾已寫入嘅 Form AI／快照；各步結果寫入 actions。
+    """
+    d, c = str(racing_date)[:10], str(course or "").upper()
+    out_root = Path(output_root) if output_root else default_output_dir()
+    out: Dict[str, Any] = {
+        "ok": True,
+        "racing_date": d,
+        "course": c,
+        "actions": [],
+        "batch_id": batch_id or "",
+    }
+
+    if not pre_race_cascade_enabled() and not force:
+        out["ok"] = True
+        out["skipped"] = True
+        out["reason"] = "MEETING_PRE_RACE_AD_CASCADE disabled"
+        return out
+
+    if require_form_ai:
+        ai_ok, ai_detail = form_ai_ready_for_cascade(d, c)
+        out["form_ai"] = {"ok": ai_ok, "detail": ai_detail}
+        if not ai_ok:
+            out["ok"] = False
+            out["waiting"] = True
+            out["reason"] = f"FORM_AI not ready ({ai_detail})"
+            out["actions"].append(
+                {
+                    "action": "wait_form_ai",
+                    "ok": False,
+                    "waiting": True,
+                    "detail": ai_detail,
+                }
+            )
+            return out
+
+    bid = batch_id or ""
+    snap_result: Optional[Dict[str, Any]] = None
+
+    if ensure_snapshot:
+        snap_ok, snap_detail = snapshot_ready_for_cascade(d, c)
+        if snap_ok and not force:
+            out["actions"].append(
+                {
+                    "action": "snapshot",
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "SNAPSHOT already ok",
+                    "detail": snap_detail,
+                }
+            )
+            bid = bid or resolve_meeting_batch_id(d, c) or ""
+        elif dry_run:
+            out["actions"].append(
+                {"action": "snapshot", "ok": True, "dry_run": True}
+            )
+        else:
+            try:
+                from factor_calibration import FactorCalibration
+
+                snap_result = FactorCalibration().snapshot_meeting(d, c)
+                if snap_result.get("batch_id") and snap_result.get("ok") is None:
+                    snap_result = {**snap_result, "ok": True}
+                ok = bool(snap_result.get("ok"))
+                bid = str(snap_result.get("batch_id") or bid or "")
+                out["actions"].append(
+                    {
+                        "action": "snapshot",
+                        "ok": ok,
+                        "batch_id": bid,
+                        "ad_ok": snap_result.get("ad_ok"),
+                        "error": snap_result.get("error"),
+                        "provisional": snap_result.get("provisional"),
+                    }
+                )
+                out["snapshot"] = snap_result
+                if not ok:
+                    out["ok"] = False
+                    out["reason"] = str(
+                        snap_result.get("error") or "snapshot failed"
+                    )
+                    return out
+            except Exception as exc:
+                out["ok"] = False
+                out["reason"] = f"snapshot error: {exc}"
+                out["actions"].append(
+                    {"action": "snapshot", "ok": False, "error": str(exc)}
+                )
+                return out
+    else:
+        bid = bid or resolve_meeting_batch_id(d, c) or ""
+
+    out["batch_id"] = bid
+
+    # 快照 ok 但海報／copy.json 未齊 → 補產
+    if ensure_ads and not dry_run:
+        already_ad_ok = bool(
+            snap_result
+            and snap_result.get("ad_ok")
+            and (snap_result.get("ad_output") or {}).get("ok")
+        )
+        ready, _ = copy_json_ready(out_root)
+        need_ads = (not already_ad_ok) or (not ready) or force
+        if bid and need_ads:
+            try:
+                from ad_poster import generate_ads_from_snapshot_batch
+                from ad_store import set_batch_ad_status
+
+                ad_out = generate_ads_from_snapshot_batch(bid, output_root=out_root)
+                ad_ok = bool(ad_out.get("ok"))
+                try:
+                    set_batch_ad_status(bid, "ok" if ad_ok else "failed")
+                except Exception:
+                    pass
+                out["actions"].append(
+                    {
+                        "action": "ad_output_ensure",
+                        "ok": ad_ok,
+                        "batch_id": bid,
+                        "error": ad_out.get("error"),
+                    }
+                )
+                out["ad_output"] = ad_out
+                if not ad_ok:
+                    out["ok"] = False
+                    out["reason"] = str(ad_out.get("error") or "ad_output failed")
+                    # 仍試 social（可能已有舊 copy）；唔提前 return
+            except Exception as exc:
+                out["ok"] = False
+                out["reason"] = f"ad_output error: {exc}"
+                out["actions"].append(
+                    {
+                        "action": "ad_output_ensure",
+                        "ok": False,
+                        "error": str(exc),
+                        "batch_id": bid,
+                    }
+                )
+        elif ready:
+            out["actions"].append(
+                {
+                    "action": "ad_output_ensure",
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "copy.json ready",
+                    "batch_id": bid,
+                }
+            )
+        elif not bid:
+            out["actions"].append(
+                {
+                    "action": "ad_output_ensure",
+                    "ok": False,
+                    "skipped": True,
+                    "reason": "no batch_id",
+                }
+            )
+
+    if ensure_social:
+        if dry_run:
+            social = {
+                "ok": True,
+                "dry_run": True,
+                "batch_id": bid,
+                "racing_date": d,
+                "course": c,
+            }
+        else:
+            social = run_auto_social_copy(
+                racing_date=d,
+                course=c,
+                batch_id=bid or None,
+                output_root=out_root,
+                force=force,
+                dry_run=False,
+            )
+        out["actions"].append({"action": "social_copy", **social})
+        out["social_copy"] = social
+        if not social.get("ok") and not social.get("skipped"):
+            out["ok"] = False
+            if social.get("waiting"):
+                out["waiting"] = True
+            out["reason"] = str(
+                social.get("error") or social.get("reason") or "social_copy failed"
+            )
+
+    if out["actions"] and not any(
+        (not a.get("ok") and not a.get("skipped") and not a.get("waiting"))
+        for a in out["actions"]
+    ):
+        # 全部 ok／skipped／waiting 時：若無硬失敗則保持 ok（waiting 另標）
+        hard_fail = [
+            a
+            for a in out["actions"]
+            if not a.get("ok") and not a.get("skipped") and not a.get("waiting")
+        ]
+        if hard_fail:
+            out["ok"] = False
+        elif out.get("waiting"):
+            out["ok"] = False
+        else:
+            out["ok"] = True
+    return out
+
+
+def maybe_run_pre_race_cascade_after_form_ai(
+    *,
+    racing_date: str,
+    course: str,
+    output_root: Optional[Path] = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Form AI 批次成功後：覆蓋達標就接 snapshot→文案→推送。"""
+    if not pre_race_cascade_enabled() and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "MEETING_PRE_RACE_AD_CASCADE disabled",
+        }
+    return run_pre_race_ad_cascade(
+        racing_date=racing_date,
+        course=course,
+        output_root=output_root,
+        force=force,
+        ensure_snapshot=True,
+        ensure_ads=True,
+        ensure_social=True,
+        require_form_ai=True,
+    )
+
+
+def maybe_run_pre_race_cascade_after_snapshot(
+    *,
+    racing_date: str,
+    course: str,
+    batch_id: Optional[str] = None,
+    output_root: Optional[Path] = None,
+    snapshot_ad_ok: bool = False,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """
+    快照已建好後：補海報（如需）＋ AI 社交文案＋ ingest。
+    唔再重跑 snapshot（避免重複 batch）。
+    """
+    if not pre_race_cascade_enabled() and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "MEETING_PRE_RACE_AD_CASCADE disabled",
+        }
+    return run_pre_race_ad_cascade(
+        racing_date=racing_date,
+        course=course,
+        batch_id=batch_id,
+        output_root=output_root,
+        force=force,
+        ensure_snapshot=False,
+        ensure_ads=not snapshot_ad_ok,
+        ensure_social=True,
+        require_form_ai=False,
+    )
+
+
 def run_post_race_ad_cascade(
     *,
     racing_date: str,

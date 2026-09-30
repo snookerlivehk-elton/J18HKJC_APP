@@ -537,9 +537,66 @@ def run_meeting(
         status=st,
         detail=f"完成：寫入 {total_done} 匹／{n_races} 場，錯誤 {total_errors}",
         progress={"phase": "done", **final},
-        finished=True,
+        finished=False,
     )
     print(f"Done. wrote={total_done} races={n_races} errors={total_errors}", flush=True)
+
+    # Form AI 寫入後自動接快照→海報→AI 社交文案→ingest（覆蓋未達 80% 則 waiting）
+    cascade: Dict[str, Any] = {}
+    try:
+        from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
+
+        print(
+            f"[pre_race_cascade] start {racing_date[:10]} {course.upper()} …",
+            flush=True,
+        )
+        update_job(
+            engine,
+            job_id,
+            status=st,
+            detail=f"Form AI 完成，接廣告鏈（寫入 {total_done} 匹）…",
+            progress={"phase": "cascade", **final},
+            finished=False,
+        )
+        cascade = maybe_run_pre_race_cascade_after_form_ai(
+            racing_date=racing_date[:10],
+            course=course.upper(),
+        )
+        final["pre_race_cascade"] = cascade
+        casc_ok = bool(cascade.get("ok") or cascade.get("skipped"))
+        casc_reason = str(
+            cascade.get("reason")
+            or cascade.get("batch_id")
+            or ("ok" if casc_ok else "failed")
+        )
+        print(
+            f"[pre_race_cascade] ok={casc_ok} reason={casc_reason}",
+            flush=True,
+        )
+        update_job(
+            engine,
+            job_id,
+            status=st,
+            detail=(
+                f"完成：寫入 {total_done} 匹／{n_races} 場；"
+                f"廣告鏈 {'ok' if casc_ok else 'waiting/fail'}（{casc_reason[:120]}）"
+            ),
+            progress={"phase": "done", **final, "cascade_ok": casc_ok},
+            finished=True,
+        )
+    except Exception as exc:
+        traceback.print_exc()
+        cascade = {"ok": False, "error": str(exc)}
+        final["pre_race_cascade"] = cascade
+        update_job(
+            engine,
+            job_id,
+            status=st,
+            detail=f"完成寫入 {total_done} 匹；廣告鏈例外：{exc}",
+            progress={"phase": "done", **final},
+            finished=True,
+        )
+
     return final
 
 

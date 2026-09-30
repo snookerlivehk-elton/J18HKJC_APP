@@ -1190,6 +1190,79 @@ class MeetingTickRunner:
                     )
                 out["actions"].append(action_rec)
 
+        # 安全網：FORM_AI 已 ok，但本輪未建快照／未跑 social（常見：人手補完 AI 後等下一 tick）
+        if (
+            not dry_run
+            and AUTO_SNAPSHOT
+            and AUTO_SOCIAL_COPY
+            and not any(
+                a.get("action")
+                in (
+                    "snapshot",
+                    "social_copy",
+                    "ad_output_ensure",
+                    "ad_output_retry",
+                    "pre_race_ad_cascade",
+                )
+                for a in out["actions"]
+            )
+        ):
+            try:
+                from ad_copy_jobs import (
+                    job_done_for_batch,
+                    pre_race_cascade_enabled,
+                    resolve_meeting_batch_id,
+                    run_pre_race_ad_cascade,
+                )
+                from ad_poster import default_output_dir
+
+                if pre_race_cascade_enabled():
+                    ready_safe = self.pipe.refresh_readiness(d, c)
+                    if self._stage_status(ready_safe, "FORM_AI") == STATUS_OK:
+                        snap_ok = (
+                            self._stage_status(ready_safe, "SNAPSHOT") == STATUS_OK
+                        )
+                        bid = resolve_meeting_batch_id(d, c) or ""
+                        social_done = False
+                        if bid and not self.guards.force:
+                            try:
+                                social_done = job_done_for_batch(
+                                    default_output_dir(), d, c, "social", bid
+                                )
+                            except Exception:
+                                social_done = False
+                        if (not snap_ok) or (not social_done):
+                            casc = run_pre_race_ad_cascade(
+                                racing_date=d,
+                                course=c,
+                                batch_id=bid or None,
+                                force=self.guards.force,
+                                ensure_snapshot=not snap_ok,
+                                ensure_ads=True,
+                                ensure_social=not social_done,
+                                require_form_ai=True,
+                            )
+                            out["actions"].append(
+                                {
+                                    "action": "pre_race_ad_cascade",
+                                    "ok": bool(
+                                        casc.get("ok") or casc.get("skipped")
+                                    ),
+                                    "result": casc,
+                                }
+                            )
+                            out["readiness_after_cascade"] = (
+                                self.pipe.refresh_readiness(d, c)
+                            )
+            except Exception as exc:
+                out["actions"].append(
+                    {
+                        "action": "pre_race_ad_cascade",
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+
         if not out["actions"]:
             out["noop"] = True
         return out
