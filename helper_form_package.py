@@ -252,6 +252,8 @@ def publish_helper_form_package(
     抓 Helper API → 核對最新賽日 → 產三幅圖 → 寫 package JSON → 可選 webhook。
     若已有同 id ready 且 force=False，可跳過重產（仍回傳現有包）。
     """
+    from helper_form_client import normalize_racing_date
+
     latest = resolve_latest_meeting(racing_date, course)
     if not racing_date:
         if not latest.get("ok"):
@@ -259,7 +261,11 @@ def publish_helper_form_package(
                 "ok": False,
                 "error": latest.get("error") or "無法取得最新賽馬日",
             }
-        racing_date = str(latest["racing_date"])[:10]
+        racing_date = normalize_racing_date(latest.get("racing_date"))
+    else:
+        racing_date = normalize_racing_date(racing_date)
+    if not racing_date:
+        return {"ok": False, "error": "無法正規化賽日為 YYYY-MM-DD"}
     if not course and latest.get("ok"):
         course = str(latest.get("course") or "").upper() or None
 
