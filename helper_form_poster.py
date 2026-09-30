@@ -7,9 +7,14 @@
 - 雙層表頭：分組（馬匹資料／馬匹統計數字／備註）+ 欄名
 - 米色表頭、細格線、斑馬紋列
 - 淡橘色大場次號疊於表頭後方
+- 每幅圖置中 J18 logo 水印（不透明度 25%）
+
+賽日拆圖：固定優先 3 幅；每幅 3–4 場（餘場補前）。
+例：9→3+3+3、10→4+3+3、11→4+4+3、12→4+4+4；8→3+3+2。
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -18,6 +23,7 @@ from helper_form_client import load_helper_form_for_display
 
 ROOT = Path(__file__).resolve().parent
 BUNDLED_FONT = ROOT / "assets" / "fonts" / "wqy-microhei.ttc"
+LOGO_PATH = ROOT / "assets" / "j18_helper_logo.jpg"
 FONT_CANDIDATES = [
     str(BUNDLED_FONT),
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
@@ -49,6 +55,54 @@ ROW_BG = (255, 255, 255)
 RACE_NUM_FG = (232, 140, 70)  # 淡橘場次號
 CELL_FG = (25, 25, 25)
 NAME_FG = (15, 15, 15)
+
+# Logo 水印：不透明度 25%，寬約畫布 42%
+LOGO_OPACITY = 0.25
+LOGO_WIDTH_RATIO = 0.42
+
+
+def split_race_layout(n_races: int) -> List[int]:
+    """
+    依當日總場數決定每幅張數（優先固定 3 幅；餘場補前）。
+
+    - n<=0 → []
+    - 1 → [1]；2 → [1,1]
+    - n>=3 → 恒為 3 段：base = n//3，餘數由前段各 +1
+      例：8→[3,3,2]、9→[3,3,3]、10→[4,3,3]、11→[4,4,3]、12→[4,4,4]
+    """
+    n = int(n_races or 0)
+    if n <= 0:
+        return []
+    if n == 1:
+        return [1]
+    if n == 2:
+        return [1, 1]
+    base, rem = divmod(n, 3)
+    return [base + (1 if i < rem else 0) for i in range(3)]
+
+
+def chunk_races(
+    races: Sequence[Dict[str, Any]],
+    layout: Optional[Sequence[int]] = None,
+) -> List[List[Dict[str, Any]]]:
+    """依 layout 把 races 切成多組；layout 省略則自動計算。"""
+    items = list(races or [])
+    sizes = list(layout) if layout is not None else split_race_layout(len(items))
+    if not sizes:
+        return []
+    out: List[List[Dict[str, Any]]] = []
+    idx = 0
+    for size in sizes:
+        take = max(0, int(size))
+        out.append(items[idx : idx + take])
+        idx += take
+    if idx < len(items):
+        # 防 layout 與實際場數脫節：餘下併入最後一幅
+        if out:
+            out[-1].extend(items[idx:])
+        else:
+            out.append(items[idx:])
+    return [part for part in out if part]
 
 
 def _find_font() -> Optional[str]:
@@ -121,11 +175,60 @@ def _section_height(n_rows: int) -> int:
     return TITLE_H + GROUP_HEADER_H + COL_HEADER_H + n_rows * ROW_H
 
 
+def _resolve_logo_path() -> Optional[Path]:
+    env = str(os.getenv("HELPER_FORM_LOGO") or "").strip()
+    candidates = [Path(env)] if env else []
+    candidates.append(LOGO_PATH)
+    for p in candidates:
+        if p and p.is_file():
+            return p
+    return None
+
+
+def _apply_logo_watermark(
+    base_rgba: "Image.Image",
+    *,
+    opacity: float = LOGO_OPACITY,
+    width_ratio: float = LOGO_WIDTH_RATIO,
+) -> "Image.Image":
+    """於畫布正中疊加 J18 logo（預設 25% 不透明）。"""
+    from PIL import Image
+
+    logo_path = _resolve_logo_path()
+    if not logo_path:
+        return base_rgba
+
+    logo = Image.open(logo_path).convert("RGBA")
+    target_w = max(64, int(base_rgba.width * float(width_ratio)))
+    ratio = target_w / max(1, logo.width)
+    target_h = max(64, int(logo.height * ratio))
+    # 高度不超過畫布 55%，避免矮圖被撐爆
+    max_h = max(64, int(base_rgba.height * 0.55))
+    if target_h > max_h:
+        scale = max_h / target_h
+        target_w = max(64, int(target_w * scale))
+        target_h = max_h
+    logo = logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+    # 統一套用目標不透明度（乘上原 alpha）
+    r, g, b, a = logo.split()
+    op = max(0.0, min(1.0, float(opacity)))
+    a = a.point(lambda p: int(p * op))
+    logo = Image.merge("RGBA", (r, g, b, a))
+
+    layer = Image.new("RGBA", base_rgba.size, (0, 0, 0, 0))
+    x = (base_rgba.width - target_w) // 2
+    y = (base_rgba.height - target_h) // 2
+    layer.paste(logo, (x, y), logo)
+    return Image.alpha_composite(base_rgba, layer)
+
+
 def render_helper_form_image(
     races: Sequence[Dict[str, Any]],
     *,
     out_path: Optional[str | Path] = None,
     max_races: Optional[int] = None,
+    apply_logo: bool = True,
 ) -> "Image.Image":
     """將正規化後的 races 渲成接近參考圖的長 PNG。"""
     from PIL import Image, ImageDraw
@@ -147,7 +250,7 @@ def render_helper_form_image(
     heights = [_section_height(len(r.get("rows") or [])) for r in items]
     total_h = TOP_PAD + sum(heights) + SECTION_GAP * (len(items) - 1) + BOTTOM_PAD
 
-    # 全程 RGBA，方便淡橘場次號半透明疊加
+    # 全程 RGBA，方便淡橘場次號／logo 半透明疊加
     img = Image.new("RGBA", (CANVAS_W, total_h), BG + (255,))
     draw = ImageDraw.Draw(img)
     watermark = Image.new("RGBA", (CANVAS_W, total_h), (0, 0, 0, 0))
@@ -254,7 +357,10 @@ def render_helper_form_image(
 
         y = y_row + SECTION_GAP
 
-    img = Image.alpha_composite(img, watermark).convert("RGB")
+    img = Image.alpha_composite(img, watermark)
+    if apply_logo:
+        img = _apply_logo_watermark(img)
+    img = img.convert("RGB")
 
     if out_path:
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -271,10 +377,11 @@ def generate_helper_form_png(
     raw: Optional[Dict[str, Any]] = None,
     max_races: Optional[int] = None,
     render_even_if_stale: bool = False,
+    apply_logo: bool = True,
 ) -> Dict[str, Any]:
     """
-    抓 API（或用 raw）→ 日期核對 → 產出 PNG。
-    預設 stale 不產圖；測試視覺可設 render_even_if_stale=True。
+    抓 API（或用 raw）→ 日期核對 → 產出單張 PNG（除錯／相容用）。
+    正式賽日請用 generate_helper_form_parts()。
     """
     loaded = load_helper_form_for_display(
         expected_date=expected_date,
@@ -296,6 +403,7 @@ def generate_helper_form_png(
         loaded.get("races") or [],
         out_path=path,
         max_races=max_races,
+        apply_logo=apply_logo,
     )
     return {
         "ok": True,
@@ -307,21 +415,108 @@ def generate_helper_form_png(
     }
 
 
+def generate_helper_form_parts(
+    *,
+    out_dir: str | Path,
+    expected_date: Optional[str] = None,
+    expected_course: Optional[str] = None,
+    require_course: bool = False,
+    raw: Optional[Dict[str, Any]] = None,
+    render_even_if_stale: bool = False,
+    apply_logo: bool = True,
+    file_prefix: str = "helper_form",
+) -> Dict[str, Any]:
+    """
+    抓 API → 日期核對 → 依總場數拆成多幅 PNG（通常 3 幅）+ manifest。
+    """
+    loaded = load_helper_form_for_display(
+        expected_date=expected_date,
+        expected_course=expected_course,
+        require_course=require_course,
+        raw=raw,
+    )
+    guard = loaded.get("guard") or {}
+    if not loaded.get("ok") and not render_even_if_stale:
+        return {
+            "ok": False,
+            "error": guard.get("message") or "日期核對失敗",
+            "guard": guard,
+            "parts": [],
+            "out_dir": str(out_dir),
+        }
+
+    races = list(loaded.get("races") or [])
+    layout = split_race_layout(len(races))
+    chunks = chunk_races(races, layout)
+
+    directory = Path(out_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    # 賽日／場地取自第一場解析結果
+    first_parsed = (races[0].get("parsed") if races else {}) or {}
+    racing_date = first_parsed.get("racing_date") or (guard.get("api_dates") or [None])[0]
+    course = first_parsed.get("course") or (guard.get("api_courses") or [None])[0]
+
+    parts_meta: List[Dict[str, Any]] = []
+    for i, chunk in enumerate(chunks, start=1):
+        filename = f"{file_prefix}_{i}.png"
+        path = directory / filename
+        img = render_helper_form_image(chunk, out_path=path, apply_logo=apply_logo)
+        race_nums = [r.get("race_num") for r in chunk]
+        parts_meta.append(
+            {
+                "index": i,
+                "file": filename,
+                "path": str(path),
+                "race_nums": race_nums,
+                "n_races": len(chunk),
+                "size": list(img.size),
+            }
+        )
+
+    manifest = {
+        "ok": True,
+        "racing_date": racing_date,
+        "course": course,
+        "n_races": len(races),
+        "layout": layout,
+        "parts": parts_meta,
+        "guard": guard,
+        "stale_rendered": (not loaded.get("ok")),
+        "logo": {
+            "path": str(_resolve_logo_path() or ""),
+            "opacity": LOGO_OPACITY,
+        },
+    }
+    manifest_path = directory / f"{file_prefix}_manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    manifest["manifest_path"] = str(manifest_path)
+    return manifest
+
+
 def default_output_dir() -> Path:
     return ROOT / "ad_output" / "helper_form"
 
 
 if __name__ == "__main__":
     import argparse
-    import json
 
-    ap = argparse.ArgumentParser(description="產出馬匹歷史戰績表 PNG")
-    ap.add_argument("--out", default=str(default_output_dir() / "helper_form.png"))
+    ap = argparse.ArgumentParser(description="產出馬匹歷史戰績表 PNG（預設拆成多幅）")
+    ap.add_argument("--out-dir", default=str(default_output_dir()), help="輸出目錄")
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="若指定則只產單張（相容舊用法）；省略則拆多幅到 --out-dir",
+    )
     ap.add_argument("--expect-date", default=None, help="YYYY-MM-DD；省略則用系統最新賽日")
     ap.add_argument("--expect-course", default=None, help="ST 或 HV")
     ap.add_argument("--require-course", action="store_true")
     ap.add_argument("--from-file", default=None, help="本地 helper JSON fixture")
-    ap.add_argument("--max-races", type=int, default=None)
+    ap.add_argument("--max-races", type=int, default=None, help="僅單張模式有效")
+    ap.add_argument("--no-logo", action="store_true", help="關閉 logo 水印")
     ap.add_argument(
         "--allow-stale",
         action="store_true",
@@ -333,13 +528,26 @@ if __name__ == "__main__":
     if args.from_file:
         raw = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
 
-    result = generate_helper_form_png(
-        out_path=args.out,
-        expected_date=args.expect_date,
-        expected_course=args.expect_course,
-        require_course=args.require_course,
-        raw=raw,
-        max_races=args.max_races,
-        render_even_if_stale=args.allow_stale,
-    )
+    apply_logo = not args.no_logo
+    if args.out:
+        result = generate_helper_form_png(
+            out_path=args.out,
+            expected_date=args.expect_date,
+            expected_course=args.expect_course,
+            require_course=args.require_course,
+            raw=raw,
+            max_races=args.max_races,
+            render_even_if_stale=args.allow_stale,
+            apply_logo=apply_logo,
+        )
+    else:
+        result = generate_helper_form_parts(
+            out_dir=args.out_dir,
+            expected_date=args.expect_date,
+            expected_course=args.expect_course,
+            require_course=args.require_course,
+            raw=raw,
+            render_even_if_stale=args.allow_stale,
+            apply_logo=apply_logo,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -1,4 +1,4 @@
-"""helper form：日期核對、正規化、PNG 渲染。"""
+"""helper form：日期核對、正規化、拆幅 PNG、logo 水印。"""
 from __future__ import annotations
 
 import json
@@ -11,14 +11,49 @@ from helper_form_client import (
     normalize_helper_payload,
     parse_race_title,
 )
-from helper_form_poster import generate_helper_form_png, render_helper_form_image
+from helper_form_poster import (
+    LOGO_OPACITY,
+    chunk_races,
+    generate_helper_form_parts,
+    generate_helper_form_png,
+    render_helper_form_image,
+    split_race_layout,
+)
 
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "helper_form_ST_20261001_R1R2.json"
+LOGO = Path(__file__).resolve().parent.parent / "assets" / "j18_helper_logo.jpg"
 
 
 @pytest.fixture(scope="module")
 def helper_raw():
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "n,expected",
+    [
+        (0, []),
+        (1, [1]),
+        (2, [1, 1]),
+        (3, [1, 1, 1]),
+        (7, [3, 2, 2]),
+        (8, [3, 3, 2]),
+        (9, [3, 3, 3]),
+        (10, [4, 3, 3]),
+        (11, [4, 4, 3]),
+        (12, [4, 4, 4]),
+        (13, [5, 4, 4]),
+    ],
+)
+def test_split_race_layout(n, expected):
+    assert split_race_layout(n) == expected
+
+
+def test_chunk_races_follows_layout():
+    races = [{"race_num": i} for i in range(1, 12)]
+    parts = chunk_races(races)
+    assert [len(p) for p in parts] == [4, 4, 3]
+    assert [p[0]["race_num"] for p in parts] == [1, 5, 9]
 
 
 def test_parse_race_title_zh():
@@ -82,9 +117,11 @@ def test_normalize_chinese_columns(helper_raw):
 
 
 def test_render_png_matches_width(helper_raw, tmp_path):
+    assert LOGO.is_file()
+    assert LOGO_OPACITY == 0.25
     norm = normalize_helper_payload(helper_raw)
     out = tmp_path / "helper_form.png"
-    img = render_helper_form_image(norm["races"], out_path=out)
+    img = render_helper_form_image(norm["races"], out_path=out, apply_logo=True)
     assert out.is_file()
     assert img.size[0] == 1280
     assert img.size[1] > 400
@@ -113,3 +150,22 @@ def test_generate_allow_stale(helper_raw, tmp_path):
     assert result["ok"] is True
     assert result["stale_rendered"] is True
     assert out.is_file()
+
+
+def test_generate_parts_two_races(helper_raw, tmp_path):
+    """fixture 只有 2 場 → 排版 [1,1]。"""
+    out_dir = tmp_path / "parts"
+    result = generate_helper_form_parts(
+        out_dir=out_dir,
+        expected_date="2026-10-01",
+        raw=helper_raw,
+        apply_logo=True,
+    )
+    assert result["ok"] is True
+    assert result["layout"] == [1, 1]
+    assert len(result["parts"]) == 2
+    for part in result["parts"]:
+        assert Path(part["path"]).is_file()
+    manifest = Path(result["manifest_path"])
+    assert manifest.is_file()
+    assert result["logo"]["opacity"] == 0.25
