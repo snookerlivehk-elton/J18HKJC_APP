@@ -56,14 +56,12 @@ RACE_NUM_FG = (232, 140, 70)  # 淡橘場次號
 CELL_FG = (25, 25, 25)
 NAME_FG = (15, 15, 15)
 
-# Logo 水印：原檔偏淺橘＋白字，嚴格 25% alpha 在密表上幾乎不可見。
-# 實務採「加深色＋40%」仍呈浮水印感；可用 HELPER_FORM_LOGO_OPACITY 覆寫。
+# Logo 水印：塗層在最上層；真正 bug 是 PIL paste(mask=RGBA) 令 alpha 被乘兩次。
+# 現改 numpy 直寫 layer，預設真實 40% 深橘印章（可用 HELPER_FORM_LOGO_OPACITY 覆寫）。
 LOGO_OPACITY = float(os.getenv("HELPER_FORM_LOGO_OPACITY") or "0.40")
-LOGO_WIDTH_RATIO = 0.56
-# 白字（J18）轉成品牌深橘色
-LOGO_GLYPH_RGB = (168, 64, 18)
-# 整體再加深，避免淺黃橘被白底吃掉
-LOGO_DARKEN = 0.72
+LOGO_WIDTH_RATIO = 0.58
+LOGO_INK_RGB = (176, 72, 22)
+LOGO_GLYPH_RGB = (120, 42, 10)
 
 
 def split_race_layout(n_races: int) -> List[int]:
@@ -192,10 +190,10 @@ def _resolve_logo_path() -> Optional[Path]:
 
 def _prepare_logo_for_watermark(logo: "Image.Image") -> "Image.Image":
     """
-    水印前處理：
-    1) 裁掉外圍近白邊距（否則縮放後有效圖案太小）
-    2) 外圍白底 → 透明
-    3) 圖內白字（J／18）→ 品牌深橘，白底表上才看得見字形
+    水印前處理 → 產出「深橘實心印章」RGBA：
+    1) 裁掉外圍近白邊距
+    2) 外圍白底透明；圖形區域（含原白字）全部改為品牌深橘
+    如此疊在白底密表上才有足夠對比（與塗層順序／檔案格式無關）。
     """
     from collections import deque
 
@@ -237,23 +235,20 @@ def _prepare_logo_for_watermark(logo: "Image.Image") -> "Image.Image":
                 outer[ny, nx] = True
                 q.append((nx, ny))
 
-    # 外圍白邊透明
-    arr[outer, 3] = 0
-    # 圖內白字 → 深橘
-    inner_white = near_white & ~outer
-    arr[inner_white, 0] = LOGO_GLYPH_RGB[0]
-    arr[inner_white, 1] = LOGO_GLYPH_RGB[1]
-    arr[inner_white, 2] = LOGO_GLYPH_RGB[2]
-    arr[inner_white, 3] = 255
-
-    # 非透明像素整體加深（淺黃橘在白底表上易消失）
-    visible = arr[:, :, 3] > 0
-    darken = float(LOGO_DARKEN)
-    for c in range(3):
-        channel = arr[:, :, c].astype(np.float32)
-        channel[visible] = channel[visible] * darken
-        arr[:, :, c] = np.clip(channel, 0, 255).astype(np.uint8)
-    return Image.fromarray(arr, mode="RGBA")
+    # 外圍透明
+    # 原彩色區 → 品牌橘；原白字 → 更深橘（保留 J18 字形對比）
+    out = np.zeros_like(arr)
+    body = ~outer & ~near_white
+    glyphs = near_white & ~outer
+    out[body, 0] = LOGO_INK_RGB[0]
+    out[body, 1] = LOGO_INK_RGB[1]
+    out[body, 2] = LOGO_INK_RGB[2]
+    out[body, 3] = 255
+    out[glyphs, 0] = LOGO_GLYPH_RGB[0]
+    out[glyphs, 1] = LOGO_GLYPH_RGB[1]
+    out[glyphs, 2] = LOGO_GLYPH_RGB[2]
+    out[glyphs, 3] = 255
+    return Image.fromarray(out, mode="RGBA")
 
 
 def _apply_logo_watermark(
@@ -262,7 +257,13 @@ def _apply_logo_watermark(
     opacity: float = LOGO_OPACITY,
     width_ratio: float = LOGO_WIDTH_RATIO,
 ) -> "Image.Image":
-    """於畫布正中疊加 J18 logo（預設 25% 不透明）。"""
+    """
+    於畫布正中、表格之上疊加 J18 印章水印（最後一層）。
+
+    注意：不可用 ``layer.paste(logo, xy, mask=logo)``——PIL 會對 RGBA
+    再乘一次 mask alpha，導致 50% 實際變成 ~25%，水印看起來像消失。
+    """
+    import numpy as np
     from PIL import Image
 
     logo_path = _resolve_logo_path()
@@ -273,25 +274,25 @@ def _apply_logo_watermark(
     target_w = max(64, int(base_rgba.width * float(width_ratio)))
     ratio = target_w / max(1, logo.width)
     target_h = max(64, int(logo.height * ratio))
-    # 高度不超過畫布 62%，避免矮圖被撐爆
-    max_h = max(64, int(base_rgba.height * 0.62))
+    max_h = max(64, int(base_rgba.height * 0.65))
     if target_h > max_h:
         scale = max_h / target_h
         target_w = max(64, int(target_w * scale))
         target_h = max_h
     logo = logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    # 統一套用目標不透明度（乘上原 alpha）
-    r, g, b, a = logo.split()
     op = max(0.0, min(1.0, float(opacity)))
-    a = a.point(lambda p: int(p * op))
-    logo = Image.merge("RGBA", (r, g, b, a))
+    logo_arr = np.array(logo).astype(np.float32)
+    logo_arr[:, :, 3] = np.clip(logo_arr[:, :, 3] * op, 0, 255)
+    logo_arr = logo_arr.astype(np.uint8)
 
-    layer = Image.new("RGBA", base_rgba.size, (0, 0, 0, 0))
-    x = (base_rgba.width - target_w) // 2
-    y = (base_rgba.height - target_h) // 2
-    layer.paste(logo, (x, y), logo)
-    return Image.alpha_composite(base_rgba, layer)
+    base = base_rgba.convert("RGBA")
+    layer_arr = np.zeros((base.height, base.width, 4), dtype=np.uint8)
+    x = (base.width - target_w) // 2
+    y = (base.height - target_h) // 2
+    layer_arr[y : y + target_h, x : x + target_w] = logo_arr
+    layer = Image.fromarray(layer_arr, mode="RGBA")
+    return Image.alpha_composite(base, layer)
 
 
 def render_helper_form_image(
