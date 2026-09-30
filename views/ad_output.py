@@ -38,6 +38,7 @@ inject_admin_css()
 page_header(
     "廣告輸出",
     f"賽前：海報（{PRIMARY_TRACK_LABEL}）＋社交文案 · "
+    "賽前歷史戰績三幅圖 · "
     "賽後：命中評估＋宣傳文案 · 重產：由快照重畫海報",
 )
 
@@ -433,7 +434,7 @@ _status_strip(out_root)
 
 section = st.radio(
     "工作區",
-    ["今日輸出", "賽後管理", "重產海報"],
+    ["今日輸出", "賽前歷史戰績", "賽後管理", "重產海報"],
     horizontal=True,
     key="ad_output_section",
     label_visibility="collapsed",
@@ -451,6 +452,15 @@ if section == "今日輸出":
         _render_social_copy(
             out_root, load_copy_json(out_root) or {}, key_prefix="today"
         )
+
+elif section == "賽前歷史戰績":
+    st.subheader("賽前歷史戰績（三幅圖）")
+    st.caption(
+        "核對最新賽馬日後產出三幅戰績表，供下游 `GET /v1/helper-form/latest`。"
+    )
+    from views.helper_form import render_helper_form_panel
+
+    render_helper_form_panel(key_prefix="ad_hf", show_page_header=False)
 
 elif section == "賽後管理":
     st.subheader("賽後命中／文案")
