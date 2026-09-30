@@ -56,9 +56,14 @@ RACE_NUM_FG = (232, 140, 70)  # 淡橘場次號
 CELL_FG = (25, 25, 25)
 NAME_FG = (15, 15, 15)
 
-# Logo 水印：不透明度 25%，寬約畫布 42%
-LOGO_OPACITY = 0.25
-LOGO_WIDTH_RATIO = 0.42
+# Logo 水印：原檔偏淺橘＋白字，嚴格 25% alpha 在密表上幾乎不可見。
+# 實務採「加深色＋40%」仍呈浮水印感；可用 HELPER_FORM_LOGO_OPACITY 覆寫。
+LOGO_OPACITY = float(os.getenv("HELPER_FORM_LOGO_OPACITY") or "0.40")
+LOGO_WIDTH_RATIO = 0.56
+# 白字（J18）轉成品牌深橘色
+LOGO_GLYPH_RGB = (168, 64, 18)
+# 整體再加深，避免淺黃橘被白底吃掉
+LOGO_DARKEN = 0.72
 
 
 def split_race_layout(n_races: int) -> List[int]:
@@ -185,6 +190,72 @@ def _resolve_logo_path() -> Optional[Path]:
     return None
 
 
+def _prepare_logo_for_watermark(logo: "Image.Image") -> "Image.Image":
+    """
+    水印前處理：
+    1) 裁掉外圍近白邊距（否則縮放後有效圖案太小）
+    2) 外圍白底 → 透明
+    3) 圖內白字（J／18）→ 品牌深橘，白底表上才看得見字形
+    """
+    from collections import deque
+
+    import numpy as np
+    from PIL import Image
+
+    src = logo.convert("RGBA")
+    arr = np.array(src)
+    rgb = arr[:, :, :3]
+    near_white = (
+        (rgb[:, :, 0] >= 248) & (rgb[:, :, 1] >= 248) & (rgb[:, :, 2] >= 248)
+    )
+
+    ys, xs = np.where(~near_white)
+    if xs.size == 0:
+        return src
+    pad = max(2, int(min(arr.shape[0], arr.shape[1]) * 0.01))
+    top = max(0, int(ys.min()) - pad)
+    bottom = min(arr.shape[0], int(ys.max()) + pad + 1)
+    left = max(0, int(xs.min()) - pad)
+    right = min(arr.shape[1], int(xs.max()) + pad + 1)
+    arr = arr[top:bottom, left:right].copy()
+    rgb = arr[:, :, :3]
+    near_white = (
+        (rgb[:, :, 0] >= 248) & (rgb[:, :, 1] >= 248) & (rgb[:, :, 2] >= 248)
+    )
+
+    h, w = near_white.shape
+    outer = np.zeros((h, w), dtype=bool)
+    q = deque()
+    for sx, sy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        if near_white[sy, sx] and not outer[sy, sx]:
+            outer[sy, sx] = True
+            q.append((sx, sy))
+    while q:
+        x, y = q.popleft()
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= nx < w and 0 <= ny < h and near_white[ny, nx] and not outer[ny, nx]:
+                outer[ny, nx] = True
+                q.append((nx, ny))
+
+    # 外圍白邊透明
+    arr[outer, 3] = 0
+    # 圖內白字 → 深橘
+    inner_white = near_white & ~outer
+    arr[inner_white, 0] = LOGO_GLYPH_RGB[0]
+    arr[inner_white, 1] = LOGO_GLYPH_RGB[1]
+    arr[inner_white, 2] = LOGO_GLYPH_RGB[2]
+    arr[inner_white, 3] = 255
+
+    # 非透明像素整體加深（淺黃橘在白底表上易消失）
+    visible = arr[:, :, 3] > 0
+    darken = float(LOGO_DARKEN)
+    for c in range(3):
+        channel = arr[:, :, c].astype(np.float32)
+        channel[visible] = channel[visible] * darken
+        arr[:, :, c] = np.clip(channel, 0, 255).astype(np.uint8)
+    return Image.fromarray(arr, mode="RGBA")
+
+
 def _apply_logo_watermark(
     base_rgba: "Image.Image",
     *,
@@ -198,12 +269,12 @@ def _apply_logo_watermark(
     if not logo_path:
         return base_rgba
 
-    logo = Image.open(logo_path).convert("RGBA")
+    logo = _prepare_logo_for_watermark(Image.open(logo_path))
     target_w = max(64, int(base_rgba.width * float(width_ratio)))
     ratio = target_w / max(1, logo.width)
     target_h = max(64, int(logo.height * ratio))
-    # 高度不超過畫布 55%，避免矮圖被撐爆
-    max_h = max(64, int(base_rgba.height * 0.55))
+    # 高度不超過畫布 62%，避免矮圖被撐爆
+    max_h = max(64, int(base_rgba.height * 0.62))
     if target_h > max_h:
         scale = max_h / target_h
         target_w = max(64, int(target_w * scale))

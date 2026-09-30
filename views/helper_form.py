@@ -16,7 +16,7 @@ from ui_theme import inject_admin_css, page_header
 inject_admin_css()
 page_header(
     "馬匹歷史戰績表",
-    "Helper API 中文戰績圖：核對最新賽馬日後，依總場數拆成最多三幅（每幅 3–4 場），並加 J18 logo 水印。",
+    "Helper API 中文戰績圖：核對最新賽馬日後，依總場數拆成最多三幅（每幅 3–4 場），並加 J18 logo 水印（約 40%）。",
 )
 
 latest = resolve_latest_meeting()
@@ -45,7 +45,7 @@ with col_b:
 st.caption(
     "API：`/calculate/v1/tool/helper?all=1`（無日期參數）→ "
     "解析每場 `title` 日期 → 必須等於最新賽馬日才渲染；"
-    "9–12 場固定三幅（例 10→4+3+3、11→4+4+3）；logo 水印 25%。"
+    "9–12 場固定三幅（例 10→4+3+3、11→4+4+3）；logo 水印約 40%（淺色原標在 25% 幾乎不可見）。"
 )
 
 c1, c2, c3 = st.columns(3)

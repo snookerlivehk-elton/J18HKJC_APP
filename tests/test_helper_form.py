@@ -118,7 +118,7 @@ def test_normalize_chinese_columns(helper_raw):
 
 def test_render_png_matches_width(helper_raw, tmp_path):
     assert LOGO.is_file()
-    assert LOGO_OPACITY == 0.25
+    assert 0.2 <= LOGO_OPACITY <= 0.6
     norm = normalize_helper_payload(helper_raw)
     out = tmp_path / "helper_form.png"
     img = render_helper_form_image(norm["races"], out_path=out, apply_logo=True)
@@ -168,4 +168,4 @@ def test_generate_parts_two_races(helper_raw, tmp_path):
         assert Path(part["path"]).is_file()
     manifest = Path(result["manifest_path"])
     assert manifest.is_file()
-    assert result["logo"]["opacity"] == 0.25
+    assert result["logo"]["opacity"] == LOGO_OPACITY
