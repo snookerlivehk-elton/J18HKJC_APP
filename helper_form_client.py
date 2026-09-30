@@ -191,30 +191,111 @@ def _zh_or_digit_to_int(s: str) -> Optional[int]:
     return None
 
 
+def normalize_racing_date(value: Any) -> Optional[str]:
+    """
+    統一賽日為 YYYY-MM-DD。
+
+    接受：datetime／date／pandas Timestamp、ISO、YYYY/MM/DD、
+    港式 DD/MM/YYYY（或誤寫成 DD:MM/YYYY）。
+    """
+    if value is None:
+        return None
+    # datetime / date / pandas Timestamp
+    if hasattr(value, "strftime") and not isinstance(value, str):
+        try:
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    s = str(value).strip()
+    if not s or s.lower() in {"nat", "none", "null"}:
+        return None
+    # 截斷時間部分：2026-10-01 00:00:00 / 2026-10-01T00:00:00
+    if "T" in s:
+        s = s.split("T", 1)[0].strip()
+    elif " " in s and re.match(r"^\d{4}-\d{1,2}-\d{1,2}\s", s):
+        s = s.split(" ", 1)[0].strip()
+
+    # 誤寫 DD:MM/YYYY → DD/MM/YYYY
+    s = s.replace(":", "/")
+
+    # 已是 ISO
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+        except ValueError:
+            return None
+
+    # YYYY/MM/DD
+    m = re.match(r"^(\d{4})/(\d{1,2})/(\d{1,2})$", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+        except ValueError:
+            return None
+
+    # DD/MM/YYYY（港式；日必須 ≤31、月 ≤12）
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)
+    if m:
+        d0, m0, y0 = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        # 若第一段 >12，必為日在前；若第二段 >12，必為月在前的美式 → 當 MM/DD/YYYY
+        if m0 > 12 and d0 <= 12:
+            # MM/DD/YYYY
+            try:
+                return date(y0, d0, m0).isoformat()
+            except ValueError:
+                return None
+        try:
+            return date(y0, m0, d0).isoformat()  # DD/MM/YYYY
+        except ValueError:
+            return None
+
+    # 最後手段：pandas / dateutil 不強制引入；只再試一次 ISO 前綴
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
+    if m:
+        try:
+            y, mo, d = m.group(1).split("-")
+            return date(int(y), int(mo), int(d)).isoformat()
+        except ValueError:
+            return None
+    return None
+
+
 def resolve_latest_meeting(
     racing_date: Optional[str] = None,
     course: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     從系統 upcoming_races 取最新賽馬日（可選指定日期／場地）。
-    回傳 {ok, racing_date, course, n_races, error?}
+    回傳 {ok, racing_date, course, n_races, error?}；racing_date 恒為 YYYY-MM-DD。
     """
     try:
         from prediction_export import list_upcoming_meeting
     except Exception as exc:  # pragma: no cover
         return {"ok": False, "error": f"無法載入 upcoming：{exc}"}
 
-    listed = list_upcoming_meeting(racing_date, course)
+    want = normalize_racing_date(racing_date) if racing_date else None
+    # 先取全部再正規化過濾：DB 可能係 DD/MM/YYYY，唔可直接用 ISO 字串比對
+    listed = list_upcoming_meeting(None, course)
     meetings = list(listed.get("meetings") or [])
+    # 正規化每筆日期
+    normed = []
+    for m in meetings:
+        nd = normalize_racing_date(m.get("racing_date"))
+        if not nd:
+            continue
+        if want and nd != want:
+            continue
+        normed.append({**m, "racing_date": nd})
+    meetings = normed
     if not meetings:
         return {"ok": False, "error": "系統尚無 upcoming 賽馬日", "meetings": []}
     meetings_sorted = sorted(
         meetings,
         key=lambda m: (str(m.get("racing_date") or ""), str(m.get("course") or "")),
     )
-    # 「最新」：日期最大；同日多場地則取第一個（可由呼叫端再傳 course）
-    latest_date = max(str(m.get("racing_date") or "")[:10] for m in meetings_sorted)
-    same_day = [m for m in meetings_sorted if str(m.get("racing_date") or "")[:10] == latest_date]
+    latest_date = max(str(m.get("racing_date") or "") for m in meetings_sorted)
+    same_day = [m for m in meetings_sorted if str(m.get("racing_date") or "") == latest_date]
     chosen = same_day[0]
     if course:
         for m in same_day:
@@ -223,7 +304,7 @@ def resolve_latest_meeting(
                 break
     return {
         "ok": True,
-        "racing_date": str(chosen.get("racing_date") or "")[:10],
+        "racing_date": str(chosen.get("racing_date") or ""),
         "course": str(chosen.get("course") or "").upper(),
         "n_races": int(chosen.get("n_races") or 0),
         "meetings": meetings_sorted,
@@ -279,12 +360,12 @@ def guard_helper_against_latest(
             message=f"helper 各場日期不一致：{', '.join(unique_dates)}",
             api_dates=unique_dates,
             api_courses=unique_courses,
-            expected_date=expected_date,
+            expected_date=normalize_racing_date(expected_date),
             expected_course=expected_course,
         )
 
     api_date = unique_dates[0]
-    exp = (expected_date or "").strip()[:10] or None
+    exp = normalize_racing_date(expected_date) if expected_date else None
     if not exp:
         latest = resolve_latest_meeting(course=expected_course)
         if not latest.get("ok"):
@@ -295,9 +376,18 @@ def guard_helper_against_latest(
                 api_dates=unique_dates,
                 api_courses=unique_courses,
             )
-        exp = str(latest["racing_date"])[:10]
+        exp = normalize_racing_date(latest.get("racing_date"))
         if not expected_course and latest.get("course"):
             expected_course = str(latest["course"]).upper()
+
+    if not exp:
+        return HelperFormGuardResult(
+            ok=False,
+            status="no_expected",
+            message="無法正規化系統賽日為 YYYY-MM-DD",
+            api_dates=unique_dates,
+            api_courses=unique_courses,
+        )
 
     if api_date != exp:
         return HelperFormGuardResult(

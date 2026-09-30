@@ -9,6 +9,7 @@ import pytest
 from helper_form_client import (
     guard_helper_against_latest,
     normalize_helper_payload,
+    normalize_racing_date,
     parse_race_title,
 )
 from helper_form_poster import (
@@ -53,6 +54,27 @@ def test_chunk_races_follows_layout():
     parts = chunk_races(races)
     assert [len(p) for p in parts] == [4, 4, 3]
     assert [p[0]["race_num"] for p in parts] == [1, 5, 9]
+
+
+def test_normalize_racing_date_formats():
+    assert normalize_racing_date("2026-10-01") == "2026-10-01"
+    assert normalize_racing_date("2026-10-01 13:00:00") == "2026-10-01"
+    assert normalize_racing_date("2026/10/01") == "2026-10-01"
+    assert normalize_racing_date("01/10/2026") == "2026-10-01"  # 港式 D/M/Y = 10月1日
+    assert normalize_racing_date("01:10/2026") == "2026-10-01"  # 誤寫冒號
+    assert normalize_racing_date("10/01/2026") == "2026-01-10"  # D/M → 1月10日
+    assert normalize_racing_date("13/01/2026") == "2026-01-13"
+    assert normalize_racing_date("01/13/2026") == "2026-01-13"  # 月>12 → 當 M/D/Y
+
+
+def test_guard_accepts_dmy_expected(helper_raw):
+    """系統賽日若為 01/10/2026，應對齊 helper 的 2026-10-01。"""
+    g = guard_helper_against_latest(helper_raw, expected_date="01/10/2026")
+    assert g.ok
+    assert g.expected_date == "2026-10-01"
+    g2 = guard_helper_against_latest(helper_raw, expected_date="01:10/2026")
+    assert g2.ok
+    assert g2.expected_date == "2026-10-01"
 
 
 def test_parse_race_title_zh():
