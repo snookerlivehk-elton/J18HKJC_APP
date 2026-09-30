@@ -786,7 +786,7 @@
     }
     .wp-odds .win,
     .wp-odds .pla,
-    .wp-odds .qin {
+    .wp-odds .wp {
       position: relative;
       display: flex;
       align-items: flex-start;
@@ -803,10 +803,10 @@
     }
     .wp-odds .win { color: var(--text); }
     .wp-odds .pla { color: #7b8494; }
-    .wp-odds .qin { color: #8a93a3; }
+    .wp-odds .wp { color: #8a93a3; }
     .wp-odds .win.hot,
     .wp-odds .pla.hot,
-    .wp-odds .qin.hot { color: var(--red); }
+    .wp-odds .wp.hot { color: var(--red); }
     .wp-odds .od-n {
       font: inherit;
       font-size: var(--wh-num-fs);
@@ -895,9 +895,9 @@
     }
     .wh-line.pla .wv,
     .wh-line.pla .fv { color: #7b8494; }
-    /* 第三行連贏：再淡一級，與獨贏／位置分層 */
-    .wh-line.qin .wv,
-    .wh-line.qin .fv { color: #8a93a3; }
+    /* 第三行 WP（獨贏+位置混合池）：再淡一級，與獨贏／位置分層 */
+    .wh-line.wp .wv,
+    .wh-line.wp .fv { color: #8a93a3; }
     .wh-line .muted { color: var(--muted); }
     /* 升＝綠↖，降＝紅↙；預設隱藏佔位，僅十字高亮行／列顯示，減少眼花 */
     .wh-arr {
@@ -2378,9 +2378,9 @@
     html[data-theme="dark"] .wp-odds .pla {
       color: #8b93a0;
     }
-    html[data-theme="dark"] .wh-line.qin .wv,
-    html[data-theme="dark"] .wh-line.qin .fv,
-    html[data-theme="dark"] .wp-odds .qin {
+    html[data-theme="dark"] .wh-line.wp .wv,
+    html[data-theme="dark"] .wh-line.wp .fv,
+    html[data-theme="dark"] .wp-odds .wp {
       color: #7b8494;
     }
     html[data-theme="dark"] .comment {
@@ -2631,7 +2631,7 @@
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
-        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上獨贏／中位置／下連贏　時段由近到遠　點格高亮後見水位升降</div>
+        <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上獨贏／中位置／下 WP　時段由近到遠　點格高亮後見水位升降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
     </div>
@@ -3168,7 +3168,7 @@
     }
     ensureLayoffLastOddsDemo();
 
-    /* 演示：水位／流量（上獨贏／中位置／下連贏）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
+    /* 演示：水位／流量（上獨贏／中位置／下 WP）；參考 j18 PC 20240403 第1場 9號：水位 86/84、流量 10/05 */
     function ensureWaterFlowDemo() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
       MEETING.races.forEach(function (race) {
@@ -3194,17 +3194,15 @@
             const wf = r.winFlow != null ? r.winFlow : 8;
             r.placeFlow = Math.max(1, Math.min(25, Math.round(wf * 0.55) + (no % 3)));
           }
-          /* 第三行連贏水位／流量（演示） */
-          if (r.qinWater == null && r.winWater != null) {
-            const pw = r.placeWater != null ? r.placeWater : r.winWater;
-            r.qinWater = Math.max(30, Math.min(99, Math.round((r.winWater + pw) / 2) - 1 - (no % 3)));
+          /* 第三行 WP（獨贏+位置混合池）：占位演示，日後接 API，不在此混合推算 */
+          if (r.wpWater == null) {
+            r.wpWater = Math.max(30, Math.min(99, 70 + ((no * 5 + raceNum * 3) % 13) - 6));
           }
-          if (r.qinFlow == null && r.winFlow != null) {
-            const pf = r.placeFlow != null ? r.placeFlow : r.winFlow;
-            r.qinFlow = Math.max(0, Math.min(40, Math.round((r.winFlow + pf) * 0.4) + (no % 2)));
+          if (r.wpFlow == null) {
+            r.wpFlow = Math.max(0, Math.min(40, 6 + ((no * 4 + raceNum) % 8)));
           }
-          if (r.qinOdd == null && win != null && pla != null) {
-            r.qinOdd = Math.round(Math.max(1.1, win * pla * 0.32) * 10) / 10;
+          if (r.wpOdd == null) {
+            r.wpOdd = Math.round((6.5 + (no % 15) * 0.7 + (raceNum % 5) * 0.3) * 10) / 10;
           }
           /* 對照參考：第1場 9號 */
           if (raceNum === 1 && no === 9) {
@@ -3212,9 +3210,9 @@
             r.placeWater = 84;
             r.winFlow = 10;
             r.placeFlow = 5;
-            r.qinWater = 80;
-            r.qinFlow = 6;
-            r.qinOdd = 18.5;
+            r.wpWater = 80;
+            r.wpFlow = 6;
+            r.wpOdd = 18.5;
           }
         });
       });
@@ -4079,7 +4077,7 @@
     /* hourAgo：距開跑整點幾小時前；0＝最近。演示：越早水位略高、流量略低 */
     function waterHourSample(r, hourAgo) {
       if (!r || r.scratched) {
-        return { winW: null, winF: null, plaW: null, plaF: null, qinW: null, qinF: null };
+        return { winW: null, winF: null, plaW: null, plaF: null, wpW: null, wpF: null };
       }
       const no = Number(r.no) || 0;
       const raceNum = Number(currentRace) || 1;
@@ -4087,17 +4085,18 @@
       const jitter = ((no * 3 + raceNum * 5 + hourIdx * 7) % 5) - 2;
       const winW0 = numOrNull(r.winWater);
       const plaW0 = numOrNull(r.placeWater);
-      const qinW0 = numOrNull(r.qinWater);
+      const wpW0 = numOrNull(r.wpWater);
       const winF0 = numOrNull(r.winFlow);
       const plaF0 = numOrNull(r.placeFlow);
-      const qinF0 = numOrNull(r.qinFlow);
+      const wpF0 = numOrNull(r.wpFlow);
       const winW = winW0 == null ? null : clampInt(winW0 + hourIdx * 1.2 + jitter, 40, 99);
       const plaW = plaW0 == null ? null : clampInt(plaW0 + hourIdx * 1.0 + (jitter % 3), 35, 99);
-      const qinW = qinW0 == null ? null : clampInt(qinW0 + hourIdx * 1.1 + ((jitter + 1) % 3), 30, 99);
+      /* WP 時序抖動僅作占位；真實值日後由 API 提供 */
+      const wpW = wpW0 == null ? null : clampInt(wpW0 + hourIdx * 1.1 + ((jitter + 1) % 3), 30, 99);
       const winF = winF0 == null ? null : clampInt(winF0 - hourIdx + ((no + hourIdx) % 3), 0, 40);
       const plaF = plaF0 == null ? null : clampInt(plaF0 - Math.max(0, hourIdx - 1) + ((no * 2 + hourIdx) % 3), 0, 40);
-      const qinF = qinF0 == null ? null : clampInt(qinF0 - Math.max(0, hourIdx - 1) + ((no + hourIdx * 2) % 3), 0, 40);
-      return { winW: winW, winF: winF, plaW: plaW, plaF: plaF, qinW: qinW, qinF: qinF };
+      const wpF = wpF0 == null ? null : clampInt(wpF0 - Math.max(0, hourIdx - 1) + ((no + hourIdx * 2) % 3), 0, 40);
+      return { winW: winW, winF: winF, plaW: plaW, plaF: plaF, wpW: wpW, wpF: wpF };
     }
     /* 本時段 vs 更早時段（右鄰）：升＝綠↖，降＝紅↙。例：14:00=87、13:00=90 → 87 下紅↙ */
     function waterTrendDir(cur, earlier) {
@@ -4136,8 +4135,8 @@
       const colAttr = ' data-wh-col="' + esc(String(colIdx)) + '"';
       const empty =
         !sample ||
-        (sample.winW == null && sample.plaW == null && sample.qinW == null &&
-         sample.winF == null && sample.plaF == null && sample.qinF == null);
+        (sample.winW == null && sample.plaW == null && sample.wpW == null &&
+         sample.winF == null && sample.plaF == null && sample.wpF == null);
       if (empty) {
         return (
           '<div class="whour"' + colAttr + ' role="button" tabindex="0">' +
@@ -4149,7 +4148,7 @@
               waterMetricHtml("wv", null, fmtWater, null, true) +
               waterMetricHtml("fv", null, fmtFlow, null, false) +
             "</div>" +
-            '<div class="wh-line qin">' +
+            '<div class="wh-line wp">' +
               waterMetricHtml("wv", null, fmtWater, null, true) +
               waterMetricHtml("fv", null, fmtFlow, null, false) +
             "</div>" +
@@ -4166,9 +4165,9 @@
             waterMetricHtml("wv", sample.plaW, fmtWater, e.plaW, true) +
             waterMetricHtml("fv", sample.plaF, fmtFlow, e.plaF, false) +
           "</div>" +
-          '<div class="wh-line qin">' +
-            waterMetricHtml("wv", sample.qinW, fmtWater, e.qinW, true) +
-            waterMetricHtml("fv", sample.qinF, fmtFlow, e.qinF, false) +
+          '<div class="wh-line wp">' +
+            waterMetricHtml("wv", sample.wpW, fmtWater, e.wpW, true) +
+            waterMetricHtml("fv", sample.wpF, fmtFlow, e.wpF, false) +
           "</div>" +
         "</div>"
       );
@@ -4305,7 +4304,7 @@
             '<div class="wp-odds">' +
               oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
               oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
-              oddsLineHtml("qin", r.scratched ? null : r.qinOdd, "place", "", null, false) +
+              oddsLineHtml("wp", r.scratched ? null : r.wpOdd, "place", "", null, false) +
             "</div>" +
           "</div>";
         /* 左＝最近（hourAgo 0），右＝更早；與右鄰更早時段比升降 */
