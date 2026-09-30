@@ -7,7 +7,7 @@
 - 雙層表頭：分組（馬匹資料／馬匹統計數字／備註）+ 欄名
 - 米色表頭、細格線、斑馬紋列
 - 淡橘色大場次號疊於表頭後方
-- 每幅圖置中 J18 logo 水印（不透明度 25%）
+- logo 水印預設關閉（HELPER_FORM_LOGO=1 或 --logo 可重開）
 
 賽日拆圖：固定優先 3 幅；每幅 3–4 場（餘場補前）。
 例：9→3+3+3、10→4+3+3、11→4+4+3、12→4+4+4；8→3+3+2。
@@ -56,8 +56,13 @@ RACE_NUM_FG = (232, 140, 70)  # 淡橘場次號
 CELL_FG = (25, 25, 25)
 NAME_FG = (15, 15, 15)
 
-# Logo 水印：塗層在最上層；真正 bug 是 PIL paste(mask=RGBA) 令 alpha 被乘兩次。
-# 現改 numpy 直寫 layer，預設真實 40% 深橘印章（可用 HELPER_FORM_LOGO_OPACITY 覆寫）。
+# Logo 水印：預設關閉（效果不佳先停用）；設 HELPER_FORM_LOGO=1 可重開。
+LOGO_ENABLED = str(os.getenv("HELPER_FORM_LOGO") or "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 LOGO_OPACITY = float(os.getenv("HELPER_FORM_LOGO_OPACITY") or "0.40")
 LOGO_WIDTH_RATIO = 0.58
 LOGO_INK_RGB = (176, 72, 22)
@@ -300,10 +305,13 @@ def render_helper_form_image(
     *,
     out_path: Optional[str | Path] = None,
     max_races: Optional[int] = None,
-    apply_logo: bool = True,
+    apply_logo: Optional[bool] = None,
 ) -> "Image.Image":
     """將正規化後的 races 渲成接近參考圖的長 PNG。"""
     from PIL import Image, ImageDraw
+
+    if apply_logo is None:
+        apply_logo = LOGO_ENABLED
 
     items = list(races or [])
     if max_races is not None:
@@ -449,12 +457,14 @@ def generate_helper_form_png(
     raw: Optional[Dict[str, Any]] = None,
     max_races: Optional[int] = None,
     render_even_if_stale: bool = False,
-    apply_logo: bool = True,
+    apply_logo: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     抓 API（或用 raw）→ 日期核對 → 產出單張 PNG（除錯／相容用）。
     正式賽日請用 generate_helper_form_parts()。
     """
+    if apply_logo is None:
+        apply_logo = LOGO_ENABLED
     loaded = load_helper_form_for_display(
         expected_date=expected_date,
         expected_course=expected_course,
@@ -484,6 +494,7 @@ def generate_helper_form_png(
         "n_races": loaded.get("n_races") or 0,
         "size": list(img.size),
         "stale_rendered": (not loaded.get("ok")),
+        "logo_enabled": bool(apply_logo),
     }
 
 
@@ -495,12 +506,14 @@ def generate_helper_form_parts(
     require_course: bool = False,
     raw: Optional[Dict[str, Any]] = None,
     render_even_if_stale: bool = False,
-    apply_logo: bool = True,
+    apply_logo: Optional[bool] = None,
     file_prefix: str = "helper_form",
 ) -> Dict[str, Any]:
     """
     抓 API → 日期核對 → 依總場數拆成多幅 PNG（通常 3 幅）+ manifest。
     """
+    if apply_logo is None:
+        apply_logo = LOGO_ENABLED
     loaded = load_helper_form_for_display(
         expected_date=expected_date,
         expected_course=expected_course,
@@ -556,8 +569,9 @@ def generate_helper_form_parts(
         "guard": guard,
         "stale_rendered": (not loaded.get("ok")),
         "logo": {
-            "path": str(_resolve_logo_path() or ""),
-            "opacity": LOGO_OPACITY,
+            "enabled": bool(apply_logo),
+            "path": str(_resolve_logo_path() or "") if apply_logo else "",
+            "opacity": LOGO_OPACITY if apply_logo else 0,
         },
     }
     manifest_path = directory / f"{file_prefix}_manifest.json"
@@ -588,7 +602,16 @@ if __name__ == "__main__":
     ap.add_argument("--require-course", action="store_true")
     ap.add_argument("--from-file", default=None, help="本地 helper JSON fixture")
     ap.add_argument("--max-races", type=int, default=None, help="僅單張模式有效")
-    ap.add_argument("--no-logo", action="store_true", help="關閉 logo 水印")
+    ap.add_argument(
+        "--logo",
+        action="store_true",
+        help="啟用 J18 logo 水印（預設關閉）",
+    )
+    ap.add_argument(
+        "--no-logo",
+        action="store_true",
+        help="關閉 logo 水印（預設已關閉；保留相容）",
+    )
     ap.add_argument(
         "--allow-stale",
         action="store_true",
@@ -600,7 +623,7 @@ if __name__ == "__main__":
     if args.from_file:
         raw = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
 
-    apply_logo = not args.no_logo
+    apply_logo = bool(args.logo) and not args.no_logo
     if args.out:
         result = generate_helper_form_png(
             out_path=args.out,
