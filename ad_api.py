@@ -99,6 +99,7 @@ app = FastAPI(
     version=get_version(),
     description=(
         "賽前預測廣告包：結構化 JSON + 海報 + webhook；"
+        "賽前歷史戰績三幅圖 /v1/helper-form；"
         "另提供留言機械人用綜合推介＋AI 評價上下文 /v1/reply-context；"
         "另提供公開賽日速覽嵌入 /embed/raceday（無需登入）"
     ),
@@ -242,6 +243,13 @@ def health():
         "version": get_version(),
         "auth_configured": bool(_expected_api_key()),
         "webhook_configured": bool((os.getenv("GROK_BOT_WEBHOOK_URL") or "").strip()),
+        "helper_form_webhook_configured": bool(
+            (
+                os.getenv("HELPER_FORM_WEBHOOK_URL")
+                or os.getenv("GROK_BOT_WEBHOOK_URL")
+                or ""
+            ).strip()
+        ),
         "reply_webhook_configured": bool(
             (
                 os.getenv("SOCIAL_REPLY_BOT_WEBHOOK_URL")
@@ -419,6 +427,119 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
         "status": pkg.get("status"),
         "package": public_payload(pkg),
     }
+
+
+# ─── 賽前歷史戰績三幅圖（下游機械人）───────────────────────────────
+
+
+class HelperFormGenerateBody(BaseModel):
+    racing_date: str = Field("", description="YYYY-MM-DD；空則用系統最新賽日")
+    course: str = Field("", description="ST / HV；可選")
+    notify: bool = Field(True, description="ready 後是否 webhook")
+    force: bool = Field(False, description="已有 ready 仍強制重產")
+
+
+@app.get("/v1/helper-form/latest", dependencies=[Depends(require_ad_api_key)])
+def get_latest_helper_form():
+    from helper_form_package import load_latest_package, public_payload as hf_public
+
+    pkg = load_latest_package(ready_only=True)
+    if not pkg or pkg.get("status") != "ready":
+        raise HTTPException(status_code=404, detail="No ready helper-form package")
+    return hf_public(pkg)
+
+
+@app.get("/v1/helper-form/{pkg_id}", dependencies=[Depends(require_ad_api_key)])
+def get_helper_form(pkg_id: str):
+    from helper_form_package import load_package, public_payload as hf_public
+
+    pkg = load_package(pkg_id)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Helper-form package not found: {pkg_id}")
+    return hf_public(pkg)
+
+
+@app.get("/v1/helper-form/{pkg_id}/image/{index}")
+def get_helper_form_image(
+    pkg_id: str,
+    index: int,
+    authorization: Optional[str] = Header(default=None),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+):
+    """戰績圖 PNG（預設公開可下載，供 assets.images[].url）。"""
+    require_key = (os.getenv("AD_POSTER_REQUIRE_KEY") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if require_key:
+        require_ad_api_key(authorization=authorization, x_api_key=x_api_key)
+
+    from helper_form_package import image_file_path
+
+    if index < 1 or index > 8:
+        raise HTTPException(status_code=400, detail="image index out of range")
+    path = image_file_path(pkg_id, index)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="Helper-form image not found")
+    return FileResponse(
+        path=str(path),
+        media_type="image/png",
+        filename=f"{pkg_id}_{index}.png",
+    )
+
+
+@app.get("/v1/helper-form", dependencies=[Depends(require_ad_api_key)])
+def list_helper_forms():
+    from helper_form_package import list_package_ids
+
+    return {"ids": list_package_ids()}
+
+
+@app.post("/v1/helper-form/generate", dependencies=[Depends(require_ad_api_key)])
+def post_helper_form_generate(body: HelperFormGenerateBody) -> Dict[str, Any]:
+    """探測／手動：核對賽日後產出三幅賽前歷史戰績圖，可 webhook 通知機械人。"""
+    from helper_form_package import publish_helper_form_package, public_payload as hf_public
+
+    result = publish_helper_form_package(
+        racing_date=(body.racing_date or "").strip() or None,
+        course=(body.course or "").strip().upper() or None,
+        notify=bool(body.notify),
+        force=bool(body.force),
+    )
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error") or "helper-form generate failed",
+        )
+    pkg = result.get("package") or {}
+    return {
+        "ok": True,
+        "id": result.get("id"),
+        "status": result.get("status"),
+        "skipped": result.get("skipped"),
+        "package": hf_public(pkg) if pkg else None,
+        "webhook": result.get("webhook") or pkg.get("webhook"),
+    }
+
+
+@app.post("/v1/helper-form/{pkg_id}/notify", dependencies=[Depends(require_ad_api_key)])
+def post_helper_form_notify(pkg_id: str) -> Dict[str, Any]:
+    from helper_form_package import (
+        dispatch_helper_form_webhook,
+        load_package,
+        save_package,
+    )
+
+    pkg = load_package(pkg_id)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Helper-form package not found: {pkg_id}")
+    if pkg.get("status") != "ready":
+        raise HTTPException(status_code=409, detail="Package status is not ready")
+    result = dispatch_helper_form_webhook(pkg)
+    pkg["webhook"] = result
+    save_package(pkg)
+    return {"ok": bool(result.get("ok")), "id": pkg_id, "webhook": result}
 
 
 # ─── 留言機械人：綜合推介 + 推介馬 AI 評價 ───────────────────────────

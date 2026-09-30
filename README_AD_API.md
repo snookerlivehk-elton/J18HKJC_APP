@@ -5,6 +5,7 @@
 **唔會**直接發 Facebook；發佈由外部助手／人手處理。
 
 > **下游發佈機械人使用說明：** [`SOCIAL_PUBLISH_AI_USAGE.md`](SOCIAL_PUBLISH_AI_USAGE.md)（賽前＋賽後 `*-post`）。  
+> **賽前歷史戰績三幅圖：** [`HELPER_FORM_AI_USAGE.md`](HELPER_FORM_AI_USAGE.md)（`GET /v1/helper-form/latest`）。  
 > **同留言答覆 API 嘅分別：** `GET /v1/ads/latest` 係**廣告發佈**用（海報＋Facebook 文案）。  
 > 負責**回覆社交媒體留言**嘅 AI 請改用 `GET /v1/reply-context/latest`（綜合推介每場最多 4 匹 + Form AI 評述），見 [`SOCIAL_REPLY_AI_USAGE.md`](SOCIAL_REPLY_AI_USAGE.md)。
 
@@ -63,6 +64,9 @@ ZIP 下載會附消毒後嘅 `facebook_copy.txt`（日馬唔寫「今晚」、�
 | POST | `/v1/ads/rebuild-from-copy` | Bearer | 用現有 `copy.json` 重建 |
 | POST | `/v1/ads/ingest` | Bearer | **上游推送 ready 包 + 海報**（Streamlit／CORN → 生產 API） |
 | POST | `/v1/ads/{id}/notify` | Bearer | **手動重發 webhook** |
+| GET | `/v1/helper-form/latest` | Bearer | 最新賽前歷史戰績三幅包（見 [`HELPER_FORM_AI_USAGE.md`](HELPER_FORM_AI_USAGE.md)） |
+| GET | `/v1/helper-form/{id}/image/{n}` | 預設公開 | 戰績圖 PNG（n=1..3） |
+| POST | `/v1/helper-form/generate` | Bearer | 核對賽日並產三幅圖 |
 
 幂等 `id`：`{YYYY-MM-DD}-{hv\|st}-{day\|night}`（同一期重複產出覆寫同一檔，保留首次 `created_at`）。
 

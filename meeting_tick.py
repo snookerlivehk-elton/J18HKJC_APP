@@ -1071,6 +1071,60 @@ class MeetingTickRunner:
                     {"action": "ad_output_ensure", "ok": False, "error": str(exc)}
                 )
 
+        # --- HELPER_FORM ensure：排位齊後產賽前歷史戰績三幅（廣告下游）---
+        if not dry_run:
+            try:
+                ready_hf = self.pipe.refresh_readiness(d, c)
+                rc_ok_hf = (
+                    str((ready_hf.get("RACECARD") or {}).get("status") or "") == STATUS_OK
+                )
+                if rc_ok_hf:
+                    from helper_form_package import (
+                        ensure_helper_form_for_meeting,
+                        load_package,
+                        package_id,
+                    )
+
+                    hid = package_id(d, c)
+                    existing = load_package(hid)
+                    already_ready = (
+                        existing
+                        and str(existing.get("status") or "") == "ready"
+                        and (existing.get("assets") or {}).get("images")
+                    )
+                    if not already_ready:
+                        hf_ens = {
+                            "action": "helper_form_ensure",
+                            "racing_date": d,
+                            "course": c,
+                            "id": hid,
+                        }
+                        try:
+                            hf_out = ensure_helper_form_for_meeting(
+                                d, c, notify=True, force=False
+                            )
+                            hf_ens["ok"] = bool(hf_out.get("ok"))
+                            hf_ens["result"] = {
+                                k: hf_out.get(k)
+                                for k in (
+                                    "ok",
+                                    "id",
+                                    "status",
+                                    "skipped",
+                                    "error",
+                                    "webhook",
+                                )
+                                if k in hf_out
+                            }
+                        except Exception as exc:
+                            hf_ens["ok"] = False
+                            hf_ens["result"] = {"ok": False, "error": str(exc)}
+                        out["actions"].append(hf_ens)
+            except Exception as exc:
+                out["actions"].append(
+                    {"action": "helper_form_ensure", "ok": False, "error": str(exc)}
+                )
+
         # --- SOCIAL_COPY：本輪快照成功，或快照已 ok 且計劃要跑 ---
         want_social = plan.social_copy
         if not dry_run and AUTO_SOCIAL_COPY and not want_social:

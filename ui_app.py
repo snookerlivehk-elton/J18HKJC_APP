@@ -155,7 +155,7 @@ meeting_ops = st.Page("views/meeting_ops.py", title="賽日作戰室")
 data_control = st.Page("views/data_control.py", title="資料控制中心（舊）")
 data_backlog = st.Page("views/data_backlog.py", title="數據遺留清單（舊）")
 ad_output = st.Page("views/ad_output.py", title="廣告輸出")
-helper_form = st.Page("views/helper_form.py", title="馬匹歷史戰績表")
+helper_form = st.Page("views/helper_form.py", title="賽前歷史戰績")
 whitelist = st.Page("views/whitelist.py", title="白名單")
 raceday = st.Page(
     "views/raceday.py",
@@ -181,7 +181,8 @@ sg = st.Page("views/speed_guide.py", title="官方速勢能量")
 if role == ROLE_ADMIN:
     sections = {
         "系統": [home, whitelist],
-        "營運": [ops_center, meeting_ops, ad_output, helper_form, data_control, data_backlog],
+        "營運": [ops_center, meeting_ops, data_control, data_backlog],
+        "廣告": [ad_output, helper_form],
         "預測": [raceday, inference, calibration, hit_stats, form_ai],
         "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
     }

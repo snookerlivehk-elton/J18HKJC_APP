@@ -1,4 +1,4 @@
-"""馬匹歷史戰績表 — Helper API 出圖（對齊參考原圖、全中文、每賽日最多三幅）。"""
+"""馬匹歷史戰績表 — 廣告類：產三幅圖並走 Ad API 下游包。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,17 +6,15 @@ from pathlib import Path
 import streamlit as st
 
 from helper_form_client import load_helper_form_for_display, resolve_latest_meeting
-from helper_form_poster import (
-    default_output_dir,
-    generate_helper_form_parts,
-    split_race_layout,
-)
+from helper_form_package import publish_helper_form_package, public_payload
+from helper_form_poster import split_race_layout
 from ui_theme import inject_admin_css, page_header
 
 inject_admin_css()
 page_header(
-    "馬匹歷史戰績表",
-    "Helper API 中文戰績圖：核對最新賽馬日後，依總場數拆成最多三幅（每幅 3–4 場）。logo 水印預設關閉。",
+    "賽前歷史戰績",
+    "廣告類資產：核對最新賽馬日後產三幅戰績圖，寫入 helper-form 包供下游機械人 "
+    "`GET /v1/helper-form/latest` 拉取（見 HELPER_FORM_AI_USAGE.md）。",
 )
 
 latest = resolve_latest_meeting()
@@ -37,31 +35,31 @@ with col_b:
     override_date = st.text_input(
         "覆寫核對日期（可選，YYYY-MM-DD）",
         value="",
-        help="留空則使用系統最新賽馬日；僅供對照／補救。",
+        help="留空則使用系統最新賽馬日。",
     ).strip()
-    override_course = st.selectbox("場地核對", ["（不強制）", "ST", "HV"], index=0)
-    require_course = override_course in ("ST", "HV")
+    override_course = st.selectbox("場地", ["（跟系統）", "ST", "HV"], index=0)
+    force = st.checkbox("強制重產（即使已有 ready）", value=False)
+    notify = st.checkbox("ready 後 webhook 通知機械人", value=True)
 
 st.caption(
-    "API：`/calculate/v1/tool/helper?all=1`（無日期參數）→ "
-    "解析每場 `title` 日期 → 必須等於最新賽馬日才渲染；"
-    "9–12 場固定三幅（例 10→4+3+3、11→4+4+3）。"
+    "排位更新後 meeting_tick 會自動 `helper_form_ensure`；"
+    "亦可手動產出。下游：`GET /v1/helper-form/latest`。"
 )
 
 c1, c2, c3 = st.columns(3)
-do_preview = c1.button("只核對日期（不打圖）", use_container_width=True)
-do_render = c2.button("核對並產出三幅戰績圖", type="primary", use_container_width=True)
-allow_stale = c3.checkbox("日期不符仍出圖（除錯）", value=False)
+do_preview = c1.button("只核對日期", use_container_width=True)
+do_render = c2.button("產出並發佈戰績包", type="primary", use_container_width=True)
+allow_stale = c3.checkbox("日期不符仍預覽 API（除錯）", value=False)
 
 expect_date = override_date or None
-expect_course = override_course if require_course else None
+expect_course = None if override_course.startswith("（") else override_course
 
 if do_preview:
     with st.spinner("抓取 Helper API 並核對日期…"):
         loaded = load_helper_form_for_display(
             expected_date=expect_date,
             expected_course=expect_course,
-            require_course=require_course,
+            require_course=bool(expect_course),
         )
     guard = loaded.get("guard") or {}
     if loaded.get("ok"):
@@ -72,52 +70,42 @@ if do_preview:
     n = int(loaded.get("n_races") or 0)
     if loaded.get("races"):
         st.write(f"場次數：{n}；預排版：`{'+'.join(map(str, split_race_layout(n)))}`")
-        st.write("各場標題：")
         for r in loaded["races"]:
             st.text(f"R{r.get('race_num')}: {r.get('title')}")
 
 if do_render:
-    out_dir = default_output_dir()
-    with st.spinner("抓取 API、核對日期、拆幅渲染中文戰績表…"):
-        result = generate_helper_form_parts(
-            out_dir=out_dir,
-            expected_date=expect_date,
-            expected_course=expect_course,
-            require_course=require_course,
-            render_even_if_stale=allow_stale,
-            apply_logo=False,
+    with st.spinner("產三幅圖並寫入 helper-form 包…"):
+        result = publish_helper_form_package(
+            racing_date=expect_date,
+            course=expect_course,
+            notify=notify,
+            force=force,
         )
     if not result.get("ok"):
-        st.error(result.get("error") or "出圖失敗")
-        st.json(result.get("guard") or {})
+        st.error(result.get("error") or "出圖／發佈失敗")
+        st.json(result)
     else:
-        if result.get("stale_rendered"):
-            st.warning("日期核對未通過，但已依除錯選項出圖。")
-        layout = result.get("layout") or []
-        st.success(
-            f"已產出 {len(result.get('parts') or [])} 幅"
-            f"（共 {result.get('n_races')} 場，排版 `{'+'.join(map(str, layout))}`）"
-            f" → `{out_dir}`"
-        )
-        st.json(
-            {
-                "racing_date": result.get("racing_date"),
-                "course": result.get("course"),
-                "layout": layout,
-                "logo": result.get("logo"),
-                "manifest_path": result.get("manifest_path"),
-            }
-        )
-        for part in result.get("parts") or []:
-            path = Path(part.get("path") or "")
-            nums = ",".join(str(x) for x in (part.get("race_nums") or []))
-            caption = f"圖 {part.get('index')}｜第 {nums} 場（{part.get('n_races')} 場）"
+        pkg = result.get("package") or {}
+        if result.get("skipped"):
+            st.info(f"已有 ready 包，略過重產：`{result.get('id')}`")
+        else:
+            st.success(f"已發佈：`{result.get('id')}` status={result.get('status')}")
+        st.json(public_payload(pkg))
+        if result.get("webhook"):
+            st.write("webhook：", result.get("webhook"))
+        for im in (pkg.get("assets") or {}).get("images") or []:
+            path = Path(im.get("path") or "")
+            nums = ",".join(str(x) for x in (im.get("race_nums") or []))
+            caption = f"圖 {im.get('index')}｜第 {nums} 場"
             if path.is_file():
                 st.image(str(path), caption=caption, use_container_width=True)
                 st.download_button(
-                    f"下載圖 {part.get('index')}",
+                    f"下載圖 {im.get('index')}",
                     data=path.read_bytes(),
                     file_name=path.name,
                     mime="image/png",
-                    key=f"dl_helper_form_{part.get('index')}",
+                    key=f"dl_hf_{im.get('index')}",
                 )
+
+if allow_stale:
+    st.caption("除錯模式僅影響上方「只核對日期」解讀；正式發佈仍要求日期匹配。")
