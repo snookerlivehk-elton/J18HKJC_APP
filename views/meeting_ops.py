@@ -226,6 +226,25 @@ for stage, label in STAGES:
                         or oneclick_last.get("message")
                         or "完成"
                     )
+                    casc = oneclick_last.get("pre_race_cascade")
+                    if casc and stage == "FORM_AI":
+                        if casc.get("ok") or casc.get("skipped"):
+                            st.info(
+                                "已自動接快照／海報／AI 文案"
+                                + (
+                                    f"（batch `{casc.get('batch_id')}`）"
+                                    if casc.get("batch_id")
+                                    else ""
+                                )
+                            )
+                        elif casc.get("waiting"):
+                            st.warning(
+                                f"廣告鏈等待中：{casc.get('reason') or casc.get('detail') or ''}"
+                            )
+                        else:
+                            st.warning(
+                                f"廣告鏈未完成：{casc.get('reason') or casc.get('error') or ''}"
+                            )
                 else:
                     st.error(oneclick_last.get("error") or oneclick_last)
 
@@ -551,6 +570,19 @@ for stage, label in STAGES:
                         )
                     elif ad.get("error"):
                         st.caption(f"廣告輸出略過／失敗：{ad.get('error')}")
+                    casc = last_snap.get("pre_race_cascade") or {}
+                    if casc:
+                        if casc.get("ok") or casc.get("skipped"):
+                            social = casc.get("social_copy") or {}
+                            st.success(
+                                "已自動接廣告鏈："
+                                f"batch `{casc.get('batch_id') or last_snap.get('batch_id') or '—'}` · "
+                                f"social={'ok' if social.get('ok') or social.get('skipped') else '—'}"
+                            )
+                        else:
+                            st.warning(
+                                f"廣告鏈未完成：{casc.get('reason') or casc.get('error') or casc}"
+                            )
                 else:
                     st.error(last_snap.get("error"))
         elif stage == "RESULTS":

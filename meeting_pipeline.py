@@ -70,8 +70,8 @@ STAGE_HELP: Dict[str, str] = {
     "FORMGUIDE": "JJJC formguide 主路徑；waiting／空字預設打 HKJC CMS 備援。",
     "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
-    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 才出正式快照。",
-    "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；否則可 provisional／revision。",
+    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 後自動接快照／海報／AI 文案。已達標再按一鍵＝只跑廣告鏈。",
+    "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；建完自動產 AI 社交文案並推送 Ad API。",
     "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
 }
@@ -961,6 +961,40 @@ class MeetingPipeline:
             return self.run_backlog_chain(racing_date, course, **kwargs)
         if action == "crawl_fixtures":
             return self.run_action("", "", action, **kwargs)
+
+        # FORM_AI 已達標：唔再重 spawn，直接接快照／文案／推送
+        if stage == "FORM_AI":
+            try:
+                ai_st, ai_detail = self.check_form_ai(racing_date, course)
+            except Exception:
+                ai_st, ai_detail = STATUS_PENDING, ""
+            if ai_st == STATUS_OK:
+                out: Dict[str, Any] = {
+                    "ok": True,
+                    "stage": stage,
+                    "action": "pre_race_ad_cascade",
+                    "skipped_ai": True,
+                    "reason": "FORM_AI already ok — cascade ads",
+                    "detail": ai_detail,
+                }
+                try:
+                    from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
+
+                    cascade = maybe_run_pre_race_cascade_after_form_ai(
+                        racing_date=str(racing_date)[:10],
+                        course=str(course or "").upper(),
+                    )
+                    out["pre_race_cascade"] = cascade
+                    if cascade.get("ok") is False and not cascade.get("skipped"):
+                        out["ok"] = False
+                        out["error"] = cascade.get("reason") or cascade.get("error")
+                except Exception as e:
+                    out["ok"] = False
+                    out["error"] = str(e)
+                    out["pre_race_cascade"] = {"ok": False, "error": str(e)}
+                self.refresh_readiness(racing_date, course)
+                return out
+
         out = self.run_action(racing_date, course, action, **kwargs)
         out.setdefault("stage", stage)
         out.setdefault("action", action)
@@ -1510,7 +1544,24 @@ class MeetingPipeline:
                     )
                     done += out.get("done", 0)
                 self.refresh_readiness(racing_date, course)
-                return {"ok": True, "done": done, "n_races": n_races}
+                result: Dict[str, Any] = {
+                    "ok": True,
+                    "done": done,
+                    "n_races": n_races,
+                }
+                # 前台跑完同樣接廣告鏈（與背景 job 對齊）
+                try:
+                    from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
+
+                    cascade = maybe_run_pre_race_cascade_after_form_ai(
+                        racing_date=str(racing_date)[:10],
+                        course=str(course or "").upper(),
+                    )
+                    result["pre_race_cascade"] = cascade
+                    self.refresh_readiness(racing_date, course)
+                except Exception as e:
+                    result["pre_race_cascade"] = {"ok": False, "error": str(e)}
+                return result
 
             if action == "start_form_ai_background":
                 out = self.start_form_ai_background(
@@ -1590,6 +1641,22 @@ class MeetingPipeline:
                 from factor_calibration import FactorCalibration
                 out = FactorCalibration().snapshot_meeting(racing_date, course)
                 self.refresh_readiness(racing_date, course)
+                if out.get("ok") or out.get("batch_id"):
+                    try:
+                        from ad_copy_jobs import (
+                            maybe_run_pre_race_cascade_after_snapshot,
+                        )
+
+                        cascade = maybe_run_pre_race_cascade_after_snapshot(
+                            racing_date=str(racing_date)[:10],
+                            course=str(course or "").upper(),
+                            batch_id=str(out.get("batch_id") or "") or None,
+                            snapshot_ad_ok=bool(out.get("ad_ok")),
+                        )
+                        out["pre_race_cascade"] = cascade
+                        self.refresh_readiness(racing_date, course)
+                    except Exception as e:
+                        out["pre_race_cascade"] = {"ok": False, "error": str(e)}
                 return out
 
             if action == "revise_snapshot":
@@ -1601,6 +1668,22 @@ class MeetingPipeline:
                     note=kwargs.get("note") or "",
                 )
                 self.refresh_readiness(racing_date, course)
+                if out.get("ok") or out.get("batch_id"):
+                    try:
+                        from ad_copy_jobs import (
+                            maybe_run_pre_race_cascade_after_snapshot,
+                        )
+
+                        cascade = maybe_run_pre_race_cascade_after_snapshot(
+                            racing_date=str(racing_date)[:10],
+                            course=str(course or "").upper(),
+                            batch_id=str(out.get("batch_id") or "") or None,
+                            snapshot_ad_ok=bool(out.get("ad_ok")),
+                        )
+                        out["pre_race_cascade"] = cascade
+                        self.refresh_readiness(racing_date, course)
+                    except Exception as e:
+                        out["pre_race_cascade"] = {"ok": False, "error": str(e)}
                 return out
 
             if action == "settle":
