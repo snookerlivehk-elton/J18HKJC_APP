@@ -142,6 +142,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("padding: 0 26px 0 1px", r.text)
         self.assertIn("grid-template-columns: 33px 22px 15px", r.text)
         self.assertIn("jt-ini", r.text)
+        self.assertIn(".jt-ini .j-ini,\n    .jt-ini .t-ini {\n      display: block;\n      font-size: 12px;", r.text)
         self.assertIn("jockeyInitial", r.text)
         self.assertIn("trainerInitial", r.text)
         self.assertIn("jtInitialsHtml", r.text)
