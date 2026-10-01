@@ -1252,9 +1252,9 @@
     .jt-ini .t-ini { color: var(--text); }
     .jt-ini .j-ini { transform: translateY(-1px); }
     .jt-ini .t-ini { transform: translateY(2px); }
-    /* 馬名左緣與彩衣左緣齊；margin-top -1px（相對原 -3px 多留 2px 給彩衣與馬名間距） */
+    /* 馬名佔左兩格；右下角留給跑法簡稱角標 */
     .hrow:not(.head) .cell.pin-id .hname {
-      grid-column: 1 / -1;
+      grid-column: 1 / 3;
       grid-row: 2;
       z-index: 2;
       align-self: center;
@@ -1265,6 +1265,32 @@
       margin-top: -1px;
       text-align: left;
     }
+    /* 預計跑法簡稱：領／前／中／後 —— 首列右下角，單字色塊便於掃讀 */
+    .hrow:not(.head) .cell.pin-id .rs-chip {
+      grid-column: 3;
+      grid-row: 2;
+      z-index: 3;
+      align-self: center;
+      justify-self: center;
+      box-sizing: border-box;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 14px;
+      text-align: center;
+      color: #fff;
+      letter-spacing: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+    .rs-chip.lead { background: #3d5a80; }   /* 領＝前領 */
+    .rs-chip.press { background: #2f8f78; }  /* 前＝跟前 */
+    .rs-chip.mid { background: #6a7382; }    /* 中＝中置 */
+    .rs-chip.late { background: #c47a3a; }   /* 後＝後上 */
+    .hrow.scratched .rs-chip { opacity: .55; }
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
     .hrow.head .cell.head-split {
       display: grid;
@@ -2514,6 +2540,10 @@
     html[data-theme="dark"] .hrow:not(.head) .cell.pin-id:active {
       background: rgba(110, 179, 224, .18);
     }
+    html[data-theme="dark"] .rs-chip.lead { background: #5a7eaa; }
+    html[data-theme="dark"] .rs-chip.press { background: #3cb896; }
+    html[data-theme="dark"] .rs-chip.mid { background: #8a93a3; }
+    html[data-theme="dark"] .rs-chip.late { background: #d4924a; }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="water"]:active {
       background: rgba(143, 196, 168, .14);
     }
@@ -3403,6 +3433,23 @@
       const lab = String(style == null ? "" : style).trim();
       const i = RUN_STYLES.indexOf(lab);
       return i >= 0 ? i : -1;
+    }
+    /* 首列角標簡稱：前領→領、跟前→前、中置→中、後上→後 */
+    const RUN_STYLE_SHORT = {
+      "前領": { ch: "領", cls: "lead" },
+      "跟前": { ch: "前", cls: "press" },
+      "中置": { ch: "中", cls: "mid" },
+      "後上": { ch: "後", cls: "late" }
+    };
+    function runStyleChipHtml(style) {
+      const lab = String(style == null ? "" : style).trim();
+      const meta = RUN_STYLE_SHORT[lab];
+      if (!meta) return "";
+      return (
+        '<span class="rs-chip ' + meta.cls + '" title="預計跑法：' + esc(lab) + '" aria-label="預計跑法 ' + esc(lab) + '">' +
+          esc(meta.ch) +
+        "</span>"
+      );
     }
     function cellRunStyle(style) {
       const lab = String(style == null ? "" : style).trim();
@@ -5097,12 +5144,13 @@
               oddsLineHtml("pla", r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
             "</div>";
         const name = '<span class="hname">' + esc(r.name) + "</span>";
+        const rsChip = runStyleChipHtml(r.runStyle);
         const lock =
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '" data-no="' + esc(r.no) + '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 詳情">' + silkTag(r) +
             '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
             jtInitialsHtml(r) +
-            name + "</div>" +
+            name + rsChip + "</div>" +
             '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
             '<div class="draw-flag-col">' +
               renderRowFlag(r.no, mark) +
