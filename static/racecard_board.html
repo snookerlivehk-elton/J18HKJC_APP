@@ -1205,6 +1205,10 @@
       font-variant-numeric: tabular-nums lining-nums;
       margin-top: -1px;
     }
+    /* 列表第一列：彩衣／馬號／馬名左移 3px；騎／練姓氏首字不動 */
+    .hrow:not(.head) .cell.pin-id .hno {
+      transform: translateX(-3px);
+    }
     .hno > span,
     .draw-no > span {
       display: flex;
@@ -1244,7 +1248,7 @@
     .jt-ini .t-ini { color: var(--text); }
     .jt-ini .j-ini { transform: translateY(-1px); }
     .jt-ini .t-ini { transform: translateY(2px); }
-    /* 馬名左緣與彩衣左緣齊（彩衣 margin-left: 4px） */
+    /* 馬名左緣與彩衣左緣齊（彩衣 margin-left: 1px；相對原位左移 3px） */
     .hrow:not(.head) .cell.pin-id .hname {
       grid-column: 1 / -1;
       grid-row: 2;
@@ -1253,7 +1257,7 @@
       justify-self: stretch;
       max-width: none;
       width: 100%;
-      padding: 0 1px 0 4px;
+      padding: 0 1px 0 1px;
       margin-top: -3px;
       text-align: left;
     }
@@ -1375,8 +1379,8 @@
       min-height: 0;
       align-self: stretch;
       justify-self: stretch;
-      /* 相對上一版：上移 2px */
-      margin: 2px 0 0 4px;
+      /* 相對原位：上移 2px、左移 3px（騎／練首字不動） */
+      margin: 2px 0 0 1px;
       height: calc(100% + 1px);
       overflow: hidden;
       z-index: 1;
