@@ -1113,71 +1113,6 @@
     .hrow.alt { background: #f4f6f8; }
     .hrow.scratched .hname { text-decoration: line-through; }
     .hrow.scratched .cell { opacity: .45; }
-    /* 後備馬匹：貼在正選列表下方，R 號＋標籤，無檔位／賠率 */
-    .hrow.reserve-sep {
-      height: 28px;
-      min-height: 28px;
-      background: #f3eee4;
-      border-bottom: 1px solid #e2d6c0;
-    }
-    .hrow.reserve-sep .lock-cluster {
-      background: #f3eee4;
-      box-shadow: none;
-      display: flex;
-      align-items: center;
-      padding: 0 10px;
-      width: auto;
-      min-width: var(--pin-w);
-      grid-template-columns: none;
-    }
-    .hrow.reserve-sep .res-sep-lab {
-      font-size: 12px;
-      font-weight: 700;
-      color: #8a5a20;
-      letter-spacing: .06em;
-    }
-    .hrow.reserve .hno {
-      background: #8a7355;
-      font-size: 12px;
-    }
-    .hrow.reserve .hname .res-tag {
-      display: inline-block;
-      margin-right: 4px;
-      padding: 0 4px;
-      font-size: 10px;
-      font-weight: 700;
-      line-height: 1.35;
-      color: #8a5a20;
-      background: #fde8cc;
-      border-radius: 3px;
-      vertical-align: 1px;
-      letter-spacing: .04em;
-    }
-    .hrow.reserve .draw-no {
-      border-color: #d4c4a8;
-      background: #faf6ef;
-      color: #a09078;
-    }
-    html[data-theme="dark"] .hrow.reserve-sep,
-    html[data-theme="dark"] .hrow.reserve-sep .lock-cluster {
-      background: #3a3220;
-      border-bottom-color: #5a4a28;
-    }
-    html[data-theme="dark"] .hrow.reserve-sep .res-sep-lab {
-      color: #f0e2b0;
-    }
-    html[data-theme="dark"] .hrow.reserve .hno {
-      background: #8a7355;
-    }
-    html[data-theme="dark"] .hrow.reserve .hname .res-tag {
-      color: #f0e2b0;
-      background: #6b4f1c;
-    }
-    html[data-theme="dark"] .hrow.reserve .draw-no {
-      background: #4a3814;
-      border-color: #8a7355;
-      color: #c9b896;
-    }
     /* 小旗標記整行：一按黃、再按綠、三按復原 */
     .hrow.mark-1 { background: #fde8cc; }
     .hrow.mark-1 .lock-cluster { background: #fde8cc; }
@@ -3336,66 +3271,6 @@
     }
     ensureWaterFlowTickDemo();
 
-    /* 演示：後備馬匹（參考 HKJC 排位表「後備馬匹」；日後接 API） */
-    function ensureReservesDemo() {
-      if (!MEETING || !Array.isArray(MEETING.races)) return;
-      MEETING.races.forEach(function (race) {
-        if (!race || !Array.isArray(race.runners)) return;
-        if (race.runners.some(function (r) { return r && r.reserve; })) return;
-        /* 第 1 場示意兩匹後備（對照 2026-10-01 沙田第1場後備表） */
-        if (Number(race.num) !== 1) return;
-        const stubs = [
-          {
-            reserveNo: 1,
-            name: "朗日雪峰",
-            trainer: "方嘉柏",
-            age: 6,
-            rating: 38,
-            hw: 133,
-            bodyWt: 1266,
-            form6: "10/11/3/1/3/7",
-            recent: "10/11/3/1/3/7",
-            gear: ""
-          },
-          {
-            reserveNo: 2,
-            name: "迅意",
-            trainer: "韋達",
-            age: 5,
-            rating: 28,
-            hw: 123,
-            bodyWt: 1186,
-            form6: "10/6/10/11/3/7",
-            recent: "10/6/10/11/3/7",
-            gear: "B"
-          }
-        ];
-        stubs.forEach(function (s) {
-          race.runners.push({
-            no: 100 + s.reserveNo,
-            reserve: true,
-            reserveNo: s.reserveNo,
-            name: s.name,
-            draw: null,
-            form6: s.form6,
-            recent: s.recent,
-            jockey: "—",
-            trainer: s.trainer,
-            age: s.age,
-            rating: s.rating,
-            rtgDelta: "",
-            hw: s.hw,
-            bodyWt: s.bodyWt,
-            gear: s.gear,
-            scratched: false,
-            win: null,
-            place: null
-          });
-        });
-      });
-    }
-    ensureReservesDemo();
-
     /* 演示：預計跑法四選一（每匹僅一種）— 前領／跟前／中置／後上 */
     const RUN_STYLES = ["前領", "跟前", "中置", "後上"];
     function ensureRunStyleDemo() {
@@ -4018,13 +3893,10 @@
       if (box) box.textContent = currentMeet().meta || "";
     }
 
-    function isReserveRunner(r) {
-      return !!(r && r.reserve);
-    }
     function bestOdds() {
       let minW = Infinity, minP = Infinity;
       currentRunners().forEach((r) => {
-        if (r.scratched || isReserveRunner(r)) return;
+        if (r.scratched) return;
         if (numOrNull(r.win) != null) minW = Math.min(minW, r.win);
         if (numOrNull(r.place) != null) minP = Math.min(minP, r.place);
       });
@@ -4044,31 +3916,16 @@
 
     function sortedRows() {
       const arr = currentRunners();
-      const starters = [];
-      const reserves = [];
-      arr.forEach(function (r) {
-        if (isReserveRunner(r)) reserves.push(r);
-        else starters.push(r);
-      });
-      function cmpRow(a, b) {
+      arr.sort((a, b) => {
         const av = sortVal(a, sortKey), bv = sortVal(b, sortKey);
         const an = numOrNull(av), bn = numOrNull(bv);
         let cmp;
         if (an != null && bn != null) cmp = an - bn;
         else cmp = String(av == null ? "" : av).localeCompare(String(bv == null ? "" : bv), "zh-Hant");
-        if (cmp === 0) {
-          const ano = isReserveRunner(a) ? (Number(a.reserveNo) || 0) : (Number(a.no) || 0);
-          const bno = isReserveRunner(b) ? (Number(b.reserveNo) || 0) : (Number(b.no) || 0);
-          cmp = ano - bno;
-        }
+        if (cmp === 0) cmp = a.no - b.no;
         return cmp * sortDir;
-      }
-      starters.sort(cmpRow);
-      reserves.sort(function (a, b) {
-        return (Number(a.reserveNo) || 0) - (Number(b.reserveNo) || 0);
       });
-      /* 後備始終貼在正選下方，方便對照 HKJC「後備馬匹」區 */
-      return starters.concat(reserves);
+      return arr;
     }
 
     function renderPills() {
@@ -4407,12 +4264,9 @@
       const meet = currentMeet();
       el.waterSheetRace.textContent = meet.meta || ("第" + currentRace + "場");
       const hours = waterHourLabels(WATER_HOUR_COLS);
-      const rows = currentRunners()
-        .filter(function (r) { return !isReserveRunner(r); })
-        .slice()
-        .sort(function (a, b) {
-          return (Number(a.no) || 0) - (Number(b.no) || 0);
-        });
+      const rows = currentRunners().slice().sort(function (a, b) {
+        return (Number(a.no) || 0) - (Number(b.no) || 0);
+      });
       const head =
         '<div class="water-row head">' +
           '<div class="water-lock">' +
@@ -4621,7 +4475,7 @@
     }
     function buildQinPairs() {
       let runners = currentRunners()
-        .filter(function (r) { return numOrNull(r.no) != null && !isReserveRunner(r); })
+        .filter(function (r) { return numOrNull(r.no) != null; })
         .slice()
         .sort(function (a, b) { return a.no - b.no; });
       if (runners.length > QIN_MAX_N) runners = runners.slice(0, QIN_MAX_N);
@@ -5221,57 +5075,39 @@
           "</div>" +
         "</div>";
 
-      let reserveSepDone = false;
       const body = rows.map((r, i) => {
-        const isRes = isReserveRunner(r);
-        let sepHtml = "";
-        if (isRes && !reserveSepDone) {
-          reserveSepDone = true;
-          sepHtml =
-            '<div class="hrow reserve-sep" aria-hidden="true">' +
-              '<div class="lock-cluster"><span class="res-sep-lab">後備馬匹</span></div>' +
-            "</div>";
-        }
-        const alt = !isRes && i % 2 ? " alt" : "";
+        const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
-        const resCls = isRes ? " reserve" : "";
         const mark = getRowMark(r.no);
-        const markCls = !isRes && mark === 1 ? " mark-1" : !isRes && mark === 2 ? " mark-2" : "";
-        const winHot = !isRes && !r.scratched && r.win === hot.minW ? " hot" : "";
-        const plaHot = !isRes && !r.scratched && r.place === hot.minP ? " hot" : "";
-        const odds = isRes || r.scratched || r.win == null
+        const markCls = mark === 1 ? " mark-1" : mark === 2 ? " mark-2" : "";
+        const winHot = !r.scratched && r.win === hot.minW ? " hot" : "";
+        const plaHot = !r.scratched && r.place === hot.minP ? " hot" : "";
+        const odds = r.scratched || r.win == null
           ? '<div class="odds"><span class="na">—</span></div>'
           : '<div class="odds">' +
               oddsLineHtml("win", r.win, "win", winHot, r.winTick, r._winTickFresh) +
               oddsLineHtml("pla", r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
             "</div>";
-        const hnoLab = isRes ? ("R" + (r.reserveNo != null ? r.reserveNo : "")) : r.no;
-        const name =
-          '<span class="hname">' +
-            (isRes ? '<span class="res-tag">後備</span>' : "") +
-            esc(r.name) +
-          "</span>";
-        const drawLab = isRes || r.draw == null || r.draw === "" ? "—" : r.draw;
+        const name = '<span class="hname">' + esc(r.name) + "</span>";
         const lock =
           '<div class="lock-cluster">' +
             '<div class="cell pin-id' + colOn("no") + '" data-no="' + esc(r.no) + '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 詳情">' + silkTag(r) +
-            '<span class="hno"><span>' + esc(hnoLab) + "</span></span>" +
+            '<span class="hno"><span>' + esc(r.no) + "</span></span>" +
             jtInitialsHtml(r) +
             name + "</div>" +
             '<div class="cell odds pin-odds' + colOn("draw") + '">' + odds +
             '<div class="draw-flag-col">' +
-              (isRes ? '<span class="row-flag" aria-hidden="true"></span>' : renderRowFlag(r.no, mark)) +
-              '<span class="draw-no"><span>' + esc(drawLab) + "</span></span>" +
+              renderRowFlag(r.no, mark) +
+              '<span class="draw-no"><span>' + esc(r.draw) + "</span></span>" +
             "</div></div>" +
           "</div>";
         const cells = SCROLL_COLS.map((c) => {
-          const openWater = !isRes && c.key === "water"
+          const openWater = c.key === "water"
             ? ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位詳情"'
             : "";
           return '<div class="cell ' + c.cls + colOn(c.key) + '"' + openWater + ">" + cellValue(c, r) + "</div>";
         }).join("");
-        return sepHtml + '<div class="hrow' + alt + scratch + resCls + markCls + '" data-no="' + esc(r.no) + '"' +
-          (isRes ? ' data-reserve="1"' : "") + '>' + lock + cells + "</div>";
+        return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
       }).join("");
 
       el.boardMain.innerHTML =
