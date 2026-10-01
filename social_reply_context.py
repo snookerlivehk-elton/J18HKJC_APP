@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 import time
@@ -82,6 +83,227 @@ def race_id_from_meeting(racing_date: str, course: str, race_no: int) -> str:
     elif c in {"跑馬地", "谷草", "HV"}:
         c = "HV"
     return f"{d}{c}{int(race_no):02d}"
+
+
+
+
+def normalize_post_time(value: Any, *, racing_date: str = "") -> Optional[str]:
+    """正規化開跑時間為 ISO8601（+08:00）；無法解析則 None。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=HK_TZ)
+        return dt.astimezone(HK_TZ).isoformat(timespec="seconds")
+    s = str(value).strip()
+    if not s:
+        return None
+    for candidate in (s, s.replace("Z", "+00:00")):
+        try:
+            dt = datetime.fromisoformat(candidate)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=HK_TZ)
+            return dt.astimezone(HK_TZ).isoformat(timespec="seconds")
+        except ValueError:
+            pass
+    m = re.match(r"^(\d{1,2}):(\d{2})$", s)
+    if m and racing_date:
+        try:
+            hh, mm = int(m.group(1)), int(m.group(2))
+            base = datetime.strptime(str(racing_date)[:10], "%Y-%m-%d")
+            dt = base.replace(hour=hh, minute=mm, second=0, tzinfo=HK_TZ)
+            return dt.isoformat(timespec="seconds")
+        except ValueError:
+            return None
+    return None
+
+
+def post_time_hk_hhmm(iso_post_time: str) -> Optional[str]:
+    iso = normalize_post_time(iso_post_time)
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso).astimezone(HK_TZ).strftime("%H:%M")
+    except ValueError:
+        return None
+
+
+def _schedule_entry(
+    race_no: int,
+    *,
+    race_id: str = "",
+    post_time: Optional[str] = None,
+    racing_date: str = "",
+) -> Dict[str, Any]:
+    pt = normalize_post_time(post_time, racing_date=racing_date)
+    entry: Dict[str, Any] = {"race": int(race_no)}
+    if race_id:
+        entry["race_id"] = str(race_id)
+    if pt:
+        entry["post_time"] = pt
+        hhmm = post_time_hk_hhmm(pt)
+        if hhmm:
+            entry["post_time_hk"] = hhmm
+    return entry
+
+
+def schedule_from_copy(
+    copy_data: Optional[Dict[str, Any]],
+    *,
+    racing_date: str = "",
+    course: str = "",
+) -> List[Dict[str, Any]]:
+    """由 copy.json races 抽出各場開跑時間。"""
+    if not copy_data:
+        return []
+    meeting = dict(copy_data.get("meeting") or {})
+    date = str(racing_date or meeting.get("racing_date") or meeting.get("date") or "")[:10]
+    venue = str(course or meeting.get("course") or meeting.get("venue_code") or "").upper()
+    out: List[Dict[str, Any]] = []
+    for r in list(copy_data.get("races") or []):
+        if not isinstance(r, dict):
+            continue
+        try:
+            race_n = int(r.get("race_no") or r.get("race") or r.get("race_num"))
+        except (TypeError, ValueError):
+            continue
+        rid = str(r.get("race_id") or "").strip()
+        if not rid and date and venue:
+            rid = race_id_from_meeting(date, venue, race_n)
+        pt = (
+            r.get("post_time")
+            or r.get("race_time")
+            or r.get("start_time")
+            or r.get("post_time_iso")
+        )
+        out.append(
+            _schedule_entry(race_n, race_id=rid, post_time=pt, racing_date=date)
+        )
+    out.sort(key=lambda x: x["race"])
+    return out
+
+
+def load_meeting_schedule_from_db(
+    racing_date: str,
+    course: str,
+) -> List[Dict[str, Any]]:
+    """由 upcoming_races 讀取當日各場開跑時間（失敗則空）。"""
+    date = str(racing_date or "")[:10]
+    venue = str(course or "").upper()
+    if not date or not venue:
+        return []
+    try:
+        from inference_engine import InferenceEngine
+
+        df = InferenceEngine().get_upcoming_races()
+    except Exception as exc:
+        logger.debug("load schedule from db failed: %s", exc)
+        return []
+    if df is None or getattr(df, "empty", True):
+        return []
+    try:
+        rows = df.to_dict(orient="records")
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        try:
+            rd = str(row.get("racing_date") or "")[:10]
+            c = str(row.get("course") or "").upper()
+            if rd != date or c != venue:
+                continue
+            race_n = int(row.get("race_num") or row.get("race_no") or 0)
+            if race_n <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        out.append(
+            _schedule_entry(
+                race_n,
+                race_id=str(row.get("race_id") or ""),
+                post_time=row.get("post_time"),
+                racing_date=date,
+            )
+        )
+    out.sort(key=lambda x: x["race"])
+    return out
+
+
+def build_meeting_schedule(
+    *,
+    racing_date: str = "",
+    course: str = "",
+    copy_data: Optional[Dict[str, Any]] = None,
+    db_loader: Optional[Callable[[str, str], List[Dict[str, Any]]]] = None,
+) -> List[Dict[str, Any]]:
+    """合併 copy／DB 場次開跑表；同場優先保留有 post_time 嘅來源。"""
+    by_race: Dict[int, Dict[str, Any]] = {}
+
+    def _merge(entries: List[Dict[str, Any]]) -> None:
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            try:
+                n = int(e.get("race"))
+            except (TypeError, ValueError):
+                continue
+            cur = by_race.get(n)
+            if cur is None:
+                by_race[n] = dict(e)
+                continue
+            if not cur.get("race_id") and e.get("race_id"):
+                cur["race_id"] = e["race_id"]
+            if not cur.get("post_time") and e.get("post_time"):
+                cur["post_time"] = e["post_time"]
+                if e.get("post_time_hk"):
+                    cur["post_time_hk"] = e["post_time_hk"]
+
+    _merge(schedule_from_copy(copy_data, racing_date=racing_date, course=course))
+    if db_loader is not None:
+        try:
+            _merge(list(db_loader(racing_date, course) or []))
+        except Exception as exc:
+            logger.debug("schedule db_loader failed: %s", exc)
+    else:
+        _merge(load_meeting_schedule_from_db(racing_date, course))
+    return [by_race[k] for k in sorted(by_race)]
+
+
+def attach_schedule_to_tips(
+    tips: Sequence[Dict[str, Any]],
+    schedule: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """把開跑時間寫入各 tip（供機械人逐場對比）。"""
+    by_race = {
+        int(s["race"]): s
+        for s in schedule
+        if isinstance(s, dict) and s.get("race") is not None
+    }
+    out: List[Dict[str, Any]] = []
+    for tip in tips:
+        if not isinstance(tip, dict):
+            continue
+        item = dict(tip)
+        try:
+            n = int(item.get("race"))
+        except (TypeError, ValueError):
+            out.append(item)
+            continue
+        sched = by_race.get(n) or {}
+        if sched.get("post_time"):
+            item["post_time"] = sched["post_time"]
+            if sched.get("post_time_hk"):
+                item["post_time_hk"] = sched["post_time_hk"]
+        elif item.get("post_time"):
+            pt = normalize_post_time(item.get("post_time"))
+            if pt:
+                item["post_time"] = pt
+                hhmm = post_time_hk_hhmm(pt)
+                if hhmm:
+                    item["post_time_hk"] = hhmm
+        out.append(item)
+    return out
 
 
 def _race_id_lookup_from_copy(
@@ -289,6 +511,7 @@ def build_reply_context(
     copy_data: Optional[Dict[str, Any]] = None,
     output_root: Optional[Path] = None,
     form_ai_loader: Optional[Callable[[str], Any]] = None,
+    schedule_loader: Optional[Callable[[str, str], List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """由廣告包組留言機械人上下文。"""
     ad_id = str(ad_pkg.get("id") or "").strip()
@@ -329,6 +552,13 @@ def build_reply_context(
         copy_data=copy_data if isinstance(copy_data, dict) else {},
         form_ai_loader=form_ai_loader,
     )
+    schedule = build_meeting_schedule(
+        racing_date=racing_date,
+        course=course,
+        copy_data=copy_data if isinstance(copy_data, dict) else {},
+        db_loader=schedule_loader,
+    )
+    tips = attach_schedule_to_tips(tips, schedule)
     n_horses = sum(len(t.get("horses") or []) for t in tips)
     n_ai = _count_ai_evals(tips)
     if tips and n_horses:
@@ -358,6 +588,8 @@ def build_reply_context(
         "meeting": meeting,
         "intro": str(ad_pkg.get("intro") or "").strip(),
         "tips": tips,
+        "schedule": schedule,
+        "timezone": "Asia/Hong_Kong",
         "featured": featured,
         "disclaimer": DEFAULT_DISCLAIMER,
         "links": {"site": DEFAULT_SITE, "detail": ""},
@@ -371,6 +603,8 @@ def build_reply_context(
             "n_horses": n_horses,
             "n_ai_evals": n_ai,
             "coverage": round(n_ai / n_horses, 3) if n_horses else 0.0,
+            "n_scheduled_races": len(schedule),
+            "timezone": "Asia/Hong_Kong",
         },
     }
 
@@ -385,6 +619,8 @@ def public_reply_payload(pkg: Dict[str, Any]) -> Dict[str, Any]:
         "meeting",
         "intro",
         "tips",
+        "schedule",
+        "timezone",
         "featured",
         "disclaimer",
         "links",
@@ -474,7 +710,7 @@ def format_reply_context_prompt(pkg: Dict[str, Any]) -> str:
         f"包 ID：{pkg.get('id')}",
         "",
         "以下係綜合推介（fused）同推介馬嘅 AI 評價。回答留言時請以此為準；"
-        "唔好發明未列出嘅推介或評價；預測只供參考。",
+        "唔好發明未列出嘅推介或評價；預測只供參考；必須參考各場開跑時間再揀答覆素材。",
         "",
     ]
     intro = str(pkg.get("intro") or "").strip()
@@ -482,9 +718,34 @@ def format_reply_context_prompt(pkg: Dict[str, Any]) -> str:
         lines.append(intro)
         lines.append("")
 
+    schedule = list(pkg.get("schedule") or [])
+    tz = str(
+        pkg.get("timezone")
+        or (pkg.get("meta") or {}).get("timezone")
+        or "Asia/Hong_Kong"
+    )
+    lines.append(f"時區：{tz}")
+    lines.append(
+        "各場開跑時間如下。回覆留言時請以「回覆當下時間」對比開跑時間："
+        "已過開跑時間嘅場次視為已完成／進行中，優先引用尚未開跑或即將開跑嘅場次資料；"
+        "唔好把已完賽場次當未跑推介。"
+    )
+    if schedule:
+        lines.append("賽日場次時間表：")
+        for s in schedule:
+            pt = s.get("post_time_hk") or s.get("post_time") or "時間待定"
+            lines.append(f"  第{s.get('race')}場｜開跑 {pt}")
+    else:
+        lines.append("賽日場次時間表：暫無逐場開跑時間（請勿臆測）。")
+    lines.append("")
+
     for tip in list(pkg.get("tips") or []):
         race_n = tip.get("race")
-        lines.append(f"── 第{race_n}場 ──")
+        pt = tip.get("post_time_hk") or tip.get("post_time")
+        if pt:
+            lines.append(f"── 第{race_n}場｜開跑 {pt} ──")
+        else:
+            lines.append(f"── 第{race_n}場 ──")
         for h in list(tip.get("horses") or []):
             tag = f"（{h.get('tag')}）" if h.get("tag") else ""
             share = (

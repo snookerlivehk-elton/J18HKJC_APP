@@ -233,6 +233,7 @@ CREATE TABLE upcoming_races (
     distance_m INT,
     track VARCHAR(50),
     ground VARCHAR(50),
+    post_time TIMESTAMPTZ,          -- 開跑時間（HKJC post_time，含 +08:00）
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
