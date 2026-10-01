@@ -1110,6 +1110,10 @@
       border-bottom: 1px solid var(--line);
       background: #fff;
     }
+    /* 資料列加高 2px，多出的距離放在彩衣與馬名之間 */
+    .hrow:not(.head) {
+      height: 49px;
+    }
     .hrow.alt { background: #f4f6f8; }
     .hrow.scratched .hname { text-decoration: line-through; }
     .hrow.scratched .cell { opacity: .45; }
@@ -1248,7 +1252,7 @@
     .jt-ini .t-ini { color: var(--text); }
     .jt-ini .j-ini { transform: translateY(-1px); }
     .jt-ini .t-ini { transform: translateY(2px); }
-    /* 馬名左緣與彩衣左緣齊（彩衣 margin-left: 1px；相對原位左移 3px） */
+    /* 馬名左緣與彩衣左緣齊；margin-top -1px（相對原 -3px 多留 2px 給彩衣與馬名間距） */
     .hrow:not(.head) .cell.pin-id .hname {
       grid-column: 1 / -1;
       grid-row: 2;
@@ -1258,7 +1262,7 @@
       max-width: none;
       width: 100%;
       padding: 0 1px 0 1px;
-      margin-top: -3px;
+      margin-top: -1px;
       text-align: left;
     }
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
