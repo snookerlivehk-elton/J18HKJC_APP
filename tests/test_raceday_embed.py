@@ -252,6 +252,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('id="waterSheetZoom"', r.text)
         self.assertIn("closeMenuIfOutside", r.text)
         self.assertIn('data-open="water"', r.text)
+        self.assertIn('c.key === "water" || c.key === "flow"', r.text)
+        self.assertIn("水位／流量詳情", r.text)
         self.assertIn("is-water-open", r.text)
         self.assertIn("syncWaterSheetTop", r.text)
         self.assertIn('label: "流量"', r.text)
