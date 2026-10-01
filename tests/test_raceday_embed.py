@@ -96,7 +96,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("background-size: contain", r.text)
         self.assertIn("background-color: transparent", r.text)
         self.assertIn("margin: 2px 0 0 1px", r.text)
-        self.assertIn(".hrow:not(.head) .cell.pin-id .hno {\n      transform: translateX(-3px);\n    }", r.text)
+        self.assertIn(".hrow:not(.head) .cell.pin-id .hno {\n      width: 24px;\n      height: 24px;\n      font-size: 17px;\n      transform: translate(-3px, 2px);\n    }", r.text)
         self.assertIn("padding: 0 1px 0 1px", r.text)
         self.assertIn("margin-top: -1px", r.text)
         self.assertIn("margin-top: -1px", r.text)

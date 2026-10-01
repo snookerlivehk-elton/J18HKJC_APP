@@ -1174,7 +1174,7 @@
     /* 資料列：彩衣｜馬號｜騎／練姓氏首字（上騎下練）；馬名跨底 */
     .hrow:not(.head) .cell.pin-id {
       display: grid;
-      grid-template-columns: 36px 22px 15px;
+      grid-template-columns: 33px 22px 15px;
       grid-template-rows: 31px minmax(0, 1fr);
       column-gap: 2px;
       align-items: stretch;
@@ -1209,9 +1209,12 @@
       font-variant-numeric: tabular-nums lining-nums;
       margin-top: -1px;
     }
-    /* 列表第一列：彩衣／馬號／馬名左移 3px；騎／練姓氏首字不動 */
+    /* 列表第一列：馬號加大 2px、下移 2px；橫向仍左移 3px（騎／練首字不動） */
     .hrow:not(.head) .cell.pin-id .hno {
-      transform: translateX(-3px);
+      width: 24px;
+      height: 24px;
+      font-size: 17px;
+      transform: translate(-3px, 2px);
     }
     .hno > span,
     .draw-no > span {
