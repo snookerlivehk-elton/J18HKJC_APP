@@ -1255,7 +1255,8 @@
     .jt-ini .t-ini { color: var(--text); }
     .jt-ini .j-ini { transform: translateY(-1px); }
     .jt-ini .t-ini { transform: translateY(1px); }
-    /* 馬名橫跨首列；右側留空給兩字跑法角標；僅馬名左移 5px */
+    /* 馬名橫跨首列；右側留空給兩字跑法角標；僅馬名左移 5px
+       width 補回 5px，避免 transform 左移後右側留白、文字卻被 ellipsis 截斷 */
     .hrow:not(.head) .cell.pin-id .hname {
       grid-column: 1 / -1;
       grid-row: 2;
@@ -1263,7 +1264,7 @@
       align-self: center;
       justify-self: stretch;
       max-width: none;
-      width: 100%;
+      width: calc(100% + 5px);
       padding: 0 26px 0 1px;
       margin-top: -1px;
       text-align: left;
@@ -1430,7 +1431,8 @@
       display: block;
       font-size: 13px; font-weight: 400; line-height: 1.02;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: var(--text); max-width: 52px;
+      color: var(--text);
+      max-width: none; /* 舊 52px 會讓四字馬名被截斷，右側卻看似仍有空位 */
       text-align: left;
       letter-spacing: -.02em;
     }

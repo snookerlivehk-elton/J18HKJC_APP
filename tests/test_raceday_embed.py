@@ -141,6 +141,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("text-align: left", r.text)
         self.assertIn("padding: 0 26px 0 1px", r.text)
         self.assertIn("transform: translateX(-5px)", r.text)
+        self.assertIn("width: calc(100% + 5px)", r.text)
+        self.assertIn("舊 52px 會讓四字馬名被截斷", r.text)
         self.assertIn("僅馬名左移 5px", r.text)
         self.assertIn("grid-template-columns: 33px 22px 15px", r.text)
         self.assertIn("jt-ini", r.text)
