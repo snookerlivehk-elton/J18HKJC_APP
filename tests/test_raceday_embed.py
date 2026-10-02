@@ -140,6 +140,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn(".hname {\n      display: block;\n      font-size: 13px; font-weight: 400", r.text)
         self.assertIn("text-align: left", r.text)
         self.assertIn("padding: 0 26px 0 1px", r.text)
+        self.assertIn(".hrow:not(.head) .cell.pin-id .hname {\n      grid-column: 1 / -1;\n      grid-row: 2;\n      z-index: 2;\n      align-self: center;\n      justify-self: stretch;\n      max-width: none;\n      width: 100%;\n      padding: 0 26px 0 1px;\n      margin-top: -1px;\n      text-align: left;\n      transform: translateX(-4px);\n    }", r.text)
         self.assertIn("grid-template-columns: 33px 22px 15px", r.text)
         self.assertIn("jt-ini", r.text)
         self.assertIn(".jt-ini .j-ini,\n    .jt-ini .t-ini {\n      display: block;\n      font-size: 12px;", r.text)
