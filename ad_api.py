@@ -91,6 +91,24 @@ async def _lifespan(_app: FastAPI):
         )
     else:
         print(f"ad_api startup hydrate skipped: {info.get('error') or 'unknown'}")
+    # 海報 bytes 誤掛到另一賽日（例如 10-04 id 仍係 10-01 PNG）→ 啟動時按 tips 重畫
+    try:
+        from ad_poster_guard import repair_cloned_ad_posters
+
+        repair = repair_cloned_ad_posters(output_root=_output_root(), notify=False)
+        n_fix = len(repair.get("repaired") or [])
+        if n_fix:
+            print(
+                f"ad_api startup poster repair: fixed {n_fix} cloned poster(s) "
+                f"groups={len(repair.get('groups') or [])}"
+            )
+        elif repair.get("groups"):
+            print(
+                f"ad_api startup poster repair: detected clones but none fixed "
+                f"errors={repair.get('errors')}"
+            )
+    except Exception as exc:
+        print(f"ad_api startup poster repair skipped: {exc}")
     yield
 
 
@@ -415,7 +433,7 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
             poster_png=poster_bytes,
             output_root=_output_root(),
             notify=body.notify,
-            force=bool(getattr(body, "force", True)),
+            force=bool(getattr(body, "force", False)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -427,6 +445,17 @@ def post_ingest(body: IngestBody) -> Dict[str, Any]:
         "status": pkg.get("status"),
         "package": public_payload(pkg),
     }
+
+
+@app.post("/v1/ads/repair-cloned-posters", dependencies=[Depends(require_ad_api_key)])
+def post_repair_cloned_posters(notify: bool = False) -> Dict[str, Any]:
+    """
+    掃描 ready 包：若同一海報 bytes 掛喺多個賽日，保留最早嗰個、其餘按 tips 重畫。
+    用於緊急修復（例如 10-04 id 仍出 10-01 圖）。
+    """
+    from ad_poster_guard import repair_cloned_ad_posters
+
+    return repair_cloned_ad_posters(output_root=_output_root(), notify=bool(notify))
 
 
 # ─── 賽前歷史戰績三幅圖（下游機械人）───────────────────────────────
