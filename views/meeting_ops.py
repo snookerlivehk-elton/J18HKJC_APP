@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -368,8 +370,9 @@ for stage, label in STAGES:
             st.caption(
                 "上方 readiness「尚未跑」= `upcoming_form_ai` 仲未有結果；"
                 "下方 running = `background_jobs` 紀錄。"
-                "若 phase 長期停喺 `spawned` 且 OpenRouter 無流量，代表進程已死——"
-                "按「重新整理進度」會自動標記 failed，之後可再「後台啟動」。"
+                "若 phase 長期停喺 `spawned`／無心跳，tick 會自動標 failed 並 only_missing 續跑"
+                f"（上限 {os.getenv('FORM_AI_AUTO_RESTART_MAX', '3')} 次／日）。"
+                "亦可按「重新整理進度」手動解鎖。"
             )
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",
