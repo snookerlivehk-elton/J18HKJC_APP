@@ -16,12 +16,13 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+import pandas as pd
 
 # 勿 override=True：Railway／容器已注入的 DATABASE_URL／OPENAI_* 不能被映像內 .env 蓋掉，
 # 否則背景子進程會寫錯庫，父進程 background_jobs 永遠停在 phase=spawned。
@@ -131,7 +132,7 @@ def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
     因此以年齡／心跳為主，PID 只作同容器輔助：
       - phase 仍係 spawned／booting 且超過 FORM_AI_SPAWNED_STALE_SEC（預設 120s）→ failed
       - 寬限內唔用 PID 判死（避免剛由 CORN 啟動、Web 刷新就誤殺）
-      - phase=running 但 updated_at 超過 FORM_AI_RUNNING_STALE_SEC（預設 45min）無心跳 → failed
+      - phase=running 但 updated_at 超過 FORM_AI_RUNNING_STALE_SEC（預設 15min）無心跳 → failed
       - 同容器且 cmdline 明顯唔似 form_ai_batch_job（逾短門檻）→ failed
     """
     if not job:
@@ -147,7 +148,7 @@ def reconcile_running_job(engine, job: Optional[dict]) -> Optional[dict]:
     age = _job_age_seconds(job)
     # 預設 2 分鐘：spawned 太久無 booting／running 心跳即當殭屍（跨容器唔好信 PID）
     spawned_stale = int(os.getenv("FORM_AI_SPAWNED_STALE_SEC", "120") or 120)
-    running_stale = int(os.getenv("FORM_AI_RUNNING_STALE_SEC", str(45 * 60)) or 45 * 60)
+    running_stale = int(os.getenv("FORM_AI_RUNNING_STALE_SEC", str(15 * 60)) or 15 * 60)
 
     pid_raw = prog.get("pid")
     try:
@@ -401,6 +402,96 @@ def latest_job(
         return None
 
 
+def count_auto_restarts(
+    engine,
+    *,
+    racing_date: str,
+    course: str,
+    within_hours: float = 24.0,
+) -> int:
+    """統計本賽日 Form AI 自動重啟次數（detail／progress 帶 auto_restart）。"""
+    ensure_jobs_table(engine)
+    d, c = str(racing_date)[:10], str(course or "").upper()
+    try:
+        rows = pd.read_sql(
+            text(
+                """
+                SELECT job_id, detail, progress_json, created_at
+                FROM background_jobs
+                WHERE job_type = 'form_ai'
+                  AND CAST(racing_date AS TEXT) LIKE :d
+                  AND UPPER(CAST(course AS TEXT)) = :c
+                ORDER BY created_at DESC
+                LIMIT 50
+                """
+            ),
+            engine,
+            params={"d": f"{d}%", "c": c},
+        )
+    except Exception:
+        try:
+            rows = pd.read_sql(
+                text(
+                    """
+                    SELECT job_id, detail, progress_json, created_at
+                    FROM background_jobs
+                    WHERE job_type = 'form_ai'
+                      AND racing_date = :d AND course = :c
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                    """
+                ),
+                engine,
+                params={"d": d, "c": c},
+            )
+        except Exception:
+            return 0
+    if rows is None or getattr(rows, "empty", True):
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(0.1, float(within_hours)))
+    n = 0
+    for _, row in rows.iterrows():
+        created = _parse_job_ts(row.get("created_at"))
+        if created is not None and created < cutoff:
+            continue
+        detail = str(row.get("detail") or "")
+        prog = row.get("progress_json") or {}
+        if isinstance(prog, str):
+            try:
+                prog = json.loads(prog)
+            except Exception:
+                prog = {}
+        if not isinstance(prog, dict):
+            prog = {}
+        if prog.get("auto_restart") or "auto_restart" in detail.lower():
+            n += 1
+    return n
+
+
+def _parse_job_ts(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        if "T" not in s and " " in s:
+            s = s.replace(" ", "T")
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
 def run_meeting(
     racing_date: str,
     course: str,
@@ -409,11 +500,48 @@ def run_meeting(
     sleep: float = 0.15,
     job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    import threading
+
     from form_ai_analyst import FormAIAnalyst
     from inference_engine import InferenceEngine
 
     engine = create_engine(DATABASE_URL_SYNC)
     ensure_jobs_table(engine)
+
+    hb_interval = float(os.getenv("FORM_AI_HEARTBEAT_SEC", "45") or 45)
+    hb_stop = threading.Event()
+    hb_lock = threading.Lock()
+    hb_progress: Dict[str, Any] = {
+        "phase": "booting",
+        "pid": os.getpid(),
+        "racing_date": racing_date[:10],
+        "course": course.upper(),
+    }
+
+    def _set_progress(**kwargs: Any) -> None:
+        with hb_lock:
+            hb_progress.update(kwargs)
+
+    def _heartbeat_loop() -> None:
+        """獨立心跳：LLM 卡住時仍更新 updated_at，方便較短 stale 偵測。"""
+        while not hb_stop.wait(max(5.0, hb_interval)):
+            try:
+                with hb_lock:
+                    prog = dict(hb_progress)
+                prog["heartbeat_at"] = _now()
+                prog["pid"] = os.getpid()
+                phase = str(prog.get("phase") or "running")
+                if phase in ("done", "cascade", "dead", "force_failed"):
+                    continue
+                update_job(
+                    engine,
+                    job_id,
+                    status="running",
+                    detail=str(prog.get("detail") or f"heartbeat phase={phase}"),
+                    progress=prog,
+                )
+            except Exception:
+                pass
 
     # 盡早打心跳，避免父進程只見 phase=spawned；跨容器 reconcile 靠呢個
     update_job(
@@ -421,183 +549,205 @@ def run_meeting(
         job_id,
         status="running",
         detail="booting Form AI worker",
-        progress={
-            "phase": "booting",
-            "pid": os.getpid(),
+        progress=dict(hb_progress),
+    )
+    hb_thread = threading.Thread(
+        target=_heartbeat_loop, name=f"form-ai-hb-{job_id or 'x'}", daemon=True
+    )
+    hb_thread.start()
+
+    try:
+        analyst = FormAIAnalyst()
+        if not analyst.is_ready():
+            update_job(
+                engine, job_id, status="failed", detail="OPENAI_API_KEY 未設定", finished=True
+            )
+            return {"ok": False, "error": "OPENAI_API_KEY 未設定"}
+
+        races = InferenceEngine().get_upcoming_races()
+        if races is None or races.empty:
+            update_job(
+                engine, job_id, status="failed", detail="無 upcoming 賽事", finished=True
+            )
+            return {"ok": False, "error": "無 upcoming 賽事"}
+
+        races = races.copy()
+        races = races[
+            (races["racing_date"].astype(str).str[:10] == racing_date[:10])
+            & (races["course"].astype(str).str.upper() == course.upper())
+        ]
+        race_ids = [str(x) for x in races["race_id"].tolist()]
+        if not race_ids:
+            update_job(
+                engine,
+                job_id,
+                status="failed",
+                detail=f"找不到 {racing_date} {course} 排位",
+                finished=True,
+            )
+            return {"ok": False, "error": f"找不到 {racing_date} {course} 排位"}
+
+        _set_progress(
+            phase="running",
+            race_count=len(race_ids),
+            race_index=0,
+            done=0,
+            detail=f"開始 {len(race_ids)} 場",
+        )
+        update_job(
+            engine,
+            job_id,
+            status="running",
+            detail=f"開始 {len(race_ids)} 場",
+            progress=dict(hb_progress),
+        )
+
+        total_done = 0
+        total_errors = 0
+        n_races = len(race_ids)
+
+        for i, rid in enumerate(race_ids, start=1):
+            print(f"[{i}/{n_races}] {rid} …", flush=True)
+
+            def _cb(cur, tot, hno, res, _i=i, _rid=rid):
+                detail = f"{_rid} 馬#{hno} ({cur}/{tot})"
+                _set_progress(
+                    phase="running",
+                    race_index=_i,
+                    race_count=n_races,
+                    race_id=_rid,
+                    horse_done=cur,
+                    horse_total=tot,
+                    horse_no=hno,
+                    done=total_done + int(cur or 0),
+                    detail=detail,
+                )
+                update_job(
+                    engine,
+                    job_id,
+                    status="running",
+                    detail=detail,
+                    progress=dict(hb_progress),
+                )
+
+            try:
+                out = analyst.analyze_race(
+                    rid,
+                    only_missing=only_missing,
+                    progress_cb=_cb,
+                )
+                total_done += int(out.get("done") or 0)
+                total_errors += len(out.get("errors") or [])
+                print(
+                    f"  done={out.get('done')} skipped={out.get('skipped')} "
+                    f"errors={len(out.get('errors') or [])}",
+                    flush=True,
+                )
+            except Exception as e:
+                total_errors += 1
+                print(f"  FAIL {rid}: {e}", file=sys.stderr, flush=True)
+                traceback.print_exc()
+                detail = f"{rid} 失敗：{e}"
+                _set_progress(
+                    phase="running",
+                    race_index=i,
+                    race_count=n_races,
+                    race_id=rid,
+                    error=str(e),
+                    done=total_done,
+                    detail=detail,
+                )
+                update_job(
+                    engine,
+                    job_id,
+                    status="running",
+                    detail=detail,
+                    progress=dict(hb_progress),
+                )
+            if sleep > 0:
+                time.sleep(sleep)
+
+        final = {
+            "ok": True,
+            "done": total_done,
+            "n_races": n_races,
+            "errors": total_errors,
             "racing_date": racing_date[:10],
             "course": course.upper(),
-        },
-    )
-
-    analyst = FormAIAnalyst()
-    if not analyst.is_ready():
-        update_job(engine, job_id, status="failed", detail="OPENAI_API_KEY 未設定", finished=True)
-        return {"ok": False, "error": "OPENAI_API_KEY 未設定"}
-
-    races = InferenceEngine().get_upcoming_races()
-    if races is None or races.empty:
-        update_job(engine, job_id, status="failed", detail="無 upcoming 賽事", finished=True)
-        return {"ok": False, "error": "無 upcoming 賽事"}
-
-    races = races.copy()
-    races = races[
-        (races["racing_date"].astype(str).str[:10] == racing_date[:10])
-        & (races["course"].astype(str).str.upper() == course.upper())
-    ]
-    race_ids = [str(x) for x in races["race_id"].tolist()]
-    if not race_ids:
-        update_job(
-            engine,
-            job_id,
-            status="failed",
-            detail=f"找不到 {racing_date} {course} 排位",
-            finished=True,
-        )
-        return {"ok": False, "error": f"找不到 {racing_date} {course} 排位"}
-
-    update_job(
-        engine,
-        job_id,
-        status="running",
-        detail=f"開始 {len(race_ids)} 場",
-        progress={"phase": "running", "race_count": len(race_ids), "race_index": 0, "done": 0},
-    )
-
-    total_done = 0
-    total_errors = 0
-    n_races = len(race_ids)
-
-    for i, rid in enumerate(race_ids, start=1):
-        print(f"[{i}/{n_races}] {rid} …", flush=True)
-
-        def _cb(cur, tot, hno, res, _i=i, _rid=rid):
-            update_job(
-                engine,
-                job_id,
-                status="running",
-                detail=f"{_rid} 馬#{hno} ({cur}/{tot})",
-                progress={
-                    "phase": "running",
-                    "race_index": _i,
-                    "race_count": n_races,
-                    "race_id": _rid,
-                    "horse_done": cur,
-                    "horse_total": tot,
-                    "horse_no": hno,
-                    "done": total_done + int(cur or 0),
-                },
-            )
-
-        try:
-            out = analyst.analyze_race(
-                rid,
-                only_missing=only_missing,
-                progress_cb=_cb,
-            )
-            total_done += int(out.get("done") or 0)
-            total_errors += len(out.get("errors") or [])
-            print(
-                f"  done={out.get('done')} skipped={out.get('skipped')} errors={len(out.get('errors') or [])}",
-                flush=True,
-            )
-        except Exception as e:
-            total_errors += 1
-            print(f"  FAIL {rid}: {e}", file=sys.stderr, flush=True)
-            traceback.print_exc()
-            update_job(
-                engine,
-                job_id,
-                status="running",
-                detail=f"{rid} 失敗：{e}",
-                progress={
-                    "phase": "running",
-                    "race_index": i,
-                    "race_count": n_races,
-                    "race_id": rid,
-                    "error": str(e),
-                    "done": total_done,
-                },
-            )
-        if sleep > 0:
-            time.sleep(sleep)
-
-    final = {
-        "ok": True,
-        "done": total_done,
-        "n_races": n_races,
-        "errors": total_errors,
-        "racing_date": racing_date[:10],
-        "course": course.upper(),
-        "only_missing": only_missing,
-    }
-    st = "ok" if total_errors == 0 else "ok_with_errors"
-    update_job(
-        engine,
-        job_id,
-        status=st,
-        detail=f"完成：寫入 {total_done} 匹／{n_races} 場，錯誤 {total_errors}",
-        progress={"phase": "done", **final},
-        finished=False,
-    )
-    print(f"Done. wrote={total_done} races={n_races} errors={total_errors}", flush=True)
-
-    # Form AI 寫入後自動接快照→海報→AI 社交文案→ingest（覆蓋未達 80% 則 waiting）
-    cascade: Dict[str, Any] = {}
-    try:
-        from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
-
-        print(
-            f"[pre_race_cascade] start {racing_date[:10]} {course.upper()} …",
-            flush=True,
-        )
+            "only_missing": only_missing,
+        }
+        st = "ok" if total_errors == 0 else "ok_with_errors"
+        _set_progress(phase="done", **final)
         update_job(
             engine,
             job_id,
             status=st,
-            detail=f"Form AI 完成，接廣告鏈（寫入 {total_done} 匹）…",
-            progress={"phase": "cascade", **final},
+            detail=f"完成：寫入 {total_done} 匹／{n_races} 場，錯誤 {total_errors}",
+            progress={"phase": "done", **final},
             finished=False,
         )
-        cascade = maybe_run_pre_race_cascade_after_form_ai(
-            racing_date=racing_date[:10],
-            course=course.upper(),
-        )
-        final["pre_race_cascade"] = cascade
-        casc_ok = bool(cascade.get("ok") or cascade.get("skipped"))
-        casc_reason = str(
-            cascade.get("reason")
-            or cascade.get("batch_id")
-            or ("ok" if casc_ok else "failed")
-        )
-        print(
-            f"[pre_race_cascade] ok={casc_ok} reason={casc_reason}",
-            flush=True,
-        )
-        update_job(
-            engine,
-            job_id,
-            status=st,
-            detail=(
-                f"完成：寫入 {total_done} 匹／{n_races} 場；"
-                f"廣告鏈 {'ok' if casc_ok else 'waiting/fail'}（{casc_reason[:120]}）"
-            ),
-            progress={"phase": "done", **final, "cascade_ok": casc_ok},
-            finished=True,
-        )
-    except Exception as exc:
-        traceback.print_exc()
-        cascade = {"ok": False, "error": str(exc)}
-        final["pre_race_cascade"] = cascade
-        update_job(
-            engine,
-            job_id,
-            status=st,
-            detail=f"完成寫入 {total_done} 匹；廣告鏈例外：{exc}",
-            progress={"phase": "done", **final},
-            finished=True,
-        )
+        print(f"Done. wrote={total_done} races={n_races} errors={total_errors}", flush=True)
 
-    return final
+        # Form AI 寫入後自動接快照→海報→AI 社交文案→ingest（覆蓋未達 80% 則 waiting）
+        cascade: Dict[str, Any] = {}
+        try:
+            from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
+
+            print(
+                f"[pre_race_cascade] start {racing_date[:10]} {course.upper()} …",
+                flush=True,
+            )
+            _set_progress(phase="cascade", **final)
+            update_job(
+                engine,
+                job_id,
+                status=st,
+                detail=f"Form AI 完成，接廣告鏈（寫入 {total_done} 匹）…",
+                progress={"phase": "cascade", **final},
+                finished=False,
+            )
+            cascade = maybe_run_pre_race_cascade_after_form_ai(
+                racing_date=racing_date[:10],
+                course=course.upper(),
+            )
+            final["pre_race_cascade"] = cascade
+            casc_ok = bool(cascade.get("ok") or cascade.get("skipped"))
+            casc_reason = str(
+                cascade.get("reason")
+                or cascade.get("batch_id")
+                or ("ok" if casc_ok else "failed")
+            )
+            print(
+                f"[pre_race_cascade] ok={casc_ok} reason={casc_reason}",
+                flush=True,
+            )
+            update_job(
+                engine,
+                job_id,
+                status=st,
+                detail=(
+                    f"完成：寫入 {total_done} 匹／{n_races} 場；"
+                    f"廣告鏈 {'ok' if casc_ok else 'waiting/fail'}（{casc_reason[:120]}）"
+                ),
+                progress={"phase": "done", **final, "cascade_ok": casc_ok},
+                finished=True,
+            )
+        except Exception as exc:
+            traceback.print_exc()
+            cascade = {"ok": False, "error": str(exc)}
+            final["pre_race_cascade"] = cascade
+            update_job(
+                engine,
+                job_id,
+                status=st,
+                detail=f"完成寫入 {total_done} 匹；廣告鏈例外：{exc}",
+                progress={"phase": "done", **final},
+                finished=True,
+            )
+
+        return final
+    finally:
+        hb_stop.set()
 
 
 def main(argv=None) -> int:

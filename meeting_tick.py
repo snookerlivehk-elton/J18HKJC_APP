@@ -101,6 +101,11 @@ AUTO_FORM_AI = (os.getenv("MEETING_TICK_AUTO_FORM_AI", "true") or "true").lower(
     "true",
     "yes",
 )
+# Form AI 自我修復：failed／部分覆蓋後較短冷卻再 only_missing 續跑
+FORM_AI_AUTO_RESTART_COOLDOWN_SEC = int(
+    os.getenv("FORM_AI_AUTO_RESTART_COOLDOWN_SEC", "300") or 300
+)
+FORM_AI_AUTO_RESTART_MAX = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "3") or 3)
 AUTO_SOCIAL_COPY = (
     os.getenv("MEETING_TICK_AUTO_SOCIAL_COPY", "true") or "true"
 ).lower() in (
@@ -509,6 +514,60 @@ class MeetingTickRunner:
             return False, f"cooldown {int(cd - elapsed)}s left (status={stage_status})"
         return True, "cooldown_ok"
 
+    def _attempt_allowed_form_ai(
+        self,
+        racing_date: str,
+        course: str,
+        stage_status: str,
+        *,
+        now: Optional[datetime] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Form AI 專用：部分覆蓋／failed 用較短冷卻，並以 auto_restart 上限取代 max_fails。
+        """
+        g = self.guards
+        if g.force:
+            return True, "force"
+        if stage_status == STATUS_OK:
+            return False, "already ok"
+
+        now = now or _utcnow()
+        try:
+            import form_ai_batch_job as faj
+
+            n_auto = faj.count_auto_restarts(
+                self.pipe.engine,
+                racing_date=str(racing_date)[:10],
+                course=str(course).upper(),
+            )
+            if n_auto >= max(0, FORM_AI_AUTO_RESTART_MAX):
+                return (
+                    False,
+                    f"auto_restart {n_auto}>={FORM_AI_AUTO_RESTART_MAX}",
+                )
+        except Exception:
+            pass
+
+        state = self.get_tick_state(racing_date, course, "FORM_AI")
+        last = _parse_ts(state.get("last_attempt_at"))
+        if last is None:
+            return True, "no_prior_attempt"
+        cd = min(
+            int(FORM_AI_AUTO_RESTART_COOLDOWN_SEC),
+            cooldown_seconds_for(
+                stage_status,
+                waiting_sec=g.cooldown_waiting_sec,
+                failed_sec=g.cooldown_failed_sec,
+            ),
+        )
+        # pending 也用短冷卻，方便續跑
+        if stage_status in (STATUS_PENDING, STATUS_FAILED, STATUS_WAITING):
+            cd = min(cd, int(FORM_AI_AUTO_RESTART_COOLDOWN_SEC))
+        elapsed = (now - last).total_seconds()
+        if elapsed < cd:
+            return False, f"form_ai cooldown {int(cd - elapsed)}s left"
+        return True, "form_ai_retry_ok"
+
     @staticmethod
     def _stage_status(readiness: Dict[str, Any], stage: str) -> str:
         return str((readiness.get(stage) or {}).get("status") or STATUS_PENDING)
@@ -661,7 +720,7 @@ class MeetingTickRunner:
             plan.skip_reasons.append("FORM_AI already ok")
         else:
             # 計劃層：上游已 ok 或本輪將嘗試；缺料時 execute 會 skip
-            allowed, why = self._attempt_allowed(d, c, "FORM_AI", ai, now=now)
+            allowed, why = self._attempt_allowed_form_ai(d, c, ai, now=now)
             if not allowed:
                 plan.skip_reasons.append(f"FORM_AI skip: {why}")
             else:
@@ -933,24 +992,57 @@ class MeetingTickRunner:
                     detail="wait gates " + ",".join(ai_missing),
                 )
             else:
-                rec = _act("start_form_ai_background")
+                # 自我修復：reconcile 殭屍後 only_missing 自動重啟
+                rec = _act("ensure_form_ai_self_heal")
                 if not dry_run:
                     res = dict(rec.get("result") or {})
-                    err = str(res.get("error") or "")
-                    if "進行中" in err:
+                    err = str(res.get("error") or res.get("reason") or "")
+                    if res.get("waiting") or "進行中" in err:
                         res["ok"] = True
                         res["waiting"] = True
-                        res["detail"] = err
+                        res["detail"] = err or res.get("reason") or "running"
+                    elif res.get("skipped") and res.get("ok"):
+                        res["waiting"] = False
                     elif not res.get("ok") and "OPENAI" in err.upper():
                         res["waiting"] = False
+                    elif res.get("skipped") and not res.get("ok"):
+                        # 達自動重啟上限 → waiting，唔累加硬失敗
+                        res["ok"] = True
+                        res["waiting"] = True
                     self._record_pull_attempt(
                         d,
                         c,
                         "FORM_AI",
                         res,
-                        waiting_hints=("進行中", "尚未"),
+                        waiting_hints=("進行中", "尚未", "上限", "running"),
                     )
                     out["readiness_after_form_ai"] = self.pipe.refresh_readiness(d, c)
+
+        # 即使本輪唔排重啟：仍 reconcile 殭屍 running，避免永遠卡住「進行中」
+        elif not dry_run and AUTO_FORM_AI:
+            try:
+                import form_ai_batch_job as faj
+
+                latest = faj.latest_job(
+                    self.pipe.engine, job_type="form_ai", racing_date=d, course=c
+                )
+                if latest and str(latest.get("status") or "") == "running":
+                    before = str(latest.get("job_id") or "")
+                    latest2 = faj.reconcile_running_job(self.pipe.engine, latest) or latest
+                    if str(latest2.get("status") or "") != "running":
+                        out["actions"].append(
+                            {
+                                "action": "form_ai_reconcile",
+                                "ok": True,
+                                "job_id": before,
+                                "status": latest2.get("status"),
+                                "detail": (latest2.get("detail") or "")[:200],
+                            }
+                        )
+            except Exception as exc:
+                out["actions"].append(
+                    {"action": "form_ai_reconcile", "ok": False, "error": str(exc)}
+                )
 
         # 正式快照：計劃已開，或本輪補齊閘門後 opportunistically
         if not dry_run:

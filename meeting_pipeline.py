@@ -70,7 +70,7 @@ STAGE_HELP: Dict[str, str] = {
     "FORMGUIDE": "JJJC formguide 主路徑；waiting／空字預設打 HKJC CMS 備援。",
     "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
-    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。覆蓋 ≥80% 後自動接快照／海報／AI 文案。已達標再按一鍵＝只跑廣告鏈。",
+    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。卡死會自動 reconcile＋only_missing 續跑（每日上限）。覆蓋 ≥80% 後自動接快照／海報／AI 文案。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；建完自動產 AI 社交文案並推送 Ad API。",
     "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
@@ -754,10 +754,14 @@ class MeetingPipeline:
         course: str,
         *,
         only_missing: bool = True,
+        auto_restart: bool = False,
+        detail: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         後台啟動 Form AI（subprocess，關閉手機頁面不中斷）。
         進度寫入 background_jobs；用 get_form_ai_job 查詢。
+
+        auto_restart=True：由 tick 自我修復呼叫；會計入自動重啟上限。
         """
         import form_ai_batch_job as faj
 
@@ -772,17 +776,58 @@ class MeetingPipeline:
             return {
                 "ok": False,
                 "error": "已有 Form AI 任務進行中",
+                "waiting": True,
                 "job_id": latest.get("job_id"),
                 "job": latest,
             }
 
+        max_auto = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "3") or 3)
+        if auto_restart:
+            n_auto = faj.count_auto_restarts(
+                self.engine, racing_date=racing_date[:10], course=course.upper()
+            )
+            if n_auto >= max(0, max_auto):
+                return {
+                    "ok": False,
+                    "skipped": True,
+                    "error": f"Form AI 自動重啟已達上限 {max_auto}（24h）",
+                    "auto_restarts": n_auto,
+                }
+
+        restart_n = 0
+        if auto_restart:
+            restart_n = (
+                faj.count_auto_restarts(
+                    self.engine, racing_date=racing_date[:10], course=course.upper()
+                )
+                + 1
+            )
+        job_detail = detail or (
+            f"auto_restart #{restart_n}" if auto_restart else "ops background start"
+        )
         job_id = faj.create_job(
             self.engine,
             job_type="form_ai",
             racing_date=racing_date[:10],
             course=course.upper(),
-            detail="ops background start",
+            detail=job_detail,
         )
+        # 標記 auto_restart 方便統計（create 後立刻寫 progress）
+        if auto_restart:
+            try:
+                faj.update_job(
+                    self.engine,
+                    job_id,
+                    status="queued",
+                    detail=job_detail,
+                    progress={
+                        "phase": "queued",
+                        "auto_restart": True,
+                        "auto_restart_n": restart_n,
+                    },
+                )
+            except Exception:
+                pass
         root = os.path.dirname(os.path.abspath(__file__))
         log_dir = os.path.join(root, "logs")
         try:
@@ -822,14 +867,23 @@ class MeetingPipeline:
                 self.engine,
                 job_id,
                 status="running",
-                detail=f"pid={proc.pid} log={log_path}",
-                progress={"phase": "spawned", "pid": proc.pid, "log": log_path},
+                detail=f"pid={proc.pid} log={log_path}"
+                + (f" {job_detail}" if auto_restart else ""),
+                progress={
+                    "phase": "spawned",
+                    "pid": proc.pid,
+                    "log": log_path,
+                    "auto_restart": bool(auto_restart),
+                    "auto_restart_n": restart_n if auto_restart else None,
+                },
             )
             return {
                 "ok": True,
                 "job_id": job_id,
                 "pid": proc.pid,
                 "log_path": log_path,
+                "auto_restart": bool(auto_restart),
+                "auto_restart_n": restart_n if auto_restart else None,
                 "message": "已後台啟動；可關閉本頁，稍後按「重新整理進度」",
             }
         except Exception as e:
@@ -837,6 +891,65 @@ class MeetingPipeline:
                 self.engine, job_id, status="failed", detail=str(e), finished=True
             )
             return {"ok": False, "error": str(e), "job_id": job_id}
+
+    def ensure_form_ai_self_heal(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        only_missing: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Tick／自我修復入口：
+          1) reconcile 殭屍 running
+          2) 覆蓋已 ≥80% → skip
+          3) 仍有 running → waiting
+          4) 否則 only_missing 自動重啟（受 FORM_AI_AUTO_RESTART_MAX 限制）
+        """
+        d, c = str(racing_date)[:10], str(course or "").upper()
+        ai_st, ai_detail = self.check_form_ai(d, c)
+        if ai_st == STATUS_OK:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "FORM_AI already ok",
+                "detail": ai_detail,
+            }
+
+        import form_ai_batch_job as faj
+
+        faj.ensure_jobs_table(self.engine)
+        latest = faj.latest_job(self.engine, job_type="form_ai", racing_date=d, course=c)
+        reconciled = False
+        if latest and str(latest.get("status") or "") == "running":
+            before = str(latest.get("status") or "")
+            latest = faj.reconcile_running_job(self.engine, latest) or latest
+            after = str(latest.get("status") or "")
+            reconciled = before == "running" and after != "running"
+
+        if latest and str(latest.get("status") or "") == "running":
+            return {
+                "ok": True,
+                "waiting": True,
+                "skipped": True,
+                "reason": "Form AI 任務進行中",
+                "job_id": latest.get("job_id"),
+                "job": latest,
+                "reconciled": reconciled,
+            }
+
+        # 剛 failed／無 job：自動 only_missing 續跑
+        out = self.start_form_ai_background(
+            d,
+            c,
+            only_missing=only_missing,
+            auto_restart=True,
+            detail="auto_restart self_heal",
+        )
+        out["reconciled"] = reconciled
+        out["self_heal"] = True
+        out["form_ai_detail"] = ai_detail
+        return out
 
     def get_form_ai_job(
         self, racing_date: str, course: str, job_id: Optional[str] = None
@@ -1568,8 +1681,17 @@ class MeetingPipeline:
                     racing_date,
                     course,
                     only_missing=bool(kwargs.get("only_missing", True)),
+                    auto_restart=bool(kwargs.get("auto_restart", False)),
+                    detail=kwargs.get("detail"),
                 )
                 return out
+
+            if action == "ensure_form_ai_self_heal":
+                return self.ensure_form_ai_self_heal(
+                    racing_date,
+                    course,
+                    only_missing=bool(kwargs.get("only_missing", True)),
+                )
 
             if action == "form_ai_job_status":
                 return self.get_form_ai_job(

@@ -328,10 +328,25 @@ class FormAIAnalyst:
         if progress_cb and total == 0:
             progress_cb(0, 0, None, None)
 
+        horse_timeout = float(os.getenv("FORM_AI_HORSE_TIMEOUT_SEC", "90") or 90)
+        horse_timeout = max(15.0, horse_timeout)
+
         for row in work:
             hno = int(row["馬號"])
             try:
-                res = self.analyze_one(race_meta, row, form_map.get(hno, ""))
+                from concurrent.futures import ThreadPoolExecutor
+                from concurrent.futures import TimeoutError as FuturesTimeout
+
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(
+                        self.analyze_one, race_meta, row, form_map.get(hno, "")
+                    )
+                    try:
+                        res = fut.result(timeout=horse_timeout)
+                    except FuturesTimeout:
+                        raise TimeoutError(
+                            f"單馬超時 {int(horse_timeout)}s（FORM_AI_HORSE_TIMEOUT_SEC）"
+                        )
                 self.save_result(race_id, hno, res)
                 done += 1
                 if progress_cb:
