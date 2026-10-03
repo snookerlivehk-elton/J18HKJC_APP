@@ -2,6 +2,9 @@
 # 賽日 tick 入口（Railway Cron Service／阿里雲定時任務共用）
 # 預設 mode=all（賽前＋賽後）；可用 MEETING_TICK_MODE=pre_race|post_race|all 覆寫
 # 需已設定：USE_SQLITE=false、DATABASE_URL 或 DATABASE_URL_SYNC、JJJC_API_BASE
+#
+# Form AI（C1）：tick 會喺本 Cron 容器內 inline 跑 form_ai（唔靠 Streamlit Popen）。
+# 可調：FORM_AI_INLINE_MAX_HORSES（預設 40）、FORM_AI_INLINE_MAX_SEC（預設 1200）
 set -euo pipefail
 cd "$(dirname "$0")"
 

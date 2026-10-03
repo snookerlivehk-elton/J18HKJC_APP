@@ -105,7 +105,7 @@ AUTO_FORM_AI = (os.getenv("MEETING_TICK_AUTO_FORM_AI", "true") or "true").lower(
 FORM_AI_AUTO_RESTART_COOLDOWN_SEC = int(
     os.getenv("FORM_AI_AUTO_RESTART_COOLDOWN_SEC", "300") or 300
 )
-FORM_AI_AUTO_RESTART_MAX = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "3") or 3)
+FORM_AI_AUTO_RESTART_MAX = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "8") or 8)
 AUTO_SOCIAL_COPY = (
     os.getenv("MEETING_TICK_AUTO_SOCIAL_COPY", "true") or "true"
 ).lower() in (

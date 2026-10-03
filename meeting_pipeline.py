@@ -70,7 +70,7 @@ STAGE_HELP: Dict[str, str] = {
     "FORMGUIDE": "JJJC formguide 主路徑；waiting／空字預設打 HKJC CMS 備援。",
     "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
-    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok 才後台啟動。卡死會自動 reconcile＋only_missing 續跑（每日上限）。覆蓋 ≥80% 後自動接快照／海報／AI 文案。",
+    "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok。Web 只入隊；Cron tick 喺容器內 inline 跑（唔再 Web Popen）。卡住會 reconcile＋only_missing 續跑。覆蓋 ≥80% 後自動接快照／海報／文案。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；建完自動產 AI 社交文案並推送 Ad API。",
     "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
@@ -756,19 +756,26 @@ class MeetingPipeline:
         only_missing: bool = True,
         auto_restart: bool = False,
         detail: Optional[str] = None,
+        enqueue_only: Optional[bool] = None,
+        run_inline: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
-        後台啟動 Form AI（subprocess，關閉手機頁面不中斷）。
-        進度寫入 background_jobs；用 get_form_ai_job 查詢。
+        Form AI 啟動：
+
+        - 預設（C1）：Web／作戰室 → **只入隊**（queued），由 Cron tick inline 執行
+        - tick／self_heal → **inline** 在當前進程跑（Railway Cron 長壽命）
+        - FORM_AI_ALLOW_SPAWN=true 時仍可用舊 Popen（不建議）
 
         auto_restart=True：由 tick 自我修復呼叫；會計入自動重啟上限。
         """
         import form_ai_batch_job as faj
 
         faj.ensure_jobs_table(self.engine)
-        # 若已有 running，先 reconcile 殭屍任務（PID 已死仍顯示 running）
+        d, c = str(racing_date)[:10], str(course or "").upper()
+
+        # 若已有 running，先 reconcile 殭屍任務
         latest = faj.latest_job(
-            self.engine, job_type="form_ai", racing_date=racing_date, course=course
+            self.engine, job_type="form_ai", racing_date=d, course=c
         )
         if latest:
             latest = faj.reconcile_running_job(self.engine, latest) or latest
@@ -781,10 +788,30 @@ class MeetingPipeline:
                 "job": latest,
             }
 
-        max_auto = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "3") or 3)
+        allow_spawn = (os.getenv("FORM_AI_ALLOW_SPAWN", "false") or "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        web_enqueue = (os.getenv("FORM_AI_WEB_ENQUEUE_ONLY", "true") or "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        exec_mode = (os.getenv("FORM_AI_EXEC_MODE", "inline") or "inline").strip().lower()
+
+        if run_inline is None:
+            # 只有 tick／self_heal（auto_restart）預設 inline；UI 一鍵／後台 → 入隊
+            run_inline = bool(auto_restart)
+        if enqueue_only is None:
+            enqueue_only = (not run_inline) and web_enqueue
+
+        max_auto = int(os.getenv("FORM_AI_AUTO_RESTART_MAX", "8") or 8)
         if auto_restart:
             n_auto = faj.count_auto_restarts(
-                self.engine, racing_date=racing_date[:10], course=course.upper()
+                self.engine, racing_date=d, course=c
             )
             if n_auto >= max(0, max_auto):
                 return {
@@ -794,40 +821,87 @@ class MeetingPipeline:
                     "auto_restarts": n_auto,
                 }
 
+        # 已有 queued：tick inline 時直接 claim 跑；UI 則回已入隊
+        if latest and str(latest.get("status") or "") == "queued":
+            if enqueue_only and not run_inline:
+                return {
+                    "ok": True,
+                    "queued": True,
+                    "skipped": True,
+                    "job_id": latest.get("job_id"),
+                    "message": "已有排隊任務，等待 Cron tick 執行",
+                    "job": latest,
+                }
+            if run_inline:
+                return self._run_form_ai_inline_job(
+                    d,
+                    c,
+                    job_id=str(latest.get("job_id")),
+                    only_missing=only_missing,
+                    auto_restart=auto_restart,
+                    detail=detail or "claim queued → inline/cron",
+                )
+
         restart_n = 0
         if auto_restart:
             restart_n = (
-                faj.count_auto_restarts(
-                    self.engine, racing_date=racing_date[:10], course=course.upper()
-                )
-                + 1
+                faj.count_auto_restarts(self.engine, racing_date=d, course=c) + 1
             )
         job_detail = detail or (
-            f"auto_restart #{restart_n}" if auto_restart else "ops background start"
+            f"auto_restart #{restart_n} inline"
+            if auto_restart
+            else ("enqueue for cron" if enqueue_only else "ops background start")
         )
         job_id = faj.create_job(
             self.engine,
             job_type="form_ai",
-            racing_date=racing_date[:10],
-            course=course.upper(),
+            racing_date=d,
+            course=c,
             detail=job_detail,
         )
-        # 標記 auto_restart 方便統計（create 後立刻寫 progress）
-        if auto_restart:
-            try:
-                faj.update_job(
-                    self.engine,
-                    job_id,
-                    status="queued",
-                    detail=job_detail,
-                    progress={
-                        "phase": "queued",
-                        "auto_restart": True,
-                        "auto_restart_n": restart_n,
-                    },
-                )
-            except Exception:
-                pass
+        faj.update_job(
+            self.engine,
+            job_id,
+            status="queued",
+            detail=job_detail,
+            progress={
+                "phase": "queued",
+                "auto_restart": bool(auto_restart),
+                "auto_restart_n": restart_n if auto_restart else None,
+                "enqueue_only": bool(enqueue_only),
+                "exec_mode": "inline" if run_inline else ("queued" if enqueue_only else "spawn"),
+            },
+        )
+
+        if enqueue_only and not run_inline:
+            return {
+                "ok": True,
+                "queued": True,
+                "job_id": job_id,
+                "message": "已入隊；下一次 Meeting Tick（Cron）會在容器內直接跑 Form AI，唔再靠 Web Popen",
+                "auto_restart": bool(auto_restart),
+            }
+
+        if run_inline:
+            return self._run_form_ai_inline_job(
+                d,
+                c,
+                job_id=job_id,
+                only_missing=only_missing,
+                auto_restart=auto_restart,
+                detail=job_detail,
+                restart_n=restart_n,
+            )
+
+        if not allow_spawn:
+            return {
+                "ok": True,
+                "queued": True,
+                "job_id": job_id,
+                "message": "已入隊（FORM_AI_ALLOW_SPAWN=false）；等 Cron tick inline 執行",
+            }
+
+        # ---- legacy Popen（僅 FORM_AI_ALLOW_SPAWN=true）----
         root = os.path.dirname(os.path.abspath(__file__))
         log_dir = os.path.join(root, "logs")
         try:
@@ -839,9 +913,9 @@ class MeetingPipeline:
             sys.executable,
             "form_ai_batch_job.py",
             "--date",
-            racing_date[:10],
+            d,
             "--course",
-            course.upper(),
+            c,
             "--job-id",
             job_id,
             "--sleep",
@@ -853,7 +927,6 @@ class MeetingPipeline:
         env = os.environ.copy()
         try:
             with open(log_path, "ab", buffering=0) as logf:
-                # 脫離 Streamlit session：關閉 stdin，stdout/err → log
                 proc = subprocess.Popen(
                     cmd,
                     cwd=root,
@@ -867,14 +940,14 @@ class MeetingPipeline:
                 self.engine,
                 job_id,
                 status="running",
-                detail=f"pid={proc.pid} log={log_path}"
-                + (f" {job_detail}" if auto_restart else ""),
+                detail=f"pid={proc.pid} log={log_path} {job_detail}",
                 progress={
                     "phase": "spawned",
                     "pid": proc.pid,
                     "log": log_path,
                     "auto_restart": bool(auto_restart),
                     "auto_restart_n": restart_n if auto_restart else None,
+                    "exec_mode": "spawn",
                 },
             )
             return {
@@ -884,13 +957,76 @@ class MeetingPipeline:
                 "log_path": log_path,
                 "auto_restart": bool(auto_restart),
                 "auto_restart_n": restart_n if auto_restart else None,
-                "message": "已後台啟動；可關閉本頁，稍後按「重新整理進度」",
+                "message": "已 Popen 後台啟動（legacy spawn）",
             }
         except Exception as e:
             faj.update_job(
                 self.engine, job_id, status="failed", detail=str(e), finished=True
             )
             return {"ok": False, "error": str(e), "job_id": job_id}
+
+    def _run_form_ai_inline_job(
+        self,
+        racing_date: str,
+        course: str,
+        *,
+        job_id: str,
+        only_missing: bool = True,
+        auto_restart: bool = False,
+        detail: str = "",
+        restart_n: int = 0,
+    ) -> Dict[str, Any]:
+        """在當前進程（Cron tick）內跑 Form AI——唔依賴 Web Popen。"""
+        import form_ai_batch_job as faj
+
+        d, c = str(racing_date)[:10], str(course or "").upper()
+        faj.update_job(
+            self.engine,
+            job_id,
+            status="running",
+            detail=detail or "inline/cron start",
+            progress={
+                "phase": "booting",
+                "pid": os.getpid(),
+                "auto_restart": bool(auto_restart),
+                "auto_restart_n": restart_n or None,
+                "exec_mode": "inline",
+            },
+        )
+        try:
+            result = faj.run_meeting(
+                d,
+                c,
+                only_missing=only_missing,
+                job_id=job_id,
+            )
+            out = {
+                "ok": bool(result.get("ok")),
+                "job_id": job_id,
+                "inline": True,
+                "exec_mode": "inline",
+                "auto_restart": bool(auto_restart),
+                "auto_restart_n": restart_n or None,
+                "result": result,
+                "message": (
+                    f"Cron inline 完成：寫入 {result.get('done')} 匹"
+                    + ("（本輪達上限，下一 tick 續跑）" if result.get("budget_exhausted") else "")
+                ),
+            }
+            if result.get("budget_exhausted"):
+                out["waiting"] = True
+                out["paused"] = True
+            return out
+        except Exception as e:
+            faj.update_job(
+                self.engine,
+                job_id,
+                status="failed",
+                detail=f"inline crash: {e}",
+                progress={"phase": "dead", "error": str(e), "exec_mode": "inline"},
+                finished=True,
+            )
+            return {"ok": False, "error": str(e), "job_id": job_id, "inline": True}
 
     def ensure_form_ai_self_heal(
         self,
@@ -900,11 +1036,11 @@ class MeetingPipeline:
         only_missing: bool = True,
     ) -> Dict[str, Any]:
         """
-        Tick／自我修復入口：
+        Tick／Cron 自我修復入口（C1）：
           1) reconcile 殭屍 running
           2) 覆蓋已 ≥80% → skip
           3) 仍有 running → waiting
-          4) 否則 only_missing 自動重啟（受 FORM_AI_AUTO_RESTART_MAX 限制）
+          4) 否則 **inline** only_missing 續跑（唔 Popen）
         """
         d, c = str(racing_date)[:10], str(course or "").upper()
         ai_st, ai_detail = self.check_form_ai(d, c)
@@ -938,13 +1074,14 @@ class MeetingPipeline:
                 "reconciled": reconciled,
             }
 
-        # 剛 failed／無 job：自動 only_missing 續跑
         out = self.start_form_ai_background(
             d,
             c,
             only_missing=only_missing,
             auto_restart=True,
-            detail="auto_restart self_heal",
+            run_inline=True,
+            enqueue_only=False,
+            detail="auto_restart self_heal inline/cron",
         )
         out["reconciled"] = reconciled
         out["self_heal"] = True
@@ -1683,6 +1820,8 @@ class MeetingPipeline:
                     only_missing=bool(kwargs.get("only_missing", True)),
                     auto_restart=bool(kwargs.get("auto_restart", False)),
                     detail=kwargs.get("detail"),
+                    enqueue_only=kwargs.get("enqueue_only"),
+                    run_inline=kwargs.get("run_inline"),
                 )
                 return out
 

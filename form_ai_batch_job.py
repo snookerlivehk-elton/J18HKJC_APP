@@ -499,6 +499,8 @@ def run_meeting(
     only_missing: bool = True,
     sleep: float = 0.15,
     job_id: Optional[str] = None,
+    max_horses: Optional[int] = None,
+    max_sec: Optional[float] = None,
 ) -> Dict[str, Any]:
     import threading
 
@@ -508,6 +510,14 @@ def run_meeting(
     engine = create_engine(DATABASE_URL_SYNC)
     ensure_jobs_table(engine)
 
+    # Cron／inline 預設每輪上限，避免單次 tick 跑滿 100+ 匹被平台殺進程
+    if max_horses is None:
+        raw = os.getenv("FORM_AI_INLINE_MAX_HORSES", "40")
+        max_horses = int(raw) if str(raw).strip() != "" else None
+    if max_sec is None:
+        raw_s = os.getenv("FORM_AI_INLINE_MAX_SEC", "1200")
+        max_sec = float(raw_s) if str(raw_s).strip() != "" else None
+
     hb_interval = float(os.getenv("FORM_AI_HEARTBEAT_SEC", "45") or 45)
     hb_stop = threading.Event()
     hb_lock = threading.Lock()
@@ -516,6 +526,7 @@ def run_meeting(
         "pid": os.getpid(),
         "racing_date": racing_date[:10],
         "course": course.upper(),
+        "exec_mode": "inline",
     }
 
     def _set_progress(**kwargs: Any) -> None:
@@ -531,15 +542,20 @@ def run_meeting(
                 prog["heartbeat_at"] = _now()
                 prog["pid"] = os.getpid()
                 phase = str(prog.get("phase") or "running")
-                if phase in ("done", "cascade", "dead", "force_failed"):
+                if phase in ("done", "cascade", "dead", "force_failed", "paused"):
                     continue
-                update_job(
-                    engine,
-                    job_id,
-                    status="running",
-                    detail=str(prog.get("detail") or f"heartbeat phase={phase}"),
-                    progress=prog,
-                )
+                # 心跳用獨立 engine，避免同連線跨 thread 問題
+                hb_engine = create_engine(DATABASE_URL_SYNC)
+                try:
+                    update_job(
+                        hb_engine,
+                        job_id,
+                        status="running",
+                        detail=str(prog.get("detail") or f"heartbeat phase={phase}"),
+                        progress=prog,
+                    )
+                finally:
+                    hb_engine.dispose()
             except Exception:
                 pass
 
@@ -548,13 +564,16 @@ def run_meeting(
         engine,
         job_id,
         status="running",
-        detail="booting Form AI worker",
+        detail="booting Form AI worker (inline/cron)",
         progress=dict(hb_progress),
     )
     hb_thread = threading.Thread(
         target=_heartbeat_loop, name=f"form-ai-hb-{job_id or 'x'}", daemon=True
     )
     hb_thread.start()
+
+    started_mono = time.monotonic()
+    budget_exhausted = False
 
     try:
         analyst = FormAIAnalyst()
@@ -587,18 +606,21 @@ def run_meeting(
             )
             return {"ok": False, "error": f"找不到 {racing_date} {course} 排位"}
 
+        horses_left = int(max_horses) if max_horses is not None else None
         _set_progress(
             phase="running",
             race_count=len(race_ids),
             race_index=0,
             done=0,
-            detail=f"開始 {len(race_ids)} 場",
+            max_horses=max_horses,
+            max_sec=max_sec,
+            detail=f"開始 {len(race_ids)} 場（inline；上限 {max_horses or '∞'} 匹／{max_sec or '∞'}s）",
         )
         update_job(
             engine,
             job_id,
             status="running",
-            detail=f"開始 {len(race_ids)} 場",
+            detail=str(hb_progress.get("detail")),
             progress=dict(hb_progress),
         )
 
@@ -607,6 +629,15 @@ def run_meeting(
         n_races = len(race_ids)
 
         for i, rid in enumerate(race_ids, start=1):
+            if max_sec is not None and (time.monotonic() - started_mono) >= float(max_sec):
+                budget_exhausted = True
+                print(f"[budget] max_sec={max_sec} reached — pause for next tick", flush=True)
+                break
+            if horses_left is not None and horses_left <= 0:
+                budget_exhausted = True
+                print(f"[budget] max_horses reached — pause for next tick", flush=True)
+                break
+
             print(f"[{i}/{n_races}] {rid} …", flush=True)
 
             def _cb(cur, tot, hno, res, _i=i, _rid=rid):
@@ -634,10 +665,16 @@ def run_meeting(
                 out = analyst.analyze_race(
                     rid,
                     only_missing=only_missing,
+                    max_horses=horses_left,
                     progress_cb=_cb,
                 )
-                total_done += int(out.get("done") or 0)
+                wrote = int(out.get("done") or 0)
+                total_done += wrote
                 total_errors += len(out.get("errors") or [])
+                if horses_left is not None:
+                    horses_left = max(0, horses_left - wrote - len(out.get("errors") or []))
+                if out.get("budget_hit") or (horses_left is not None and horses_left <= 0):
+                    budget_exhausted = True
                 print(
                     f"  done={out.get('done')} skipped={out.get('skipped')} "
                     f"errors={len(out.get('errors') or [])}",
@@ -664,6 +701,8 @@ def run_meeting(
                     detail=detail,
                     progress=dict(hb_progress),
                 )
+            if budget_exhausted:
+                break
             if sleep > 0:
                 time.sleep(sleep)
 
@@ -675,75 +714,92 @@ def run_meeting(
             "racing_date": racing_date[:10],
             "course": course.upper(),
             "only_missing": only_missing,
+            "budget_exhausted": budget_exhausted,
+            "max_horses": max_horses,
+            "max_sec": max_sec,
+            "elapsed_sec": round(time.monotonic() - started_mono, 1),
         }
-        st = "ok" if total_errors == 0 else "ok_with_errors"
-        _set_progress(phase="done", **final)
+        # 預算用盡＝正常暫停（下一 tick only_missing 續跑），唔當 failed
+        st = "paused" if budget_exhausted else ("ok" if total_errors == 0 else "ok_with_errors")
+        phase = "paused" if budget_exhausted else "done"
+        detail_msg = (
+            f"本輪寫入 {total_done} 匹／{n_races} 場"
+            + ("（達上限，下一 tick 續跑）" if budget_exhausted else f"，錯誤 {total_errors}")
+        )
+        _set_progress(phase=phase, **final)
         update_job(
             engine,
             job_id,
             status=st,
-            detail=f"完成：寫入 {total_done} 匹／{n_races} 場，錯誤 {total_errors}",
-            progress={"phase": "done", **final},
-            finished=False,
+            detail=detail_msg,
+            progress={"phase": phase, **final},
+            finished=not budget_exhausted,
         )
-        print(f"Done. wrote={total_done} races={n_races} errors={total_errors}", flush=True)
+        print(f"Done. wrote={total_done} races={n_races} errors={total_errors} paused={budget_exhausted}", flush=True)
 
-        # Form AI 寫入後自動接快照→海報→AI 社交文案→ingest（覆蓋未達 80% 則 waiting）
+        # 覆蓋未達 80% 時 cascade 會 waiting；預算暫停亦照試（無妨）
         cascade: Dict[str, Any] = {}
-        try:
-            from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
+        if not budget_exhausted:
+            try:
+                from ad_copy_jobs import maybe_run_pre_race_cascade_after_form_ai
 
-            print(
-                f"[pre_race_cascade] start {racing_date[:10]} {course.upper()} …",
-                flush=True,
-            )
-            _set_progress(phase="cascade", **final)
-            update_job(
-                engine,
-                job_id,
-                status=st,
-                detail=f"Form AI 完成，接廣告鏈（寫入 {total_done} 匹）…",
-                progress={"phase": "cascade", **final},
-                finished=False,
-            )
-            cascade = maybe_run_pre_race_cascade_after_form_ai(
-                racing_date=racing_date[:10],
-                course=course.upper(),
-            )
-            final["pre_race_cascade"] = cascade
-            casc_ok = bool(cascade.get("ok") or cascade.get("skipped"))
-            casc_reason = str(
-                cascade.get("reason")
-                or cascade.get("batch_id")
-                or ("ok" if casc_ok else "failed")
-            )
-            print(
-                f"[pre_race_cascade] ok={casc_ok} reason={casc_reason}",
-                flush=True,
-            )
-            update_job(
-                engine,
-                job_id,
-                status=st,
-                detail=(
-                    f"完成：寫入 {total_done} 匹／{n_races} 場；"
-                    f"廣告鏈 {'ok' if casc_ok else 'waiting/fail'}（{casc_reason[:120]}）"
-                ),
-                progress={"phase": "done", **final, "cascade_ok": casc_ok},
-                finished=True,
-            )
-        except Exception as exc:
-            traceback.print_exc()
-            cascade = {"ok": False, "error": str(exc)}
-            final["pre_race_cascade"] = cascade
-            update_job(
-                engine,
-                job_id,
-                status=st,
-                detail=f"完成寫入 {total_done} 匹；廣告鏈例外：{exc}",
-                progress={"phase": "done", **final},
-                finished=True,
-            )
+                print(
+                    f"[pre_race_cascade] start {racing_date[:10]} {course.upper()} …",
+                    flush=True,
+                )
+                _set_progress(phase="cascade", **final)
+                update_job(
+                    engine,
+                    job_id,
+                    status=st,
+                    detail=f"Form AI 完成，接廣告鏈（寫入 {total_done} 匹）…",
+                    progress={"phase": "cascade", **final},
+                    finished=False,
+                )
+                cascade = maybe_run_pre_race_cascade_after_form_ai(
+                    racing_date=racing_date[:10],
+                    course=course.upper(),
+                )
+                final["pre_race_cascade"] = cascade
+                casc_ok = bool(cascade.get("ok") or cascade.get("skipped"))
+                casc_reason = str(
+                    cascade.get("reason")
+                    or cascade.get("batch_id")
+                    or ("ok" if casc_ok else "failed")
+                )
+                print(
+                    f"[pre_race_cascade] ok={casc_ok} reason={casc_reason}",
+                    flush=True,
+                )
+                update_job(
+                    engine,
+                    job_id,
+                    status=st,
+                    detail=(
+                        f"完成：寫入 {total_done} 匹／{n_races} 場；"
+                        f"廣告鏈 {'ok' if casc_ok else 'waiting/fail'}（{casc_reason[:120]}）"
+                    ),
+                    progress={"phase": "done", **final, "cascade_ok": casc_ok},
+                    finished=True,
+                )
+            except Exception as exc:
+                traceback.print_exc()
+                cascade = {"ok": False, "error": str(exc)}
+                final["pre_race_cascade"] = cascade
+                update_job(
+                    engine,
+                    job_id,
+                    status=st,
+                    detail=f"完成寫入 {total_done} 匹；廣告鏈例外：{exc}",
+                    progress={"phase": "done", **final},
+                    finished=True,
+                )
+        else:
+            final["pre_race_cascade"] = {
+                "ok": True,
+                "skipped": True,
+                "reason": "budget_exhausted — cascade next tick",
+            }
 
         return final
     finally:
