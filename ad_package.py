@@ -931,6 +931,26 @@ def ingest_ad_package(
     paths = package_paths(ad_id, out_root)
     paths["root"].mkdir(parents=True, exist_ok=True)
 
+    # 拒絕把另一個賽日嘅舊海報 bytes 掛到今日 package id
+    if poster_png:
+        try:
+            from ad_poster_guard import assert_poster_not_foreign_clone
+
+            meeting = pkg.get("meeting") if isinstance(pkg.get("meeting"), dict) else {}
+            meeting_date = str(
+                meeting.get("date") or meeting.get("racing_date") or ""
+            )[:10]
+            assert_poster_not_foreign_clone(
+                poster_png,
+                meeting_date=meeting_date,
+                output_root=out_root,
+                force=bool(force),
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            logger.warning("poster clone guard skipped: %s", exc)
+
     if poster_png:
         paths["poster"].write_bytes(poster_png)
         try:
