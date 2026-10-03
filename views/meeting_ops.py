@@ -368,11 +368,10 @@ for stage, label in STAGES:
             st.caption("NLP 為可選；一鍵遺留鏈見上方按鈕，或本階段「一鍵完成」。")
         elif stage == "FORM_AI":
             st.caption(
-                "上方 readiness「尚未跑」= `upcoming_form_ai` 仲未有結果；"
-                "下方 running = `background_jobs` 紀錄。"
-                "若 phase 長期停喺 `spawned`／無心跳，tick 會自動標 failed 並 only_missing 續跑"
-                f"（上限 {os.getenv('FORM_AI_AUTO_RESTART_MAX', '3')} 次／日）。"
-                "亦可按「重新整理進度」手動解鎖。"
+                "上方 readiness＝`upcoming_form_ai` 結果；下方＝`background_jobs`。"
+                "「後台啟動」而家只**入隊**，由 Railway Cron／meeting_tick **喺容器內 inline 跑**"
+                "（唔再靠 Web Popen，避免無心跳被殺）。"
+                f"每輪約最多 {os.getenv('FORM_AI_INLINE_MAX_HORSES', '40')} 匹，下一 tick only_missing 續跑。"
             )
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",
@@ -386,13 +385,15 @@ for stage, label in STAGES:
             if a2.button(
                 "後台啟動 Form AI",
                 key=f"act_ai_bg_{stage}",
-                help="subprocess 背景跑；進度寫 background_jobs",
+                help="入隊後由 Cron tick inline 執行（唔再 Web Popen）",
             ):
                 r = pipe.run_action(
                     racing_date,
                     course,
                     "start_form_ai_background",
                     only_missing=only_miss,
+                    enqueue_only=True,
+                    run_inline=False,
                 )
                 _rec("start_form_ai_background", stage, str(r.get("job_id") or r.get("error") or ""))
                 st.session_state["ops_form_ai_job"] = r.get("job_id")

@@ -292,6 +292,7 @@ class FormAIAnalyst:
         *,
         only_missing: bool = True,
         horse_nos: Optional[List[int]] = None,
+        max_horses: Optional[int] = None,
         progress_cb=None,
     ) -> Dict[str, Any]:
         pred, info, meta = self.infer.predict_race(race_id)
@@ -321,6 +322,11 @@ class FormAIAnalyst:
             if only_missing and hno in existing:
                 continue
             work.append(row)
+
+        budget_hit = False
+        if max_horses is not None and max_horses >= 0 and len(work) > int(max_horses):
+            work = work[: int(max_horses)]
+            budget_hit = True
 
         done = 0
         errors = []
@@ -363,4 +369,5 @@ class FormAIAnalyst:
             "total": total,
             "errors": errors,
             "race_id": race_id,
+            "budget_hit": budget_hit,
         }
