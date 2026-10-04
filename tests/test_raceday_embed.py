@@ -96,6 +96,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("loadMeetingForDate", r.text)
         self.assertIn("formatFixtureMetaLine", r.text)
         self.assertIn("cal-legend-col", r.text)
+        self.assertIn(".cal-legend[hidden]", r.text)
         self.assertIn("沙田·日馬", r.text)
         self.assertIn("沙田·夜馬", r.text)
         self.assertIn("跑馬地·日馬", r.text)

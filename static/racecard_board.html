@@ -2506,6 +2506,10 @@
       padding-top: 10px;
       border-top: 1px solid var(--line);
     }
+    /* display:grid 會蓋過原生 [hidden]，須顯式隱藏 */
+    .cal-legend[hidden] {
+      display: none !important;
+    }
     .cal-legend-col {
       display: flex;
       flex-direction: column;
