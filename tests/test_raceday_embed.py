@@ -80,6 +80,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("menuRaceDateBtn", r.text)
         self.assertIn("查看賽期和歷史數據", r.text)
         self.assertIn("menu-date-hint", r.text)
+        self.assertIn("menu-date-field", r.text)
+        self.assertIn("menu-date-chev", r.text)
         self.assertIn("RACE_FIXTURES", r.text)
         self.assertIn("openRaceDateCalendar", r.text)
         self.assertIn("raceCalOverlay", r.text)
