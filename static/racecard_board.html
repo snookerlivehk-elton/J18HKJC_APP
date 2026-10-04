@@ -2367,7 +2367,7 @@
     .cal-scope-switch {
       flex: 0 0 auto;
       display: block;
-      width: 86px;
+      width: 118px;
       height: 30px;
       margin: 0 0 0 6px;
       padding: 2px;
@@ -2395,6 +2395,7 @@
       font-size: 11px;
       font-weight: 800;
       letter-spacing: 0;
+      white-space: nowrap;
     }
     .cal-scope-switch[data-cal-scope="hk"] .qin-sw-lab[data-cal-scope="hk"],
     .cal-scope-switch[data-cal-scope="os"] .qin-sw-lab[data-cal-scope="os"] {
@@ -3008,11 +3009,11 @@
           <button type="button" class="cal-nav" id="raceCalPrev" aria-label="上一個月">‹</button>
           <div class="cal-title" id="raceCalTitle">賽期</div>
           <button type="button" class="cal-nav" id="raceCalNext" aria-label="下一個月">›</button>
-          <button type="button" class="cal-scope-switch" id="raceCalScopeSwitch" data-cal-scope="hk" role="switch" aria-checked="false" aria-label="賽期範圍：港馬或外馬">
+          <button type="button" class="cal-scope-switch" id="raceCalScopeSwitch" data-cal-scope="hk" role="switch" aria-checked="false" aria-label="賽期範圍：香港馬或外國馬">
             <span class="qin-sw-track" aria-hidden="true">
               <span class="qin-sw-thumb"></span>
-              <span class="qin-sw-lab" data-cal-scope="hk">港馬</span>
-              <span class="qin-sw-lab" data-cal-scope="os">外馬</span>
+              <span class="qin-sw-lab" data-cal-scope="hk">香港馬</span>
+              <span class="qin-sw-lab" data-cal-scope="os">外國馬</span>
             </span>
           </button>
         </div>
@@ -3022,7 +3023,7 @@
         <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
       </div>
       <div class="cal-grid" id="raceCalGrid"></div>
-      <div class="cal-legend" id="raceCalLegendHk" aria-label="港馬賽日圖例">
+      <div class="cal-legend" id="raceCalLegendHk" aria-label="香港馬賽日圖例">
         <div class="cal-legend-col">
           <span class="lg"><i class="dot st-day"></i>沙田·日馬</span>
           <span class="lg"><i class="dot st-night"></i>沙田·夜馬</span>
@@ -3032,7 +3033,7 @@
           <span class="lg"><i class="dot hv-night"></i>跑馬地·夜馬</span>
         </div>
       </div>
-      <div class="cal-legend" id="raceCalLegendOs" hidden aria-label="外馬賽日圖例">
+      <div class="cal-legend" id="raceCalLegendOs" hidden aria-label="外國馬賽日圖例">
         <div class="cal-legend-col">
           <span class="lg"><i class="dot os-uk"></i>英國</span>
           <span class="lg"><i class="dot os-au"></i>澳洲</span>
