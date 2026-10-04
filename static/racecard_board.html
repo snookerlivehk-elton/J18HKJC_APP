@@ -5619,7 +5619,7 @@
     const WEEKDAY_LABEL = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
     function fixtureMarkClass(f) {
       if (!f) return "";
-      /* 黃昏馬近年極少／已近乎停辦，統一歸入日／夜色點 */
+      /* 暮場近年極少，統一歸入日／夜色點 */
       if (f.course === "ST" && f.session === "night") return "st-night";
       if (f.course === "HV" && f.session === "day") return "hv-day";
       if (f.course === "HV") return "hv-night";
