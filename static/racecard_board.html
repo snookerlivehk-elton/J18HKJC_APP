@@ -2311,24 +2311,35 @@
       .cal-overlay, .cal-sheet { animation: none; }
     }
     .cal-head {
-      display: grid;
-      grid-template-columns: 36px 1fr 36px 28px;
+      display: flex;
       align-items: center;
-      gap: 4px;
+      justify-content: space-between;
+      gap: 10px;
       margin-bottom: 4px;
     }
+    .cal-month-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      flex: 0 1 auto;
+    }
     .cal-title {
+      flex: 0 0 auto;
+      min-width: 7.2em;
       text-align: center;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      letter-spacing: .04em;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      padding: 0 2px;
     }
     .cal-nav, .cal-close {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       margin: 0;
       padding: 0;
       border: 0;
@@ -2339,15 +2350,19 @@
       font-size: 22px;
       line-height: 1;
       cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
     .cal-close {
-      width: 28px;
-      height: 28px;
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      margin-left: 4px;
       font-size: 20px;
       background: transparent;
       color: var(--muted);
     }
     .cal-nav:active { background: #e2e8f0; }
+    .cal-close:active { background: #f0f3f7; }
     .cal-sub {
       text-align: center;
       font-size: 12px;
@@ -2950,9 +2965,11 @@
   <div class="cal-overlay" id="raceCalOverlay" hidden aria-hidden="true">
     <div class="cal-sheet" id="raceCalSheet" role="dialog" aria-modal="true" aria-labelledby="raceCalTitle">
       <div class="cal-head">
-        <button type="button" class="cal-nav" id="raceCalPrev" aria-label="上一個月">‹</button>
-        <div class="cal-title" id="raceCalTitle">賽期</div>
-        <button type="button" class="cal-nav" id="raceCalNext" aria-label="下一個月">›</button>
+        <div class="cal-month-nav" role="group" aria-label="選擇月份">
+          <button type="button" class="cal-nav" id="raceCalPrev" aria-label="上一個月">‹</button>
+          <div class="cal-title" id="raceCalTitle">賽期</div>
+          <button type="button" class="cal-nav" id="raceCalNext" aria-label="下一個月">›</button>
+        </div>
         <button type="button" class="cal-close" id="raceCalClose" aria-label="關閉">×</button>
       </div>
       <div class="cal-sub" id="raceCalSub">點選有賽事的日子</div>
