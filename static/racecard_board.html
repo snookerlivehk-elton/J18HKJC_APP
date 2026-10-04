@@ -2268,18 +2268,22 @@
       letter-spacing: .03em;
     }
 
-    /* —— 賽日日曆彈窗（非全屏） —— */
+    /* —— 賽日日曆彈窗：頂邊對齊馬匹列表，不遮場次／場次資訊 —— */
     .cal-overlay {
       position: fixed;
-      inset: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: 0; /* JS 按 #boardMain 頂邊覆寫 */
       z-index: 120;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 18px 14px;
+      padding: 0 14px 16px;
       background: rgba(20, 28, 40, .42);
       -webkit-tap-highlight-color: transparent;
       animation: calFadeIn .16s ease-out;
+      box-sizing: border-box;
     }
     .cal-overlay[hidden] { display: none !important; }
     @keyframes calFadeIn {
@@ -2288,15 +2292,19 @@
     }
     .cal-sheet {
       width: min(342px, 100%);
+      max-height: calc(100% - 8px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
       border-radius: 16px;
       background: #fff;
       color: var(--text);
       box-shadow: 0 18px 48px rgba(30, 42, 58, .28), 0 0 0 1px rgba(45, 62, 80, .08);
       padding: 14px 14px 12px;
       animation: calSheetIn .18s ease-out;
+      margin-top: 0;
     }
     @keyframes calSheetIn {
-      from { opacity: 0; transform: translateY(8px) scale(.98); }
+      from { opacity: 0; transform: translateY(6px) scale(.98); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -5713,6 +5721,13 @@
       });
     }
 
+    function syncRaceCalOverlayTop() {
+      const overlay = document.getElementById("raceCalOverlay");
+      const main = (el && el.boardMain) || document.getElementById("boardMain");
+      if (!overlay || !main) return;
+      const top = Math.max(0, Math.round(main.getBoundingClientRect().top));
+      overlay.style.top = top + "px";
+    }
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
@@ -5725,8 +5740,12 @@
         }
       }
       renderRaceCalendar();
+      syncRaceCalOverlayTop();
       overlay.removeAttribute("hidden");
       overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () {
+        syncRaceCalOverlayTop();
+      });
     }
     function closeRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
@@ -5765,6 +5784,10 @@
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
       document.addEventListener("keydown", function (ev) {
         if (ev.key === "Escape") closeRaceDateCalendar();
+      });
+      window.addEventListener("resize", function () {
+        const ov = document.getElementById("raceCalOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncRaceCalOverlayTop();
       });
     }
     bindRaceDateCalendar();

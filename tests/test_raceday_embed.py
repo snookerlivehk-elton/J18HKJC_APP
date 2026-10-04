@@ -84,6 +84,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("menu-date-chev", r.text)
         self.assertIn("RACE_FIXTURES", r.text)
         self.assertIn("openRaceDateCalendar", r.text)
+        self.assertIn("syncRaceCalOverlayTop", r.text)
         self.assertIn("raceCalOverlay", r.text)
         self.assertIn("cal-legend-col", r.text)
         self.assertIn("沙田·日馬", r.text)
