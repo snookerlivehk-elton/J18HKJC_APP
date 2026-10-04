@@ -82,6 +82,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("menu-date-hint", r.text)
         self.assertIn("menu-date-field", r.text)
         self.assertIn("menu-date-chev", r.text)
+        self.assertIn("white-space: nowrap", r.text)
+        self.assertIn("WEEKDAY_SHORT", r.text)
         self.assertIn("RACE_FIXTURES", r.text)
         self.assertIn("OVERSEAS_FIXTURES", r.text)
         self.assertIn("openRaceDateCalendar", r.text)

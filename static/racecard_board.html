@@ -2203,12 +2203,12 @@
     }
 
     /* —— 菜單：最近賽日（日期選擇欄） —— */
-    .topbar-menu { min-width: 228px; }
+    .topbar-menu { min-width: 248px; }
     .topbar-menu button.menu-race-date {
       flex-direction: column;
       align-items: stretch;
-      gap: 7px;
-      padding: 12px 12px 11px;
+      gap: 6px;
+      padding: 10px 12px 10px;
     }
     .topbar-menu button.menu-race-date:active {
       background: transparent;
@@ -2217,10 +2217,10 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
-      min-height: 42px;
-      padding: 8px 10px 8px 12px;
+      min-height: 36px;
+      padding: 6px 8px 6px 10px;
       border: 1.5px solid #b7c4d4;
       border-radius: 11px;
       background: linear-gradient(180deg, #fbfcfe 0%, #eef3f8 100%);
@@ -2237,13 +2237,14 @@
     .menu-date-val {
       flex: 1 1 auto;
       min-width: 0;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: .01em;
+      letter-spacing: 0;
       color: #1f2a37;
       font-variant-numeric: tabular-nums;
-      line-height: 1.25;
+      line-height: 1.2;
       text-align: left;
+      white-space: nowrap;
     }
     .menu-date-chev {
       flex: 0 0 auto;
@@ -5747,7 +5748,7 @@
       const m = Number(p[1]);
       const d = Number(p[2]);
       if (!y || !m || !d) return "—";
-      const wd = WEEKDAY_LABEL[new Date(y, m - 1, d).getDay()] || "";
+      const wd = WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()] || "";
       return y + "年" + m + "月" + d + "日" + (wd ? (" " + wd) : "");
     }
     function fixtureTagText(list) {
