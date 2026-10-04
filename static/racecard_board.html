@@ -2313,8 +2313,8 @@
     .cal-head {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      justify-content: flex-start;
+      gap: 6px;
       margin-bottom: 4px;
     }
     .cal-month-nav {
@@ -2371,15 +2371,16 @@
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
     .cal-sub { display: none !important; }
+    /* 上下撥動：省橫向空間，避免擠壓右側關閉鍵 */
     .cal-scope-switch {
       flex: 0 0 auto;
       display: block;
-      width: 118px;
-      height: 30px;
-      margin: 0 0 0 6px;
+      width: 52px;
+      height: 52px;
+      margin: 0 2px 0 auto;
       padding: 2px;
       border: 0;
-      border-radius: 5px;
+      border-radius: 6px;
       background: #d5dbe3;
       box-shadow: inset 0 0 0 1px #b8c0cb;
       cursor: pointer;
@@ -2387,22 +2388,37 @@
       -webkit-tap-highlight-color: transparent;
     }
     .cal-scope-switch .qin-sw-track {
-      min-height: 26px;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
+      align-items: stretch;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
       border-radius: 4px;
       background: #9aa5b4;
+      overflow: hidden;
     }
     .cal-scope-switch .qin-sw-thumb {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 50%;
       border-radius: 3px;
       background: var(--orange);
+      transform: translateY(0);
+      transition: transform .22s cubic-bezier(.4, .0, .2, 1);
     }
     .cal-scope-switch[data-cal-scope="os"] .qin-sw-thumb {
-      transform: translateX(100%);
+      transform: translateY(100%);
     }
     .cal-scope-switch .qin-sw-lab {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
       letter-spacing: 0;
+      line-height: 1.05;
       white-space: nowrap;
+      padding: 0;
     }
     .cal-scope-switch[data-cal-scope="hk"] .qin-sw-lab[data-cal-scope="hk"],
     .cal-scope-switch[data-cal-scope="os"] .qin-sw-lab[data-cal-scope="os"] {
@@ -3016,14 +3032,14 @@
           <button type="button" class="cal-nav" id="raceCalPrev" aria-label="上一個月">‹</button>
           <div class="cal-title" id="raceCalTitle">賽期</div>
           <button type="button" class="cal-nav" id="raceCalNext" aria-label="下一個月">›</button>
-          <button type="button" class="cal-scope-switch" id="raceCalScopeSwitch" data-cal-scope="hk" role="switch" aria-checked="false" aria-label="賽期範圍：香港馬或外國馬">
-            <span class="qin-sw-track" aria-hidden="true">
-              <span class="qin-sw-thumb"></span>
-              <span class="qin-sw-lab" data-cal-scope="hk">香港馬</span>
-              <span class="qin-sw-lab" data-cal-scope="os">外國馬</span>
-            </span>
-          </button>
         </div>
+        <button type="button" class="cal-scope-switch" id="raceCalScopeSwitch" data-cal-scope="hk" role="switch" aria-checked="false" aria-label="賽期範圍：香港馬或外國馬">
+          <span class="qin-sw-track" aria-hidden="true">
+            <span class="qin-sw-thumb"></span>
+            <span class="qin-sw-lab" data-cal-scope="hk">香港馬</span>
+            <span class="qin-sw-lab" data-cal-scope="os">外國馬</span>
+          </span>
+        </button>
         <button type="button" class="cal-close" id="raceCalClose" aria-label="關閉">×</button>
       </div>
       <div class="cal-wdays" aria-hidden="true">
