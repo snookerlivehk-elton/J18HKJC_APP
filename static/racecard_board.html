@@ -1422,7 +1422,7 @@
       z-index: 1;
     }
     .silk.has-img {
-      background-color: transparent;
+      /* 保留 silk-N 底色作外鏈失敗時的兜底，圖片蓋在上面 */
       background-size: contain;
       background-position: left top;
       background-repeat: no-repeat;
@@ -4196,11 +4196,19 @@
       });
       return maxP;
     }
+    function silkProxyUrl(url) {
+      const m = String(url || "").match(/\/RaceColor\/([A-Za-z0-9]+)\.gif/i);
+      if (!m) return url || "";
+      /* 同源代理：避免手機網訪問 HKJC 外鏈失敗導致彩衣空白 */
+      return "/silk/" + m[1] + ".gif";
+    }
     function silkTag(r) {
+      const base = silkClass(r.no);
       if (r.silk) {
-        return '<span class="silk has-img" style="background-image:url(\'' + esc(r.silk) + '\')" aria-hidden="true"></span>';
+        const src = silkProxyUrl(r.silk);
+        return '<span class="' + base + ' has-img" style="background-image:url(\'' + esc(src) + '\')" aria-hidden="true"></span>';
       }
-      return '<span class="' + silkClass(r.no) + '" aria-hidden="true"></span>';
+      return '<span class="' + base + '" aria-hidden="true"></span>';
     }
     function currentMeet() {
       return MEETING.races.find((r) => r.num === currentRace) || MEETING.races[0];
@@ -4673,8 +4681,8 @@
       el.sheetName.textContent = r.name || "";
       el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
       if (r.silk) {
-        el.sheetSilk.style.backgroundImage = "url('" + String(r.silk).replace(/'/g, "%27") + "')";
-        el.sheetSilk.className = "horse-sheet-silk";
+        el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
+        el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
       } else {
         el.sheetSilk.style.backgroundImage = "";
         el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
