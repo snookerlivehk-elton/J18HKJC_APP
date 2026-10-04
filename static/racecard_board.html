@@ -2203,7 +2203,7 @@
     }
 
     /* —— 菜單：最近賽日（日期選擇欄） —— */
-    .topbar-menu { min-width: 248px; }
+    .topbar-menu { min-width: 280px; }
     .topbar-menu button.menu-race-date {
       flex-direction: column;
       align-items: stretch;
@@ -2219,8 +2219,8 @@
       justify-content: space-between;
       gap: 8px;
       width: 100%;
-      min-height: 36px;
-      padding: 6px 8px 6px 10px;
+      min-height: 40px;
+      padding: 7px 8px 7px 10px;
       border: 1.5px solid #b7c4d4;
       border-radius: 11px;
       background: linear-gradient(180deg, #fbfcfe 0%, #eef3f8 100%);
@@ -2237,7 +2237,7 @@
     .menu-date-val {
       flex: 1 1 auto;
       min-width: 0;
-      font-size: 13px;
+      font-size: 18px;
       font-weight: 700;
       letter-spacing: 0;
       color: #1f2a37;
@@ -5748,7 +5748,7 @@
       const m = Number(p[1]);
       const d = Number(p[2]);
       if (!y || !m || !d) return "—";
-      const wd = WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()] || "";
+      const wd = WEEKDAY_LABEL[new Date(y, m - 1, d).getDay()] || "";
       return y + "年" + m + "月" + d + "日" + (wd ? (" " + wd) : "");
     }
     function fixtureTagText(list) {
