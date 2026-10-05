@@ -506,68 +506,78 @@
       .race-meta-run.is-marquee { animation: none; transform: none; }
     }
 
-    /* 場次信息與馬匹列表之間：時間軸＋膠囊（吸頂鎖定） */
+    /* 場次信息與馬匹列表之間：時間軸＋膠囊（對齊參考稿，吸頂鎖定） */
     .insight-pin {
       position: sticky;
       top: 0;
       z-index: 8;
       display: flex;
       flex-direction: column;
-      gap: 5px;
-      padding: 5px 10px 6px;
+      gap: 6px;
+      padding: 4px 10px 7px;
       background: #f7f9fc;
       border-bottom: 1px solid var(--line);
       box-shadow: 0 1px 0 rgba(45, 62, 80, .04);
     }
     .time-scrub {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      height: 26px;
+      display: block;
       min-width: 0;
+      padding: 0 2px;
       user-select: none;
       -webkit-user-select: none;
       touch-action: none;
     }
-    .time-scrub-lab {
-      flex: 0 0 auto;
-      min-width: 3.1em;
-      max-width: 4.2em;
-      padding: 0 2px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0;
-      color: var(--nav);
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-      text-align: right;
-      line-height: 1;
-    }
-    .time-scrub-end {
-      flex: 0 0 auto;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--muted);
-      letter-spacing: .02em;
-      line-height: 1;
-    }
     .time-scrub-track-wrap {
       position: relative;
-      flex: 1 1 auto;
-      min-width: 0;
-      height: 26px;
-      display: flex;
-      align-items: center;
+      width: 100%;
+      padding-top: 14px;
+      height: 36px;
+      box-sizing: border-box;
       cursor: pointer;
     }
-    /* 視覺細軌＋加大熱區，省高又好拖 */
+    .time-scrub-labels {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 14px;
+      pointer-events: none;
+    }
+    .time-scrub-lab-item {
+      position: absolute;
+      top: 0;
+      transform: translateX(-50%);
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      color: #8a93a3;
+      white-space: nowrap;
+      letter-spacing: 0;
+    }
+    .time-scrub-lab-item.is-edge-start {
+      transform: translateX(0);
+    }
+    .time-scrub-lab-item.is-edge-end {
+      transform: translateX(-100%);
+    }
+    .time-scrub-lab-item.is-active {
+      color: #c45f12;
+      font-weight: 800;
+    }
+    .time-scrub-lab-item.is-open-lab {
+      font-size: 8px;
+      letter-spacing: -.02em;
+    }
+    /* 視覺細軌＋加大熱區 */
     .time-scrub-track {
-      position: relative;
-      width: 100%;
-      height: 4px;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 20px;
+      height: 5px;
       border-radius: 999px;
-      background: #d5dde8;
-      box-shadow: inset 0 0 0 1px rgba(45, 62, 80, .06);
+      background: #e6ebf2;
+      box-shadow: inset 0 0 0 1px rgba(45, 62, 80, .05);
     }
     .time-scrub-fill {
       position: absolute;
@@ -576,7 +586,7 @@
       bottom: 0;
       width: 0%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #f0a03a, var(--orange));
+      background: linear-gradient(90deg, #f7c39a 0%, #f0a03a 42%, #e87a3a 78%, #e25a3c 100%);
       pointer-events: none;
     }
     .time-scrub-marks {
@@ -587,48 +597,46 @@
     .time-scrub-mark {
       position: absolute;
       top: 50%;
-      width: 6px;
-      height: 6px;
-      margin: -3px 0 0 -3px;
+      width: 5px;
+      height: 5px;
+      margin: -2.5px 0 0 -2.5px;
       border-radius: 50%;
-      background: #9aa7b8;
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, .7);
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(232, 139, 42, .35);
     }
     .time-scrub-mark.is-active {
-      background: var(--orange);
-      width: 7px;
-      height: 7px;
-      margin: -3.5px 0 0 -3.5px;
+      background: #fff;
+      box-shadow: 0 0 0 1.5px var(--orange);
     }
     .time-scrub-thumb {
       position: absolute;
       top: 50%;
       left: 0%;
-      width: 18px;
-      height: 18px;
-      margin: -9px 0 0 -9px;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
       border-radius: 50%;
       background: #fff;
-      border: 2px solid var(--orange);
-      box-shadow: 0 1px 3px rgba(45, 62, 80, .22);
+      border: 3px solid #e87a3a;
+      box-shadow: 0 1px 4px rgba(200, 90, 30, .28);
       pointer-events: none;
       z-index: 1;
     }
     .time-scrub.is-dragging .time-scrub-thumb {
-      transform: scale(1.12);
-      border-color: #c45f12;
+      transform: scale(1.1);
+      border-color: #d06028;
     }
     .capsule-rail {
       display: flex;
       align-items: stretch;
       gap: 8px;
-      min-height: 32px;
+      min-height: 40px;
     }
     .capsule {
       display: flex;
       align-items: center;
       min-width: 0;
-      height: 32px;
+      height: 40px;
       border-radius: 999px;
       border: 1px solid #cfd7e4;
       background: #e8eef5;
@@ -646,25 +654,122 @@
       color: #fff;
       box-shadow: 0 1px 3px rgba(45, 62, 80, .18);
     }
-    /* 綜合指數：賣點膠囊，暖橙高亮（賽果派彩維持鋼藍） */
+    /* 綜合指數：參考稿 — 奶油底＋橙粉頭＋白圈馬號＋右側狀態 */
     .capsule[data-capsule="index"] {
-      border-color: #f0b56a;
-      background: linear-gradient(180deg, #fff7eb 0%, #ffe2b8 100%);
+      border-color: #f0d2a0;
+      background: #fff4df;
       color: #b55f0d;
-      box-shadow: inset 0 0 0 1px rgba(240, 160, 58, .18);
+      box-shadow: inset 0 0 0 1px rgba(240, 180, 80, .2);
+      padding-right: 4px;
     }
     .capsule[data-capsule="index"].is-open {
-      border-color: transparent;
-      background: linear-gradient(180deg, #f5a623 0%, #e88b2a 48%, #d07018 100%);
+      border-color: #f0d2a0;
+      background: #fff4df;
+      color: #2c3340;
+      box-shadow: 0 1px 3px rgba(200, 130, 40, .14), inset 0 0 0 1px rgba(240, 180, 80, .22);
+    }
+    .capsule[data-capsule="index"] .capsule-head-wrap {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      height: 32px;
+      margin: 4px 0 4px 4px;
+      padding: 0 4px 0 0;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #ff9a4a 0%, #f07838 55%, #e85a6a 100%);
       color: #fff;
-      box-shadow: 0 1px 4px rgba(200, 110, 20, .32), inset 0 1px 0 rgba(255, 255, 255, .22);
+      box-shadow: 0 1px 2px rgba(200, 80, 40, .22);
+    }
+    .capsule[data-capsule="index"] .capsule-head {
+      height: 32px;
+      margin: 0;
+      padding: 0 4px 0 8px;
+      border-radius: 999px;
+      background: transparent;
+      color: #fff;
+      gap: 4px;
+      box-shadow: none;
+    }
+    .capsule[data-capsule="index"]:not(.is-open) .capsule-head-wrap {
+      margin: 4px;
+    }
+    .capsule[data-capsule="index"] .capsule-ico {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      opacity: .95;
+    }
+    .capsule[data-capsule="index"] .capsule-ico svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .capsule[data-capsule="index"] .capsule-title-stack {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+      line-height: 1;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .capsule[data-capsule="index"] .capsule-chev {
+      width: 14px;
+      height: 14px;
+      margin-right: 4px;
+      font-size: 8px;
+      background: rgba(255, 255, 255, .2);
+      color: #fff;
+      opacity: 1;
+      flex: 0 0 auto;
+    }
+    .capsule[data-capsule="index"] .capsule-body {
+      padding: 0 6px 0 8px;
+      gap: 5px;
+      justify-content: space-evenly;
+    }
+    .capsule[data-capsule="index"] .cap-no {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #fff;
+      color: #2c3e50;
+      border: 1.5px solid #e88b2a;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    .capsule[data-capsule="index"] .cap-no.is-empty {
+      background: rgba(255, 255, 255, .65);
+      color: #b0b8c4;
+      border-color: #e0c49a;
+    }
+    .capsule-status {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.6em;
+      height: 24px;
+      margin-right: 4px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 999px;
+      background: #3d5a80;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .capsule[data-capsule="index"].is-open .capsule-status {
+      display: inline-flex;
     }
     .capsule[data-capsule="index"]:not(.is-open) .capsule-head:active {
-      background: rgba(232, 139, 42, .12);
-    }
-    .capsule[data-capsule="index"].is-open .cap-no {
-      background: rgba(255, 255, 255, .24);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+      filter: brightness(.96);
     }
     .capsule-head {
       display: inline-flex;
@@ -753,6 +858,9 @@
     }
     .capsule[data-capsule="payout"].is-open {
       background: linear-gradient(180deg, #5a7fa8 0%, #3d5a80 100%);
+    }
+    .capsule[data-capsule="payout"] .capsule-head {
+      padding: 0 10px 0 12px;
     }
     @media (prefers-reduced-motion: reduce) {
       .capsule { transition: none; }
@@ -3022,13 +3130,16 @@
       border-bottom-color: var(--line);
       box-shadow: none;
     }
-    html[data-theme="dark"] .time-scrub-lab { color: #d5deea; }
-    html[data-theme="dark"] .time-scrub-end { color: #8a93a3; }
+    html[data-theme="dark"] .time-scrub-lab-item { color: #8a93a3; }
+    html[data-theme="dark"] .time-scrub-lab-item.is-active { color: #f0a84a; }
     html[data-theme="dark"] .time-scrub-track { background: #3a4250; }
-    html[data-theme="dark"] .time-scrub-mark { background: #6a7384; box-shadow: none; }
+    html[data-theme="dark"] .time-scrub-mark {
+      background: #fff4df;
+      box-shadow: 0 0 0 1px rgba(227, 154, 69, .4);
+    }
     html[data-theme="dark"] .time-scrub-thumb {
       background: #2a323e;
-      border-color: var(--orange);
+      border-color: #e39a45;
     }
     html[data-theme="dark"] .capsule {
       background: #2a323e;
@@ -3042,15 +3153,32 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
     }
     html[data-theme="dark"] .capsule[data-capsule="index"] {
-      border-color: #b8843a;
-      background: linear-gradient(180deg, #3a3228 0%, #4a3824 100%);
+      border-color: #6a5230;
+      background: #2e281f;
       color: #f0c080;
       box-shadow: none;
     }
     html[data-theme="dark"] .capsule[data-capsule="index"].is-open {
-      background: linear-gradient(180deg, #e39a45 0%, #c77820 100%);
+      border-color: #6a5230;
+      background: #322a20;
+      color: #e6eaf0;
+      box-shadow: none;
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .capsule-head-wrap {
+      background: linear-gradient(180deg, #e39a45 0%, #d07030 55%, #c45a5a 100%);
       color: #fff;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .capsule-head {
+      background: transparent;
+      color: #fff;
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .cap-no {
+      background: #1e242d;
+      color: #e6eaf0;
+      border-color: #e39a45;
+    }
+    html[data-theme="dark"] .capsule-status {
+      background: #456487;
     }
     html[data-theme="dark"] .capsule[data-capsule="payout"].is-open {
       background: linear-gradient(180deg, #456487 0%, #314a68 100%);
@@ -3504,23 +3632,32 @@
 
       <div class="insight-pin" id="insightPin">
         <div class="time-scrub" id="timeScrub" role="slider" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-label="賽前時間軸" tabindex="0">
-          <span class="time-scrub-lab" id="timeScrubLab">—</span>
           <div class="time-scrub-track-wrap" id="timeScrubTrackWrap">
+            <div class="time-scrub-labels" id="timeScrubLabels"></div>
             <div class="time-scrub-track">
               <div class="time-scrub-fill" id="timeScrubFill"></div>
               <div class="time-scrub-marks" id="timeScrubMarks"></div>
               <div class="time-scrub-thumb" id="timeScrubThumb"></div>
             </div>
           </div>
-          <span class="time-scrub-end">開跑</span>
         </div>
         <div class="capsule-rail" id="capsuleRail" aria-label="指數與賽果派彩">
           <div class="capsule is-open" data-capsule="index" id="capsuleIndex">
-            <button type="button" class="capsule-head" data-cap-open="index" aria-expanded="true" aria-controls="capsuleIndexBody">
-              <span class="capsule-title">綜合指數</span>
-            </button>
-            <button type="button" class="capsule-chev" data-cap-menu="index" aria-label="綜合指數選項" title="綜合指數選項">▼</button>
+            <div class="capsule-head-wrap">
+              <button type="button" class="capsule-head" data-cap-open="index" aria-expanded="true" aria-controls="capsuleIndexBody">
+                <span class="capsule-ico" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="#fff" stroke-width="1.4"/>
+                    <path d="M3.5 11 L6.2 7.8 L8.4 9.6 L12.5 4.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12.5" cy="4.5" r="1.1" fill="#fff"/>
+                  </svg>
+                </span>
+                <span class="capsule-title-stack"><span>綜合</span><span>指數</span></span>
+              </button>
+              <button type="button" class="capsule-chev" data-cap-menu="index" aria-label="綜合指數選項" title="綜合指數選項">▼</button>
+            </div>
             <div class="capsule-body" id="capsuleIndexBody" aria-live="polite"></div>
+            <span class="capsule-status" id="capsuleIndexStatus">正常</span>
           </div>
           <div class="capsule" data-capsule="payout" id="capsulePayout">
             <button type="button" class="capsule-head" data-cap-open="payout" aria-expanded="false" aria-controls="capsulePayoutBody">
@@ -5031,23 +5168,36 @@
       const t = new Date(start.getTime() - (Number(minsBefore) || 0) * 60000);
       return pad2(t.getHours()) + ":" + pad2(t.getMinutes());
     }
+    /* 參考稿時間軸：開始賠率 → 30'…0'；近開跑更密 */
+    const SCRUB_MARK_DEFS = [
+      { minsBefore: 180, lab: "開始賠率", pos: 0, openLab: true },
+      { minsBefore: 30, lab: "30'", pos: 22 },
+      { minsBefore: 15, lab: "15'", pos: 38 },
+      { minsBefore: 10, lab: "10'", pos: 50 },
+      { minsBefore: 5, lab: "5'", pos: 62 },
+      { minsBefore: 4, lab: "4'", pos: 71 },
+      { minsBefore: 3, lab: "3'", pos: 79 },
+      { minsBefore: 2, lab: "2'", pos: 86 },
+      { minsBefore: 1, lab: "1'", pos: 93 },
+      { minsBefore: 0, lab: "0'", pos: 100 }
+    ];
     /* 演示：賽前多個時間點快照；日後可接真實綜合指數序列 */
     function buildScrubPoints() {
       const base = topIndexPickNos(6).map(Number);
-      const marks = [120, 90, 60, 45, 30, 20, 15, 10, 5, 0];
-      return marks.map(function (m, i) {
+      return SCRUB_MARK_DEFS.map(function (def, i) {
         const picks = base.slice();
-        /* 越早時間點略作輪換，方便拖動時看見變化 */
         const rot = Math.min(i, Math.max(0, picks.length - 1));
         if (rot > 0 && picks.length) {
           const head = picks.splice(0, rot);
           picks.push.apply(picks, head);
         }
-        const clock = clockFromRaceOffset(m);
         return {
-          minsBefore: m,
-          clock: clock,
-          label: clock || (m === 0 ? "開跑" : ("T-" + m + "'")),
+          minsBefore: def.minsBefore,
+          lab: def.lab,
+          pos: def.pos,
+          openLab: !!def.openLab,
+          clock: clockFromRaceOffset(def.minsBefore),
+          label: def.lab,
           picks: picks
         };
       });
@@ -5058,11 +5208,10 @@
       if (i < 0 || i >= scrubPoints.length) i = scrubPoints.length - 1;
       return scrubPoints[i];
     }
-    function scrubRatio() {
-      if (scrubPoints.length <= 1) return 1;
-      let i = scrubPointIdx;
-      if (i < 0 || i >= scrubPoints.length) i = scrubPoints.length - 1;
-      return i / (scrubPoints.length - 1);
+    function scrubPosPct() {
+      const pt = activeScrubPoint();
+      if (!pt) return 100;
+      return Number(pt.pos) || 0;
     }
     function syncInsightStickyHeight() {
       const pin = document.getElementById("insightPin");
@@ -5071,18 +5220,18 @@
     }
     function renderTimeScrub() {
       const scrub = document.getElementById("timeScrub");
-      const lab = document.getElementById("timeScrubLab");
       const fill = document.getElementById("timeScrubFill");
       const thumb = document.getElementById("timeScrubThumb");
       const marks = document.getElementById("timeScrubMarks");
-      if (!scrub || !lab || !fill || !thumb || !marks) return;
+      const labels = document.getElementById("timeScrubLabels");
+      if (!scrub || !fill || !thumb || !marks || !labels) return;
       scrubPoints = buildScrubPoints();
       if (!scrubPoints.length) {
         scrubPointIdx = -1;
-        lab.textContent = "—";
         fill.style.width = "0%";
         thumb.style.left = "0%";
         marks.innerHTML = "";
+        labels.innerHTML = "";
         scrub.setAttribute("aria-valuemax", "0");
         scrub.setAttribute("aria-valuenow", "0");
         syncInsightStickyHeight();
@@ -5092,41 +5241,55 @@
         scrubPointIdx = scrubPoints.length - 1;
       }
       const pt = scrubPoints[scrubPointIdx];
-      const ratio = scrubRatio();
-      const pct = (ratio * 100).toFixed(2) + "%";
-      lab.textContent = pt.label;
+      const pct = scrubPosPct().toFixed(2) + "%";
       fill.style.width = pct;
       thumb.style.left = pct;
       let marksHtml = "";
+      let labelsHtml = "";
       for (let i = 0; i < scrubPoints.length; i++) {
-        const p = scrubPoints.length <= 1 ? 0 : (i / (scrubPoints.length - 1)) * 100;
-        marksHtml += '<i class="time-scrub-mark' + (i === scrubPointIdx ? " is-active" : "") +
-          '" style="left:' + p.toFixed(2) + '%" data-scrub-i="' + i + '"></i>';
+        const sp = scrubPoints[i];
+        const p = Number(sp.pos).toFixed(2) + "%";
+        const active = i === scrubPointIdx;
+        marksHtml += '<i class="time-scrub-mark' + (active ? " is-active" : "") +
+          '" style="left:' + p + '" data-scrub-i="' + i + '"></i>';
+        let labCls = "time-scrub-lab-item";
+        if (active) labCls += " is-active";
+        if (sp.openLab) labCls += " is-open-lab";
+        if (i === 0) labCls += " is-edge-start";
+        if (i === scrubPoints.length - 1) labCls += " is-edge-end";
+        labelsHtml += '<span class="' + labCls + '" style="left:' + p + '">' + esc(sp.lab) + "</span>";
       }
       marks.innerHTML = marksHtml;
+      labels.innerHTML = labelsHtml;
       scrub.setAttribute("aria-valuemin", "0");
       scrub.setAttribute("aria-valuemax", String(scrubPoints.length - 1));
       scrub.setAttribute("aria-valuenow", String(scrubPointIdx));
-      scrub.setAttribute("aria-valuetext", pt.label + (pt.minsBefore === 0 ? "" : (" 距開跑" + pt.minsBefore + "分")));
+      scrub.setAttribute("aria-valuetext", pt.lab + (pt.minsBefore > 0 ? (" 距開跑" + pt.minsBefore + "分") : " 開跑"));
       syncInsightStickyHeight();
     }
-    function setScrubIndex(idx, fromDrag) {
+    function setScrubIndex(idx) {
       if (!scrubPoints.length) return;
       const next = Math.max(0, Math.min(scrubPoints.length - 1, Math.round(idx)));
-      if (next === scrubPointIdx && fromDrag) {
-        /* 拖動中也要刷新位置百分比（吸附點之間） */
-      }
       scrubPointIdx = next;
       renderTimeScrub();
       renderCapsuleBodies();
     }
     function scrubIndexFromClientX(clientX) {
       const wrap = document.getElementById("timeScrubTrackWrap");
-      if (!wrap || scrubPoints.length <= 1) return scrubPoints.length ? scrubPoints.length - 1 : 0;
+      if (!wrap || !scrubPoints.length) return 0;
       const rect = wrap.getBoundingClientRect();
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      const ratio = rect.width > 0 ? x / rect.width : 1;
-      return Math.round(ratio * (scrubPoints.length - 1));
+      const pct = rect.width > 0 ? (x / rect.width) * 100 : 100;
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < scrubPoints.length; i++) {
+        const d = Math.abs(Number(scrubPoints[i].pos) - pct);
+        if (d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+      }
+      return best;
     }
     function bindTimeScrub() {
       const scrub = document.getElementById("timeScrub");
@@ -5138,12 +5301,12 @@
         scrubDragging = true;
         scrub.classList.add("is-dragging");
         try { wrap.setPointerCapture(ev.pointerId); } catch (e) {}
-        setScrubIndex(scrubIndexFromClientX(ev.clientX), true);
+        setScrubIndex(scrubIndexFromClientX(ev.clientX));
         ev.preventDefault();
       }
       function onPointerMove(ev) {
         if (!scrubDragging) return;
-        setScrubIndex(scrubIndexFromClientX(ev.clientX), true);
+        setScrubIndex(scrubIndexFromClientX(ev.clientX));
         ev.preventDefault();
       }
       function onPointerUp(ev) {
