@@ -145,6 +145,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("cap-nos-scroll", r.text)
         self.assertIn("cap-badge", r.text)
         self.assertIn("capsule-drop", r.text)
+        self.assertIn('data-drop-kind="payout"', r.text)
+        self.assertIn(".capsule-drop[data-drop-kind=\"payout\"] .cap-drop-bar", r.text)
         self.assertIn("toggleCapsuleDrop", r.text)
         self.assertIn("renderCapNoHtml", r.text)
         self.assertIn("cal-legend-col", r.text)
