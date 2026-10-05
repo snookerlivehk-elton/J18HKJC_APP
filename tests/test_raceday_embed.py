@@ -121,7 +121,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("capsule-rail", r.text)
         self.assertIn('id="capsuleRail"', r.text)
         self.assertIn("綜合指數", r.text)
-        self.assertIn("派彩數據", r.text)
+        self.assertIn("賽果派彩", r.text)
         self.assertIn("setCapsuleActive", r.text)
         self.assertIn("topIndexPickNos", r.text)
         self.assertIn("bindCapsuleRail", r.text)

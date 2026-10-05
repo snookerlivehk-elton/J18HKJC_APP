@@ -506,7 +506,7 @@
       .race-meta-run.is-marquee { animation: none; transform: none; }
     }
 
-    /* 場次信息與馬匹列表之間：左右膠囊（綜合指數／派彩數據） */
+    /* 場次信息與馬匹列表之間：左右膠囊（綜合指數／賽果派彩） */
     .capsule-rail {
       display: flex;
       align-items: stretch;
@@ -3346,7 +3346,7 @@
             </div>
           </div>
         </div>
-        <div class="capsule-rail" id="capsuleRail" aria-label="指數與派彩">
+        <div class="capsule-rail" id="capsuleRail" aria-label="指數與賽果派彩">
           <div class="capsule is-open" data-capsule="index" id="capsuleIndex">
             <button type="button" class="capsule-head" data-cap-open="index" aria-expanded="true" aria-controls="capsuleIndexBody">
               <span class="capsule-title">綜合指數</span>
@@ -3356,9 +3356,9 @@
           </div>
           <div class="capsule" data-capsule="payout" id="capsulePayout">
             <button type="button" class="capsule-head" data-cap-open="payout" aria-expanded="false" aria-controls="capsulePayoutBody">
-              <span class="capsule-title">派彩數據</span>
+              <span class="capsule-title">賽果派彩</span>
             </button>
-            <button type="button" class="capsule-chev" data-cap-menu="payout" aria-label="派彩數據選項" title="派彩數據選項">▼</button>
+            <button type="button" class="capsule-chev" data-cap-menu="payout" aria-label="賽果派彩選項" title="賽果派彩選項">▼</button>
             <div class="capsule-body" id="capsulePayoutBody" aria-live="polite"></div>
           </div>
         </div>
