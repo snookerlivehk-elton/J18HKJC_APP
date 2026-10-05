@@ -5852,24 +5852,19 @@
         if (!cap) return;
         const which = cap.getAttribute("data-capsule");
         if (which !== "index" && which !== "payout") return;
-        /* 橫滑號碼區不觸發切換 */
-        if (ev.target.closest(".capsule-body") || ev.target.closest(".cap-nos-scroll")) return;
+        /* 橫滑號碼區／狀態標不觸發 */
+        if (ev.target.closest(".capsule-body") || ev.target.closest(".cap-nos-scroll") || ev.target.closest(".capsule-status")) return;
         const isOpen = cap.classList.contains("is-open");
-        const menu = ev.target.closest("[data-cap-menu]");
-        if (menu && isOpen) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          toggleCapsuleDrop(which);
-          return;
-        }
         if (!isOpen) {
           ev.preventDefault();
           setCapsuleActive(which);
           return;
         }
-        /* 已展開：點頭部不關膠囊，僅收起下展 */
-        if (ev.target.closest(".capsule-head-wrap") || ev.target.closest("[data-cap-open]")) {
-          if (capsuleDropOpen) closeCapsuleDrop();
+        /* 已展開：點頭部文字或箭頭均可下展／收起 */
+        if (ev.target.closest(".capsule-head-wrap") || ev.target.closest("[data-cap-open]") || ev.target.closest("[data-cap-menu]")) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleCapsuleDrop(which);
         }
       });
       document.addEventListener("click", function (ev) {
