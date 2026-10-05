@@ -955,44 +955,45 @@
       border-color: #e88b2a !important;
       color: #fff !important;
     }
-    /* 下展面板（參考稿：場次列＋奶油條＋角標馬號） */
+    /* 下展面板：緊湊場次列（矮行＋小號馬號） */
     .capsule-drop {
-      margin-top: 2px;
-      max-height: min(42vh, 320px);
+      margin-top: 1px;
+      max-height: min(34vh, 240px);
       overflow-x: hidden;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       background: #fff;
       border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 4px 14px rgba(45, 62, 80, .12);
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(45, 62, 80, .1);
     }
     .capsule-drop[hidden] { display: none !important; }
     .cap-drop-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-      min-height: 40px;
-      padding: 6px 8px;
+      gap: 6px;
+      min-height: 28px;
+      padding: 3px 6px;
       border-bottom: 1px solid #eef1f5;
     }
     .cap-drop-row:last-child { border-bottom: 0; }
     .cap-drop-lab {
       flex: 0 0 auto;
-      width: 3.2em;
-      font-size: 12px;
+      width: 2.8em;
+      font-size: 11px;
       font-weight: 700;
       color: #8a93a3;
       white-space: nowrap;
+      line-height: 1;
     }
     .cap-drop-bar {
       flex: 1 1 auto;
       min-width: 0;
       display: flex;
       align-items: center;
-      gap: 6px;
-      height: 32px;
-      padding: 0 8px;
+      gap: 4px;
+      height: 24px;
+      padding: 0 6px;
       border-radius: 999px;
       background: #fff4df;
       overflow-x: auto;
@@ -1004,14 +1005,20 @@
     .cap-drop-bar::-webkit-scrollbar { display: none; }
     .cap-drop-bar .cap-no {
       flex: 0 0 auto;
-      width: 26px;
-      height: 26px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: #fff;
       color: #2c3e50;
       border: 1.5px solid #e88b2a;
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 800;
+    }
+    .cap-drop-bar .cap-no .cap-badge {
+      width: 10px;
+      height: 10px;
+      font-size: 6px;
+      padding: 0.5px 0 0 1px;
     }
     /* 賽果派彩下展：鋼藍色系，對齊橫拉膠囊 */
     .capsule-drop[data-drop-kind="payout"] {
