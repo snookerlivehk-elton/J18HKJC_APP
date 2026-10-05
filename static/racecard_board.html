@@ -4208,10 +4208,13 @@
           "</svg>";
       }
       if (id === "water") {
-        /* 水位排名：水滴＋刻度 */
+        /* 水位排名：折扣標（水位＝折扣率） */
         return '<svg ' + common + '>' +
-          '<path d="M8 2.2 C8 2.2 3.8 7.2 3.8 10.1 C3.8 12.4 5.7 14.1 8 14.1 C10.3 14.1 12.2 12.4 12.2 10.1 C12.2 7.2 8 2.2 8 2.2 Z" stroke="' + c + '" stroke-width="1.35" stroke-linejoin="round"/>' +
-          '<path d="M5.6 10.2 H10.4" stroke="' + c + '" stroke-width="1.2" stroke-linecap="round"/>' +
+          '<path d="M2.2 8 L7.4 2.6 H13.4 V13.4 H7.4 Z" stroke="' + c + '" stroke-width="1.35" stroke-linejoin="round"/>' +
+          '<circle cx="4.6" cy="8" r="0.95" fill="' + c + '"/>' +
+          '<circle cx="8.3" cy="6.1" r="1.15" stroke="' + c + '" stroke-width="1.15"/>' +
+          '<circle cx="11.1" cy="10.1" r="1.15" stroke="' + c + '" stroke-width="1.15"/>' +
+          '<path d="M9.1 10.9 L10.3 5.3" stroke="' + c + '" stroke-width="1.2" stroke-linecap="round"/>' +
           "</svg>";
       }
       if (id === "flow") {
