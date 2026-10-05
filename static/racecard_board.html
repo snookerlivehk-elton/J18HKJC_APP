@@ -1098,6 +1098,30 @@
       accent-color: #e88b2a;
       cursor: pointer;
     }
+    .cap-drop-pay {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 22px;
+      margin: 0;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 999px;
+      background: #e88b2a;
+      color: #fff;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cap-drop-pay:active {
+      filter: brightness(.94);
+    }
     .capsule.is-open .capsule-head-wrap {
       cursor: pointer;
     }
@@ -3173,7 +3197,7 @@
       padding: 0 8px 0 4px;
     }
     .payout-detail-sheet .cal-close {
-      margin-left: 4px;
+      margin-left: auto;
     }
     .payout-detail-body {
       min-height: 326px; /* ≈ cal-wdays + cal-grid(6×34) + cal-legend */
@@ -4034,7 +4058,7 @@
     <div class="cal-sheet payout-detail-sheet" id="payoutDetailSheet" role="dialog" aria-modal="true" aria-labelledby="payoutDetailTitle">
       <div class="cal-head">
         <div class="cal-title" id="payoutDetailTitle">派彩詳情</div>
-        <button type="button" class="cal-close" id="payoutDetailClose" aria-label="關閉" style="margin-left:auto">×</button>
+        <button type="button" class="cal-close" id="payoutDetailClose" aria-label="關閉">×</button>
       </div>
       <div class="payout-detail-body" id="payoutDetailBody" aria-label="派彩詳情內容"></div>
     </div>
@@ -6060,6 +6084,8 @@
           html += '<div class="cap-drop-row">' +
             '<span class="cap-drop-lab">' + lab + "</span>" +
             '<div class="cap-drop-bar">' + barHtml + "</div>" +
+            '<button type="button" class="cap-drop-pay" data-pay-race="' + esc(race.num) + '"' +
+            ' aria-label="第' + esc(race.num) + '場派彩詳情">派彩</button>' +
             "</div>";
         });
       } else {
@@ -6211,6 +6237,13 @@
           ev.stopPropagation();
           setIndexStrategyPinned(t.value);
         });
+        drop.addEventListener("click", function (ev) {
+          const payBtn = ev.target && ev.target.closest ? ev.target.closest(".cap-drop-pay") : null;
+          if (!payBtn) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          openPayoutForRace(payBtn.getAttribute("data-pay-race"));
+        });
       }
     }
 
@@ -6249,6 +6282,36 @@
       return arr;
     }
 
+    function selectRace(num) {
+      const n = Number(num);
+      if (!Number.isFinite(n)) return false;
+      const races = (MEETING && MEETING.races) || [];
+      if (!races.some(function (r) { return Number(r.num) === n; })) return false;
+      if (n === currentRace) {
+        /* 同場仍刷新膠囊／詳情所需狀態 */
+        return true;
+      }
+      currentRace = n;
+      sortKey = "no";
+      sortDir = 1;
+      scrubPointIdx = -1;
+      waterCrossFocus = null;
+      closeHorseSheet();
+      renderPills();
+      renderMeta();
+      renderBoard();
+      if (isWaterSheetOpen()) {
+        syncWaterSheetTop();
+        fillWaterSheet();
+      }
+      return true;
+    }
+    function openPayoutForRace(num) {
+      if (!selectRace(num)) return;
+      setCapsuleActive("payout");
+      closeCapsuleDrop();
+      if (payoutStatusKind === "paid") openPayoutDetail();
+    }
     function renderPills() {
       el.pills.innerHTML = MEETING.races.map((r) => {
         const on = r.num === currentRace ? " active" : "";
@@ -6258,20 +6321,7 @@
       }).join("");
       el.pills.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () => {
-          currentRace = Number(btn.getAttribute("data-n"));
-          sortKey = "no";
-          sortDir = 1;
-          scrubPointIdx = -1;
-          waterCrossFocus = null;
-          closeHorseSheet();
-          renderPills();
-          renderMeta();
-          renderBoard();
-          /* 水位頁保持打開：切場次即刷新該場水位，無需退出 */
-          if (isWaterSheetOpen()) {
-            syncWaterSheetTop();
-            fillWaterSheet();
-          }
+          selectRace(btn.getAttribute("data-n"));
         });
       });
       const active = el.pills.querySelector("button.active");
@@ -7853,6 +7903,7 @@
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
+      closePayoutDetail();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
