@@ -888,10 +888,10 @@
       color: #a0a8b4;
       border-color: #b7c6d8;
     }
-    /* J18 角標：100% 沿用既有設計——左上三角折角 + 金字母（W/P/Q 同色） */
+    /* J18 角標：對齊原版——實心底色號圈 + 左上深色直角三角折角 + 亮金字母 */
     .cap-no {
       position: relative;
-      overflow: hidden; /* 三角貼圓弧裁切 */
+      overflow: hidden; /* 三角外緣隨圓弧裁切 */
     }
     .cap-no .cap-badge {
       position: absolute;
@@ -899,46 +899,63 @@
       left: 0;
       z-index: 2;
       display: block;
-      width: 12px;
-      height: 12px;
+      box-sizing: border-box;
+      /* 約佔號圈直徑 55%，對齊原版折角體量 */
+      width: 15px;
+      height: 15px;
       margin: 0;
-      padding: 0.5px 0 0 1px;
+      padding: 1px 0 0 1.5px;
       border: 0;
       border-radius: 0;
-      /* 深色三角折角；clip 連字母一齊裁，對齊參考稿 */
-      background: #383635;
-      color: #e2d189;
+      /* 直角三角用漸變畫，字母不被 clip 切斜 */
+      background: linear-gradient(to bottom right, #2c2a28 0 50%, transparent 50%);
+      color: #e8cf7a;
       font-style: normal;
-      font-family: "Helvetica Neue", Arial, sans-serif;
-      font-size: 7px;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 9px;
       font-weight: 800;
       line-height: 1;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.06em;
       text-align: left;
       box-shadow: none;
       pointer-events: none;
-      clip-path: polygon(0 0, 100% 0, 0 100%);
-      -webkit-clip-path: polygon(0 0, 100% 0, 0 100%);
     }
-    .cap-no.is-w {
-      background: #cc453f;
+    /* 實心底色必須壓過 .capsule[...] .cap-no 的白底／描邊 */
+    .cap-no.is-w,
+    .capsule[data-capsule="index"] .cap-no.is-w,
+    .capsule[data-capsule="payout"] .cap-no.is-w,
+    .cap-drop-bar .cap-no.is-w,
+    .capsule-drop .cap-drop-bar .cap-no.is-w {
+      background: #cc453f !important;
       border-color: #cc453f !important;
-      color: #fff;
+      color: #fff !important;
     }
-    .cap-no.is-p {
-      background: #478c4b;
-      border-color: #478c4b !important;
-      color: #fff;
+    .cap-no.is-p,
+    .capsule[data-capsule="index"] .cap-no.is-p,
+    .capsule[data-capsule="payout"] .cap-no.is-p,
+    .cap-drop-bar .cap-no.is-p,
+    .capsule-drop .cap-drop-bar .cap-no.is-p {
+      background: #3f8f4a !important;
+      border-color: #3f8f4a !important;
+      color: #fff !important;
     }
-    .cap-no.is-q {
-      background: #2f70ca;
+    .cap-no.is-q,
+    .capsule[data-capsule="index"] .cap-no.is-q,
+    .capsule[data-capsule="payout"] .cap-no.is-q,
+    .cap-drop-bar .cap-no.is-q,
+    .capsule-drop .cap-drop-bar .cap-no.is-q {
+      background: #2f70ca !important;
       border-color: #2f70ca !important;
-      color: #fff;
+      color: #fff !important;
     }
-    .cap-no.is-hot {
-      background: #e88b2a;
+    .cap-no.is-hot,
+    .capsule[data-capsule="index"] .cap-no.is-hot,
+    .capsule[data-capsule="payout"] .cap-no.is-hot,
+    .cap-drop-bar .cap-no.is-hot,
+    .capsule-drop .cap-drop-bar .cap-no.is-hot {
+      background: #e88b2a !important;
       border-color: #e88b2a !important;
-      color: #fff;
+      color: #fff !important;
     }
     /* 下展面板（參考稿：場次列＋奶油條＋角標馬號） */
     .capsule-drop {
@@ -3468,8 +3485,29 @@
       border-color: #5a9fd4;
     }
     html[data-theme="dark"] .cap-no .cap-badge {
-      background: #2a2d33;
-      color: #e2d189;
+      background: linear-gradient(to bottom right, #1a1c20 0 50%, transparent 50%);
+      color: #e8cf7a;
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .cap-no.is-w,
+    html[data-theme="dark"] .capsule[data-capsule="payout"] .cap-no.is-w,
+    html[data-theme="dark"] .cap-drop-bar .cap-no.is-w {
+      background: #cc453f !important;
+      border-color: #cc453f !important;
+      color: #fff !important;
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .cap-no.is-p,
+    html[data-theme="dark"] .capsule[data-capsule="payout"] .cap-no.is-p,
+    html[data-theme="dark"] .cap-drop-bar .cap-no.is-p {
+      background: #3f8f4a !important;
+      border-color: #3f8f4a !important;
+      color: #fff !important;
+    }
+    html[data-theme="dark"] .capsule[data-capsule="index"] .cap-no.is-q,
+    html[data-theme="dark"] .capsule[data-capsule="payout"] .cap-no.is-q,
+    html[data-theme="dark"] .cap-drop-bar .cap-no.is-q {
+      background: #2f70ca !important;
+      border-color: #2f70ca !important;
+      color: #fff !important;
     }
     html[data-theme="dark"] .capsule[data-capsule="payout"] {
       border-color: #3a4a5e;
