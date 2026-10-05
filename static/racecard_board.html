@@ -5854,6 +5854,7 @@
     /* 無實時賠率時：?demoOddsTick=1 自動演示刷新呼吸；控制台也可調 window.simulateOddsTickRefresh() */
     try {
       window.simulateOddsTickRefresh = simulateOddsTickRefresh;
+      window.resolveRaceStatus = resolveRaceStatus;
       const q = new URLSearchParams(location.search || "");
       if (q.get("demoOddsTick") === "1" || q.get("demoOdds") === "1") {
         window.setTimeout(function () { simulateOddsTickRefresh(); }, 500);
