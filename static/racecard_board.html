@@ -473,6 +473,35 @@
     .race-meta-text {
       flex: 1 1 auto;
       min-width: 0;
+      overflow: hidden;
+    }
+    .race-meta-viewport {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .race-meta-run {
+      display: inline-block;
+      max-width: none;
+      white-space: nowrap;
+      line-height: 1.45;
+      will-change: transform;
+      transform: translateX(0);
+    }
+    .race-meta-run.is-marquee {
+      animation-name: raceMetaBounce;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      animation-direction: alternate;
+      animation-duration: var(--meta-dur, 10s);
+    }
+    @keyframes raceMetaBounce {
+      from { transform: translateX(0); }
+      to { transform: translateX(calc(-1 * var(--meta-overflow, 0px))); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .race-meta-run.is-marquee { animation: none; transform: none; }
     }
 
     /* 表格區殼：表體 + 馬匹詳情彈層同尺寸 */
@@ -3166,7 +3195,11 @@
               <i class="race-status-dot" aria-hidden="true"></i>
               <span class="race-status-lab" id="raceStatusLab">待開賽</span>
             </span>
-            <div class="race-meta-text" id="raceMeta">18:40 南風讓賽　谷草 "C" 1650米 第五班 好地</div>
+            <div class="race-meta-text" id="raceMeta">
+              <div class="race-meta-viewport" id="raceMetaViewport">
+                <span class="race-meta-run" id="raceMetaRun">23/9 周三 20:40 谷草 四班 1650  "C" 好地 香港鄉村俱樂部挑戰盃（讓賽）</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -3249,6 +3282,9 @@
     let raceCalSelected = null;
     let raceCalViewY = 2026;
     let raceCalViewM = 10; /* 1-12 */
+    /* 星期標籤須早於 formatRaceInfoLine / 首次 renderMeta */
+    const WEEKDAY_LABEL = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+    const WEEKDAY_SHORT = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
     const el = {
       pills: document.getElementById("racePills"),
@@ -4541,6 +4577,84 @@
       }
       if (lab) lab.textContent = st.lab;
     }
+    function syncRaceMetaScroll() {
+      const run = document.getElementById("raceMetaRun");
+      const vp = document.getElementById("raceMetaViewport");
+      if (!run || !vp) return;
+      run.classList.remove("is-marquee");
+      run.style.removeProperty("--meta-overflow");
+      run.style.removeProperty("--meta-dur");
+      run.style.transform = "translateX(0)";
+      /* 下一幀量寬度，決定是否來回滾動 */
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          const overflow = Math.ceil(run.scrollWidth - vp.clientWidth);
+          if (overflow > 6) {
+            run.style.setProperty("--meta-overflow", overflow + "px");
+            /* 約 32px/s，單程最短 5s、最長 22s；alternate 來回循環 */
+            const dur = Math.max(5, Math.min(22, overflow / 32));
+            run.style.setProperty("--meta-dur", dur.toFixed(2) + "s");
+            run.classList.add("is-marquee");
+          }
+        });
+      });
+    }
+    function setRaceMetaText(text) {
+      const run = document.getElementById("raceMetaRun");
+      const box = document.getElementById("raceMeta");
+      const line = text == null ? "" : String(text);
+      if (run) run.textContent = line;
+      else if (box) box.textContent = line;
+      syncRaceMetaScroll();
+    }
+    /* 場次信息：23/9 周三 20:40 谷草 四班 1650 "C" 好地 賽事名 */
+    function formatRaceInfoLine(dateIso, race, meeting) {
+      if (!race) return "該日暫無賽事";
+      const p = String(dateIso || (meeting && meeting.date) || "").split("-");
+      const md = (p.length === 3)
+        ? (String(Number(p[2])) + "/" + String(Number(p[1])))
+        : "";
+      let wd = "";
+      if (p.length === 3) {
+        wd = WEEKDAY_SHORT[new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay()] || "";
+      } else if (meeting && meeting.weekday) {
+        wd = String(meeting.weekday).replace(/^星期/, "周");
+      }
+      const raw = String(race.meta || "");
+      const time = race.time || (raw.match(/(\d{1,2}:\d{2})/) || [])[1] || "—";
+      let surface = "";
+      const sm = raw.match(/(谷草|田草|全天候|泥地|草地)/);
+      if (sm) {
+        surface = sm[1] === "草地"
+          ? ((meeting && meeting.courseLabel === "跑馬地") ? "谷草" : "田草")
+          : sm[1];
+      } else if (meeting && meeting.courseLabel === "跑馬地") {
+        surface = "谷草";
+      } else if (meeting && meeting.courseLabel) {
+        surface = "田草";
+      }
+      let klass = "";
+      const km = raw.match(/(第?[一二三四五]班|[1-5]班)/);
+      if (km) {
+        const map = { "第一班": "一班", "第二班": "二班", "第三班": "三班", "第四班": "四班", "第五班": "五班" };
+        klass = map[km[1]] || String(km[1]).replace(/^第/, "");
+      }
+      let dist = "";
+      const dm = raw.match(/(\d{3,4})\s*米/);
+      if (dm) dist = dm[1];
+      else if (race.dist) dist = String(race.dist).replace(/米$/, "");
+      let rail = "";
+      const rm = raw.match(/["\u201c\u201d]([A-Za-z+\-]+)["\u201c\u201d]/);
+      if (rm) rail = ' "' + rm[1] + '"'; /* 前導空格 → 與路程之間雙空 */
+      else if (race.rail) rail = ' "' + String(race.rail).replace(/^["']+|["']+$/g, "") + '"';
+      let going = "";
+      const gm = raw.match(/(好地至快地|好地|快地|濕慢地|封地|標準)/);
+      if (gm) going = gm[1];
+      const name = race.name || "";
+      return [md, wd, time, surface, klass, dist, rail, going, name]
+        .filter(function (x) { return x != null && String(x).trim() !== ""; })
+        .join(" ");
+    }
     function renderMeta() {
       const box = document.getElementById("raceMeta");
       if (!box) return;
@@ -4549,7 +4663,7 @@
         return;
       }
       const meet = currentMeet();
-      box.textContent = (meet && meet.meta) || "";
+      setRaceMetaText(formatRaceInfoLine(MEETING && MEETING.date, meet, MEETING));
       applyRaceStatus(resolveRaceStatus({
         race: meet,
         dateIso: MEETING && MEETING.date,
@@ -5869,6 +5983,7 @@
     }
     window.addEventListener("resize", function () {
       if (isWaterSheetOpen()) syncWaterSheetTop();
+      if (typeof syncRaceMetaScroll === "function") syncRaceMetaScroll();
     });
     /* 賽期快照（HKJC Fixture；日後可接 API） */
     const RACE_FIXTURES = [{"date":"2026-09-23","course":"HV","session":"night","time":"18:40","track":"草地","klass":"五班","going":"好地","dist":"1650"},{"date":"2026-10-01","course":"ST","session":"day","time":"13:00","track":"草地","klass":"四班","going":"好地","dist":"1400"},{"date":"2026-10-04","course":"ST","session":"day","time":"12:30","track":"全天候","klass":"五班","going":"封地","dist":"1650"},{"date":"2026-10-07","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1200"},{"date":"2026-10-11","course":"ST","session":"day","time":"13:00","track":"草地","klass":"三班","going":"好地","dist":"1600"},{"date":"2026-10-14","course":"HV","session":"night","time":"19:15","track":"草地","klass":"五班","going":"好地","dist":"1650"},{"date":"2026-10-19","course":"ST","session":"day","time":"13:15","track":"草地","klass":"四班","going":"好地","dist":"1200"},{"date":"2026-10-21","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1800"},{"date":"2026-10-25","course":"ST","session":"day","time":"12:45","track":"草地","klass":"三班","going":"好地","dist":"1400"},{"date":"2026-10-28","course":"ST","session":"night","time":"19:15","track":"全天候","klass":"四班","going":"封地","dist":"1200"},{"date":"2026-11-01","course":"HV","session":"day","time":"13:00","track":"草地","klass":"五班","going":"好地","dist":"1000"},{"date":"2026-11-04","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1650"},{"date":"2026-11-08","course":"ST","session":"day","time":"13:00","track":"草地","klass":"三班","going":"好地","dist":"1600"},{"date":"2026-11-11","course":"HV","session":"night","time":"19:15","track":"草地","klass":"五班","going":"好地","dist":"1200"},{"date":"2026-11-14","course":"ST","session":"day","time":"12:30","track":"全天候","klass":"四班","going":"封地","dist":"1650"},{"date":"2026-11-18","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1650"},{"date":"2026-11-22","course":"ST","session":"day","time":"13:00","track":"草地","klass":"三班","going":"好地","dist":"1400"},{"date":"2026-11-25","course":"HV","session":"night","time":"19:15","track":"草地","klass":"五班","going":"好地","dist":"1200"},{"date":"2026-11-29","course":"ST","session":"day","time":"13:15","track":"草地","klass":"四班","going":"好地","dist":"1800"},{"date":"2026-12-02","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1650"},{"date":"2026-12-06","course":"ST","session":"day","time":"13:00","track":"草地","klass":"三班","going":"好地","dist":"1600"},{"date":"2026-12-09","course":"HV","session":"night","time":"19:15","track":"草地","klass":"五班","going":"好地","dist":"1200"},{"date":"2026-12-13","course":"ST","session":"day","time":"12:45","track":"全天候","klass":"四班","going":"封地","dist":"1200"},{"date":"2026-12-16","course":"HV","session":"night","time":"19:15","track":"草地","klass":"四班","going":"好地","dist":"1650"},{"date":"2026-12-20","course":"ST","session":"day","time":"13:00","track":"草地","klass":"三班","going":"好地","dist":"1400"},{"date":"2026-12-23","course":"HV","session":"night","time":"19:15","track":"草地","klass":"五班","going":"好地","dist":"1800"},{"date":"2026-12-26","course":"ST","session":"day","time":"13:00","track":"草地","klass":"四班","going":"好地","dist":"1600"}];
@@ -5876,8 +5991,6 @@
     const COURSE_LABEL = { ST: "沙田", HV: "跑馬地" };
     const COURSE_SHORT = { ST: "田", HV: "谷" };
     const SESSION_LABEL = { day: "日馬", night: "夜馬" };
-    const WEEKDAY_LABEL = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-    const WEEKDAY_SHORT = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
     function activeFixtureList() {
       return raceCalScope === "os" ? OVERSEAS_FIXTURES : RACE_FIXTURES;
@@ -5929,47 +6042,33 @@
     function formatFixtureMetaLine(f) {
       if (!f || !f.date) return "該日暫無賽事";
       const p = String(f.date).split("-");
-      const md = p[1] + "/" + p[2];
-      const wd = WEEKDAY_SHORT[new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay()] || "";
+      const md = (p.length === 3)
+        ? (String(Number(p[2])) + "/" + String(Number(p[1])))
+        : "";
+      const wd = (p.length === 3)
+        ? (WEEKDAY_SHORT[new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay()] || "")
+        : "";
       const time = defaultFixtureTime(f);
       if (f.region || f.venueLabel) {
-        return [md, wd, time, f.venueLabel || f.venue || "外地", f.track || "草地", f.klass || "—", f.going || "—", f.dist || "—"].join(" ");
+        return [md, wd, time, f.venueLabel || f.venue || "外地", f.track || "草地", f.klass || "—", (f.dist || "").toString().replace(/米$/, ""), f.going || "—"]
+          .filter(function (x) { return x != null && String(x).trim() !== ""; })
+          .join(" ");
       }
-      const courseShort = COURSE_SHORT[f.course] || (COURSE_LABEL[f.course] || "");
-      const track = f.track || (f.course === "ST" && f.session === "night" ? "全天候" : "草地");
-      const klass = f.klass || (f.session === "night" ? "夜馬" : "日馬");
-      const going = f.going || (track === "全天候" ? "封地" : "好地");
-      const dist = f.dist || "—";
-      return [md, wd, time, courseShort, track, klass, going, dist].join(" ");
+      const trackRaw = f.track || (f.course === "ST" && f.session === "night" ? "全天候" : "草地");
+      let surface = trackRaw;
+      if (trackRaw === "草地") {
+        surface = (f.course === "HV") ? "谷草" : "田草";
+      }
+      const klass = f.klass || "";
+      const dist = (f.dist || "").toString().replace(/米$/, "");
+      const going = f.going || (trackRaw === "全天候" ? "封地" : "好地");
+      return [md, wd, time, surface, klass, dist, going]
+        .filter(function (x) { return x != null && String(x).trim() !== ""; })
+        .join(" ");
     }
-    /* 由已載入會議首場整理成 j18 場次信息樣式：MM/DD 周X HH:MM 田/谷 … */
+    /* 由已載入會議首場整理成 j18 場次信息樣式 */
     function formatMeetingRaceMetaLine(meet, race) {
-      if (!meet || !meet.date) return "該日暫無賽事";
-      const f = {
-        date: meet.date,
-        course: meet.courseLabel === "跑馬地" ? "HV" : "ST",
-        session: (race && race.time && Number(String(race.time).split(":")[0]) >= 17) ? "night" : "day",
-        time: (race && race.time) || "—",
-        track: "草地",
-        klass: "—",
-        going: "好地",
-        dist: "—"
-      };
-      const raw = (race && race.meta) || "";
-      if (/全天候|AWT/i.test(raw)) f.track = "全天候";
-      else if (/泥地/.test(raw)) f.track = "泥地";
-      else if (/谷草|田草|草地/.test(raw)) f.track = "草地";
-      const km = raw.match(/(第?[一二三四五]班|[1-5]班)/);
-      if (km) f.klass = km[1].replace(/^第/, "").replace("一", "一").replace("二", "二");
-      if (km) {
-        const map = {"第一班":"一班","第二班":"二班","第三班":"三班","第四班":"四班","第五班":"五班"};
-        f.klass = map[km[1]] || km[1].replace(/^第/, "");
-      }
-      const gm = raw.match(/(好地至快地|好地|快地|濕慢地|封地|標準)/);
-      if (gm) f.going = gm[1];
-      const dm = raw.match(/(\d{3,4})\s*米/);
-      if (dm) f.dist = dm[1];
-      return formatFixtureMetaLine(f);
+      return formatRaceInfoLine(meet && meet.date, race, meet);
     }
     function nearestFixtureDate(fromIso) {
       const dates = [];
@@ -6009,17 +6108,15 @@
       }
     }
     function previewSelectedFixtureMeta() {
-      const box = document.getElementById("raceMeta");
-      if (!box) return;
       if (!raceCalSelected) {
-        box.textContent = "該日暫無賽事";
+        setRaceMetaText("該日暫無賽事");
         applyRaceStatus(RACE_STATUS.wait);
         return;
       }
       const snap = meetingSnapshotHk || MEETING;
       if (raceCalScope === "hk" && snap && snap.date === raceCalSelected && snap.races && snap.races.length) {
         const race0 = snap.races[0];
-        box.textContent = formatMeetingRaceMetaLine(snap, race0);
+        setRaceMetaText(formatRaceInfoLine(snap.date, race0, snap));
         applyRaceStatus(resolveRaceStatus({
           race: race0,
           dateIso: snap.date,
@@ -6029,12 +6126,12 @@
       }
       const list = fixturesOnDate(raceCalSelected);
       if (!list.length) {
-        box.textContent = "該日暫無賽事";
+        setRaceMetaText("該日暫無賽事");
         applyRaceStatus(RACE_STATUS.wait);
         return;
       }
       const f = list[0];
-      box.textContent = formatFixtureMetaLine(f);
+      setRaceMetaText(formatFixtureMetaLine(f));
       applyRaceStatus(resolveRaceStatus({
         race: f,
         dateIso: f.date,
