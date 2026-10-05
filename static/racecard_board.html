@@ -843,9 +843,27 @@
       flex: 0 0 auto;
     }
     .capsule[data-capsule="payout"] .capsule-body {
-      padding: 0 6px 0 8px;
+      padding: 0 4px 0 8px;
+      gap: 0;
+      justify-content: flex-start;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+      scrollbar-width: none;
+    }
+    .capsule[data-capsule="payout"] .capsule-body::-webkit-scrollbar {
+      display: none;
+    }
+    .capsule[data-capsule="payout"] .cap-nos-scroll {
+      display: flex;
+      align-items: center;
       gap: 5px;
-      justify-content: space-evenly;
+      flex: 0 0 auto;
+      min-width: min-content;
+      height: 100%;
+      padding-right: 2px;
     }
     .capsule[data-capsule="payout"] .cap-no {
       flex: 0 0 auto;
@@ -862,6 +880,19 @@
       background: rgba(255, 255, 255, .7);
       color: #a0a8b4;
       border-color: #b7c6d8;
+    }
+    .capsule[data-capsule="payout"] .cap-no.is-place-1 {
+      border-color: #d4a017;
+      color: #8a6a08;
+      font-weight: 800;
+    }
+    .capsule[data-capsule="payout"] .cap-no.is-place-2 {
+      border-color: #8a93a3;
+      color: #5b6575;
+    }
+    .capsule[data-capsule="payout"] .cap-no.is-place-3 {
+      border-color: #c47a3a;
+      color: #8a5520;
     }
     .capsule[data-capsule="payout"] .capsule-status {
       background: #e88b2a;
@@ -5475,6 +5506,53 @@
       }
       return slots.join("");
     }
+    /* 賽果名次：有 finish/position/rank 則按名次；否則演示用獨贏由低到高作名次 */
+    function payoutFinishNos() {
+      const runners = currentRunners().filter(function (r) { return r && !r.scratched; });
+      if (!runners.length) return [];
+      function finishOf(r) {
+        const a = numOrNull(r.finish);
+        if (a != null) return a;
+        const b = numOrNull(r.position);
+        if (b != null) return b;
+        const c = numOrNull(r.rank);
+        if (c != null) return c;
+        const d = numOrNull(r.placePos);
+        if (d != null) return d;
+        return null;
+      }
+      const hasFinish = runners.every(function (r) { return finishOf(r) != null; });
+      const sorted = runners.slice().sort(function (a, b) {
+        if (hasFinish) {
+          const fa = finishOf(a);
+          const fb = finishOf(b);
+          if (fa !== fb) return fa - fb;
+          return Number(a.no) - Number(b.no);
+        }
+        const aw = numOrNull(a.win);
+        const bw = numOrNull(b.win);
+        if (aw == null && bw == null) return Number(a.no) - Number(b.no);
+        if (aw == null) return 1;
+        if (bw == null) return -1;
+        if (aw !== bw) return aw - bw;
+        return Number(a.no) - Number(b.no);
+      });
+      return sorted.map(function (r) { return r.no; });
+    }
+    function renderPayoutCapNos(nos) {
+      const list = nos || [];
+      if (!list.length) {
+        return '<div class="cap-nos-scroll"><span class="cap-no is-empty">—</span></div>';
+      }
+      const slots = list.map(function (n, i) {
+        let cls = "cap-no";
+        if (i === 0) cls += " is-place-1";
+        else if (i === 1) cls += " is-place-2";
+        else if (i === 2) cls += " is-place-3";
+        return '<span class="' + cls + '" title="第' + (i + 1) + '名">' + esc(n) + "</span>";
+      });
+      return '<div class="cap-nos-scroll">' + slots.join("") + "</div>";
+    }
     function setCapsuleActive(which) {
       const next = (which === "payout") ? "payout" : "index";
       capsuleActive = next;
@@ -5498,6 +5576,7 @@
     function renderCapsuleBodies() {
       const indexBody = document.getElementById("capsuleIndexBody");
       const payoutBody = document.getElementById("capsulePayoutBody");
+      const payoutStatus = document.getElementById("capsulePayoutStatus");
       if (indexBody) {
         if (capsuleActive === "index") {
           const pt = activeScrubPoint();
@@ -5509,10 +5588,12 @@
       }
       if (payoutBody) {
         if (capsuleActive === "payout") {
-          /* 賽果派彩內容稍後再定；先佔 6 格 */
-          payoutBody.innerHTML = renderCapNos([], "—");
+          const finishNos = payoutFinishNos();
+          payoutBody.innerHTML = renderPayoutCapNos(finishNos);
+          if (payoutStatus) payoutStatus.textContent = "待派";
         } else {
           payoutBody.innerHTML = "";
+          if (payoutStatus) payoutStatus.textContent = "待派";
         }
       }
     }
