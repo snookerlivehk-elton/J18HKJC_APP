@@ -132,6 +132,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("time-scrub", r.text)
         self.assertIn("bindTimeScrub", r.text)
         self.assertIn("syncInsightStickyHeight", r.text)
+        self.assertIn("currentListZoom", r.text)
+        self.assertIn("h / z", r.text)
         self.assertIn("--insight-h", r.text)
         self.assertIn("開始賠率", r.text)
         self.assertIn("capsule-status", r.text)

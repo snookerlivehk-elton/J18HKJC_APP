@@ -5575,10 +5575,31 @@
       if (!pt) return 100;
       return Number(pt.pos) || 0;
     }
+    function currentListZoom() {
+      const main = document.getElementById("boardMain");
+      if (!main) return 1;
+      let z = Number(main.style.zoom);
+      if (!(z > 0)) {
+        const raw = (main.style.getPropertyValue("--list-zoom") || "").trim();
+        z = Number(raw);
+      }
+      if (!(z > 0)) {
+        try {
+          z = Number(getComputedStyle(main).zoom);
+        } catch (e) {
+          z = 1;
+        }
+      }
+      return z > 0 ? z : 1;
+    }
     function syncInsightStickyHeight() {
       const pin = document.getElementById("insightPin");
       const h = pin ? Math.ceil(pin.getBoundingClientRect().height) : 0;
-      document.documentElement.style.setProperty("--insight-h", h + "px");
+      /* board-head-pin 在 #boardMain 的 zoom 座標系內：sticky top 必須 ÷ zoom，
+         否則字體放大後表頭會下沉，與膠囊行之間露出首行馬匹 */
+      const z = currentListZoom();
+      const stickyTop = z === 1 ? h : Math.round((h / z) * 100) / 100;
+      document.documentElement.style.setProperty("--insight-h", stickyTop + "px");
     }
     function renderTimeScrub() {
       const scrub = document.getElementById("timeScrub");
@@ -7704,6 +7725,13 @@
         fitScrollColWidths();
         fitQinTableWidths();
         syncHeadScrollLeft();
+        /* zoom 改變後立刻重算表頭 sticky top（÷ zoom） */
+        if (typeof syncInsightStickyHeight === "function") {
+          syncInsightStickyHeight();
+          requestAnimationFrame(function () {
+            syncInsightStickyHeight();
+          });
+        }
         /* 殼不 zoom，放大後仍鎖在馬匹列表頂 */
         if (isWaterSheetOpen()) {
           requestAnimationFrame(function () {
@@ -7805,6 +7833,7 @@
             fitScrollColWidths();
             fitQinTableWidths();
             syncHeadScrollLeft();
+            if (typeof syncInsightStickyHeight === "function") syncInsightStickyHeight();
           }
         });
         mo.observe(main, { childList: true });
