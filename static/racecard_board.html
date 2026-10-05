@@ -26,6 +26,7 @@
       --blue: #5ba3d9;
       --blue-2: #3b8fd4;
       --green: #5cb85c;
+      --yellow: #d4a017;
       --orange: #e88b2a;
       --red: #e74c3c;
       --place: #27ae60;
@@ -449,20 +450,21 @@
       background: #8a93a3;
       box-shadow: 0 0 0 1px rgba(45, 62, 80, .08);
     }
-    .race-status[data-status="wait"] .race-status-dot { background: #8a93a3; }
-    .race-status[data-status="parade"] .race-status-dot { background: #d4a017; }
-    .race-status[data-status="gate"] .race-status-dot { background: #e67e22; }
+    /* 狀態燈色系對齊頁面：藍／綠／黃／紅／橙 */
+    .race-status[data-status="wait"] .race-status-dot { background: var(--blue); }
+    .race-status[data-status="parade"] .race-status-dot { background: var(--green); }
+    .race-status[data-status="gate"] .race-status-dot { background: var(--yellow); }
     .race-status[data-status="running"] .race-status-dot {
-      background: #2f9e6f;
-      box-shadow: 0 0 0 1px rgba(47, 158, 111, .18);
+      background: var(--red);
+      box-shadow: 0 0 0 1px rgba(231, 76, 60, .18);
       animation: raceStatusPulse 1.2s ease-in-out infinite;
     }
-    .race-status[data-status="paid"] .race-status-dot { background: #3d5a80; }
-    .race-status[data-status="wait"] { color: #707888; }
-    .race-status[data-status="parade"] { color: #9a7a18; }
-    .race-status[data-status="gate"] { color: #c45f12; }
-    .race-status[data-status="running"] { color: #247a56; }
-    .race-status[data-status="paid"] { color: #3d5a80; }
+    .race-status[data-status="paid"] .race-status-dot { background: var(--orange); }
+    .race-status[data-status="wait"] { color: var(--blue-2); }
+    .race-status[data-status="parade"] { color: #3d9a3d; }
+    .race-status[data-status="gate"] { color: #a67f0f; }
+    .race-status[data-status="running"] { color: #c0392b; }
+    .race-status[data-status="paid"] { color: #c46e18; }
     @keyframes raceStatusPulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: .55; transform: scale(.92); }
@@ -2585,7 +2587,7 @@
       height: 7px;
       border-radius: 50%;
     }
-    .dot.st-day, .marks i.st-day { background: #d4a017; }
+    .dot.st-day, .marks i.st-day { background: var(--yellow); }
     .dot.hv-night, .marks i.hv-night { background: #3d5a80; }
     .dot.st-night, .marks i.st-night { background: #1f6f8f; }
     .dot.hv-day, .marks i.hv-day { background: #5a8f6b; }
@@ -2686,6 +2688,7 @@
       --blue: #6eb3e0;
       --blue-2: #5a9fd4;
       --green: #5cb86a;
+      --yellow: #e0c35a;
       --orange: #e39a45;
       --red: #ff7a6e;
       --place: #4caf6a;
@@ -2760,11 +2763,11 @@
     html[data-theme="dark"] .meta {
       color: #9aa3b2;
     }
-    html[data-theme="dark"] .race-status[data-status="wait"] { color: #9aa3b2; }
-    html[data-theme="dark"] .race-status[data-status="parade"] { color: #e0c35a; }
-    html[data-theme="dark"] .race-status[data-status="gate"] { color: #f0a05a; }
-    html[data-theme="dark"] .race-status[data-status="running"] { color: #6dcf9f; }
-    html[data-theme="dark"] .race-status[data-status="paid"] { color: #8fb4d8; }
+    html[data-theme="dark"] .race-status[data-status="wait"] { color: var(--blue); }
+    html[data-theme="dark"] .race-status[data-status="parade"] { color: var(--green); }
+    html[data-theme="dark"] .race-status[data-status="gate"] { color: var(--yellow); }
+    html[data-theme="dark"] .race-status[data-status="running"] { color: var(--red); }
+    html[data-theme="dark"] .race-status[data-status="paid"] { color: var(--orange); }
     html[data-theme="dark"] .race-pills::-webkit-scrollbar-thumb {
       background: #4a5564;
     }
