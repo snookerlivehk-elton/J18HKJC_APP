@@ -870,7 +870,7 @@
       flex: 0 0 auto;
       min-width: min-content;
       height: 100%;
-      padding: 3px 2px 0 4px; /* 給角標留位 */
+      padding: 0 2px 0 0;
     }
     .capsule[data-capsule="payout"] .cap-no {
       flex: 0 0 auto;
@@ -888,49 +888,56 @@
       color: #a0a8b4;
       border-color: #b7c6d8;
     }
-    /* J18 角標：W／P／Q */
+    /* J18 角標：100% 沿用既有設計——左上三角折角 + 金字母（W/P/Q 同色） */
     .cap-no {
       position: relative;
+      overflow: hidden; /* 三角貼圓弧裁切 */
     }
     .cap-no .cap-badge {
       position: absolute;
-      top: -4px;
-      left: -4px;
+      top: 0;
+      left: 0;
       z-index: 2;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 11px;
-      height: 11px;
-      padding: 0 2px;
-      border-radius: 2px;
-      background: #1e2430;
-      color: #fff;
+      display: block;
+      width: 12px;
+      height: 12px;
+      margin: 0;
+      padding: 0.5px 0 0 1px;
+      border: 0;
+      border-radius: 0;
+      /* 深色三角折角；clip 連字母一齊裁，對齊參考稿 */
+      background: #383635;
+      color: #e2d189;
+      font-style: normal;
+      font-family: "Helvetica Neue", Arial, sans-serif;
       font-size: 7px;
       font-weight: 800;
       line-height: 1;
-      letter-spacing: 0;
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, .35);
+      letter-spacing: -0.04em;
+      text-align: left;
+      box-shadow: none;
       pointer-events: none;
+      clip-path: polygon(0 0, 100% 0, 0 100%);
+      -webkit-clip-path: polygon(0 0, 100% 0, 0 100%);
     }
     .cap-no.is-w {
-      background: #e74c3c;
-      border-color: #c0392b !important;
+      background: #cc453f;
+      border-color: #cc453f !important;
       color: #fff;
     }
     .cap-no.is-p {
-      background: #2ecc71;
-      border-color: #27ae60 !important;
+      background: #478c4b;
+      border-color: #478c4b !important;
       color: #fff;
     }
     .cap-no.is-q {
-      background: #3d5a80;
-      border-color: #2f4868 !important;
+      background: #2f70ca;
+      border-color: #2f70ca !important;
       color: #fff;
     }
     .cap-no.is-hot {
       background: #e88b2a;
-      border-color: #d07018 !important;
+      border-color: #e88b2a !important;
       color: #fff;
     }
     /* 下展面板（參考稿：場次列＋奶油條＋角標馬號） */
@@ -3461,7 +3468,8 @@
       border-color: #5a9fd4;
     }
     html[data-theme="dark"] .cap-no .cap-badge {
-      background: #0e1218;
+      background: #2a2d33;
+      color: #e2d189;
     }
     html[data-theme="dark"] .capsule[data-capsule="payout"] {
       border-color: #3a4a5e;
