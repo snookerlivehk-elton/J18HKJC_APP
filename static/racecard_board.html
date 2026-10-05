@@ -506,6 +506,130 @@
       .race-meta-run.is-marquee { animation: none; transform: none; }
     }
 
+    /* 場次信息與馬匹列表之間：左右膠囊（綜合指數／派彩數據） */
+    .capsule-rail {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      margin-top: 7px;
+      margin-bottom: 1px;
+      min-height: 34px;
+    }
+    .capsule {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      height: 32px;
+      border-radius: 999px;
+      border: 1px solid #cfd7e4;
+      background: #e8eef5;
+      color: var(--nav);
+      overflow: hidden;
+      transition: flex .28s ease, background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+    }
+    .capsule:not(.is-open) {
+      flex: 0 0 auto;
+    }
+    .capsule.is-open {
+      flex: 1 1 auto;
+      border-color: transparent;
+      background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(45, 62, 80, .18);
+    }
+    .capsule-head {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex: 0 0 auto;
+      height: 100%;
+      margin: 0;
+      padding: 0 8px 0 12px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .capsule:not(.is-open) .capsule-head:active {
+      background: rgba(61, 90, 128, .08);
+    }
+    .capsule-title { line-height: 1; }
+    .capsule-chev {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      opacity: .85;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .capsule.is-open .capsule-chev {
+      background: rgba(255, 255, 255, .16);
+      opacity: 1;
+    }
+    .capsule-chev:active {
+      transform: scale(.92);
+    }
+    .capsule-body {
+      display: none;
+      flex: 1 1 auto;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      height: 100%;
+      padding: 0 10px 0 2px;
+      overflow: hidden;
+    }
+    .capsule.is-open .capsule-body {
+      display: flex;
+    }
+    .cap-no {
+      flex: 1 1 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      height: 22px;
+      padding: 0 2px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .2);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .cap-no.is-empty {
+      background: rgba(255, 255, 255, .1);
+      color: rgba(255, 255, 255, .55);
+      font-weight: 700;
+    }
+    .capsule[data-capsule="payout"].is-open {
+      background: linear-gradient(180deg, #5a7fa8 0%, #3d5a80 100%);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .capsule { transition: none; }
+      .capsule-chev:active { transform: none; }
+    }
+
     /* 表格區殼：表體 + 馬匹詳情彈層同尺寸 */
     .board-shell {
       flex: 1 1 auto;
@@ -2763,6 +2887,23 @@
     html[data-theme="dark"] .meta {
       color: #9aa3b2;
     }
+    html[data-theme="dark"] .capsule {
+      background: #2a323e;
+      border-color: #3a4250;
+      color: #c5d0de;
+    }
+    html[data-theme="dark"] .capsule.is-open {
+      background: linear-gradient(180deg, #3a5474 0%, #2a3d58 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+    }
+    html[data-theme="dark"] .capsule[data-capsule="payout"].is-open {
+      background: linear-gradient(180deg, #456487 0%, #314a68 100%);
+    }
+    html[data-theme="dark"] .capsule:not(.is-open) .capsule-head:active {
+      background: rgba(255, 255, 255, .06);
+    }
     html[data-theme="dark"] .race-status[data-status="wait"] { color: var(--blue); }
     html[data-theme="dark"] .race-status[data-status="parade"] { color: var(--green); }
     html[data-theme="dark"] .race-status[data-status="gate"] { color: var(--yellow); }
@@ -3205,6 +3346,22 @@
             </div>
           </div>
         </div>
+        <div class="capsule-rail" id="capsuleRail" aria-label="指數與派彩">
+          <div class="capsule is-open" data-capsule="index" id="capsuleIndex">
+            <button type="button" class="capsule-head" data-cap-open="index" aria-expanded="true" aria-controls="capsuleIndexBody">
+              <span class="capsule-title">綜合指數</span>
+            </button>
+            <button type="button" class="capsule-chev" data-cap-menu="index" aria-label="綜合指數選項" title="綜合指數選項">▼</button>
+            <div class="capsule-body" id="capsuleIndexBody" aria-live="polite"></div>
+          </div>
+          <div class="capsule" data-capsule="payout" id="capsulePayout">
+            <button type="button" class="capsule-head" data-cap-open="payout" aria-expanded="false" aria-controls="capsulePayoutBody">
+              <span class="capsule-title">派彩數據</span>
+            </button>
+            <button type="button" class="capsule-chev" data-cap-menu="payout" aria-label="派彩數據選項" title="派彩數據選項">▼</button>
+            <div class="capsule-body" id="capsulePayoutBody" aria-live="polite"></div>
+          </div>
+        </div>
       </section>
 
       <div class="board-main" id="boardMain"></div>
@@ -3311,6 +3468,7 @@
     let currentRace = 5; /* 暫開第五場（11 匹）方便驗顯示 */
     let sortKey = "no";
     let sortDir = 1;
+    let capsuleActive = "index"; /* index | payout；默認展開綜合指數 */
     const QIN_FIT_N = 14;
     const QIN_MAX_N = 20;
     /* 小旗整行標記：0 無／1 藍／2 橙；鍵＝場次:馬號 */
@@ -4672,6 +4830,95 @@
         dateIso: MEETING && MEETING.date,
         timeStr: meet && (meet.time || meet.meta)
       }));
+      renderCapsuleRail();
+    }
+
+    /* 綜合指數推薦：暫以獨贏水位由低至高取前 6 匹（退出除外） */
+    function topIndexPickNos(limit) {
+      const n = limit == null ? 6 : limit;
+      const rows = currentRunners()
+        .filter(function (r) { return r && !r.scratched; })
+        .slice()
+        .sort(function (a, b) {
+          const aw = numOrNull(a.win);
+          const bw = numOrNull(b.win);
+          if (aw == null && bw == null) return Number(a.no) - Number(b.no);
+          if (aw == null) return 1;
+          if (bw == null) return -1;
+          if (aw !== bw) return aw - bw;
+          return Number(a.no) - Number(b.no);
+        });
+      return rows.slice(0, n).map(function (r) { return r.no; });
+    }
+    function renderCapNos(nos, emptyLab) {
+      const slots = [];
+      for (let i = 0; i < 6; i++) {
+        const v = nos && nos[i] != null ? String(nos[i]) : "";
+        if (v) slots.push('<span class="cap-no">' + esc(v) + "</span>");
+        else slots.push('<span class="cap-no is-empty">' + esc(emptyLab || "—") + "</span>");
+      }
+      return slots.join("");
+    }
+    function setCapsuleActive(which) {
+      const next = (which === "payout") ? "payout" : "index";
+      capsuleActive = next;
+      const idx = document.getElementById("capsuleIndex");
+      const pay = document.getElementById("capsulePayout");
+      if (idx) {
+        const open = next === "index";
+        idx.classList.toggle("is-open", open);
+        const head = idx.querySelector(".capsule-head");
+        if (head) head.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      if (pay) {
+        const open = next === "payout";
+        pay.classList.toggle("is-open", open);
+        const head = pay.querySelector(".capsule-head");
+        if (head) head.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      renderCapsuleBodies();
+    }
+    function renderCapsuleBodies() {
+      const indexBody = document.getElementById("capsuleIndexBody");
+      const payoutBody = document.getElementById("capsulePayoutBody");
+      if (indexBody) {
+        if (capsuleActive === "index") {
+          indexBody.innerHTML = renderCapNos(topIndexPickNos(6));
+        } else {
+          indexBody.innerHTML = "";
+        }
+      }
+      if (payoutBody) {
+        if (capsuleActive === "payout") {
+          /* 派彩內容稍後再定；先佔 6 格 */
+          payoutBody.innerHTML = renderCapNos([], "—");
+        } else {
+          payoutBody.innerHTML = "";
+        }
+      }
+    }
+    function renderCapsuleRail() {
+      const rail = document.getElementById("capsuleRail");
+      if (!rail) return;
+      setCapsuleActive(capsuleActive);
+    }
+    function bindCapsuleRail() {
+      const rail = document.getElementById("capsuleRail");
+      if (!rail || rail.getAttribute("data-bound") === "1") return;
+      rail.setAttribute("data-bound", "1");
+      rail.addEventListener("click", function (ev) {
+        const menu = ev.target && ev.target.closest ? ev.target.closest("[data-cap-menu]") : null;
+        if (menu) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          /* 下拉內容稍後再定 */
+          return;
+        }
+        const openBtn = ev.target && ev.target.closest ? ev.target.closest("[data-cap-open]") : null;
+        if (!openBtn) return;
+        const which = openBtn.getAttribute("data-cap-open");
+        if (which === "index" || which === "payout") setCapsuleActive(which);
+      });
     }
 
     function bestOdds() {
@@ -5907,6 +6154,8 @@
       syncHeadScrollLeft();
       el.board.scrollTop = st;
 
+      renderCapsuleBodies();
+
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.getAttribute("data-sort");
@@ -5959,6 +6208,7 @@
     }
 
     applyColFitRule();
+    bindCapsuleRail();
     renderPills();
     renderMeta();
     renderBoard();
