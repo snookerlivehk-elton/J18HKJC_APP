@@ -1048,6 +1048,32 @@
     .capsule-drop[data-drop-kind="payout"] .cap-drop-bar {
       height: 31px;
     }
+    .capsule-drop[data-drop-kind="index"] .cap-drop-lab {
+      width: auto;
+      min-width: 4.2em;
+      color: #5b6575;
+    }
+    .cap-drop-pin {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: #8a93a3;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cap-drop-pin input {
+      margin: 0;
+      width: 14px;
+      height: 14px;
+      accent-color: #e88b2a;
+      cursor: pointer;
+    }
     .capsule.is-open .capsule-head-wrap {
       cursor: pointer;
     }
@@ -4147,6 +4173,14 @@
     let sortDir = 1;
     let capsuleActive = "index"; /* index | payout；默認展開綜合指數 */
     let capsuleDropOpen = false;
+    let indexStrategyPinned = "composite"; /* 綜合指數下展置頂策略 */
+    const INDEX_STRATEGIES = [
+      { id: "composite", label: "綜合指數" },
+      { id: "energy", label: "能量蓄勢" },
+      { id: "expert", label: "名家權重" },
+      { id: "water", label: "水位排名" },
+      { id: "flow", label: "流量排名" }
+    ];
     let scrubPointIdx = -1; /* 時間軸選中點；-1 表示跟最新 */
     let scrubPoints = []; /* { minsBefore, label, clock, picks }[] */
     let scrubDragging = false;
@@ -5514,22 +5548,66 @@
       renderCapsuleRail();
     }
 
+    function parseSignedNum(v) {
+      if (v == null || v === "") return null;
+      const s = String(v).trim().replace(/^\+/, "");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
     /* 綜合指數推薦：暫以獨贏水位由低至高取前 6 匹（退出除外） */
-    function topIndexPickNos(limit) {
+    function indexPicksForStrategy(strategyId, limit) {
       const n = limit == null ? 6 : limit;
+      const id = strategyId || "composite";
       const rows = currentRunners()
         .filter(function (r) { return r && !r.scratched; })
-        .slice()
-        .sort(function (a, b) {
-          const aw = numOrNull(a.win);
-          const bw = numOrNull(b.win);
-          if (aw == null && bw == null) return Number(a.no) - Number(b.no);
-          if (aw == null) return 1;
-          if (bw == null) return -1;
-          if (aw !== bw) return aw - bw;
+        .slice();
+      function cmpNum(getVal, dir) {
+        const mul = dir === "desc" ? -1 : 1;
+        return function (a, b) {
+          const av = getVal(a);
+          const bv = getVal(b);
+          if (av == null && bv == null) return Number(a.no) - Number(b.no);
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          if (av !== bv) return mul * (av - bv);
+          return Number(a.no) - Number(b.no);
+        };
+      }
+      if (id === "water") {
+        rows.sort(cmpNum(function (r) { return numOrNull(r.winWater); }, "desc"));
+      } else if (id === "flow") {
+        rows.sort(cmpNum(function (r) { return numOrNull(r.winFlow); }, "desc"));
+      } else if (id === "expert") {
+        rows.sort(cmpNum(function (r) { return numOrNull(r.rating); }, "desc"));
+      } else if (id === "energy") {
+        rows.sort(function (a, b) {
+          const aw = numOrNull(a.win) || 99;
+          const bw = numOrNull(b.win) || 99;
+          const ah = numOrNull(a.hw) || 120;
+          const bh = numOrNull(b.hw) || 120;
+          const ad = parseSignedNum(a.rtgDelta);
+          const bd = parseSignedNum(b.rtgDelta);
+          const scoreA = (ah / aw) + (ad != null ? ad * 0.08 : 0);
+          const scoreB = (bh / bw) + (bd != null ? bd * 0.08 : 0);
+          if (scoreA !== scoreB) return scoreB - scoreA;
           return Number(a.no) - Number(b.no);
         });
+      } else {
+        rows.sort(cmpNum(function (r) { return numOrNull(r.winWater); }, "asc"));
+      }
       return rows.slice(0, n).map(function (r) { return r.no; });
+    }
+    function topIndexPickNos(limit) {
+      return indexPicksForStrategy(indexStrategyPinned, limit);
+    }
+    function setIndexStrategyPinned(id) {
+      const ok = INDEX_STRATEGIES.some(function (s) { return s.id === id; });
+      const next = ok ? id : "composite";
+      if (next === indexStrategyPinned) return;
+      indexStrategyPinned = next;
+      scrubPointIdx = -1;
+      renderTimeScrub();
+      renderCapsuleBodies();
     }
     function pad2(n) {
       return (n < 10 ? "0" : "") + String(n);
@@ -5799,21 +5877,20 @@
     function payoutFinishNos() {
       return payoutFinishNosForRace(currentMeet());
     }
-    function indexPicksForRace(race, limit) {
-      const n = limit == null ? 6 : limit;
-      const rows = ((race && race.runners) || [])
-        .filter(function (r) { return r && !r.scratched; })
-        .slice()
-        .sort(function (a, b) {
-          const aw = numOrNull(a.win);
-          const bw = numOrNull(b.win);
-          if (aw == null && bw == null) return Number(a.no) - Number(b.no);
-          if (aw == null) return 1;
-          if (bw == null) return -1;
-          if (aw !== bw) return aw - bw;
-          return Number(a.no) - Number(b.no);
-        });
-      return rows.slice(0, n).map(function (r) { return r.no; });
+    function indexDropBarHtml(nos) {
+      const finish = payoutFinishNosForRace(currentMeet());
+      const w = finish[0] != null ? String(finish[0]) : "";
+      const q = finish[1] != null ? String(finish[1]) : "";
+      const p = finish[2] != null ? String(finish[2]) : "";
+      const barHtml = (nos || []).map(function (n) {
+        const s = String(n);
+        let kind = "";
+        if (s === w) kind = "w";
+        else if (s === q) kind = "q";
+        else if (s === p) kind = "p";
+        return renderCapNoHtml(n, kind, "");
+      }).join("");
+      return barHtml || '<span class="cap-no is-empty">—</span>';
     }
     function renderPayoutCapNos(nos) {
       const list = nos || [];
@@ -5858,35 +5935,32 @@
       }
       const isPay = which === "payout";
       let html = "";
-      races.forEach(function (race) {
-        const lab = "第" + esc(race.num) + "場";
-        const nos = isPay
-          ? payoutFinishNosForRace(race)
-          : indexPicksForRace(race, 6);
-        /* 綜合指數下展：6 碼，並用該場名次打 W／Q／P 角標（命中才標） */
-        let barHtml = "";
-        if (isPay) {
-          barHtml = renderDropBarNos(nos, true);
-        } else {
-          const finish = payoutFinishNosForRace(race);
-          const w = finish[0] != null ? String(finish[0]) : "";
-          const q = finish[1] != null ? String(finish[1]) : "";
-          const p = finish[2] != null ? String(finish[2]) : "";
-          barHtml = (nos || []).map(function (n) {
-            const s = String(n);
-            let kind = "";
-            if (s === w) kind = "w";
-            else if (s === q) kind = "q";
-            else if (s === p) kind = "p";
-            return renderCapNoHtml(n, kind, "");
-          }).join("");
-          if (!barHtml) barHtml = '<span class="cap-no is-empty">—</span>';
-        }
-        html += '<div class="cap-drop-row">' +
-          '<span class="cap-drop-lab">' + lab + "</span>" +
-          '<div class="cap-drop-bar">' + barHtml + "</div>" +
-          "</div>";
-      });
+      if (isPay) {
+        races.forEach(function (race) {
+          const lab = "第" + esc(race.num) + "場";
+          const nos = payoutFinishNosForRace(race);
+          const barHtml = renderDropBarNos(nos, true);
+          html += '<div class="cap-drop-row">' +
+            '<span class="cap-drop-lab">' + lab + "</span>" +
+            '<div class="cap-drop-bar">' + barHtml + "</div>" +
+            "</div>";
+        });
+      } else {
+        INDEX_STRATEGIES.forEach(function (strat) {
+          const nos = indexPicksForStrategy(strat.id, 6);
+          const barHtml = indexDropBarHtml(nos);
+          const pinned = indexStrategyPinned === strat.id;
+          html += '<div class="cap-drop-row">' +
+            '<span class="cap-drop-lab">' + esc(strat.label) + "</span>" +
+            '<div class="cap-drop-bar">' + barHtml + "</div>" +
+            '<label class="cap-drop-pin">' +
+            '<input type="radio" name="indexStrategyPin" value="' + esc(strat.id) + '"' +
+            (pinned ? " checked" : "") +
+            ' aria-label="' + esc(strat.label) + " 置頂" + '">' +
+            "<span>置頂</span></label>" +
+            "</div>";
+        });
+      }
       drop.innerHTML = html;
     }
     function openCapsuleDrop(which) {
@@ -5993,6 +6067,15 @@
         if (pin && pin.contains(ev.target)) return;
         closeCapsuleDrop();
       });
+      const drop = document.getElementById("capsuleDrop");
+      if (drop) {
+        drop.addEventListener("change", function (ev) {
+          const t = ev.target;
+          if (!t || t.name !== "indexStrategyPin") return;
+          ev.stopPropagation();
+          setIndexStrategyPinned(t.value);
+        });
+      }
     }
 
     function bestOdds() {
