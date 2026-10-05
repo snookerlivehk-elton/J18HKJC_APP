@@ -646,6 +646,12 @@
     }
     .capsule:not(.is-open) {
       flex: 0 0 auto;
+      cursor: pointer;
+    }
+    .capsule:not(.is-open) .capsule-head-wrap,
+    .capsule:not(.is-open) .capsule-head,
+    .capsule:not(.is-open) .capsule-chev {
+      pointer-events: none; /* 收起時整顆點開 */
     }
     .capsule.is-open {
       flex: 1 1 auto;
@@ -653,6 +659,7 @@
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
       color: #fff;
       box-shadow: 0 1px 3px rgba(45, 62, 80, .18);
+      overflow: visible; /* 角標可探出 */
     }
     /* 綜合指數：參考稿 — 奶油底＋橙粉頭＋白圈馬號＋右側狀態 */
     .capsule[data-capsule="index"] {
@@ -863,7 +870,7 @@
       flex: 0 0 auto;
       min-width: min-content;
       height: 100%;
-      padding-right: 2px;
+      padding: 3px 2px 0 4px; /* 給角標留位 */
     }
     .capsule[data-capsule="payout"] .cap-no {
       flex: 0 0 auto;
@@ -881,18 +888,111 @@
       color: #a0a8b4;
       border-color: #b7c6d8;
     }
-    .capsule[data-capsule="payout"] .cap-no.is-place-1 {
-      border-color: #d4a017;
-      color: #8a6a08;
+    /* J18 角標：W／P／Q */
+    .cap-no {
+      position: relative;
+    }
+    .cap-no .cap-badge {
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 11px;
+      height: 11px;
+      padding: 0 2px;
+      border-radius: 2px;
+      background: #1e2430;
+      color: #fff;
+      font-size: 7px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .35);
+      pointer-events: none;
+    }
+    .cap-no.is-w {
+      background: #e74c3c;
+      border-color: #c0392b !important;
+      color: #fff;
+    }
+    .cap-no.is-p {
+      background: #2ecc71;
+      border-color: #27ae60 !important;
+      color: #fff;
+    }
+    .cap-no.is-q {
+      background: #3d5a80;
+      border-color: #2f4868 !important;
+      color: #fff;
+    }
+    .cap-no.is-hot {
+      background: #e88b2a;
+      border-color: #d07018 !important;
+      color: #fff;
+    }
+    /* 下展面板（參考稿：場次列＋奶油條＋角標馬號） */
+    .capsule-drop {
+      margin-top: 2px;
+      max-height: min(42vh, 320px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 4px 14px rgba(45, 62, 80, .12);
+    }
+    .capsule-drop[hidden] { display: none !important; }
+    .cap-drop-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #eef1f5;
+    }
+    .cap-drop-row:last-child { border-bottom: 0; }
+    .cap-drop-lab {
+      flex: 0 0 auto;
+      width: 3.2em;
+      font-size: 12px;
+      font-weight: 700;
+      color: #8a93a3;
+      white-space: nowrap;
+    }
+    .cap-drop-bar {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #fff4df;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+      scrollbar-width: none;
+    }
+    .cap-drop-bar::-webkit-scrollbar { display: none; }
+    .cap-drop-bar .cap-no {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #fff;
+      color: #2c3e50;
+      border: 1.5px solid #e88b2a;
+      font-size: 12px;
       font-weight: 800;
     }
-    .capsule[data-capsule="payout"] .cap-no.is-place-2 {
-      border-color: #8a93a3;
-      color: #5b6575;
-    }
-    .capsule[data-capsule="payout"] .cap-no.is-place-3 {
-      border-color: #c47a3a;
-      color: #8a5520;
+    .capsule-chev.is-drop-open {
+      transform: rotate(180deg);
     }
     .capsule[data-capsule="payout"] .capsule-status {
       background: #e88b2a;
@@ -3303,8 +3403,21 @@
       color: #e6eaf0;
       border-color: #e39a45;
     }
-    html[data-theme="dark"] .capsule-status {
-      background: #456487;
+    html[data-theme="dark"] .capsule-drop {
+      background: #1e242d;
+      border-color: var(--line);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+    }
+    html[data-theme="dark"] .cap-drop-row { border-bottom-color: #2a323e; }
+    html[data-theme="dark"] .cap-drop-lab { color: #8a93a3; }
+    html[data-theme="dark"] .cap-drop-bar { background: #322a20; }
+    html[data-theme="dark"] .cap-drop-bar .cap-no {
+      background: #1e242d;
+      color: #e6eaf0;
+      border-color: #e39a45;
+    }
+    html[data-theme="dark"] .cap-no .cap-badge {
+      background: #0e1218;
     }
     html[data-theme="dark"] .capsule[data-capsule="payout"] {
       border-color: #3a4a5e;
@@ -3828,6 +3941,7 @@
             <span class="capsule-status" id="capsulePayoutStatus">待派</span>
           </div>
         </div>
+        <div class="capsule-drop" id="capsuleDrop" hidden aria-hidden="true"></div>
       </div>
 
       <div class="board-main" id="boardMain"></div>
@@ -3935,6 +4049,7 @@
     let sortKey = "no";
     let sortDir = 1;
     let capsuleActive = "index"; /* index | payout；默認展開綜合指數 */
+    let capsuleDropOpen = false;
     let scrubPointIdx = -1; /* 時間軸選中點；-1 表示跟最新 */
     let scrubPoints = []; /* { minsBefore, label, clock, picks }[] */
     let scrubDragging = false;
@@ -5497,18 +5612,42 @@
         }
       });
     }
+    function renderCapNoHtml(no, kind, title) {
+      let cls = "cap-no";
+      let badge = "";
+      if (kind === "w") {
+        cls += " is-w";
+        badge = '<i class="cap-badge" aria-hidden="true">W</i>';
+      } else if (kind === "p") {
+        cls += " is-p";
+        badge = '<i class="cap-badge" aria-hidden="true">P</i>';
+      } else if (kind === "q") {
+        cls += " is-q";
+        badge = '<i class="cap-badge" aria-hidden="true">Q</i>';
+      } else if (kind === "hot") {
+        cls += " is-hot";
+      }
+      const tit = title ? (' title="' + esc(title) + '"') : "";
+      return '<span class="' + cls + '"' + tit + ">" + badge + esc(no) + "</span>";
+    }
     function renderCapNos(nos, emptyLab) {
       const slots = [];
       for (let i = 0; i < 6; i++) {
         const v = nos && nos[i] != null ? String(nos[i]) : "";
-        if (v) slots.push('<span class="cap-no">' + esc(v) + "</span>");
+        if (v) slots.push(renderCapNoHtml(v, "", ""));
         else slots.push('<span class="cap-no is-empty">' + esc(emptyLab || "—") + "</span>");
       }
       return slots.join("");
     }
+    function finishKindAt(i) {
+      if (i === 0) return "w";
+      if (i === 1) return "q";
+      if (i === 2) return "p";
+      return "";
+    }
     /* 賽果名次：有 finish/position/rank 則按名次；否則演示用獨贏由低到高作名次 */
-    function payoutFinishNos() {
-      const runners = currentRunners().filter(function (r) { return r && !r.scratched; });
+    function payoutFinishNosForRace(race) {
+      const runners = ((race && race.runners) || []).filter(function (r) { return r && !r.scratched; });
       if (!runners.length) return [];
       function finishOf(r) {
         const a = numOrNull(r.finish);
@@ -5539,22 +5678,120 @@
       });
       return sorted.map(function (r) { return r.no; });
     }
+    function payoutFinishNos() {
+      return payoutFinishNosForRace(currentMeet());
+    }
+    function indexPicksForRace(race, limit) {
+      const n = limit == null ? 6 : limit;
+      const rows = ((race && race.runners) || [])
+        .filter(function (r) { return r && !r.scratched; })
+        .slice()
+        .sort(function (a, b) {
+          const aw = numOrNull(a.win);
+          const bw = numOrNull(b.win);
+          if (aw == null && bw == null) return Number(a.no) - Number(b.no);
+          if (aw == null) return 1;
+          if (bw == null) return -1;
+          if (aw !== bw) return aw - bw;
+          return Number(a.no) - Number(b.no);
+        });
+      return rows.slice(0, n).map(function (r) { return r.no; });
+    }
     function renderPayoutCapNos(nos) {
       const list = nos || [];
       if (!list.length) {
         return '<div class="cap-nos-scroll"><span class="cap-no is-empty">—</span></div>';
       }
       const slots = list.map(function (n, i) {
-        let cls = "cap-no";
-        if (i === 0) cls += " is-place-1";
-        else if (i === 1) cls += " is-place-2";
-        else if (i === 2) cls += " is-place-3";
-        return '<span class="' + cls + '" title="第' + (i + 1) + '名">' + esc(n) + "</span>";
+        return renderCapNoHtml(n, finishKindAt(i), "第" + (i + 1) + "名");
       });
       return '<div class="cap-nos-scroll">' + slots.join("") + "</div>";
     }
+    function renderDropBarNos(nos, withWpq) {
+      const list = nos || [];
+      if (!list.length) return '<span class="cap-no is-empty">—</span>';
+      return list.map(function (n, i) {
+        const kind = withWpq ? finishKindAt(i) : "";
+        return renderCapNoHtml(n, kind, withWpq ? ("第" + (i + 1) + "名") : "");
+      }).join("");
+    }
+    function closeCapsuleDrop() {
+      capsuleDropOpen = false;
+      const drop = document.getElementById("capsuleDrop");
+      if (drop) {
+        drop.setAttribute("hidden", "");
+        drop.setAttribute("aria-hidden", "true");
+        drop.innerHTML = "";
+      }
+      document.querySelectorAll(".capsule-chev.is-drop-open").forEach(function (el) {
+        el.classList.remove("is-drop-open");
+      });
+      syncInsightStickyHeight();
+    }
+    function renderCapsuleDrop(which) {
+      const drop = document.getElementById("capsuleDrop");
+      if (!drop) return;
+      const races = (MEETING && MEETING.races) || [];
+      if (!races.length) {
+        drop.innerHTML = '<div class="cap-drop-row"><span class="cap-drop-lab">—</span><div class="cap-drop-bar"><span class="cap-no is-empty">—</span></div></div>';
+        return;
+      }
+      const isPay = which === "payout";
+      let html = "";
+      races.forEach(function (race) {
+        const lab = "第" + esc(race.num) + "場";
+        const nos = isPay
+          ? payoutFinishNosForRace(race)
+          : indexPicksForRace(race, 6);
+        /* 綜合指數下展：6 碼，並用該場名次打 W／Q／P 角標（命中才標） */
+        let barHtml = "";
+        if (isPay) {
+          barHtml = renderDropBarNos(nos, true);
+        } else {
+          const finish = payoutFinishNosForRace(race);
+          const w = finish[0] != null ? String(finish[0]) : "";
+          const q = finish[1] != null ? String(finish[1]) : "";
+          const p = finish[2] != null ? String(finish[2]) : "";
+          barHtml = (nos || []).map(function (n) {
+            const s = String(n);
+            let kind = "";
+            if (s === w) kind = "w";
+            else if (s === q) kind = "q";
+            else if (s === p) kind = "p";
+            return renderCapNoHtml(n, kind, "");
+          }).join("");
+          if (!barHtml) barHtml = '<span class="cap-no is-empty">—</span>';
+        }
+        html += '<div class="cap-drop-row">' +
+          '<span class="cap-drop-lab">' + lab + "</span>" +
+          '<div class="cap-drop-bar">' + barHtml + "</div>" +
+          "</div>";
+      });
+      drop.innerHTML = html;
+    }
+    function openCapsuleDrop(which) {
+      const drop = document.getElementById("capsuleDrop");
+      if (!drop) return;
+      capsuleDropOpen = true;
+      drop.removeAttribute("hidden");
+      drop.setAttribute("aria-hidden", "false");
+      renderCapsuleDrop(which);
+      document.querySelectorAll(".capsule-chev").forEach(function (el) {
+        const on = el.getAttribute("data-cap-menu") === which;
+        el.classList.toggle("is-drop-open", on);
+      });
+      syncInsightStickyHeight();
+    }
+    function toggleCapsuleDrop(which) {
+      const drop = document.getElementById("capsuleDrop");
+      const open = drop && !drop.hasAttribute("hidden") && capsuleDropOpen;
+      const same = open && capsuleActive === which;
+      if (same) closeCapsuleDrop();
+      else openCapsuleDrop(which);
+    }
     function setCapsuleActive(which) {
       const next = (which === "payout") ? "payout" : "index";
+      const switched = next !== capsuleActive;
       capsuleActive = next;
       const idx = document.getElementById("capsuleIndex");
       const pay = document.getElementById("capsulePayout");
@@ -5570,6 +5807,7 @@
         const head = pay.querySelector(".capsule-head");
         if (head) head.setAttribute("aria-expanded", open ? "true" : "false");
       }
+      if (switched) closeCapsuleDrop();
       renderCapsuleBodies();
       syncInsightStickyHeight();
     }
@@ -5596,6 +5834,7 @@
           if (payoutStatus) payoutStatus.textContent = "待派";
         }
       }
+      if (capsuleDropOpen) renderCapsuleDrop(capsuleActive);
     }
     function renderCapsuleRail() {
       const rail = document.getElementById("capsuleRail");
@@ -5605,20 +5844,38 @@
     }
     function bindCapsuleRail() {
       const rail = document.getElementById("capsuleRail");
+      const pin = document.getElementById("insightPin");
       if (!rail || rail.getAttribute("data-bound") === "1") return;
       rail.setAttribute("data-bound", "1");
       rail.addEventListener("click", function (ev) {
-        const menu = ev.target && ev.target.closest ? ev.target.closest("[data-cap-menu]") : null;
-        if (menu) {
+        const cap = ev.target && ev.target.closest ? ev.target.closest(".capsule") : null;
+        if (!cap) return;
+        const which = cap.getAttribute("data-capsule");
+        if (which !== "index" && which !== "payout") return;
+        /* 橫滑號碼區不觸發切換 */
+        if (ev.target.closest(".capsule-body") || ev.target.closest(".cap-nos-scroll")) return;
+        const isOpen = cap.classList.contains("is-open");
+        const menu = ev.target.closest("[data-cap-menu]");
+        if (menu && isOpen) {
           ev.preventDefault();
           ev.stopPropagation();
-          /* 下拉內容稍後再定 */
+          toggleCapsuleDrop(which);
           return;
         }
-        const openBtn = ev.target && ev.target.closest ? ev.target.closest("[data-cap-open]") : null;
-        if (!openBtn) return;
-        const which = openBtn.getAttribute("data-cap-open");
-        if (which === "index" || which === "payout") setCapsuleActive(which);
+        if (!isOpen) {
+          ev.preventDefault();
+          setCapsuleActive(which);
+          return;
+        }
+        /* 已展開：點頭部不關膠囊，僅收起下展 */
+        if (ev.target.closest(".capsule-head-wrap") || ev.target.closest("[data-cap-open]")) {
+          if (capsuleDropOpen) closeCapsuleDrop();
+        }
+      });
+      document.addEventListener("click", function (ev) {
+        if (!capsuleDropOpen) return;
+        if (pin && pin.contains(ev.target)) return;
+        closeCapsuleDrop();
       });
     }
 
