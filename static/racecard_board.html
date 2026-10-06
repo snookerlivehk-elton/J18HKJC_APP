@@ -1119,8 +1119,15 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    .cap-drop-pay.is-unpaid {
+      background: #9aa3b2;
+      cursor: default;
+    }
     .cap-drop-pay:active {
       filter: brightness(.94);
+    }
+    .cap-drop-pay.is-unpaid:active {
+      filter: none;
     }
     .capsule.is-open .capsule-head-wrap {
       cursor: pointer;
@@ -6167,11 +6174,15 @@
           const lab = "第" + esc(race.num) + "場";
           const nos = payoutFinishNosForRace(race);
           const barHtml = renderDropBarNos(nos, true);
+          const paid = raceHasPayout(race);
+          const payLab = paid ? "已派彩" : "未派彩";
+          const payCls = "cap-drop-pay" + (paid ? " is-paid" : " is-unpaid");
           html += '<div class="cap-drop-row">' +
             '<span class="cap-drop-lab">' + lab + "</span>" +
             '<div class="cap-drop-bar">' + barHtml + "</div>" +
-            '<button type="button" class="cap-drop-pay" data-pay-race="' + esc(race.num) + '"' +
-            ' aria-label="第' + esc(race.num) + '場派彩詳情">派彩</button>' +
+            '<button type="button" class="' + payCls + '" data-pay-race="' + esc(race.num) + '"' +
+            (paid ? "" : " disabled") +
+            ' aria-label="第' + esc(race.num) + "場" + payLab + '">' + payLab + "</button>" +
             "</div>";
         });
       } else {
