@@ -1121,13 +1121,6 @@
     }
     .cap-drop-pay.is-unpaid {
       background: #9aa3b2;
-      cursor: default;
-    }
-    .cap-drop-pay:active {
-      filter: brightness(.94);
-    }
-    .cap-drop-pay.is-unpaid:active {
-      filter: none;
     }
     .capsule.is-open .capsule-head-wrap {
       cursor: pointer;
@@ -6181,7 +6174,6 @@
             '<span class="cap-drop-lab">' + lab + "</span>" +
             '<div class="cap-drop-bar">' + barHtml + "</div>" +
             '<button type="button" class="' + payCls + '" data-pay-race="' + esc(race.num) + '"' +
-            (paid ? "" : " disabled") +
             ' aria-label="第' + esc(race.num) + "場" + payLab + '">' + payLab + "</button>" +
             "</div>";
         });
