@@ -2617,19 +2617,25 @@
       align-items: flex-end;
     }
 
-    /* 歷史場次前四名：負磅／騎師列冠亞季殿半透明賽事水印 */
-    .hrow:not(.head) .cell.finish-wm-cell {
+    /* 歷史場次前四名：負磅與騎師之間空位，冠亞季殿半透明賽事水印 */
+    .hrow:not(.head) .cell.finish-wm-host,
+    .hrow:not(.head) .cell.finish-wm-pair {
       position: relative;
-      overflow: hidden;
-      isolation: isolate;
+      overflow: visible;
+    }
+    .hrow:not(.head) .cell.finish-wm-host {
+      z-index: 0;
+    }
+    .hrow:not(.head) .cell.finish-wm-pair {
+      z-index: 1;
     }
     .finish-wm {
       position: absolute;
-      left: 42%;
-      top: 54%;
-      transform: translate(-50%, -50%) rotate(-12deg) skewX(-6deg);
+      left: 100%;
+      top: 52%;
+      transform: translate(-42%, -50%) rotate(-12deg) skewX(-6deg);
       font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
-      font-size: 34px;
+      font-size: 32px;
       font-weight: 900;
       font-style: italic;
       line-height: 1;
@@ -2643,7 +2649,8 @@
         0 1px 0 rgba(255, 255, 255, .25),
         0 2px 6px rgba(30, 42, 58, .18);
     }
-    .finish-wm-cell > .v {
+    .finish-wm-host > .v,
+    .finish-wm-pair > .v {
       position: relative;
       z-index: 1;
     }
@@ -7591,13 +7598,16 @@
             ? ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位／流量詳情"'
             : "";
           const fin = finishOfRunner(r);
-          const showWm = raceHasPayout(currentMeet()) && (c.key === "hw" || c.key === "jockey") &&
-            fin != null && fin >= 1 && fin <= 4;
-          const wmCls = showWm ? (" finish-wm-cell finish-pos-" + fin) : "";
-          const wmHtml = showWm
-            ? ('<span class="finish-wm is-' + fin + '" aria-hidden="true">' + fin + "</span>")
-            : "";
-          return '<div class="cell ' + c.cls + colOn(c.key) + wmCls + '"' + openWater + ">" +
+          const top4 = raceHasPayout(currentMeet()) && fin != null && fin >= 1 && fin <= 4;
+          let extraCls = "";
+          let wmHtml = "";
+          if (top4 && c.key === "hw") {
+            extraCls = " finish-wm-host finish-pos-" + fin;
+            wmHtml = '<span class="finish-wm is-' + fin + '" aria-hidden="true">' + fin + "</span>";
+          } else if (top4 && c.key === "jockey") {
+            extraCls = " finish-wm-pair";
+          }
+          return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openWater + ">" +
             wmHtml + cellValue(c, r) + "</div>";
         }).join("");
         return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
