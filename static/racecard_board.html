@@ -2649,8 +2649,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 92px;
-      height: 52px;
+      width: 100px;
+      height: 54px;
       pointer-events: none;
       z-index: 0;
       /* 不用整層 opacity：白描邊必須實心，否則彩帶會透進數字 */
@@ -2659,14 +2659,14 @@
       color: rgb(var(--wm-r), var(--wm-g), var(--wm-b));
       overflow: visible;
     }
-    /* 飄逸絲帶：左端壓負磅下方，右端上揚避開騎師名 */
+    /* 飄逸絲帶：左端收在負磅內（不伸進流量列），右端上揚避開騎師名 */
     .finish-wm-ribbon {
       position: absolute;
       left: 50%;
       top: 52%;
-      width: 100px;
+      width: 88px;
       height: 50px;
-      margin: -22px 0 0 -54px;
+      margin: -22px 0 0 -34px;
       overflow: visible;
       display: block;
       pointer-events: none;
@@ -7655,12 +7655,12 @@
             wmHtml =
               '<span class="finish-wm is-' + fin + '" aria-hidden="true">' +
                 '<svg class="finish-wm-ribbon" viewBox="0 0 100 50" preserveAspectRatio="xMidYMid meet" focusable="false">' +
-                  /* 左燕尾壓負磅下方，帶身右上飄，盡量讓開騎師名 */
+                  /* 左端收圓、不伸進流量列；右端上飄讓開騎師名 */
                   '<path class="finish-wm-ribbon-path" d="' +
-                    "M1.5 33.5 L10.8 27.8 L7.6 33.2 L11.2 38.8 L1.8 44.5 " +
-                    "L18 41.2 C32 39.2 42 34.5 51.5 27.5 C60.5 20.8 70 13.5 82.5 7.2 " +
-                    "L91.5 2.8 L86.2 10.2 L95.5 7.8 L89.8 15.5 " +
-                    "C76.5 16.8 66.2 22.8 56.5 30.2 C46.2 38 33.5 42.2 18.2 44.2 Z" +
+                    "M14 34 C16 28.5 20 26.5 26 27.5 C40 29.5 50 24.5 60 17.5 " +
+                    "C68 11.5 78 6.5 88 3.5 L95 1.8 L90 9.2 L97.5 7.2 L92.5 14.5 " +
+                    "C80 15.5 70 20.5 60.5 27.5 C50 35.5 38 40.5 26 41.5 " +
+                    "C20 42 16 40 14 34 Z" +
                   '"/>' +
                 "</svg>" +
                 '<b class="finish-wm-num">' + fin + "</b>" +
