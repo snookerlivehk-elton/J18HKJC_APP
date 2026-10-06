@@ -2641,65 +2641,50 @@
       --wm-g: 58;
       --wm-b: 58;
       --wm-fill: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .58);
-      --wm-ribbon: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .46);
-      --wm-tail: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .4);
+      --wm-ribbon: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .44);
       position: absolute;
       left: 100%;
-      top: 52%;
+      top: 50%;
       transform: translate(calc(-50% - 9px), -50%);
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 58px;
-      height: 46px;
+      width: 92px;
+      height: 52px;
       pointer-events: none;
       z-index: 0;
       /* 不用整層 opacity：白描邊必須實心，否則彩帶會透進數字 */
       opacity: 1;
       user-select: none;
       color: rgb(var(--wm-r), var(--wm-g), var(--wm-b));
+      overflow: visible;
     }
-    /* 斜向絲帶 — 半透明色帶 + 實心白描邊，與數字留白間隔 */
+    /* 飄逸絲帶：左端壓負磅下方，右端上揚避開騎師名 */
     .finish-wm-ribbon {
       position: absolute;
       left: 50%;
-      top: 58%;
-      width: 58px;
-      height: 13px;
-      margin: -6.5px 0 0 -29px;
-      background: var(--wm-ribbon);
-      transform: rotate(-20deg) skewX(-6deg);
-      border-radius: 2px;
-      box-shadow:
-        0 0 0 2.5px #fff,
-        inset 0 1px 0 rgba(255, 255, 255, .35),
-        inset 0 -1px 0 rgba(0, 0, 0, .12);
+      top: 52%;
+      width: 100px;
+      height: 50px;
+      margin: -22px 0 0 -54px;
+      overflow: visible;
+      display: block;
+      pointer-events: none;
     }
-    .finish-wm-ribbon::before,
-    .finish-wm-ribbon::after {
-      content: "";
-      position: absolute;
-      top: -2px;
-      width: 11px;
-      height: calc(100% + 4px);
-      background: var(--wm-tail);
-      box-shadow: 0 0 0 2.5px #fff;
-    }
-    /* 左燕尾 */
-    .finish-wm-ribbon::before {
-      left: -9px;
-      clip-path: polygon(100% 0, 100% 100%, 0 100%, 35% 50%, 0 0);
-    }
-    /* 右燕尾 */
-    .finish-wm-ribbon::after {
-      right: -9px;
-      clip-path: polygon(0 0, 65% 50%, 0 100%, 100% 100%, 100% 0);
+    .finish-wm-ribbon-path {
+      fill: var(--wm-ribbon);
+      stroke: #fff;
+      stroke-width: 4.2;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      paint-order: stroke fill;
     }
     /* 名次數字：塊面字形 + 實心白描邊／光暈，與彩帶清晰分離 */
     .finish-wm-num {
       position: relative;
       z-index: 1;
-      margin-top: -3px;
+      margin-top: 1px;
+      margin-left: -6px;
       font-family: "Arial Black", Impact, "Helvetica Neue Condensed Bold", "Arial Narrow", sans-serif;
       font-size: 40px;
       font-weight: 900;
@@ -7669,7 +7654,15 @@
             extraCls = " finish-wm-host finish-pos-" + fin;
             wmHtml =
               '<span class="finish-wm is-' + fin + '" aria-hidden="true">' +
-                '<i class="finish-wm-ribbon"></i>' +
+                '<svg class="finish-wm-ribbon" viewBox="0 0 100 50" preserveAspectRatio="xMidYMid meet" focusable="false">' +
+                  /* 左燕尾壓負磅下方，帶身右上飄，盡量讓開騎師名 */
+                  '<path class="finish-wm-ribbon-path" d="' +
+                    "M1.5 33.5 L10.8 27.8 L7.6 33.2 L11.2 38.8 L1.8 44.5 " +
+                    "L18 41.2 C32 39.2 42 34.5 51.5 27.5 C60.5 20.8 70 13.5 82.5 7.2 " +
+                    "L91.5 2.8 L86.2 10.2 L95.5 7.8 L89.8 15.5 " +
+                    "C76.5 16.8 66.2 22.8 56.5 30.2 C46.2 38 33.5 42.2 18.2 44.2 Z" +
+                  '"/>' +
+                "</svg>" +
                 '<b class="finish-wm-num">' + fin + "</b>" +
               "</span>";
           } else if (top4 && c.key === "jockey") {
