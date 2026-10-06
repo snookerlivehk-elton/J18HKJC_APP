@@ -2641,8 +2641,6 @@
       --wm-g: 58;
       --wm-b: 58;
       --wm-fill: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .58);
-      --wm-ribbon: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .42);
-      --wm-ribbon-soft: rgba(var(--wm-r), var(--wm-g), var(--wm-b), .28);
       position: absolute;
       left: 100%;
       top: 50%;
@@ -2650,55 +2648,20 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 90px;
-      height: 56px;
+      width: 56px;
+      height: 46px;
       pointer-events: none;
       z-index: 0;
-      /* 不用整層 opacity：白描邊必須實心，否則彩帶會透進數字 */
+      /* 不用整層 opacity：白描邊必須實心 */
       opacity: 1;
       user-select: none;
       color: rgb(var(--wm-r), var(--wm-g), var(--wm-b));
       overflow: visible;
     }
-    /* 授帶式飄帶：左端收在負磅內，右叉上揚避開騎師 */
-    .finish-wm-ribbon {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 92px;
-      height: 54px;
-      margin: -26px 0 0 -30px;
-      overflow: visible;
-      display: block;
-      pointer-events: none;
-    }
-    .finish-wm-ribbon-path {
-      fill: var(--wm-ribbon);
-      stroke: #fff;
-      stroke-width: 3.8;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-      paint-order: stroke fill;
-    }
-    .finish-wm-ribbon-tail {
-      fill: var(--wm-ribbon-soft);
-      stroke: #fff;
-      stroke-width: 3.2;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-      paint-order: stroke fill;
-    }
-    .finish-wm-ribbon-shine {
-      fill: rgba(255, 255, 255, .28);
-      stroke: none;
-      pointer-events: none;
-    }
-    /* 名次數字：塊面字形 + 實心白描邊／光暈，與彩帶清晰分離 */
+    /* 名次數字：塊面字形 + 實心白描邊 */
     .finish-wm-num {
       position: relative;
       z-index: 1;
-      margin-top: 2px;
-      margin-left: -4px;
       font-family: "Arial Black", Impact, "Helvetica Neue Condensed Bold", "Arial Narrow", sans-serif;
       font-size: 40px;
       font-weight: 900;
@@ -7668,26 +7631,6 @@
             extraCls = " finish-wm-host finish-pos-" + fin;
             wmHtml =
               '<span class="finish-wm is-' + fin + '" aria-hidden="true">' +
-                '<svg class="finish-wm-ribbon" viewBox="0 0 110 56" preserveAspectRatio="xMidYMid meet" focusable="false">' +
-                  /* 上層輕飄尾：右上揚，讓開騎師名 */
-                  '<path class="finish-wm-ribbon-tail" d="' +
-                    "M52 24 C64 16 78 9 92 4.5 L101 1.5 L96.5 8 L105 5.5 L99 13 " +
-                    "C86 13.5 72 17.5 60 25 C55 28 52 27 52 24 Z" +
-                  '"/>' +
-                  /* 主授帶：左尖收在負磅下，不伸進流量；中段托數字；右叉上飄 */
-                  '<path class="finish-wm-ribbon-path" d="' +
-                    "M18 37 C19.5 31.5 23 29 29 30 C42 32 51 27.5 60 20.5 " +
-                    "C68 14.5 78 9 90 5.5 L99 2.8 L94 10 L106 7 L100 15.5 " +
-                    "C86 16.5 74 21.5 64 29.5 C52 39 40 43.5 29 43.5 " +
-                    "C23.5 43.5 19 41.5 18 37 Z" +
-                  '"/>' +
-                  /* 高光條：增加布感／飄逸層次 */
-                  '<path class="finish-wm-ribbon-shine" d="' +
-                    "M30 32.5 C42 33.5 52 28.5 62 21.5 C70 16 78 11.5 88 8.5 " +
-                    "C78 12.5 68 17.5 60 23.5 C50 31 40 35.5 30 35.5 " +
-                    "C28.5 35.5 29 33.5 30 32.5 Z" +
-                  '"/>' +
-                "</svg>" +
                 '<b class="finish-wm-num">' + fin + "</b>" +
               "</span>";
           } else if (top4 && c.key === "jockey") {
