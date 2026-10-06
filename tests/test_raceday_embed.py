@@ -152,7 +152,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("finish-wm-ribbon", r.text)
         self.assertIn("finish-wm-ribbon-path", r.text)
         self.assertIn("finish-wm-ribbon-tail", r.text)
-        self.assertIn("-webkit-text-stroke: 10px #fff", r.text)
+        self.assertIn("-webkit-text-stroke: 5px #fff", r.text)
         self.assertIn("--wm-fill:", r.text)
         self.assertIn("defaultSortForRace", r.text)
         self.assertIn("finishOfRunner", r.text)
