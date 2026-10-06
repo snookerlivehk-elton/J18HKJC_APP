@@ -2621,10 +2621,14 @@
     }
 
     /* 歷史場次前四名：負磅與騎師之間空位，冠亞季殿半透明賽事水印 */
+    .hrow:not(.head):has(.finish-wm-host) {
+      overflow: visible;
+      z-index: 2;
+    }
     .hrow:not(.head) .cell.finish-wm-host,
     .hrow:not(.head) .cell.finish-wm-pair {
       position: relative;
-      overflow: visible;
+      overflow: visible !important; /* 水印可自然出血，不撐行列 */
     }
     .hrow:not(.head) .cell.finish-wm-host {
       z-index: 0;
@@ -2638,11 +2642,12 @@
       top: 52%;
       transform: translate(calc(-42% - 5px), -50%) rotate(-12deg) skewX(-6deg);
       font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
-      font-size: 32px;
+      font-size: 42px; /* 32px × 1.3 */
       font-weight: 900;
       font-style: italic;
       line-height: 1;
       letter-spacing: -0.06em;
+      white-space: nowrap;
       pointer-events: none;
       z-index: 0;
       opacity: .43;
@@ -6529,7 +6534,12 @@
         for (let i = 0; i < cells.length && i < n; i++) {
           cells[i].style.width = widths[i] + "px";
           cells[i].style.flex = "0 0 " + widths[i] + "px";
-          cells[i].style.overflow = "";
+          /* 水印列保持可見溢出，其餘清掉臨時 overflow */
+          if (cells[i].classList.contains("finish-wm-host") || cells[i].classList.contains("finish-wm-pair")) {
+            cells[i].style.overflow = "visible";
+          } else {
+            cells[i].style.overflow = "";
+          }
         }
       });
     }
