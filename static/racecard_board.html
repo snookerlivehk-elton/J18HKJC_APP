@@ -2652,55 +2652,68 @@
       user-select: none;
       color: #e03a3a;
     }
-    /* 斜向絲帶（授帶／賽事彩帶） */
+    /* 斜向絲帶（授帶／賽事彩帶）— 外緣白邊與數字隔開 */
     .finish-wm-ribbon {
       position: absolute;
       left: 50%;
-      top: 54%;
-      width: 54px;
-      height: 15px;
-      margin: -7.5px 0 0 -27px;
+      top: 56%;
+      width: 56px;
+      height: 14px;
+      margin: -7px 0 0 -28px;
       background: currentColor;
-      transform: rotate(-22deg) skewX(-8deg);
+      transform: rotate(-20deg) skewX(-6deg);
       border-radius: 2px;
-      opacity: .55;
+      opacity: .5;
       box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .35),
-        inset 0 -1px 0 rgba(0, 0, 0, .12);
+        0 0 0 2px #fff,
+        inset 0 1px 0 rgba(255, 255, 255, .4),
+        inset 0 -1px 0 rgba(0, 0, 0, .14);
     }
     .finish-wm-ribbon::before,
     .finish-wm-ribbon::after {
       content: "";
       position: absolute;
-      top: 0;
-      width: 10px;
-      height: 100%;
+      top: -2px;
+      width: 11px;
+      height: calc(100% + 4px);
       background: currentColor;
-      filter: brightness(.88);
+      filter: brightness(.9);
+      box-shadow: 0 0 0 2px #fff;
     }
     /* 左燕尾 */
     .finish-wm-ribbon::before {
-      left: -8px;
+      left: -9px;
       clip-path: polygon(100% 0, 100% 100%, 0 100%, 35% 50%, 0 0);
     }
     /* 右燕尾 */
     .finish-wm-ribbon::after {
-      right: -8px;
+      right: -9px;
       clip-path: polygon(0 0, 65% 50%, 0 100%, 100% 100%, 100% 0);
     }
+    /* 名次數字：塊面字形 + 白色描邊，與彩帶清晰分離 */
     .finish-wm-num {
       position: relative;
       z-index: 1;
-      font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
-      font-size: 40px;
+      font-family: Impact, "Arial Narrow", "Helvetica Neue Condensed Bold", "Arial Black", sans-serif;
+      font-size: 38px;
       font-weight: 900;
       font-style: italic;
-      line-height: .85;
-      letter-spacing: -0.06em;
+      font-stretch: condensed;
+      line-height: .8;
+      letter-spacing: -0.04em;
       color: currentColor;
+      -webkit-text-stroke: 3.5px #fff;
+      paint-order: stroke fill;
       text-shadow:
-        0 1px 0 rgba(255, 255, 255, .45),
-        0 0 8px rgba(255, 255, 255, .2);
+        0 0 0 #fff,
+        -2px 0 0 #fff,
+        2px 0 0 #fff,
+        0 -2px 0 #fff,
+        0 2px 0 #fff,
+        -2px -2px 0 #fff,
+        2px -2px 0 #fff,
+        -2px 2px 0 #fff,
+        2px 2px 0 #fff;
     }
     .finish-wm-host > .v,
     .finish-wm-pair > .v {
