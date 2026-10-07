@@ -1612,7 +1612,17 @@
     }
     .wp-odds .win { color: var(--text); }
     .wp-odds .pla { color: #7b8494; }
-    .wp-odds .wp { color: #8a93a3; }
+    .wp-odds .wp {
+      color: #8a93a3;
+      align-self: stretch;
+      width: 100%;
+      justify-content: flex-end;
+      text-align: right;
+    }
+    .wp-odds .wp .od-n {
+      margin-left: auto;
+      text-align: right;
+    }
     .wp-odds .win.hot,
     .wp-odds .pla.hot,
     .wp-odds .wp.hot { color: var(--red); }
