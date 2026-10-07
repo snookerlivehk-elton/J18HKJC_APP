@@ -326,6 +326,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("wpFlow", r.text)
         self.assertIn('wh-line wp', r.text)
         self.assertIn("上獨贏／中位置／下 WP", r.text)
+        self.assertIn("'<span class=\"wp\"><span class=\"od-n\">WP</span></span>'", r.text)
+        self.assertNotIn('oddsLineHtml("wp"', r.text)
         self.assertIn("日後接 API，不在此混合推算", r.text)
         self.assertIn("water-board", r.text)
         self.assertIn("wh-line", r.text)

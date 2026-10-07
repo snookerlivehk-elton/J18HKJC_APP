@@ -6821,7 +6821,8 @@
             '<div class="wp-odds">' +
               oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
               oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
-              oddsLineHtml("wp", r.scratched ? null : r.wpOdd, "place", "", null, false) +
+              /* 第三行無獨立 WP 賠率，固定標「WP」對齊時段列下 WP 行 */
+              '<span class="wp"><span class="od-n">WP</span></span>' +
             "</div>" +
           "</div>";
         /* 左＝最近（hourAgo 0），右＝更早；與右鄰更早時段比升降 */
