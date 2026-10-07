@@ -1612,7 +1612,11 @@
     }
     .wp-odds .win { color: var(--text); }
     .wp-odds .pla { color: #7b8494; }
-    .wp-odds .wp { color: #8a93a3; }
+    .wp-odds .wp {
+      color: #8a93a3;
+      /* 較獨贏／位置再右移 8px（共用 translateX(-5px) + 8） */
+      transform: translateX(3px);
+    }
     .wp-odds .win.hot,
     .wp-odds .pla.hot,
     .wp-odds .wp.hot { color: var(--red); }
