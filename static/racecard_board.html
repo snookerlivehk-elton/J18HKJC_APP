@@ -1612,7 +1612,11 @@
     }
     .wp-odds .win { color: var(--text); }
     .wp-odds .pla { color: #7b8494; }
-    .wp-odds .wp { color: #8a93a3; }
+    .wp-odds .wp {
+      color: #8a93a3;
+      /* 較獨贏／位置再右移 10px（共用 translateX(-5px) + 10） */
+      transform: translateX(5px);
+    }
     .wp-odds .win.hot,
     .wp-odds .pla.hot,
     .wp-odds .wp.hot { color: var(--red); }
@@ -6821,7 +6825,8 @@
             '<div class="wp-odds">' +
               oddsLineHtml("win", r.scratched ? null : r.win, "win", winHot, r.winTick, r._winTickFresh) +
               oddsLineHtml("pla", r.scratched ? null : r.place, "place", plaHot, r.placeTick, r._placeTickFresh) +
-              oddsLineHtml("wp", r.scratched ? null : r.wpOdd, "place", "", null, false) +
+              /* 第三行無獨立 WP 賠率，固定標「WP+」對齊時段列下 WP 行 */
+              '<span class="wp"><span class="od-n">WP+</span></span>' +
             "</div>" +
           "</div>";
         /* 左＝最近（hourAgo 0），右＝更早；與右鄰更早時段比升降 */
