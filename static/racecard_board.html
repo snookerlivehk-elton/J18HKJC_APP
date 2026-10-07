@@ -3068,8 +3068,8 @@
       font-variant-numeric: tabular-nums;
     }
     .qin-swatch.hot { background: #e74c3c; }
-    .qin-swatch.drop20 { background: #2ecc71; }
-    .qin-swatch.drop50 { background: #c4a035; }
+    .qin-swatch.drop20 { background: var(--green); } /* 與表內 drop20／idx-g 同色 */
+    .qin-swatch.drop50 { background: #c47a3a; } /* 與表內 drop50／idx-b、「後上」同色 */
     /* 圖例右上開關：80×40 等比例縮至 64×32，讓上／下三角各佔一行 */
     .qin-mode-switch-lg {
       width: 64px;
@@ -4046,6 +4046,9 @@
     html[data-theme="dark"] .qin-tbl .qin-c.idx-g { background: var(--green); color: #fff; }
     html[data-theme="dark"] .qin-tbl .qin-c.drop50,
     html[data-theme="dark"] .qin-tbl .qin-c.idx-b { background: #d4924a; color: #fff; }
+    html[data-theme="dark"] .qin-swatch.hot { background: #c94a3d; }
+    html[data-theme="dark"] .qin-swatch.drop20 { background: var(--green); }
+    html[data-theme="dark"] .qin-swatch.drop50 { background: #d4924a; }
     html[data-theme="dark"] .silk-13 {
       background: #e8e8e8;
       color: #111;
