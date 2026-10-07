@@ -3624,10 +3624,15 @@
     html[data-theme="dark"] .cal-overlay {
       background: rgba(0, 0, 0, .55);
     }
+    /* 彈層邊界：與菜單同級亮邊＋外圈＋內高光，深色底上更易辨識 */
     html[data-theme="dark"] .cal-sheet {
       background: #2a313c;
       color: var(--text);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, .5), 0 0 0 1px rgba(210, 222, 236, .12);
+      border: 1px solid rgba(210, 222, 236, .28);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, .58),
+        0 0 0 1px rgba(0, 0, 0, .4),
+        inset 0 1px 0 rgba(255, 255, 255, .1);
     }
     html[data-theme="dark"] .cal-scope-switch {
       background: #323a46;
@@ -4072,7 +4077,10 @@
     html[data-theme="dark"] .horse-sheet,
     html[data-theme="dark"] .water-sheet {
       background: #1e242d;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+      /* 全幅面板：頂邊亮線＋外輪廓，與上方場次區分開 */
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .12),
+        0 0 0 1px rgba(210, 222, 236, .28);
     }
     html[data-theme="dark"] .horse-sheet-bar {
       background: linear-gradient(180deg, #3a5474 0%, #2a3d58 100%);
