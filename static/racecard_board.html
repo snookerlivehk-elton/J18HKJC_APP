@@ -3285,22 +3285,125 @@
     }
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
-    /* 派彩詳情：與賽期日曆同殼；空白區高度對齊日曆網格＋圖例 */
-    .payout-detail-sheet .cal-head {
-      min-height: 52px;
+    /* 派彩詳情：與賽期日曆同殼同寬；橙頭＋三列表，內容超出可內滾 */
+    .payout-detail-sheet {
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100% - 8px);
     }
-    .payout-detail-sheet .cal-title {
-      flex: 1 1 auto;
-      min-width: 0;
-      text-align: left;
-      padding: 0 8px 0 4px;
+    .payout-detail-head {
+      flex: 0 0 auto;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 44px;
+      background: #c88852;
+      color: #fff;
+      border-radius: 16px 16px 0 0;
     }
-    .payout-detail-sheet .cal-close {
-      margin-left: auto;
+    .payout-detail-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      line-height: 1;
+    }
+    .payout-detail-close {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .payout-detail-close:active {
+      background: rgba(255, 255, 255, .18);
     }
     .payout-detail-body {
-      min-height: 326px; /* ≈ cal-wdays + cal-grid(6×34) + cal-legend */
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: 360px; /* 超出此高則表體內滾 */
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       box-sizing: border-box;
+      background: #fff;
+      border-radius: 0 0 16px 16px;
+    }
+    .payout-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 13px;
+      line-height: 1.25;
+      color: #3a4554;
+    }
+    .payout-tbl th,
+    .payout-tbl td {
+      padding: 9px 6px;
+      text-align: center;
+      vertical-align: middle;
+      border: 1px solid #d7dee6;
+      word-break: break-all;
+    }
+    .payout-tbl thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #eef2f6;
+      color: #5a6575;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    .payout-tbl tbody tr:nth-child(odd) td {
+      background: #fff;
+    }
+    .payout-tbl tbody tr:nth-child(even) td {
+      background: #f4f6f8;
+    }
+    .payout-tbl .payout-pool {
+      font-weight: 700;
+      color: #2f3a48;
+      background: #fff;
+      width: 22%;
+    }
+    .payout-tbl tbody tr:nth-child(even) .payout-pool {
+      background: #f4f6f8;
+    }
+    .payout-tbl .payout-combo {
+      width: 40%;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .payout-tbl .payout-amt {
+      width: 38%;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .payout-detail-empty {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
     }
     /* 馬匹數據排序：與賽期表同殼同寬 */
     .col-sort-sheet .cal-head {
@@ -3644,6 +3747,34 @@
         0 18px 48px rgba(0, 0, 0, .58),
         0 0 0 1px rgba(0, 0, 0, .45),
         inset 0 1px 0 rgba(255, 255, 255, .14);
+    }
+    html[data-theme="dark"] .payout-detail-head {
+      background: #b87840;
+    }
+    html[data-theme="dark"] .payout-detail-body {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .payout-tbl {
+      color: var(--text);
+    }
+    html[data-theme="dark"] .payout-tbl th,
+    html[data-theme="dark"] .payout-tbl td {
+      border-color: #3a4250;
+    }
+    html[data-theme="dark"] .payout-tbl thead th {
+      background: #323a46;
+      color: #9aa3b2;
+    }
+    html[data-theme="dark"] .payout-tbl tbody tr:nth-child(odd) td,
+    html[data-theme="dark"] .payout-tbl tbody tr:nth-child(odd) .payout-pool {
+      background: #232a34;
+    }
+    html[data-theme="dark"] .payout-tbl tbody tr:nth-child(even) td,
+    html[data-theme="dark"] .payout-tbl tbody tr:nth-child(even) .payout-pool {
+      background: #1e242d;
+    }
+    html[data-theme="dark"] .payout-tbl .payout-pool {
+      color: #e6eaf0;
     }
     html[data-theme="dark"] .cal-scope-switch {
       background: #323a46;
@@ -4350,9 +4481,9 @@
 
   <div class="cal-overlay" id="payoutDetailOverlay" hidden aria-hidden="true">
     <div class="cal-sheet payout-detail-sheet" id="payoutDetailSheet" role="dialog" aria-modal="true" aria-labelledby="payoutDetailTitle">
-      <div class="cal-head">
-        <div class="cal-title" id="payoutDetailTitle">派彩詳情</div>
-        <button type="button" class="cal-close" id="payoutDetailClose" aria-label="關閉">×</button>
+      <div class="payout-detail-head">
+        <div class="payout-detail-title" id="payoutDetailTitle">派彩</div>
+        <button type="button" class="payout-detail-close" id="payoutDetailClose" aria-label="關閉">×</button>
       </div>
       <div class="payout-detail-body" id="payoutDetailBody" aria-label="派彩詳情內容"></div>
     </div>
@@ -8326,12 +8457,122 @@
     function syncPayoutDetailOverlayTop() {
       syncBoardOverlayTop("payoutDetailOverlay");
     }
+    function fmtPayoutAmt(n) {
+      const x = Number(n);
+      if (!Number.isFinite(x)) return "—";
+      return x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function pairCombo(a, b, ordered) {
+      if (a == null || b == null) return "";
+      if (ordered) return String(a) + "," + String(b);
+      const xs = [Number(a), Number(b)].sort(function (x, y) { return x - y; });
+      return xs[0] + "," + xs[1];
+    }
+    function trioCombo(a, b, c, ordered) {
+      if (a == null || b == null || c == null) return "";
+      if (ordered) return [a, b, c].join(",");
+      return [Number(a), Number(b), Number(c)].sort(function (x, y) { return x - y; }).join(",");
+    }
+    function quartetCombo(a, b, c, d, ordered) {
+      if (a == null || b == null || c == null || d == null) return "";
+      if (ordered) return [a, b, c, d].join(",");
+      return [Number(a), Number(b), Number(c), Number(d)].sort(function (x, y) { return x - y; }).join(",");
+    }
+    /* 派彩表區塊：優先 race.dividends；否則按名次生成演示彩池（對齊馬會常見排列） */
+    function buildPayoutDetailSections(race) {
+      if (race && Array.isArray(race.dividends) && race.dividends.length) {
+        const map = {};
+        const order = [];
+        race.dividends.forEach(function (d) {
+          if (!d || !d.pool) return;
+          const key = String(d.pool);
+          if (!map[key]) {
+            map[key] = { pool: key, rows: [] };
+            order.push(key);
+          }
+          map[key].rows.push({
+            combo: d.combo != null ? String(d.combo) : (d.combination != null ? String(d.combination) : "—"),
+            pay: d.pay != null ? d.pay : d.dividend
+          });
+        });
+        return order.map(function (k) { return map[k]; }).filter(function (s) { return s.rows.length; });
+      }
+      const nos = payoutFinishNosForRace(race).map(function (n) { return String(n); });
+      if (!nos.length) return [];
+      const a = nos[0];
+      const b = nos[1];
+      const c = nos[2];
+      const d = nos[3];
+      const sections = [];
+      sections.push({ pool: "獨贏", rows: [{ combo: a, pay: 118.5 }] });
+      if (b && c) {
+        sections.push({
+          pool: "位置",
+          rows: [
+            { combo: a, pay: 28 },
+            { combo: b, pay: 15.5 },
+            { combo: c, pay: 16 }
+          ]
+        });
+      }
+      if (b) {
+        sections.push({ pool: "連贏", rows: [{ combo: pairCombo(a, b, false), pay: 205.5 }] });
+      }
+      if (b && c) {
+        sections.push({
+          pool: "位置Q",
+          rows: [
+            { combo: pairCombo(a, b, false), pay: 75 },
+            { combo: pairCombo(a, c, false), pay: 63.5 },
+            { combo: pairCombo(b, c, false), pay: 31.5 }
+          ]
+        });
+        sections.push({ pool: "二重彩", rows: [{ combo: pairCombo(a, b, true), pay: 539 }] });
+        sections.push({ pool: "三重彩", rows: [{ combo: trioCombo(a, b, c, false), pay: 1597 }] });
+        sections.push({ pool: "單T", rows: [{ combo: trioCombo(a, b, c, true), pay: 182 }] });
+      }
+      if (b && c && d) {
+        sections.push({ pool: "四連環", rows: [{ combo: quartetCombo(a, b, c, d, false), pay: 601 }] });
+        sections.push({ pool: "四重彩", rows: [{ combo: quartetCombo(a, b, c, d, true), pay: 15907 }] });
+      }
+      return sections;
+    }
+    function renderPayoutDetailBody() {
+      const body = document.getElementById("payoutDetailBody");
+      if (!body) return;
+      const race = currentMeet();
+      const sections = buildPayoutDetailSections(race);
+      if (!sections.length) {
+        body.innerHTML = '<div class="payout-detail-empty">暫無派彩資料</div>';
+        return;
+      }
+      let rowsHtml = "";
+      sections.forEach(function (sec) {
+        const n = sec.rows.length;
+        sec.rows.forEach(function (row, i) {
+          rowsHtml += "<tr>";
+          if (i === 0) {
+            rowsHtml += '<td class="payout-pool" rowspan="' + n + '">' + esc(sec.pool) + "</td>";
+          }
+          rowsHtml += '<td class="payout-combo">' + esc(row.combo) + "</td>";
+          rowsHtml += '<td class="payout-amt">' + esc(fmtPayoutAmt(row.pay)) + "</td>";
+          rowsHtml += "</tr>";
+        });
+      });
+      body.innerHTML =
+        '<table class="payout-tbl" aria-label="派彩結果">' +
+          "<thead><tr><th>彩池</th><th>勝出組合</th><th>派彩</th></tr></thead>" +
+          "<tbody>" + rowsHtml + "</tbody>" +
+        "</table>";
+      body.scrollTop = 0;
+    }
     function openPayoutDetail() {
       const overlay = document.getElementById("payoutDetailOverlay");
       if (!overlay || payoutStatusKind !== "paid") return;
       closeCapsuleDrop();
       closeRaceDateCalendar();
       closeColSortSheet();
+      renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
       overlay.setAttribute("aria-hidden", "false");
