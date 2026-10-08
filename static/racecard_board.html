@@ -621,10 +621,21 @@
       box-shadow: 0 1px 4px rgba(200, 90, 30, .28);
       pointer-events: none;
       z-index: 1;
+      transform-origin: center center;
+      /* 當前可拖動大圓：輕柔大小呼吸，時間在走 */
+      animation: timeScrubThumbBreath 2.6s ease-in-out infinite;
     }
     .time-scrub.is-dragging .time-scrub-thumb {
+      animation: none;
       transform: scale(1.1);
       border-color: #d06028;
+    }
+    @keyframes timeScrubThumbBreath {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.18); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .time-scrub-thumb { animation: none; }
     }
     .capsule-rail {
       display: flex;
