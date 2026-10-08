@@ -603,10 +603,31 @@
       border-radius: 50%;
       background: #fff;
       box-shadow: 0 0 0 1px rgba(232, 139, 42, .35);
+      transform-origin: center center;
+      /* 輕柔大小呼吸：時間在走的感覺；由左往右錯開半拍 */
+      animation: timeScrubMarkBreath 2.6s ease-in-out infinite;
     }
+    .time-scrub-mark:nth-child(1) { animation-delay: 0s; }
+    .time-scrub-mark:nth-child(2) { animation-delay: .12s; }
+    .time-scrub-mark:nth-child(3) { animation-delay: .24s; }
+    .time-scrub-mark:nth-child(4) { animation-delay: .36s; }
+    .time-scrub-mark:nth-child(5) { animation-delay: .48s; }
+    .time-scrub-mark:nth-child(6) { animation-delay: .60s; }
+    .time-scrub-mark:nth-child(7) { animation-delay: .72s; }
+    .time-scrub-mark:nth-child(8) { animation-delay: .84s; }
+    .time-scrub-mark:nth-child(9) { animation-delay: .96s; }
+    .time-scrub-mark:nth-child(10) { animation-delay: 1.08s; }
     .time-scrub-mark.is-active {
       background: #fff;
       box-shadow: 0 0 0 1.5px var(--orange);
+      animation-duration: 2.2s;
+    }
+    @keyframes timeScrubMarkBreath {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.45); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .time-scrub-mark { animation: none; }
     }
     .time-scrub-thumb {
       position: absolute;
