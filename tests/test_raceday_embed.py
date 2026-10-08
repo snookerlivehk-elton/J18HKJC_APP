@@ -161,6 +161,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("time-scrub", r.text)
         self.assertIn("padding: 0 12px", r.text)
         self.assertIn("兩頭各縮 10px", r.text)
+        self.assertIn(".time-scrub-lab-item {\n      position: absolute;\n      top: 0;\n      transform: translateX(-50%);\n      font-size: 11px;", r.text)
+        self.assertIn(".time-scrub-lab-item.is-open-lab {\n      font-size: 10px;", r.text)
         self.assertIn("time-scrub-thumb", r.text)
         self.assertIn("timeScrubThumbBreath", r.text)
         self.assertIn("@keyframes timeScrubThumbBreath", r.text)
