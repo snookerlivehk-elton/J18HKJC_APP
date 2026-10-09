@@ -2527,23 +2527,24 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 18px;
-      height: 16px;
+      width: 20px;
+      height: 18px;
       margin: 0;
       padding: 0;
       border: 0;
       border-radius: 4px;
       background: transparent;
-      color: #5a6a7a;
+      color: #4a5a6a;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
     .tip-note-ico:active {
       background: rgba(45, 62, 80, .08);
+      color: #2f5649;
     }
     .tip-note-ico svg {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
       display: block;
     }
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
@@ -5059,11 +5060,22 @@
       });
       return !!(st && st.key === "running");
     }
+    /* 心水筆記圖標：線圈記事本 + 斜放原子筆（小尺寸可辨） */
     function tipNoteIconSvg() {
       return '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-        '<path d="M3.2 2.4 H10.2 L12.8 5 V13.6 H3.2 Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>' +
-        '<path d="M10.2 2.4 V5 H12.8" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>' +
-        '<path d="M5.2 7.2 H10.8 M5.2 9.4 H10.8 M5.2 11.6 H8.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+        /* 本體 */
+        '<rect x="1.75" y="2.1" width="9.1" height="11.8" rx="1.35" stroke="currentColor" stroke-width="1.25"/>' +
+        /* 左側線圈／裝訂 */
+        '<path d="M4.15 2.1 V13.9" stroke="currentColor" stroke-width="1.15"/>' +
+        '<path d="M3.35 4.2 h1.6 M3.35 6.55 h1.6 M3.35 8.9 h1.6 M3.35 11.25 h1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+        /* 橫線 */
+        '<path d="M5.85 5.35 H9.55 M5.85 7.7 H9.55 M5.85 10.05 H8.35" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>' +
+        /* 筆身（右下斜放） */
+        '<path d="M9.05 12.55 L13.55 6.85" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>' +
+        /* 筆尖 */
+        '<path d="M13.55 6.85 L14.55 5.45 L13.15 5.85 Z" fill="currentColor"/>' +
+        /* 筆帽環 */
+        '<path d="M10.15 11.15 L10.85 10.25" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>' +
         "</svg>";
     }
     function cellTipNote(r) {
