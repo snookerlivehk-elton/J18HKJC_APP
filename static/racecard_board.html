@@ -2448,19 +2448,31 @@
       font-variant-numeric: tabular-nums;
       font-weight: 400;
     }
-    /* 心水筆記：勾選＋序號＋下方筆記圖標（對角微移拉開） */
+    /* 心水筆記：勾選靠右上、筆記靠左下；左右離列邊界各 4px，不額外撐寬 */
     .scroll-col.tip-note {
-      justify-content: center;
-      min-width: 56px;
+      justify-content: stretch;
+      align-items: stretch;
+      min-width: 0;
+      padding-left: 4px;
+      padding-right: calc(4px + var(--scroll-col-rule));
+    }
+    .hrow:not(.head) .cell.scroll-col.tip-note {
+      align-items: stretch;
+      justify-content: stretch;
     }
     .tip-note-cell {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       justify-content: center;
-      gap: 3px;
-      min-width: 48px;
-      padding: 3px 0 1px;
+      gap: 2px;
+      width: 100%;
+      min-width: 0;
+      padding: 1px 0;
+      box-sizing: border-box;
+    }
+    .tip-note-cell.is-na {
+      align-items: center;
     }
     .tip-note-cell.is-na .v {
       color: var(--muted);
@@ -2479,8 +2491,9 @@
       line-height: 1;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      /* 往右 8px、往上 2px */
-      transform: translate(8px, -2px);
+      /* 貼右；略上移 2px */
+      align-self: flex-end;
+      transform: translateY(-2px);
     }
     .tip-check:disabled {
       cursor: default;
@@ -2539,8 +2552,9 @@
       color: #4a5a6a;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      /* 往左 8px、往下 2px */
-      transform: translate(-8px, 2px);
+      /* 貼左；略下移 2px */
+      align-self: flex-start;
+      transform: translateY(2px);
     }
     .tip-note-ico:active {
       background: rgba(45, 62, 80, .08);
