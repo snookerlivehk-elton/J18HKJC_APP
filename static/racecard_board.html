@@ -2448,10 +2448,10 @@
       font-variant-numeric: tabular-nums;
       font-weight: 400;
     }
-    /* 心水筆記：勾選＋序號＋下方筆記圖標 */
+    /* 心水筆記：勾選＋序號＋下方筆記圖標（對角微移拉開） */
     .scroll-col.tip-note {
       justify-content: center;
-      min-width: 44px;
+      min-width: 56px;
     }
     .tip-note-cell {
       display: flex;
@@ -2459,8 +2459,8 @@
       align-items: center;
       justify-content: center;
       gap: 3px;
-      min-width: 36px;
-      padding: 1px 0;
+      min-width: 48px;
+      padding: 3px 0 1px;
     }
     .tip-note-cell.is-na .v {
       color: var(--muted);
@@ -2479,6 +2479,8 @@
       line-height: 1;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      /* 往右 8px、往上 2px */
+      transform: translate(8px, -2px);
     }
     .tip-check:disabled {
       cursor: default;
@@ -2537,6 +2539,8 @@
       color: #4a5a6a;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      /* 往左 8px、往下 2px */
+      transform: translate(-8px, 2px);
     }
     .tip-note-ico:active {
       background: rgba(45, 62, 80, .08);

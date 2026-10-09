@@ -126,6 +126,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("線圈記事本", r.text)
         self.assertIn('width="9.1" height="11.8"', r.text)
         self.assertIn("L13.55 6.85", r.text)
+        self.assertIn("transform: translate(8px, -2px)", r.text)
+        self.assertIn("transform: translate(-8px, 2px)", r.text)
         self.assertIn("is-frozen", r.text)
         self.assertIn("menuRaceDateBtn", r.text)
         self.assertIn("查看賽期和歷史數據", r.text)
