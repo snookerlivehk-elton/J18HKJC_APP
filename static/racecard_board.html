@@ -2568,6 +2568,19 @@
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
       cursor: default;
     }
+    /* 馬匹筆記彈層：與賽期表同 cal-overlay／cal-sheet 尺寸與定位；內容稍後補 */
+    .tip-note-sheet .cal-head {
+      margin-bottom: 10px;
+    }
+    .tip-note-sheet .cal-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+    }
+    .tip-note-sheet-body {
+      min-height: 300px;
+      box-sizing: border-box;
+    }
     /* 入圍數｜% 等：數據靠右 */
     .scroll-col.end {
       justify-content: flex-end;
@@ -4623,6 +4636,16 @@
     </div>
   </div>
 
+  <div class="cal-overlay" id="tipNoteSheetOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet tip-note-sheet" id="tipNoteSheet" role="dialog" aria-modal="true" aria-labelledby="tipNoteSheetTitle">
+      <div class="cal-head">
+        <div class="cal-title" id="tipNoteSheetTitle">馬匹筆記</div>
+        <button type="button" class="cal-close" id="tipNoteSheetClose" aria-label="關閉">×</button>
+      </div>
+      <div class="tip-note-sheet-body" id="tipNoteSheetBody" aria-label="馬匹筆記內容"></div>
+    </div>
+  </div>
+
   <div class="cal-overlay" id="colSortOverlay" hidden aria-hidden="true">
     <div class="cal-sheet col-sort-sheet" id="colSortSheet" role="dialog" aria-modal="true" aria-labelledby="colSortTitle">
       <div class="cal-head">
@@ -5157,8 +5180,76 @@
           ev.preventDefault();
           ev.stopPropagation();
           const no = note.getAttribute("data-tip-note-no");
-          if (no != null && no !== "") openHorseSheet(no);
+          if (no != null && no !== "") openTipNoteSheet(no);
         }
+      });
+    }
+    /* 馬匹筆記彈層（尺寸／定位同賽期表；內容後續補） */
+    let tipNoteSheetNo = null;
+    function syncTipNoteSheetOverlayTop() {
+      syncBoardOverlayTop("tipNoteSheetOverlay");
+    }
+    function fillTipNoteSheet(no) {
+      const body = document.getElementById("tipNoteSheetBody");
+      const title = document.getElementById("tipNoteSheetTitle");
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(no); });
+      const name = row && row.name ? String(row.name) : "";
+      tipNoteSheetNo = no != null && no !== "" ? String(no) : null;
+      if (title) {
+        title.textContent = tipNoteSheetNo
+          ? ("馬匹筆記 · " + tipNoteSheetNo + (name ? (" " + name) : ""))
+          : "馬匹筆記";
+      }
+      /* 內容稍後由產品提供；先留空殼 */
+      if (body) body.innerHTML = "";
+    }
+    function openTipNoteSheet(no) {
+      const overlay = document.getElementById("tipNoteSheetOverlay");
+      if (!overlay) return;
+      closeRaceDateCalendar();
+      closePayoutDetail();
+      closeColSortSheet();
+      closeHorseSheet();
+      fillTipNoteSheet(no);
+      syncTipNoteSheetOverlayTop();
+      overlay.removeAttribute("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () {
+        syncTipNoteSheetOverlayTop();
+      });
+    }
+    function closeTipNoteSheet() {
+      const overlay = document.getElementById("tipNoteSheetOverlay");
+      if (!overlay) return;
+      overlay.setAttribute("hidden", "");
+      overlay.setAttribute("aria-hidden", "true");
+      tipNoteSheetNo = null;
+    }
+    function bindTipNoteSheet() {
+      const overlay = document.getElementById("tipNoteSheetOverlay");
+      const sheet = document.getElementById("tipNoteSheet");
+      const closeBtn = document.getElementById("tipNoteSheetClose");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeTipNoteSheet();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+          if (ev.target === overlay) closeTipNoteSheet();
+        });
+      }
+      if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        const ov = document.getElementById("tipNoteSheetOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeTipNoteSheet();
+      });
+      window.addEventListener("resize", function () {
+        const ov = document.getElementById("tipNoteSheetOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncTipNoteSheetOverlayTop();
       });
     }
     function cycleRowMark(no) {
@@ -7164,6 +7255,7 @@
       scrubPointIdx = -1;
       waterCrossFocus = null;
       closeHorseSheet();
+      closeTipNoteSheet();
       renderPills();
       renderMeta();
       renderBoard();
@@ -8857,6 +8949,7 @@
       closeCapsuleDrop();
       closeRaceDateCalendar();
       closeColSortSheet();
+      closeTipNoteSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -8977,6 +9070,7 @@
       if (!overlay) return;
       closeRaceDateCalendar();
       closePayoutDetail();
+      closeTipNoteSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -9046,12 +9140,14 @@
       });
     }
     bindColSortSheet();
+    bindTipNoteSheet();
 
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
       closePayoutDetail();
       closeColSortSheet();
+      closeTipNoteSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -9308,6 +9404,11 @@
           const colOv = document.getElementById("colSortOverlay");
           if (colOv && !colOv.hasAttribute("hidden")) {
             closeColSortSheet();
+            return;
+          }
+          const tipOv = document.getElementById("tipNoteSheetOverlay");
+          if (tipOv && !tipOv.hasAttribute("hidden")) {
+            closeTipNoteSheet();
             return;
           }
           closeHorseSheet();
