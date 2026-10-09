@@ -2448,35 +2448,19 @@
       font-variant-numeric: tabular-nums;
       font-weight: 400;
     }
-    /* 心水筆記：對角佈局——勾選右上、筆記左下，拉開防誤觸 */
+    /* 心水筆記：勾選＋序號＋下方筆記圖標 */
     .scroll-col.tip-note {
-      justify-content: stretch;
-      align-items: stretch;
-      min-width: 54px;
-    }
-    .hrow:not(.head) .cell.scroll-col.tip-note {
-      align-items: stretch;
-      justify-content: stretch;
-      padding-top: 1px;
-      padding-bottom: 1px;
+      justify-content: center;
+      min-width: 44px;
     }
     .tip-note-cell {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      width: 100%;
-      height: 100%;
-      min-width: 50px;
-      min-height: 45px;
-      box-sizing: border-box;
-      padding: 1px 0;
-      gap: 0;
-    }
-    .tip-note-cell.is-na {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 0;
+      gap: 3px;
+      min-width: 36px;
+      padding: 1px 0;
     }
     .tip-note-cell.is-na .v {
       color: var(--muted);
@@ -2487,6 +2471,7 @@
       justify-content: center;
       gap: 2px;
       margin: 0;
+      padding: 0;
       border: 0;
       background: transparent;
       color: var(--text);
@@ -2494,15 +2479,6 @@
       line-height: 1;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      /* 右上角；熱區往右上擴，遠離左下筆記 */
-      grid-column: 2;
-      grid-row: 1;
-      justify-self: end;
-      align-self: start;
-      z-index: 1;
-      padding: 1px 1px 10px 12px;
-      box-sizing: border-box;
-      min-height: 24px;
     }
     .tip-check:disabled {
       cursor: default;
@@ -2551,25 +2527,16 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      width: 20px;
+      height: 18px;
       margin: 0;
+      padding: 0;
       border: 0;
       border-radius: 4px;
       background: transparent;
       color: #4a5a6a;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      /* 左下角；熱區往左下擴，遠離右上勾選 */
-      grid-column: 1;
-      grid-row: 2;
-      justify-self: start;
-      align-self: end;
-      z-index: 1;
-      width: auto;
-      height: auto;
-      min-width: 28px;
-      min-height: 26px;
-      padding: 10px 12px 1px 1px;
-      box-sizing: border-box;
     }
     .tip-note-ico:active {
       background: rgba(45, 62, 80, .08);
@@ -5121,9 +5088,6 @@
       const full = !on && tipNoteList().length >= TIP_NOTE_MAX;
       const disabled = frozen || full;
       return '<span class="tip-note-cell' + (on ? " is-on" : "") + (frozen ? " is-frozen" : "") + '">' +
-        /* 對角：筆記左下、勾選右上（CSS grid 定位） */
-        '<button type="button" class="tip-note-ico" data-tip-note-no="' + esc(r.no) + '"' +
-        ' aria-label="馬匹筆記">' + tipNoteIconSvg() + "</button>" +
         '<button type="button" class="tip-check' + (on ? " is-on" : "") + '" data-tip-no="' + esc(r.no) + '"' +
         ' aria-pressed="' + (on ? "true" : "false") + '"' +
         (disabled ? " disabled" : "") +
@@ -5132,6 +5096,8 @@
         '<span class="tip-box" aria-hidden="true">' +
           (on ? '<span class="tip-tick">✓</span>' : "") +
         "</span></button>" +
+        '<button type="button" class="tip-note-ico" data-tip-note-no="' + esc(r.no) + '"' +
+        ' aria-label="馬匹筆記">' + tipNoteIconSvg() + "</button>" +
         "</span>";
     }
     function toggleTipNote(no) {
