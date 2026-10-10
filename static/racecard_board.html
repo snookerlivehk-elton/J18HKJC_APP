@@ -3621,13 +3621,13 @@
       text-align: left;
     }
 
-    /* —— 賽日日曆彈窗：頂邊對齊馬匹列表，不遮場次／場次資訊 —— */
+    /* —— 賽日／派彩／綜合評述／排序彈窗：頂邊對齊馬匹列表（insight 底），不遮場次／膠囊 —— */
     .cal-overlay {
       position: fixed;
       left: 0;
       right: 0;
       bottom: 0;
-      top: 0; /* JS 按 #boardMain 頂邊覆寫 */
+      top: 0; /* JS 按 insightPin 底邊覆寫（避開 #boardMain CSS zoom 偏差） */
       z-index: 120;
       display: flex;
       align-items: flex-start;
@@ -9676,12 +9676,31 @@
       });
     }
 
+    function boardOverlayAnchorTop() {
+      /* fixed 彈層用視口座標。insight／膠囊不 zoom，以其底邊＝馬匹列表頂；
+         勿用 #boardMain.getBoundingClientRect().top（CSS zoom 放大後會偏高遮住膠囊）。 */
+      const pin = document.getElementById("insightPin");
+      if (pin) return Math.max(0, Math.round(pin.getBoundingClientRect().bottom));
+      const main = (el && el.boardMain) || document.getElementById("boardMain");
+      if (!main) return 0;
+      let y = 0;
+      let n = main;
+      while (n) {
+        y += n.offsetTop;
+        n = n.offsetParent;
+      }
+      return Math.max(0, Math.round(y));
+    }
     function syncBoardOverlayTop(overlayId) {
       const overlay = document.getElementById(overlayId);
-      const main = (el && el.boardMain) || document.getElementById("boardMain");
-      if (!overlay || !main) return;
-      const top = Math.max(0, Math.round(main.getBoundingClientRect().top));
-      overlay.style.top = top + "px";
+      if (!overlay) return;
+      overlay.style.top = boardOverlayAnchorTop() + "px";
+    }
+    function syncOpenBoardOverlaysTop() {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay"].forEach(function (id) {
+        const ov = document.getElementById(id);
+        if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
+      });
     }
     function syncRaceCalOverlayTop() {
       syncBoardOverlayTop("raceCalOverlay");
@@ -10165,14 +10184,16 @@
             syncInsightStickyHeight();
           });
         }
-        /* 殼不 zoom；放大後按 insight 底邊重鎖馬匹列表頂（避開 boardMain zoom 量測偏差） */
-        if (isWaterSheetOpen()) {
-          syncWaterSheetTop();
-          requestAnimationFrame(function () {
-            syncWaterSheetTop();
-            requestAnimationFrame(syncWaterSheetTop);
-          });
+        /* 殼／fixed 彈層不 zoom；放大後按 insight 底邊重鎖（避開 boardMain zoom 量測偏差） */
+        function resyncZoomAnchors() {
+          if (isWaterSheetOpen()) syncWaterSheetTop();
+          syncOpenBoardOverlaysTop();
         }
+        resyncZoomAnchors();
+        requestAnimationFrame(function () {
+          resyncZoomAnchors();
+          requestAnimationFrame(resyncZoomAnchors);
+        });
       }
       function setListZoomLevel(next) {
         const n = Math.max(0, Math.min(LIST_ZOOM_MAX, Number(next) || 0));
