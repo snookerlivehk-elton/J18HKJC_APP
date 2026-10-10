@@ -2789,19 +2789,17 @@
     }
     .sr-note-hist-meta {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px 8px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
       font-size: 12px;
       font-weight: 700;
       color: #3d7a3d;
-      line-height: 1.25;
+      line-height: 1.3;
     }
     .sr-note-hist-meta span {
+      display: block;
       white-space: nowrap;
-    }
-    .sr-note-hist-meta .sep {
-      color: #9bbb9b;
-      font-weight: 600;
     }
     .sr-note-hist-detail {
       padding: 0 8px 10px;
@@ -4810,9 +4808,6 @@
     html[data-theme="dark"] .sr-note-hist-meta {
       color: #9ed49e;
     }
-    html[data-theme="dark"] .sr-note-hist-meta .sep {
-      color: #5a7a5a;
-    }
     html[data-theme="dark"] .sr-note-hist-detail-box {
       background: #1a241a;
       border-color: #3a6b3a;
@@ -5742,10 +5737,7 @@
         const open = synthNoteExpandedId != null && String(synthNoteExpandedId) === String(it.id);
         const parts = horseNoteMetaParts(it);
         const metaHtml = parts.length
-          ? parts.map(function (p, i) {
-              return (i ? '<span class="sep" aria-hidden="true">·</span>' : "") +
-                "<span>" + esc(p) + "</span>";
-            }).join("")
+          ? parts.map(function (p) { return "<span>" + esc(p) + "</span>"; }).join("")
           : "<span>歷史筆記</span>";
         return '<div class="sr-note-hist-row' + (open ? " is-open" : "") + '" data-note-id="' + esc(it.id) + '">' +
           '<button type="button" class="sr-note-hist-sum" data-note-id="' + esc(it.id) + '"' +

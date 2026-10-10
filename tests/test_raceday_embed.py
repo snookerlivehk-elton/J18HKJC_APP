@@ -157,6 +157,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('data-note-act="cancel"', r.text)
         self.assertIn("sr-note-hist", r.text)
         self.assertIn("sr-note-hist-sum", r.text)
+        self.assertIn(".sr-note-hist-meta {\n      display: flex;\n      flex-direction: column;", r.text)
         self.assertIn("setSynthNoteSide", r.text)
         self.assertIn("toggleSynthNoteExpanded", r.text)
         self.assertIn("isSynthNoteDirty", r.text)
