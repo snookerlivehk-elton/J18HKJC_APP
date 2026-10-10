@@ -2528,7 +2528,7 @@
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
       cursor: default;
     }
-    /* 綜合評述：固定 150px；表頭單行居中；內容兩行截斷，點開全文彈層 */
+    /* 綜合評述：固定 150px；上藍「評述：」一行、下紅「筆記：」一行，超出省略 */
     .scroll-col.synth-review {
       justify-content: flex-start;
       align-items: center;
@@ -2551,33 +2551,37 @@
       background: rgba(47, 86, 73, .08);
     }
     .synth-review-cell {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 2px;
       width: 100%;
       max-width: 100%;
+      min-width: 0;
       margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: var(--text);
-      font: inherit;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 1.28;
-      text-align: left;
-      word-break: break-word;
-      overflow-wrap: anywhere;
+      padding: 1px 0;
+      box-sizing: border-box;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
-    .synth-review-cell.is-empty {
-      color: var(--muted);
-      cursor: default;
+    .synth-review-cell .sr-line {
       display: block;
-      -webkit-line-clamp: unset;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.2;
+      text-align: left;
+    }
+    .synth-review-cell .sr-line.sr-review {
+      color: #2c5f8a; /* 評述：藍 */
+    }
+    .synth-review-cell .sr-line.sr-note {
+      color: #e74c3c; /* 筆記：紅 */
     }
     .synth-review-sheet .cal-head {
       margin-bottom: 10px;
@@ -2590,11 +2594,33 @@
     .synth-review-sheet-body {
       min-height: 300px;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .synth-review-sheet-body .sr-sheet-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .synth-review-sheet-body .sr-sheet-lab {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .synth-review-sheet-body .sr-sheet-block.is-review .sr-sheet-lab {
+      color: #2c5f8a;
+    }
+    .synth-review-sheet-body .sr-sheet-block.is-note .sr-sheet-lab {
+      color: #e74c3c;
+    }
+    .synth-review-sheet-body .sr-sheet-text {
       font-size: 14px;
       line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
       color: var(--text);
+      min-height: 1.2em;
     }
     /* 入圍數｜% 等：數據靠右 */
     .scroll-col.end {
@@ -4543,6 +4569,14 @@
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.synth-review:active {
       background: rgba(143, 196, 168, .14);
     }
+    html[data-theme="dark"] .synth-review-cell .sr-line.sr-review,
+    html[data-theme="dark"] .synth-review-sheet-body .sr-sheet-block.is-review .sr-sheet-lab {
+      color: #6eb0e0;
+    }
+    html[data-theme="dark"] .synth-review-cell .sr-line.sr-note,
+    html[data-theme="dark"] .synth-review-sheet-body .sr-sheet-block.is-note .sr-sheet-lab {
+      color: #f07178;
+    }
 
     html[data-theme="dark"] .qin-panel,
     html[data-theme="dark"] .qin-legend {
@@ -5245,24 +5279,64 @@
       });
     }
 
-    /* 綜合評述：兩行截斷；點開賽期表同款彈層看全文（演示文案可後換 API） */
+    /* 綜合評述：上「評述：」藍一行＋下「筆記：」紅一行；點開彈層看全文 */
     const SYNTH_REVIEW_DEMO =
       "在第五班1200米全天候跑道賽事中表現穩定，模型勝率達22.56%，預測排名第一，顯示其競爭力不俗。" +
       "然而，從外檔11起步可能增加比賽難度，且近績顯示其起步後居後列，直路時才略為追前，顯示其需要較長距離發揮。";
+    const HORSE_NOTE_DEMO = "這匹馬上一仗發力基本在後期";
     function synthReviewOf(r) {
       if (!r || r.scratched) return "";
-      if (r.synthReview != null && String(r.synthReview).trim() !== "") return String(r.synthReview).trim();
-      if (r.review != null && String(r.review).trim() !== "") return String(r.review).trim();
+      if (r.synthReview != null) return String(r.synthReview).trim();
+      if (r.review != null) return String(r.review).trim();
+      /* 演示：未顯式清空時給默認評述；r.synthReview === "" 則留空標籤 */
+      if (r._synthReviewEmpty) return "";
       const name = r.name ? String(r.name) : "該駒";
       return name + SYNTH_REVIEW_DEMO;
     }
-    function cellSynthReview(r) {
-      const text = synthReviewOf(r);
-      if (!text) {
-        return '<span class="synth-review-cell is-empty">—</span>';
-      }
-      return '<span class="synth-review-cell">' + esc(text) + "</span>";
+    function horseNoteOf(r) {
+      if (!r || r.scratched) return "";
+      if (r.horseNote != null) return String(r.horseNote).trim();
+      if (r.personalNote != null) return String(r.personalNote).trim();
+      if (r.tipMemo != null) return String(r.tipMemo).trim();
+      return "";
     }
+    function cellSynthReview(r) {
+      if (!r || r.scratched) {
+        return '<span class="synth-review-cell"><span class="sr-line sr-review">—</span></span>';
+      }
+      const review = synthReviewOf(r);
+      const note = horseNoteOf(r);
+      return '<span class="synth-review-cell">' +
+        '<span class="sr-line sr-review">評述：' + esc(review) + "</span>" +
+        '<span class="sr-line sr-note">筆記：' + esc(note) + "</span>" +
+        "</span>";
+    }
+    /* 演示：若干馬有個人筆記；個別馬清空評述以示「評述：」留空 */
+    function ensureHorseNoteDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const noteSpecs = [
+        { num: 1, no: 3, note: HORSE_NOTE_DEMO },
+        { num: 1, no: 11, note: HORSE_NOTE_DEMO },
+        { num: 2, no: 4, note: "近走穩定，宜留意水位變化" },
+        { num: 5, no: 5, note: HORSE_NOTE_DEMO }
+      ];
+      noteSpecs.forEach(function (sp) {
+        const race = MEETING.races.find(function (r) { return Number(r.num) === sp.num; });
+        if (!race || !Array.isArray(race.runners)) return;
+        const row = race.runners.find(function (r) { return r && Number(r.no) === sp.no; });
+        if (!row || row.scratched) return;
+        row.horseNote = sp.note;
+      });
+      const emptyReview = MEETING.races.find(function (r) { return Number(r.num) === 1; });
+      if (emptyReview && Array.isArray(emptyReview.runners)) {
+        const row2 = emptyReview.runners.find(function (r) { return r && Number(r.no) === 2; });
+        if (row2) {
+          row2.synthReview = "";
+          row2._synthReviewEmpty = true;
+        }
+      }
+    }
+    ensureHorseNoteDemo();
     function gearPrevOf(r) {
       if (!r) return "";
       const v = r.gearPrev != null ? r.gearPrev : (r.prevGear != null ? r.prevGear : r.lastGear);
@@ -5295,14 +5369,25 @@
       const runners = currentRunners();
       const row = runners.find(function (r) { return r && String(r.no) === String(no); });
       const name = row && row.name ? String(row.name) : "";
-      const text = synthReviewOf(row);
+      const review = synthReviewOf(row);
+      const note = horseNoteOf(row);
       synthReviewSheetNo = no != null && no !== "" ? String(no) : null;
       if (title) {
         title.textContent = synthReviewSheetNo
           ? ("綜合評述 · " + synthReviewSheetNo + (name ? (" " + name) : ""))
           : "綜合評述";
       }
-      if (body) body.textContent = text || "暫無評述";
+      if (body) {
+        body.innerHTML =
+          '<div class="sr-sheet-block is-review">' +
+            '<div class="sr-sheet-lab">評述</div>' +
+            '<div class="sr-sheet-text">' + esc(review) + "</div>" +
+          "</div>" +
+          '<div class="sr-sheet-block is-note">' +
+            '<div class="sr-sheet-lab">筆記</div>' +
+            '<div class="sr-sheet-text">' + esc(note) + "</div>" +
+          "</div>";
+      }
     }
     function openSynthReviewSheet(no) {
       const overlay = document.getElementById("synthReviewOverlay");
@@ -8607,9 +8692,9 @@
           let openAttr = "";
           if (c.key === "water" || c.key === "flow") {
             openAttr = ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位／流量詳情"';
-          } else if (c.key === "synthReview" && !r.scratched && synthReviewOf(r)) {
+          } else if (c.key === "synthReview" && !r.scratched) {
             openAttr = ' data-open="synthReview" data-synth-review-no="' + esc(r.no) +
-              '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 綜合評述全文"';
+              '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 綜合評述與筆記"';
           }
           const fin = finishOfRunner(r);
           const top4 = raceHasPayout(currentMeet()) && fin != null && fin >= 1 && fin <= 4;
