@@ -2581,7 +2581,7 @@
       min-height: 300px;
       box-sizing: border-box;
     }
-    /* 綜合評述：固定 150px，兩行截斷，點開全文彈層 */
+    /* 綜合評述：固定 150px；表頭單行居中；內容兩行截斷，點開全文彈層 */
     .scroll-col.synth-review {
       justify-content: flex-start;
       align-items: center;
@@ -2589,6 +2589,12 @@
       min-width: 150px;
       max-width: 150px;
       box-sizing: border-box;
+    }
+    .hrow.head .cell.scroll-col.synth-review {
+      justify-content: center;
+    }
+    .hrow.head .cell.scroll-col.synth-review .odds-sort .lab {
+      white-space: nowrap;
     }
     .hrow:not(.head) .cell.scroll-col.synth-review {
       cursor: pointer;
@@ -4886,7 +4892,7 @@
       { key: "sameDist", label: "同程", cls: "scroll-col num" },
       { key: "layoff", label: "久休\n復出", cls: "scroll-col txt" },
       { key: "lastOdds", label: "上仗\n水位", cls: "scroll-col num" },
-      { key: "synthReview", label: "綜合\n評述", cls: "scroll-col synth-review" },
+      { key: "synthReview", label: "綜合評述", cls: "scroll-col synth-review" },
       { key: "gear", label: "裝備\n變更", cls: "scroll-col txt" },
       { key: "dam", label: "母系", cls: "scroll-col txt" },
       { key: "sire", label: "父系", cls: "scroll-col txt" },
