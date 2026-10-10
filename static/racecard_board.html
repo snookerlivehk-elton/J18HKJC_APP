@@ -2528,7 +2528,7 @@
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
       cursor: default;
     }
-    /* 綜合評述：固定 150px；上藍「評述：」一行、下紅「筆記：」一行，超出省略 */
+    /* 綜合評述：固定 150px；上黑「評述：」一行、下紅「筆記：」一行，字號同馬主，超出省略 */
     .scroll-col.synth-review {
       justify-content: flex-start;
       align-items: center;
@@ -2572,13 +2572,13 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 11px;
+      font-size: var(--head-fs); /* 與馬主列內容同大 */
       font-weight: 400;
       line-height: 1.2;
       text-align: left;
     }
     .synth-review-cell .sr-line.sr-review {
-      color: #2c5f8a; /* 評述：藍 */
+      color: var(--text); /* 評述：黑／正文色 */
     }
     .synth-review-cell .sr-line.sr-note {
       color: #e74c3c; /* 筆記：紅 */
@@ -2609,7 +2609,7 @@
       line-height: 1.2;
     }
     .synth-review-sheet-body .sr-sheet-block.is-review .sr-sheet-lab {
-      color: #2c5f8a;
+      color: var(--text);
     }
     .synth-review-sheet-body .sr-sheet-block.is-note .sr-sheet-lab {
       color: #e74c3c;
@@ -4568,10 +4568,6 @@
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.synth-review:active {
       background: rgba(143, 196, 168, .14);
-    }
-    html[data-theme="dark"] .synth-review-cell .sr-line.sr-review,
-    html[data-theme="dark"] .synth-review-sheet-body .sr-sheet-block.is-review .sr-sheet-lab {
-      color: #6eb0e0;
     }
     html[data-theme="dark"] .synth-review-cell .sr-line.sr-note,
     html[data-theme="dark"] .synth-review-sheet-body .sr-sheet-block.is-note .sr-sheet-lab {
