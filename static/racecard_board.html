@@ -2789,19 +2789,27 @@
     }
     .sr-note-hist-meta {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px 8px;
-      font-size: 12px;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0 3px;
+      font-size: 11px;
       font-weight: 700;
       color: #3d7a3d;
-      line-height: 1.25;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
     .sr-note-hist-meta span {
       white-space: nowrap;
+      flex: 0 0 auto;
     }
     .sr-note-hist-meta .sep {
       color: #9bbb9b;
       font-weight: 600;
+      margin: 0;
+      padding: 0;
     }
     .sr-note-hist-detail {
       padding: 0 8px 10px;
