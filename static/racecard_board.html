@@ -2528,13 +2528,13 @@
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
       cursor: default;
     }
-    /* 綜合評述：固定 150px；上黑「評述：」一行、下紅「筆記：」一行，字號同馬主，超出省略 */
+    /* 綜合評述：固定 200px；上黑「評述：」一行、下紅「筆記：」一行，字號同馬主，超出省略 */
     .scroll-col.synth-review {
       justify-content: flex-start;
       align-items: center;
-      width: 150px;
-      min-width: 150px;
-      max-width: 150px;
+      width: 200px;
+      min-width: 200px;
+      max-width: 200px;
       box-sizing: border-box;
     }
     .hrow.head .cell.scroll-col.synth-review {
@@ -4915,9 +4915,9 @@
 
     /* 排位右滑列寬規則：列寬 = max(表頭, 該列最長數據)，數據到分隔線固定 2px。
        快照或日後 API 都走 applyMeeting → renderBoard → fitScrollColWidths，禁止寫死 sm/md/wide/xl。
-       例外：綜合評述 150px、馬主 100px（過長兩行）。 */
+       例外：綜合評述 200px、馬主 100px（過長兩行）。 */
     const COL_FIT = { dataToRulePx: 2, rulePx: 1 };
-    const FIXED_SCROLL_COL_W = { synthReview: 150, owner: 100 };
+    const FIXED_SCROLL_COL_W = { synthReview: 200, owner: 100 };
 
     /* 右滑列顯示／順序（菜單「馬匹數據排序」）；預設＝官方 SCROLL_COLS 全顯 */
     const SCROLL_COL_KEYS_DEFAULT = SCROLL_COLS.map(function (c) { return c.key; });
@@ -5275,7 +5275,7 @@
       });
     }
 
-    /* 綜合評述：上「評述：」藍一行＋下「筆記：」紅一行；點開彈層看全文 */
+    /* 綜合評述：上「評述：」黑一行＋下「筆記：」紅一行；點開彈層看全文 */
     const SYNTH_REVIEW_DEMO =
       "在第五班1200米全天候跑道賽事中表現穩定，模型勝率達22.56%，預測排名第一，顯示其競爭力不俗。" +
       "然而，從外檔11起步可能增加比賽難度，且近績顯示其起步後居後列，直路時才略為追前，顯示其需要較長距離發揮。";

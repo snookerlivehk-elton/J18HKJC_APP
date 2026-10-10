@@ -128,7 +128,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("scroll-col synth-review", r.text)
         self.assertIn(".hrow.head .cell.scroll-col.synth-review {\n      justify-content: center;", r.text)
         self.assertIn("FIXED_SCROLL_COL_W", r.text)
-        self.assertIn("synthReview: 150", r.text)
+        self.assertIn("synthReview: 200", r.text)
         self.assertIn("owner: 100", r.text)
         self.assertIn("scroll-col txt owner-col", r.text)
         self.assertIn("owner-name", r.text)
