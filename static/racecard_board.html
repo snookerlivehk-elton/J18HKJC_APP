@@ -8215,13 +8215,26 @@
       return !!(el.waterSheet && !el.waterSheet.hasAttribute("hidden"));
     }
     function syncWaterSheetTop() {
-      if (!el.waterSheet || !el.boardMain || !el.boardShell) return;
+      if (!el.waterSheet || !el.boardShell) return;
       if (el.board) el.board.scrollTop = 0;
-      /* 殼不 zoom，按 boardMain 視覺頂對齊即可（boardMain zoom 原點為左上，頂邊不變） */
       const shellRect = el.boardShell.getBoundingClientRect();
-      const mainRect = el.boardMain.getBoundingClientRect();
-      const top = Math.max(0, Math.round(mainRect.top - shellRect.top));
-      el.waterSheet.style.top = top + "px";
+      const pin = document.getElementById("insightPin");
+      let topPx = 0;
+      if (pin) {
+        /* insight／膠囊不 zoom：以其底邊＝馬匹列表頂。勿用 #boardMain.getBoundingClientRect().top，
+           CSS zoom 放大後該值會偏高，導致水位殼上移遮住綜合指數膠囊。 */
+        topPx = Math.round(pin.getBoundingClientRect().bottom - shellRect.top);
+      } else if (el.boardMain) {
+        /* 回退：累加 offsetTop（layout 座標，不受 zoom 視覺縮放干擾） */
+        let y = 0;
+        let n = el.boardMain;
+        while (n && n !== el.boardShell) {
+          y += n.offsetTop;
+          n = n.parentElement;
+        }
+        topPx = Math.round(y);
+      }
+      el.waterSheet.style.top = Math.max(0, topPx) + "px";
     }
     /* 水位彈窗時段：近→遠（左新右舊），箭頭相對右側更早時段比較 */
     const WATER_HOUR_COLS = 8;
@@ -10152,8 +10165,9 @@
             syncInsightStickyHeight();
           });
         }
-        /* 殼不 zoom，放大後仍鎖在馬匹列表頂 */
+        /* 殼不 zoom；放大後按 insight 底邊重鎖馬匹列表頂（避開 boardMain zoom 量測偏差） */
         if (isWaterSheetOpen()) {
+          syncWaterSheetTop();
           requestAnimationFrame(function () {
             syncWaterSheetTop();
             requestAnimationFrame(syncWaterSheetTop);
