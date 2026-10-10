@@ -2448,31 +2448,21 @@
       font-variant-numeric: tabular-nums;
       font-weight: 400;
     }
-    /* 心水筆記：勾選靠右上、筆記靠左下；左右離列邊界各 4px，不額外撐寬 */
+    /* 心水標記：居中勾選＋序號；開跑中凍結 */
     .scroll-col.tip-note {
-      justify-content: stretch;
-      align-items: stretch;
-      min-width: 0;
-      padding-left: 4px;
-      padding-right: calc(4px + var(--scroll-col-rule));
-    }
-    .hrow:not(.head) .cell.scroll-col.tip-note {
-      align-items: stretch;
-      justify-content: stretch;
+      justify-content: center;
+      align-items: center;
+      min-width: 44px;
     }
     .tip-note-cell {
       display: flex;
-      flex-direction: column;
-      align-items: stretch;
+      flex-direction: row;
+      align-items: center;
       justify-content: center;
-      gap: 2px;
-      width: 100%;
-      min-width: 0;
+      gap: 3px;
+      min-width: 36px;
       padding: 1px 0;
       box-sizing: border-box;
-    }
-    .tip-note-cell.is-na {
-      align-items: center;
     }
     .tip-note-cell.is-na .v {
       color: var(--muted);
@@ -2481,9 +2471,9 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 2px;
+      gap: 3px;
       margin: 0;
-      padding: 0;
+      padding: 2px;
       border: 0;
       background: transparent;
       color: var(--text);
@@ -2491,9 +2481,6 @@
       line-height: 1;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      /* 貼右；略上移 2px */
-      align-self: flex-end;
-      transform: translateY(-2px);
     }
     .tip-check:disabled {
       cursor: default;
@@ -2505,8 +2492,8 @@
     }
     .tip-ord {
       display: inline-block;
-      min-width: 11px;
-      font-size: 11px;
+      min-width: 14px;
+      font-size: 15px;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       color: #c45f12;
@@ -2516,10 +2503,10 @@
     .tip-box {
       position: relative;
       box-sizing: border-box;
-      width: 16px;
-      height: 16px;
-      border: 1.5px solid #8a93a3;
-      border-radius: 4px;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #8a93a3;
+      border-radius: 5px;
       background: #fff;
     }
     .tip-check.is-on .tip-box,
@@ -2534,52 +2521,314 @@
       align-items: center;
       justify-content: center;
       color: #fff;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 800;
       line-height: 1;
-    }
-    .tip-note-ico {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 18px;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      border-radius: 4px;
-      background: transparent;
-      color: #4a5a6a;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      /* 貼左；略下移 2px */
-      align-self: flex-start;
-      transform: translateY(2px);
-    }
-    .tip-note-ico:active {
-      background: rgba(45, 62, 80, .08);
-      color: #2f5649;
-    }
-    .tip-note-ico svg {
-      width: 15px;
-      height: 15px;
-      display: block;
     }
     .tip-note-cell.is-frozen .tip-check:not(:disabled) {
       cursor: default;
     }
-    /* 馬匹筆記彈層：與賽期表同 cal-overlay／cal-sheet 尺寸與定位；內容稍後補 */
-    .tip-note-sheet .cal-head {
+    /* 綜合評述：固定 200px；上黑「評述：」一行、下紅「筆記：」一行，字號同馬主，超出省略 */
+    .scroll-col.synth-review {
+      justify-content: flex-start;
+      align-items: center;
+      width: 200px;
+      min-width: 200px;
+      max-width: 200px;
+      box-sizing: border-box;
+    }
+    .hrow.head .cell.scroll-col.synth-review {
+      justify-content: center;
+    }
+    .hrow.head .cell.scroll-col.synth-review .odds-sort .lab {
+      white-space: nowrap;
+    }
+    .hrow:not(.head) .cell.scroll-col.synth-review {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hrow:not(.head) .cell.scroll-col.synth-review:active {
+      background: rgba(47, 86, 73, .08);
+    }
+    .synth-review-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 2px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0;
+      padding: 1px 0;
+      box-sizing: border-box;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .synth-review-cell .sr-line {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--head-fs); /* 與馬主列內容同大 */
+      font-weight: 400;
+      line-height: 1.2;
+      text-align: left;
+    }
+    .synth-review-cell .sr-line.sr-review {
+      color: var(--text); /* 評述：黑／正文色 */
+    }
+    .synth-review-cell .sr-line.sr-note {
+      color: #e74c3c; /* 筆記：紅 */
+    }
+    .synth-review-sheet .cal-head {
       margin-bottom: 10px;
     }
-    .tip-note-sheet .cal-title {
+    .synth-review-sheet .cal-title {
       flex: 1 1 auto;
       min-width: 0;
       text-align: left;
     }
-    .tip-note-sheet-body {
+    .synth-review-sheet-body {
       min-height: 300px;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .synth-review-sheet-body .sr-sheet-block {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .synth-review-sheet-body .sr-sheet-block.is-review {
+      gap: 0;
+    }
+    .synth-review-sheet-body .sr-sheet-text {
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      min-height: 1.2em;
+    }
+    /* 馬匹個人筆記：場次數字綠系左右滑動膠囊（彈性過渡參考綜合指數 flex 切換） */
+    .sr-note-cap {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+      width: 100%;
+      min-height: 42px;
+      margin: 0;
+      padding: 3px;
+      border: 1px solid #b7dfb7;
+      border-radius: 999px;
+      background: #e8f6e8;
+      box-shadow: inset 0 0 0 1px rgba(92, 184, 92, .14);
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sr-note-cap-slider {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 3px;
+      width: calc(50% - 3px);
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 1px 3px rgba(47, 120, 60, .22);
+      transform: translateX(0);
+      transition: transform .32s cubic-bezier(.22, 1.35, .36, 1);
+      will-change: transform;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .sr-note-cap[data-side="hist"] .sr-note-cap-slider {
+      transform: translateX(100%);
+    }
+    .sr-note-cap-opt {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-width: 0;
+      margin: 0;
+      padding: 2px 6px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #3d7a3d;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .01em;
+      line-height: 1.2;
+      text-align: center;
+      white-space: normal;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: color .22s ease;
+    }
+    .sr-note-cap-opt.is-on {
+      color: #fff;
+    }
+    .sr-note-cap-opt .sr-note-cap-count {
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sr-note-cap-slider { transition: none; }
+      .sr-note-cap-opt { transition: none; }
+    }
+    .sr-note-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .sr-note-input {
+      display: block;
+      width: 100%;
+      min-height: 110px;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid #c5d6c5;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .sr-note-input:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 2px rgba(92, 184, 92, .22);
+    }
+    .sr-note-input::placeholder {
+      color: #9aa3b2;
+    }
+    .sr-note-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .sr-note-btn {
+      min-width: 76px;
+      height: 34px;
+      margin: 0;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sr-note-btn.is-save {
+      background: var(--green);
+      color: #fff;
+    }
+    .sr-note-btn.is-save:active {
+      filter: brightness(.96);
+    }
+    .sr-note-btn.is-cancel {
+      background: #e8ecf1;
+      color: #5b6575;
+    }
+    .sr-note-btn.is-cancel:active {
+      filter: brightness(.97);
+    }
+    .sr-note-hist {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 0;
+      max-height: min(52vh, 420px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sr-note-hist-row {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid #d7e8d7;
+    }
+    .sr-note-hist-row:last-child {
+      border-bottom: 0;
+    }
+    .sr-note-hist-sum {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+      width: 100%;
+      margin: 0;
+      padding: 10px 8px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    .sr-note-hist-sum:active {
+      background: rgba(92, 184, 92, .1);
+    }
+    .sr-note-hist-row.is-open .sr-note-hist-sum {
+      background: rgba(92, 184, 92, .12);
+    }
+    .sr-note-hist-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #3d7a3d;
+      line-height: 1.25;
+    }
+    .sr-note-hist-meta span {
+      white-space: nowrap;
+    }
+    .sr-note-hist-meta .sep {
+      color: #9bbb9b;
+      font-weight: 600;
+    }
+    .sr-note-hist-detail {
+      padding: 0 8px 10px;
+      box-sizing: border-box;
+    }
+    .sr-note-hist-detail[hidden] {
+      display: none !important;
+    }
+    .sr-note-hist-detail-box {
+      width: 100%;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid #c5d6c5;
+      border-radius: 10px;
+      background: #f4faf4;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-sizing: border-box;
+    }
+    .sr-note-hist-empty {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 10px 4px;
     }
     /* 入圍數｜% 等：數據靠右 */
     .scroll-col.end {
@@ -2600,6 +2849,31 @@
       font-size: var(--head-fs);
       line-height: 1.05;
       white-space: nowrap;
+    }
+    /* 馬主：固定 100px；過長兩行顯示 */
+    .scroll-col.owner-col {
+      width: 100px;
+      min-width: 100px;
+      max-width: 100px;
+      box-sizing: border-box;
+      justify-content: center;
+    }
+    .hrow.head .cell.scroll-col.owner-col {
+      justify-content: center;
+    }
+    .scroll-col.owner-col .v.owner-name {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      width: 100%;
+      max-width: 100%;
+      line-height: 1.2;
+      text-align: center;
     }
     .scroll-col .v.stacked {
       display: flex;
@@ -2627,6 +2901,29 @@
     }
     .scroll-col .v.stacked .sub.delta-pos { color: #c0392b; }
     .scroll-col .v.stacked .sub.delta-neg { color: #1e8e3e; }
+    /* 裝備變更：上＝上仗（前：…，同位置賠率灰）；下＝本期 */
+    .scroll-col .v.gear-chg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      white-space: nowrap;
+      line-height: 1.12;
+    }
+    .scroll-col .v.gear-chg .gear-prev {
+      display: block;
+      color: #7b8494; /* 同 .odds .pla */
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.1;
+    }
+    .scroll-col .v.gear-chg .gear-now {
+      display: block;
+      color: var(--text);
+      font: inherit;
+      line-height: 1.1;
+    }
     /* 預計跑法：文字 + 四枚向左三角（實心位＝跑法） */
     .scroll-col .v.run-style {
       display: flex;
@@ -4318,7 +4615,8 @@
     html[data-theme="dark"] .odds .pla,
     html[data-theme="dark"] .wp-odds .pla,
     html[data-theme="dark"] .wh-line .fv,
-    html[data-theme="dark"] .wp-tname {
+    html[data-theme="dark"] .wp-tname,
+    html[data-theme="dark"] .scroll-col .v.gear-chg .gear-prev {
       color: #9aa3b2;
     }
     html[data-theme="dark"] .wh-line.pla .wv,
@@ -4466,10 +4764,6 @@
       border-color: #3d6b5c;
       background: #3d6b5c;
     }
-    html[data-theme="dark"] .tip-note-ico { color: #9aa3b2; }
-    html[data-theme="dark"] .tip-note-ico:active {
-      background: rgba(210, 222, 236, .1);
-    }
     html[data-theme="dark"] .hrow:not(.head) .cell.pin-id:active {
       background: rgba(110, 179, 224, .18);
     }
@@ -4479,6 +4773,50 @@
     html[data-theme="dark"] .rs-chip.late { background: #d4924a; }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="water"]:active {
       background: rgba(143, 196, 168, .14);
+    }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.synth-review:active {
+      background: rgba(143, 196, 168, .14);
+    }
+    html[data-theme="dark"] .synth-review-cell .sr-line.sr-note {
+      color: #f07178;
+    }
+    html[data-theme="dark"] .sr-note-cap {
+      border-color: #3a6b3a;
+      background: #1e2c1e;
+      box-shadow: inset 0 0 0 1px rgba(92, 184, 106, .16);
+    }
+    html[data-theme="dark"] .sr-note-cap-opt {
+      color: #9ed49e;
+    }
+    html[data-theme="dark"] .sr-note-cap-opt.is-on {
+      color: #fff;
+    }
+    html[data-theme="dark"] .sr-note-input {
+      background: #1a1f27;
+      border-color: #3a4250;
+      color: var(--text);
+    }
+    html[data-theme="dark"] .sr-note-btn.is-cancel {
+      background: #2a313c;
+      color: #c5ced9;
+    }
+    html[data-theme="dark"] .sr-note-hist-row {
+      border-bottom-color: #2a3a2a;
+    }
+    html[data-theme="dark"] .sr-note-hist-sum:active,
+    html[data-theme="dark"] .sr-note-hist-row.is-open .sr-note-hist-sum {
+      background: rgba(92, 184, 106, .14);
+    }
+    html[data-theme="dark"] .sr-note-hist-meta {
+      color: #9ed49e;
+    }
+    html[data-theme="dark"] .sr-note-hist-meta .sep {
+      color: #5a7a5a;
+    }
+    html[data-theme="dark"] .sr-note-hist-detail-box {
+      background: #1a241a;
+      border-color: #3a6b3a;
+      color: var(--text);
     }
 
     html[data-theme="dark"] .qin-panel,
@@ -4636,13 +4974,13 @@
     </div>
   </div>
 
-  <div class="cal-overlay" id="tipNoteSheetOverlay" hidden aria-hidden="true">
-    <div class="cal-sheet tip-note-sheet" id="tipNoteSheet" role="dialog" aria-modal="true" aria-labelledby="tipNoteSheetTitle">
+  <div class="cal-overlay" id="synthReviewOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet synth-review-sheet" id="synthReviewSheet" role="dialog" aria-modal="true" aria-labelledby="synthReviewTitle">
       <div class="cal-head">
-        <div class="cal-title" id="tipNoteSheetTitle">馬匹筆記</div>
-        <button type="button" class="cal-close" id="tipNoteSheetClose" aria-label="關閉">×</button>
+        <div class="cal-title" id="synthReviewTitle">綜合評述</div>
+        <button type="button" class="cal-close" id="synthReviewClose" aria-label="關閉">×</button>
       </div>
-      <div class="tip-note-sheet-body" id="tipNoteSheetBody" aria-label="馬匹筆記內容"></div>
+      <div class="synth-review-sheet-body" id="synthReviewBody" aria-label="綜合評述全文"></div>
     </div>
   </div>
 
@@ -4798,7 +5136,7 @@
       { key: "hw", label: "負磅", cls: "scroll-col num" },
       { key: "jockey", label: "騎師", cls: "scroll-col txt" },
       { key: "trainer", label: "練馬師", cls: "scroll-col txt" },
-      { key: "tipNote", label: "心水\n筆記", cls: "scroll-col tip-note" },
+      { key: "tipNote", label: "心水\n標記", cls: "scroll-col tip-note" },
       { key: "age", label: "年齡", cls: "scroll-col num" },
       { key: "runStyle", label: "預計\n跑法", cls: "scroll-col txt" },
       { key: "bestTime", label: "最佳\n時間", cls: "scroll-col num" },
@@ -4811,17 +5149,20 @@
       { key: "sameDist", label: "同程", cls: "scroll-col num" },
       { key: "layoff", label: "久休\n復出", cls: "scroll-col txt" },
       { key: "lastOdds", label: "上仗\n水位", cls: "scroll-col num" },
+      { key: "synthReview", label: "綜合評述", cls: "scroll-col synth-review" },
       { key: "gear", label: "裝備\n變更", cls: "scroll-col txt" },
       { key: "dam", label: "母系", cls: "scroll-col txt" },
       { key: "sire", label: "父系", cls: "scroll-col txt" },
       { key: "damsire", label: "外祖父", cls: "scroll-col txt" },
       { key: "prizePair", label: "今季獎金\n／總獎金", cls: "scroll-col num" },
-      { key: "owner", label: "馬主", cls: "scroll-col txt" }
+      { key: "owner", label: "馬主", cls: "scroll-col txt owner-col" }
     ];
 
     /* 排位右滑列寬規則：列寬 = max(表頭, 該列最長數據)，數據到分隔線固定 2px。
-       快照或日後 API 都走 applyMeeting → renderBoard → fitScrollColWidths，禁止寫死 sm/md/wide/xl。 */
+       快照或日後 API 都走 applyMeeting → renderBoard → fitScrollColWidths，禁止寫死 sm/md/wide/xl。
+       例外：綜合評述 200px、馬主 100px（過長兩行）。 */
     const COL_FIT = { dataToRulePx: 2, rulePx: 1 };
+    const FIXED_SCROLL_COL_W = { synthReview: 200, owner: 100 };
 
     /* 右滑列顯示／順序（菜單「馬匹數據排序」）；預設＝官方 SCROLL_COLS 全顯 */
     const SCROLL_COL_KEYS_DEFAULT = SCROLL_COLS.map(function (c) { return c.key; });
@@ -4934,6 +5275,29 @@
       });
     }
     ensureRace1HistoryPaidDemo();
+
+    /* 演示：若干馬裝備有變更 → 上仗 gearPrev／本期 gear */
+    function ensureGearChangeDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const specs = [
+        { num: 1, no: 3, gearPrev: "TT", gear: "CP-/SR2/TT" },
+        { num: 1, no: 7, gearPrev: "V", gear: "V-/PC1" },
+        { num: 1, no: 11, gearPrev: "B", gear: "B/TT" },
+        { num: 2, no: 1, gearPrev: "TT", gear: "B/TT" },
+        { num: 2, no: 9, gearPrev: "B", gear: "B/TT" },
+        { num: 5, no: 5, gearPrev: "SR", gear: "SR/TT" },
+        { num: 5, no: 8, gearPrev: "H", gear: "B" }
+      ];
+      specs.forEach(function (sp) {
+        const race = MEETING.races.find(function (r) { return Number(r.num) === sp.num; });
+        if (!race || !Array.isArray(race.runners)) return;
+        const row = race.runners.find(function (r) { return r && Number(r.no) === sp.no; });
+        if (!row || row.scratched) return;
+        row.gearPrev = sp.gearPrev;
+        row.gear = sp.gear;
+      });
+    }
+    ensureGearChangeDemo();
 
     /* 演示：末場標記已派彩，狀態燈可顯示「已派彩」 */
     try {
@@ -5061,7 +5425,7 @@
       return v === 1 || v === 2 ? v : 0;
     }
 
-    /* 心水筆記：每場最多勾 6 匹；序號＝勾選順序；開跑中凍結 */
+    /* 心水標記：每場最多勾 6 匹；序號＝勾選順序；開跑中凍結 */
     const TIP_NOTE_MAX = 6;
     const TIP_NOTE_STORE = "j18-tip-note-picks-v1";
     let tipNotePicks = {}; /* { raceNum: [no, ...] } */
@@ -5101,24 +5465,6 @@
       });
       return !!(st && st.key === "running");
     }
-    /* 心水筆記圖標：線圈記事本 + 斜放原子筆（小尺寸可辨） */
-    function tipNoteIconSvg() {
-      return '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-        /* 本體 */
-        '<rect x="1.75" y="2.1" width="9.1" height="11.8" rx="1.35" stroke="currentColor" stroke-width="1.25"/>' +
-        /* 左側線圈／裝訂 */
-        '<path d="M4.15 2.1 V13.9" stroke="currentColor" stroke-width="1.15"/>' +
-        '<path d="M3.35 4.2 h1.6 M3.35 6.55 h1.6 M3.35 8.9 h1.6 M3.35 11.25 h1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
-        /* 橫線 */
-        '<path d="M5.85 5.35 H9.55 M5.85 7.7 H9.55 M5.85 10.05 H8.35" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>' +
-        /* 筆身（右下斜放） */
-        '<path d="M9.05 12.55 L13.55 6.85" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>' +
-        /* 筆尖 */
-        '<path d="M13.55 6.85 L14.55 5.45 L13.15 5.85 Z" fill="currentColor"/>' +
-        /* 筆帽環 */
-        '<path d="M10.15 11.15 L10.85 10.25" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>' +
-        "</svg>";
-    }
     function cellTipNote(r) {
       if (!r || r.scratched) {
         return '<span class="tip-note-cell is-na"><span class="v">—</span></span>';
@@ -5132,13 +5478,11 @@
         '<button type="button" class="tip-check' + (on ? " is-on" : "") + '" data-tip-no="' + esc(r.no) + '"' +
         ' aria-pressed="' + (on ? "true" : "false") + '"' +
         (disabled ? " disabled" : "") +
-        ' aria-label="' + (on ? ("取消心水第" + ord) : "勾選心水") + '">' +
+        ' aria-label="' + (on ? ("取消心水標記第" + ord) : "勾選心水標記") + '">' +
         (on ? '<span class="tip-ord">' + ord + "</span>" : "") +
         '<span class="tip-box" aria-hidden="true">' +
           (on ? '<span class="tip-tick">✓</span>' : "") +
         "</span></button>" +
-        '<button type="button" class="tip-note-ico" data-tip-note-no="' + esc(r.no) + '"' +
-        ' aria-label="馬匹筆記">' + tipNoteIconSvg() + "</button>" +
         "</span>";
     }
     function toggleTipNote(no) {
@@ -5167,89 +5511,528 @@
       root.dataset.tipBound = "1";
       root.addEventListener("click", function (ev) {
         const check = ev.target && ev.target.closest ? ev.target.closest("button.tip-check[data-tip-no]") : null;
-        if (check && root.contains(check)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (check.disabled) return;
-          const no = check.getAttribute("data-tip-no");
-          if (toggleTipNote(no)) renderBoard();
-          return;
-        }
-        const note = ev.target && ev.target.closest ? ev.target.closest("button.tip-note-ico[data-tip-note-no]") : null;
-        if (note && root.contains(note)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const no = note.getAttribute("data-tip-note-no");
-          if (no != null && no !== "") openTipNoteSheet(no);
-        }
+        if (!check || !root.contains(check)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (check.disabled) return;
+        const no = check.getAttribute("data-tip-no");
+        if (toggleTipNote(no)) renderBoard();
       });
     }
-    /* 馬匹筆記彈層（尺寸／定位同賽期表；內容後續補） */
-    let tipNoteSheetNo = null;
-    function syncTipNoteSheetOverlayTop() {
-      syncBoardOverlayTop("tipNoteSheetOverlay");
+
+    /* 綜合評述：上「評述：」黑一行＋下「筆記：」紅一行；彈層評述無標籤，筆記為場次綠左右滑動膠囊 */
+    const SYNTH_REVIEW_DEMO =
+      "在第五班1200米全天候跑道賽事中表現穩定，模型勝率達22.56%，預測排名第一，顯示其競爭力不俗。" +
+      "然而，從外檔11起步可能增加比賽難度，且近績顯示其起步後居後列，直路時才略為追前，顯示其需要較長距離發揮。";
+    const HORSE_NOTE_DEMO = "這匹馬上一仗發力基本在後期";
+    function synthReviewOf(r) {
+      if (!r || r.scratched) return "";
+      if (r.synthReview != null) return String(r.synthReview).trim();
+      if (r.review != null) return String(r.review).trim();
+      /* 演示：未顯式清空時給默認評述；r.synthReview === "" 則留空標籤 */
+      if (r._synthReviewEmpty) return "";
+      const name = r.name ? String(r.name) : "該駒";
+      return name + SYNTH_REVIEW_DEMO;
     }
-    function fillTipNoteSheet(no) {
-      const body = document.getElementById("tipNoteSheetBody");
-      const title = document.getElementById("tipNoteSheetTitle");
+    function horseNoteLatestRaw(r) {
+      if (!r || r.scratched) return "";
+      if (r.horseNote != null) return String(r.horseNote).trim();
+      if (r.personalNote != null) return String(r.personalNote).trim();
+      if (r.tipMemo != null) return String(r.tipMemo).trim();
+      return "";
+    }
+    function formatHorseNoteDate(raw) {
+      const s = raw == null ? "" : String(raw).trim();
+      if (!s) return "";
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) {
+        const dd = ("0" + m[3]).slice(-2);
+        const mm = ("0" + m[2]).slice(-2);
+        return dd + "/" + mm + "/" + m[1];
+      }
+      const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m2) {
+        return ("0" + m2[1]).slice(-2) + "/" + ("0" + m2[2]).slice(-2) + "/" + m2[3];
+      }
+      return s;
+    }
+    function horseNoteHistoryOf(r) {
+      if (!r || r.scratched) return [];
+      const raw = r.horseNoteHistory != null ? r.horseNoteHistory
+        : (r.personalNotes != null ? r.personalNotes : r.noteHistory);
+      if (Array.isArray(raw) && raw.length) {
+        return raw.map(function (it, idx) {
+          if (it == null) return null;
+          if (typeof it === "string") {
+            const t = String(it).trim();
+            return t ? {
+              id: "n" + idx,
+              date: "",
+              text: t,
+              finish: "",
+              jockey: "",
+              dist: "",
+              course: ""
+            } : null;
+          }
+          const text = it.text != null ? String(it.text).trim()
+            : (it.note != null ? String(it.note).trim() : (it.body != null ? String(it.body).trim() : ""));
+          if (!text) return null;
+          const date = it.date != null ? String(it.date).trim()
+            : (it.at != null ? String(it.at).trim() : (it.time != null ? String(it.time).trim() : ""));
+          const finish = it.finish != null ? String(it.finish).trim()
+            : (it.place != null ? String(it.place).trim() : (it.pos != null ? String(it.pos).trim() : ""));
+          const jockey = it.jockey != null ? String(it.jockey).trim() : "";
+          const dist = it.dist != null ? String(it.dist).trim()
+            : (it.distance != null ? String(it.distance).trim() : "");
+          const course = it.course != null ? String(it.course).trim()
+            : (it.venue != null ? String(it.venue).trim() : (it.track != null ? String(it.track).trim() : ""));
+          return {
+            id: it.id != null ? String(it.id) : ("n" + idx),
+            date: date,
+            text: text,
+            finish: finish,
+            jockey: jockey,
+            dist: dist,
+            course: course
+          };
+        }).filter(Boolean);
+      }
+      const one = horseNoteLatestRaw(r);
+      return one ? [{ id: "n0", date: "", text: one, finish: "", jockey: "", dist: "", course: "" }] : [];
+    }
+    function horseNoteCountOf(r) {
+      if (!r || r.scratched) return 0;
+      if (r.horseNoteCount != null && Number.isFinite(Number(r.horseNoteCount))) {
+        return Math.max(0, Math.floor(Number(r.horseNoteCount)));
+      }
+      return horseNoteHistoryOf(r).length;
+    }
+    function horseNoteOf(r) {
+      if (!r || r.scratched) return "";
+      const latest = horseNoteLatestRaw(r);
+      if (latest) return latest;
+      const hist = horseNoteHistoryOf(r);
+      return hist.length ? hist[0].text : "";
+    }
+    function cellSynthReview(r) {
+      if (!r || r.scratched) {
+        return '<span class="synth-review-cell"><span class="sr-line sr-review">—</span></span>';
+      }
+      const review = synthReviewOf(r);
+      const note = horseNoteOf(r);
+      return '<span class="synth-review-cell">' +
+        '<span class="sr-line sr-review">評述：' + esc(review) + "</span>" +
+        '<span class="sr-line sr-note">筆記：' + esc(note) + "</span>" +
+        "</span>";
+    }
+    /* 演示：若干馬有個人筆記歷史；個別馬清空評述以示「評述：」留空 */
+    function ensureHorseNoteDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const noteSpecs = [
+        {
+          num: 1, no: 3,
+          note: HORSE_NOTE_DEMO,
+          history: [
+            { date: "2026-09-23", text: HORSE_NOTE_DEMO, finish: "2", jockey: "霍宏聲", dist: "1650米", course: "跑馬地" },
+            { date: "2026-08-17", text: "中後段加速尚可，宜避快步場", finish: "5", jockey: "潘頓", dist: "1200米", course: "沙田" },
+            { date: "2026-07-01", text: "初出未盡全力，後續值得跟進", finish: "8", jockey: "何澤堯", dist: "1400米", course: "沙田" }
+          ]
+        },
+        {
+          num: 1, no: 11,
+          note: HORSE_NOTE_DEMO,
+          history: [
+            { date: "2026-09-23", text: HORSE_NOTE_DEMO, finish: "1", jockey: "潘頓", dist: "1650米", course: "跑馬地" },
+            { date: "2026-09-03", text: "外檔起步後居後，直路才略追", finish: "4", jockey: "潘頓", dist: "1200米", course: "沙田" }
+          ]
+        },
+        {
+          num: 2, no: 4,
+          note: "近走穩定，宜留意水位變化",
+          history: [
+            { date: "2026-09-23", text: "近走穩定，宜留意水位變化", finish: "3", jockey: "艾兆禮", dist: "1200米", course: "跑馬地" },
+            { date: "2026-08-20", text: "谷草短途表現不俗", finish: "2", jockey: "艾兆禮", dist: "1000米", course: "跑馬地" },
+            { date: "2026-07-13", text: "首次上陣節奏偏慢", finish: "6", jockey: "田泰安", dist: "1200米", course: "沙田" },
+            { date: "2026-06-08", text: "試閘反應理想", finish: "—", jockey: "田泰安", dist: "1000米", course: "沙田" }
+          ]
+        },
+        {
+          num: 5, no: 5,
+          note: HORSE_NOTE_DEMO,
+          history: [
+            { date: "2026-09-23", text: HORSE_NOTE_DEMO, finish: "1", jockey: "周俊樂", dist: "1650米", course: "跑馬地" }
+          ]
+        }
+      ];
+      noteSpecs.forEach(function (sp) {
+        const race = MEETING.races.find(function (r) { return Number(r.num) === sp.num; });
+        if (!race || !Array.isArray(race.runners)) return;
+        const row = race.runners.find(function (r) { return r && Number(r.no) === sp.no; });
+        if (!row || row.scratched) return;
+        row.horseNote = sp.note;
+        row.horseNoteHistory = sp.history.slice();
+        row.horseNoteCount = sp.history.length;
+      });
+      const emptyReview = MEETING.races.find(function (r) { return Number(r.num) === 1; });
+      if (emptyReview && Array.isArray(emptyReview.runners)) {
+        const row2 = emptyReview.runners.find(function (r) { return r && Number(r.no) === 2; });
+        if (row2) {
+          row2.synthReview = "";
+          row2._synthReviewEmpty = true;
+        }
+      }
+    }
+    ensureHorseNoteDemo();
+    function gearPrevOf(r) {
+      if (!r) return "";
+      const v = r.gearPrev != null ? r.gearPrev : (r.prevGear != null ? r.prevGear : r.lastGear);
+      const s = v == null ? "" : String(v).trim();
+      return s === "—" ? "" : s;
+    }
+    function gearNowOf(r) {
+      if (!r) return "";
+      const s = r.gear == null ? "" : String(r.gear).trim();
+      return s === "—" ? "" : s;
+    }
+    function cellGear(r) {
+      if (!r || r.scratched) return '<span class="v">—</span>';
+      const prev = gearPrevOf(r);
+      const now = gearNowOf(r);
+      if (!prev && !now) return '<span class="v">—</span>';
+      if (!prev) return '<span class="v">' + esc(now) + "</span>";
+      return '<span class="v gear-chg">' +
+        '<span class="gear-prev">前：' + esc(prev) + "</span>" +
+        '<span class="gear-now">' + esc(now || "—") + "</span>" +
+        "</span>";
+    }
+    let synthReviewSheetNo = null;
+    let synthNoteSide = "write"; /* write | hist */
+    let synthNoteDraft = "";
+    let synthNoteBaseline = ""; /* 已保存基準；與 draft 不同則視為未保存新內容 */
+    let synthNoteExpandedId = null;
+    function syncSynthReviewOverlayTop() {
+      syncBoardOverlayTop("synthReviewOverlay");
+    }
+    function getSynthNoteDraftLive() {
+      const ta = document.getElementById("srNoteInput");
+      return ta ? String(ta.value) : String(synthNoteDraft || "");
+    }
+    function isSynthNoteDirty() {
+      return getSynthNoteDraftLive() !== String(synthNoteBaseline || "");
+    }
+    function horseNoteMetaParts(it) {
+      const parts = [];
+      const d = formatHorseNoteDate(it && it.date);
+      if (d) parts.push(d);
+      if (it && it.finish) {
+        const f = String(it.finish);
+        parts.push(/^\d+$/.test(f) ? ("第" + f + "名") : f);
+      }
+      if (it && it.jockey) parts.push(it.jockey);
+      if (it && it.dist) parts.push(it.dist);
+      if (it && it.course) parts.push(it.course);
+      return parts;
+    }
+    function renderHorseNoteHistHtml(hist) {
+      if (!hist.length) {
+        return '<div class="sr-note-hist-empty">暫無歷史筆記</div>';
+      }
+      return hist.map(function (it) {
+        const open = synthNoteExpandedId != null && String(synthNoteExpandedId) === String(it.id);
+        const parts = horseNoteMetaParts(it);
+        const metaHtml = parts.length
+          ? parts.map(function (p, i) {
+              return (i ? '<span class="sep" aria-hidden="true">·</span>' : "") +
+                "<span>" + esc(p) + "</span>";
+            }).join("")
+          : "<span>歷史筆記</span>";
+        return '<div class="sr-note-hist-row' + (open ? " is-open" : "") + '" data-note-id="' + esc(it.id) + '">' +
+          '<button type="button" class="sr-note-hist-sum" data-note-id="' + esc(it.id) + '"' +
+            ' aria-expanded="' + (open ? "true" : "false") + '">' +
+            '<div class="sr-note-hist-meta">' + metaHtml + "</div>" +
+          "</button>" +
+          '<div class="sr-note-hist-detail"' + (open ? "" : " hidden") + '>' +
+            '<div class="sr-note-hist-detail-box" aria-readonly="true">' + esc(it.text) + "</div>" +
+          "</div>" +
+        "</div>";
+      }).join("");
+    }
+    function renderHorseNoteWriteHtml(draft) {
+      return '<textarea class="sr-note-input" id="srNoteInput" rows="5"' +
+        ' placeholder="輸入本場賽馬筆記…">' + esc(draft || "") + "</textarea>" +
+        '<div class="sr-note-actions">' +
+          '<button type="button" class="sr-note-btn is-cancel" data-note-act="cancel">取消</button>' +
+          '<button type="button" class="sr-note-btn is-save" data-note-act="save">保存</button>' +
+        "</div>";
+    }
+    function renderSynthNotePanelHtml(side, row) {
+      if (side === "hist") {
+        return '<div class="sr-note-hist" id="srNoteHist" aria-label="歷史筆記列表">' +
+          renderHorseNoteHistHtml(horseNoteHistoryOf(row)) + "</div>";
+      }
+      return renderHorseNoteWriteHtml(synthNoteDraft);
+    }
+    function syncSynthNoteCapUi(side, count) {
+      const body = document.getElementById("synthReviewBody");
+      if (!body) return;
+      const cap = body.querySelector(".sr-note-cap");
+      if (!cap) return;
+      const s = side === "hist" ? "hist" : "write";
+      cap.setAttribute("data-side", s);
+      const writeBtn = cap.querySelector('button.sr-note-cap-opt[data-note-side="write"]');
+      const histBtn = cap.querySelector('button.sr-note-cap-opt[data-note-side="hist"]');
+      if (writeBtn) {
+        writeBtn.classList.toggle("is-on", s === "write");
+        writeBtn.setAttribute("aria-selected", s === "write" ? "true" : "false");
+      }
+      if (histBtn) {
+        histBtn.classList.toggle("is-on", s === "hist");
+        histBtn.setAttribute("aria-selected", s === "hist" ? "true" : "false");
+      }
+      const countEl = cap.querySelector(".sr-note-cap-count");
+      if (countEl && count != null) countEl.textContent = "（" + count + "條）";
+    }
+    function fillSynthNotePanelOnly() {
+      const body = document.getElementById("synthReviewBody");
+      const panel = body && body.querySelector(".sr-note-panel");
+      if (!panel || !synthReviewSheetNo) return;
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(synthReviewSheetNo); });
+      const side = synthNoteSide === "hist" ? "hist" : "write";
+      panel.innerHTML = renderSynthNotePanelHtml(side, row);
+      syncSynthNoteCapUi(side, horseNoteCountOf(row));
+    }
+    function fillSynthReviewSheet(no) {
+      const body = document.getElementById("synthReviewBody");
+      const title = document.getElementById("synthReviewTitle");
       const runners = currentRunners();
       const row = runners.find(function (r) { return r && String(r.no) === String(no); });
       const name = row && row.name ? String(row.name) : "";
-      tipNoteSheetNo = no != null && no !== "" ? String(no) : null;
+      const review = synthReviewOf(row);
+      const count = horseNoteCountOf(row);
+      const side = synthNoteSide === "hist" ? "hist" : "write";
+      synthReviewSheetNo = no != null && no !== "" ? String(no) : null;
       if (title) {
-        title.textContent = tipNoteSheetNo
-          ? ("馬匹筆記 · " + tipNoteSheetNo + (name ? (" " + name) : ""))
-          : "馬匹筆記";
+        title.textContent = synthReviewSheetNo
+          ? ("綜合評述 · " + synthReviewSheetNo + (name ? (" " + name) : ""))
+          : "綜合評述";
       }
-      /* 內容稍後由產品提供；先留空殼 */
-      if (body) body.innerHTML = "";
+      if (body) {
+        body.innerHTML =
+          '<div class="sr-sheet-block is-review">' +
+            '<div class="sr-sheet-text">' + esc(review) + "</div>" +
+          "</div>" +
+          '<div class="sr-sheet-block is-note">' +
+            '<div class="sr-note-cap" data-side="' + side + '" role="tablist" aria-label="馬匹個人筆記切換">' +
+              '<span class="sr-note-cap-slider" aria-hidden="true"></span>' +
+              '<button type="button" class="sr-note-cap-opt' + (side === "write" ? " is-on" : "") +
+                '" data-note-side="write" role="tab" aria-selected="' + (side === "write" ? "true" : "false") + '">' +
+                "為該馬匹創建個人筆記" +
+              "</button>" +
+              '<button type="button" class="sr-note-cap-opt' + (side === "hist" ? " is-on" : "") +
+                '" data-note-side="hist" role="tab" aria-selected="' + (side === "hist" ? "true" : "false") + '">' +
+                '點擊查看歷史筆記<span class="sr-note-cap-count">（' + count + "條）</span>" +
+              "</button>" +
+            "</div>" +
+            '<div class="sr-note-panel">' + renderSynthNotePanelHtml(side, row) + "</div>" +
+          "</div>";
+      }
     }
-    function openTipNoteSheet(no) {
-      const overlay = document.getElementById("tipNoteSheetOverlay");
+    function setSynthNoteSide(side) {
+      const next = side === "hist" ? "hist" : "write";
+      synthNoteDraft = getSynthNoteDraftLive();
+      if (synthNoteSide === next) return;
+      /* 切到歷史筆記：未保存內容先自動保存 */
+      if (next === "hist" && isSynthNoteDirty()) {
+        saveSynthHorseNote({ silent: true, skipFill: true });
+      }
+      synthNoteSide = next;
+      if (next === "write") synthNoteExpandedId = null;
+      const body = document.getElementById("synthReviewBody");
+      const cap = body && body.querySelector(".sr-note-cap");
+      if (cap && synthReviewSheetNo != null) {
+        /* 先改 data-side 讓滑塊動畫跑起來，再換面板內容 */
+        syncSynthNoteCapUi(next, null);
+        requestAnimationFrame(function () {
+          fillSynthNotePanelOnly();
+        });
+      } else if (synthReviewSheetNo != null) {
+        fillSynthReviewSheet(synthReviewSheetNo);
+      }
+    }
+    function saveSynthHorseNote(opts) {
+      const o = opts || {};
+      const text = String(getSynthNoteDraftLive() || "").trim();
+      if (!synthReviewSheetNo) return false;
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(synthReviewSheetNo); });
+      if (!row || row.scratched) return false;
+      synthNoteDraft = text;
+      synthNoteBaseline = text;
+      row.horseNote = text;
+      if (!Array.isArray(row.horseNoteHistory)) row.horseNoteHistory = [];
+      if (text) {
+        const meet = currentMeet();
+        const distMatch = meet && meet.meta ? String(meet.meta).match(/(\d{3,4})\s*米/) : null;
+        const courseLabel = (MEETING && MEETING.courseLabel) || "";
+        const course = /沙田/.test(courseLabel) ? "沙田" : (/跑馬地|谷/.test(courseLabel) ? "跑馬地" : (courseLabel || ""));
+        const entry = {
+          id: "n" + Date.now(),
+          date: (MEETING && MEETING.date) || "",
+          text: text,
+          finish: row.finish != null ? String(row.finish) : "",
+          jockey: row.jockey != null ? String(row.jockey) : "",
+          dist: distMatch ? (distMatch[1] + "米") : "",
+          course: course
+        };
+        row.horseNoteHistory = [entry].concat(row.horseNoteHistory.filter(function (it) {
+          return !(it && String(it.text || it.note || "").trim() === text && String(it.date || "") === String(entry.date));
+        }));
+        row.horseNoteCount = row.horseNoteHistory.length;
+      } else {
+        row.horseNoteCount = horseNoteHistoryOf(row).length;
+      }
+      if (!o.silent) renderBoard();
+      else {
+        try { renderBoard(); } catch (e) {}
+      }
+      if (!o.skipFill && synthReviewSheetNo != null) {
+        /* 保存後保持當前側，只刷新計數／面板，避免打掉滑塊動畫 */
+        syncSynthNoteCapUi(synthNoteSide, horseNoteCountOf(row));
+        if (synthNoteSide === "write") {
+          const ta = document.getElementById("srNoteInput");
+          if (ta) ta.value = synthNoteDraft;
+        } else {
+          fillSynthNotePanelOnly();
+        }
+      } else {
+        syncSynthNoteCapUi(synthNoteSide, horseNoteCountOf(row));
+      }
+      return true;
+    }
+    function cancelSynthHorseNote() {
+      synthNoteDraft = String(synthNoteBaseline || "");
+      const ta = document.getElementById("srNoteInput");
+      if (ta) ta.value = synthNoteDraft;
+      else if (synthReviewSheetNo != null) fillSynthNotePanelOnly();
+    }
+    function toggleSynthNoteExpanded(id) {
+      const sid = id != null ? String(id) : "";
+      if (!sid) return;
+      synthNoteExpandedId = String(synthNoteExpandedId) === sid ? null : sid;
+      fillSynthNotePanelOnly();
+    }
+    function openSynthReviewSheet(no) {
+      const overlay = document.getElementById("synthReviewOverlay");
       if (!overlay) return;
       closeRaceDateCalendar();
       closePayoutDetail();
       closeColSortSheet();
       closeHorseSheet();
-      fillTipNoteSheet(no);
-      syncTipNoteSheetOverlayTop();
+      synthNoteSide = "write";
+      synthNoteExpandedId = null;
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(no); });
+      synthNoteDraft = horseNoteOf(row) || "";
+      synthNoteBaseline = synthNoteDraft;
+      fillSynthReviewSheet(no);
+      syncSynthReviewOverlayTop();
       overlay.removeAttribute("hidden");
       overlay.setAttribute("aria-hidden", "false");
       requestAnimationFrame(function () {
-        syncTipNoteSheetOverlayTop();
+        syncSynthReviewOverlayTop();
       });
     }
-    function closeTipNoteSheet() {
-      const overlay = document.getElementById("tipNoteSheetOverlay");
-      if (!overlay) return;
+    /* fromOutside：點遮罩；有未保存新內容時攔截關閉。其餘關閉路徑未保存則自動保存。 */
+    function closeSynthReviewSheet(opts) {
+      const o = opts || {};
+      const overlay = document.getElementById("synthReviewOverlay");
+      if (!overlay || overlay.hasAttribute("hidden")) return false;
+      synthNoteDraft = getSynthNoteDraftLive();
+      if (o.fromOutside && isSynthNoteDirty()) return false;
+      if (isSynthNoteDirty()) saveSynthHorseNote({ silent: true, skipFill: true });
       overlay.setAttribute("hidden", "");
       overlay.setAttribute("aria-hidden", "true");
-      tipNoteSheetNo = null;
+      synthReviewSheetNo = null;
+      synthNoteSide = "write";
+      synthNoteExpandedId = null;
+      synthNoteDraft = "";
+      synthNoteBaseline = "";
+      return true;
     }
-    function bindTipNoteSheet() {
-      const overlay = document.getElementById("tipNoteSheetOverlay");
-      const sheet = document.getElementById("tipNoteSheet");
-      const closeBtn = document.getElementById("tipNoteSheetClose");
+    function bindSynthReviewSheet() {
+      const overlay = document.getElementById("synthReviewOverlay");
+      const sheet = document.getElementById("synthReviewSheet");
+      const body = document.getElementById("synthReviewBody");
+      const closeBtn = document.getElementById("synthReviewClose");
       if (closeBtn) {
         closeBtn.addEventListener("click", function (ev) {
           ev.preventDefault();
-          closeTipNoteSheet();
+          closeSynthReviewSheet({ fromOutside: false });
         });
       }
       if (overlay) {
         overlay.addEventListener("click", function (ev) {
-          if (ev.target === overlay) closeTipNoteSheet();
+          if (ev.target === overlay) closeSynthReviewSheet({ fromOutside: true });
         });
       }
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      if (body && body.dataset.noteCapBound !== "1") {
+        body.dataset.noteCapBound = "1";
+        body.addEventListener("click", function (ev) {
+          const sideBtn = ev.target && ev.target.closest ? ev.target.closest("button.sr-note-cap-opt[data-note-side]") : null;
+          if (sideBtn && body.contains(sideBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setSynthNoteSide(sideBtn.getAttribute("data-note-side"));
+            return;
+          }
+          const actBtn = ev.target && ev.target.closest ? ev.target.closest("button.sr-note-btn[data-note-act]") : null;
+          if (actBtn && body.contains(actBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const act = actBtn.getAttribute("data-note-act");
+            if (act === "save") saveSynthHorseNote();
+            else if (act === "cancel") cancelSynthHorseNote();
+            return;
+          }
+          const histBtn = ev.target && ev.target.closest ? ev.target.closest("button.sr-note-hist-sum[data-note-id]") : null;
+          if (histBtn && body.contains(histBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleSynthNoteExpanded(histBtn.getAttribute("data-note-id"));
+          }
+        });
+        body.addEventListener("input", function (ev) {
+          if (ev.target && ev.target.id === "srNoteInput") synthNoteDraft = ev.target.value;
+        });
+      }
       document.addEventListener("keydown", function (ev) {
         if (ev.key !== "Escape") return;
-        const ov = document.getElementById("tipNoteSheetOverlay");
-        if (ov && !ov.hasAttribute("hidden")) closeTipNoteSheet();
+        const ov = document.getElementById("synthReviewOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeSynthReviewSheet({ fromOutside: false });
       });
       window.addEventListener("resize", function () {
-        const ov = document.getElementById("tipNoteSheetOverlay");
-        if (ov && !ov.hasAttribute("hidden")) syncTipNoteSheetOverlayTop();
+        const ov = document.getElementById("synthReviewOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncSynthReviewOverlayTop();
+      });
+    }
+    function bindSynthReviewOpens() {
+      document.querySelectorAll('#board .hrow:not(.head) .cell[data-open="synthReview"]').forEach(function (cell) {
+        cell.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const no = cell.getAttribute("data-synth-review-no");
+          if (no != null && no !== "") openSynthReviewSheet(no);
+        });
+        cell.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            const no = cell.getAttribute("data-synth-review-no");
+            if (no != null && no !== "") openSynthReviewSheet(no);
+          }
+        });
       });
     }
     function cycleRowMark(no) {
@@ -6325,6 +7108,12 @@
       if (c.key === "lastOdds") {
         return cellWinPlacePair(r, "lastWinOdds", "lastPlaceOdds", fmtLastOdds);
       }
+      if (c.key === "synthReview") {
+        return cellSynthReview(r);
+      }
+      if (c.key === "gear") {
+        return cellGear(r);
+      }
       if (c.key === "prizePair") {
         const season = r.prizeSeason;
         const total = r.prizeTotal != null ? r.prizeTotal : r.prize;
@@ -6336,7 +7125,16 @@
       if (c.key === "tipNote") {
         return cellTipNote(r);
       }
+      if (c.key === "owner") {
+        return cellOwner(r);
+      }
       return '<span class="v">' + esc(fmt(r[c.key])) + "</span>";
+    }
+    function cellOwner(r) {
+      if (!r || r.scratched) return '<span class="v">—</span>';
+      const name = r.owner == null ? "" : String(r.owner).trim();
+      if (!name || name === "—") return '<span class="v">—</span>';
+      return '<span class="v owner-name">' + esc(name) + "</span>";
     }
     function numOrNull(v) {
       if (v == null || v === "" || v === "—") return null;
@@ -7219,7 +8017,7 @@
           if (fa !== fb) return (fa - fb) * sortDir;
           return Number(a.no) - Number(b.no);
         }
-        /* 心水筆記：只按勾選序號正／反排；未勾選永遠在後 */
+        /* 心水標記：只按勾選序號正／反排；未勾選永遠在後 */
         if (sortKey === "tipNote") {
           const ta = getTipNoteOrder(a && a.no);
           const tb = getTipNoteOrder(b && b.no);
@@ -7228,6 +8026,17 @@
           if (tb == null) return -1;
           if (ta !== tb) return (ta - tb) * sortDir;
           return Number(a.no) - Number(b.no);
+        }
+        /* 裝備變更：有更換（有 gearPrev）永遠排前；組內按本期裝備字串正／反排 */
+        if (sortKey === "gear") {
+          const ha = !!(a && !a.scratched && gearPrevOf(a));
+          const hb = !!(b && !b.scratched && gearPrevOf(b));
+          if (ha !== hb) return ha ? -1 : 1;
+          const av = gearNowOf(a) || "";
+          const bv = gearNowOf(b) || "";
+          let cmp = String(av).localeCompare(String(bv), "zh-Hant");
+          if (cmp === 0) cmp = Number(a.no) - Number(b.no);
+          return cmp * sortDir;
         }
         const av = sortVal(a, sortKey), bv = sortVal(b, sortKey);
         const an = numOrNull(av), bn = numOrNull(bv);
@@ -7255,7 +8064,7 @@
       scrubPointIdx = -1;
       waterCrossFocus = null;
       closeHorseSheet();
-      closeTipNoteSheet();
+      closeSynthReviewSheet();
       renderPills();
       renderMeta();
       renderBoard();
@@ -7328,17 +8137,30 @@
       renderBoard();
     }
 
+    function fixedScrollColW(key) {
+      if (!key || FIXED_SCROLL_COL_W[key] == null) return null;
+      return FIXED_SCROLL_COL_W[key];
+    }
     function fitScrollColWidths() {
       const rows = el.board.querySelectorAll(".hrow");
       if (!rows.length) return;
-      const n = activeScrollCols().length;
+      const cols = activeScrollCols();
+      const n = cols.length;
       const widths = new Array(n).fill(0);
       const all = [];
       rows.forEach((row) => {
         const cells = row.querySelectorAll(".scroll-col");
-        for (let i = 0; i < cells.length && i < n; i++) all.push(cells[i]);
+        for (let i = 0; i < cells.length && i < n; i++) all.push({ cell: cells[i], key: cols[i] && cols[i].key });
       });
-      all.forEach((cell) => {
+      all.forEach(function (item) {
+        const cell = item.cell;
+        const fw = fixedScrollColW(item.key);
+        if (fw != null) {
+          cell.style.width = fw + "px";
+          cell.style.flex = "0 0 " + fw + "px";
+          cell.style.overflow = "hidden";
+          return;
+        }
         cell.style.width = "max-content";
         cell.style.flex = "0 0 auto";
         cell.style.overflow = "visible";
@@ -7346,6 +8168,11 @@
       rows.forEach((row) => {
         const cells = row.querySelectorAll(".scroll-col");
         for (let i = 0; i < cells.length && i < n; i++) {
+          const fw = cols[i] ? fixedScrollColW(cols[i].key) : null;
+          if (fw != null) {
+            widths[i] = fw;
+            continue;
+          }
           widths[i] = Math.max(widths[i], Math.ceil(cells[i].getBoundingClientRect().width));
         }
       });
@@ -7357,6 +8184,8 @@
           /* 水印列保持可見溢出，其餘清掉臨時 overflow */
           if (cells[i].classList.contains("finish-wm-host") || cells[i].classList.contains("finish-wm-pair")) {
             cells[i].style.overflow = "visible";
+          } else if (fixedScrollColW(cols[i] && cols[i].key) != null) {
+            cells[i].style.overflow = "hidden";
           } else {
             cells[i].style.overflow = "";
           }
@@ -8441,9 +9270,13 @@
             "</div></div>" +
           "</div>";
         const cells = scrollCols.map((c) => {
-          const openWater = (c.key === "water" || c.key === "flow")
-            ? ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位／流量詳情"'
-            : "";
+          let openAttr = "";
+          if (c.key === "water" || c.key === "flow") {
+            openAttr = ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位／流量詳情"';
+          } else if (c.key === "synthReview" && !r.scratched) {
+            openAttr = ' data-open="synthReview" data-synth-review-no="' + esc(r.no) +
+              '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 綜合評述與筆記"';
+          }
           const fin = finishOfRunner(r);
           const top4 = raceHasPayout(currentMeet()) && fin != null && fin >= 1 && fin <= 4;
           let extraCls = "";
@@ -8457,7 +9290,7 @@
           } else if (top4 && c.key === "jockey") {
             extraCls = " finish-wm-pair";
           }
-          return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openWater + ">" +
+          return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openAttr + ">" +
             wmHtml + cellValue(c, r) + "</div>";
         }).join("");
         return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
@@ -8490,6 +9323,7 @@
         });
       });
       bindWaterSheetOpens();
+      bindSynthReviewOpens();
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindRowFlags();
@@ -8949,7 +9783,7 @@
       closeCapsuleDrop();
       closeRaceDateCalendar();
       closeColSortSheet();
-      closeTipNoteSheet();
+      closeSynthReviewSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -9070,7 +9904,7 @@
       if (!overlay) return;
       closeRaceDateCalendar();
       closePayoutDetail();
-      closeTipNoteSheet();
+      closeSynthReviewSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -9140,14 +9974,14 @@
       });
     }
     bindColSortSheet();
-    bindTipNoteSheet();
+    bindSynthReviewSheet();
 
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
       closePayoutDetail();
       closeColSortSheet();
-      closeTipNoteSheet();
+      closeSynthReviewSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -9406,9 +10240,9 @@
             closeColSortSheet();
             return;
           }
-          const tipOv = document.getElementById("tipNoteSheetOverlay");
-          if (tipOv && !tipOv.hasAttribute("hidden")) {
-            closeTipNoteSheet();
+          const revOv = document.getElementById("synthReviewOverlay");
+          if (revOv && !revOv.hasAttribute("hidden")) {
+            closeSynthReviewSheet();
             return;
           }
           closeHorseSheet();
