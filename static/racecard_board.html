@@ -2669,6 +2669,31 @@
       line-height: 1.05;
       white-space: nowrap;
     }
+    /* 馬主：固定 100px；過長兩行顯示 */
+    .scroll-col.owner-col {
+      width: 100px;
+      min-width: 100px;
+      max-width: 100px;
+      box-sizing: border-box;
+      justify-content: center;
+    }
+    .hrow.head .cell.scroll-col.owner-col {
+      justify-content: center;
+    }
+    .scroll-col.owner-col .v.owner-name {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      width: 100%;
+      max-width: 100%;
+      line-height: 1.2;
+      text-align: center;
+    }
     .scroll-col .v.stacked {
       display: flex;
       flex-direction: column;
@@ -4922,14 +4947,14 @@
       { key: "sire", label: "父系", cls: "scroll-col txt" },
       { key: "damsire", label: "外祖父", cls: "scroll-col txt" },
       { key: "prizePair", label: "今季獎金\n／總獎金", cls: "scroll-col num" },
-      { key: "owner", label: "馬主", cls: "scroll-col txt" }
+      { key: "owner", label: "馬主", cls: "scroll-col txt owner-col" }
     ];
 
     /* 排位右滑列寬規則：列寬 = max(表頭, 該列最長數據)，數據到分隔線固定 2px。
        快照或日後 API 都走 applyMeeting → renderBoard → fitScrollColWidths，禁止寫死 sm/md/wide/xl。
-       例外：綜合評述固定 150px（兩行截斷＋點開全文）。 */
+       例外：綜合評述 150px、馬主 100px（過長兩行）。 */
     const COL_FIT = { dataToRulePx: 2, rulePx: 1 };
-    const FIXED_SCROLL_COL_W = { synthReview: 150 };
+    const FIXED_SCROLL_COL_W = { synthReview: 150, owner: 100 };
 
     /* 右滑列顯示／順序（菜單「馬匹數據排序」）；預設＝官方 SCROLL_COLS 全顯 */
     const SCROLL_COL_KEYS_DEFAULT = SCROLL_COLS.map(function (c) { return c.key; });
@@ -6600,7 +6625,16 @@
       if (c.key === "tipNote") {
         return cellTipNote(r);
       }
+      if (c.key === "owner") {
+        return cellOwner(r);
+      }
       return '<span class="v">' + esc(fmt(r[c.key])) + "</span>";
+    }
+    function cellOwner(r) {
+      if (!r || r.scratched) return '<span class="v">—</span>';
+      const name = r.owner == null ? "" : String(r.owner).trim();
+      if (!name || name === "—") return '<span class="v">—</span>';
+      return '<span class="v owner-name">' + esc(name) + "</span>";
     }
     function numOrNull(v) {
       if (v == null || v === "" || v === "—") return null;
@@ -7604,6 +7638,10 @@
       renderBoard();
     }
 
+    function fixedScrollColW(key) {
+      if (!key || FIXED_SCROLL_COL_W[key] == null) return null;
+      return FIXED_SCROLL_COL_W[key];
+    }
     function fitScrollColWidths() {
       const rows = el.board.querySelectorAll(".hrow");
       if (!rows.length) return;
@@ -7613,12 +7651,14 @@
       const all = [];
       rows.forEach((row) => {
         const cells = row.querySelectorAll(".scroll-col");
-        for (let i = 0; i < cells.length && i < n; i++) all.push(cells[i]);
+        for (let i = 0; i < cells.length && i < n; i++) all.push({ cell: cells[i], key: cols[i] && cols[i].key });
       });
-      all.forEach((cell) => {
-        if (cell.classList.contains("synth-review")) {
-          cell.style.width = FIXED_SCROLL_COL_W.synthReview + "px";
-          cell.style.flex = "0 0 " + FIXED_SCROLL_COL_W.synthReview + "px";
+      all.forEach(function (item) {
+        const cell = item.cell;
+        const fw = fixedScrollColW(item.key);
+        if (fw != null) {
+          cell.style.width = fw + "px";
+          cell.style.flex = "0 0 " + fw + "px";
           cell.style.overflow = "hidden";
           return;
         }
@@ -7629,8 +7669,9 @@
       rows.forEach((row) => {
         const cells = row.querySelectorAll(".scroll-col");
         for (let i = 0; i < cells.length && i < n; i++) {
-          if (cols[i] && cols[i].key === "synthReview") {
-            widths[i] = FIXED_SCROLL_COL_W.synthReview;
+          const fw = cols[i] ? fixedScrollColW(cols[i].key) : null;
+          if (fw != null) {
+            widths[i] = fw;
             continue;
           }
           widths[i] = Math.max(widths[i], Math.ceil(cells[i].getBoundingClientRect().width));
@@ -7644,7 +7685,7 @@
           /* 水印列保持可見溢出，其餘清掉臨時 overflow */
           if (cells[i].classList.contains("finish-wm-host") || cells[i].classList.contains("finish-wm-pair")) {
             cells[i].style.overflow = "visible";
-          } else if (cells[i].classList.contains("synth-review")) {
+          } else if (fixedScrollColW(cols[i] && cols[i].key) != null) {
             cells[i].style.overflow = "hidden";
           } else {
             cells[i].style.overflow = "";
