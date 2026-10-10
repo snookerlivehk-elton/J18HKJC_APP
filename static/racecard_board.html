@@ -2614,14 +2614,14 @@
       color: var(--text);
       min-height: 1.2em;
     }
-    /* 馬匹個人筆記：場次數字綠系左右滑動膠囊 */
+    /* 馬匹個人筆記：場次數字綠系左右滑動膠囊（彈性過渡參考綜合指數 flex 切換） */
     .sr-note-cap {
       position: relative;
       display: grid;
-      grid-template-columns: 1fr 1.2fr;
+      grid-template-columns: 1fr 1fr;
       align-items: stretch;
       width: 100%;
-      min-height: 40px;
+      min-height: 42px;
       margin: 0;
       padding: 3px;
       border: 1px solid #b7dfb7;
@@ -2636,21 +2636,18 @@
       top: 3px;
       bottom: 3px;
       left: 3px;
-      width: calc((100% - 6px) * (1 / 2.2));
+      width: calc(50% - 3px);
       border-radius: 999px;
       background: var(--green);
-      box-shadow: 0 1px 2px rgba(47, 120, 60, .22);
-      transition: transform .22s ease, width .22s ease;
+      box-shadow: 0 1px 3px rgba(47, 120, 60, .22);
+      transform: translateX(0);
+      transition: transform .32s cubic-bezier(.22, 1.35, .36, 1);
+      will-change: transform;
       pointer-events: none;
       z-index: 0;
     }
-    .sr-note-cap[data-side="write"] .sr-note-cap-slider {
-      width: calc((100% - 6px) * (1 / 2.2));
-      transform: translateX(0);
-    }
     .sr-note-cap[data-side="hist"] .sr-note-cap-slider {
-      width: calc((100% - 6px) * (1.2 / 2.2));
-      transform: translateX(calc((100% - 6px) * (1 / 2.2)));
+      transform: translateX(100%);
     }
     .sr-note-cap-opt {
       position: relative;
@@ -2661,25 +2658,32 @@
       gap: 2px;
       min-width: 0;
       margin: 0;
-      padding: 0 4px;
+      padding: 2px 6px;
       border: 0;
       border-radius: 999px;
       background: transparent;
       color: #3d7a3d;
       font: inherit;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
       letter-spacing: .01em;
-      line-height: 1.15;
-      white-space: nowrap;
+      line-height: 1.2;
+      text-align: center;
+      white-space: normal;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      transition: color .22s ease;
     }
     .sr-note-cap-opt.is-on {
       color: #fff;
     }
     .sr-note-cap-opt .sr-note-cap-count {
       font-weight: 800;
+      white-space: nowrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sr-note-cap-slider { transition: none; }
+      .sr-note-cap-opt { transition: none; }
     }
     .sr-note-panel {
       display: flex;
@@ -5705,9 +5709,17 @@
     let synthReviewSheetNo = null;
     let synthNoteSide = "write"; /* write | hist */
     let synthNoteDraft = "";
+    let synthNoteBaseline = ""; /* 已保存基準；與 draft 不同則視為未保存新內容 */
     let synthNoteExpandedId = null;
     function syncSynthReviewOverlayTop() {
       syncBoardOverlayTop("synthReviewOverlay");
+    }
+    function getSynthNoteDraftLive() {
+      const ta = document.getElementById("srNoteInput");
+      return ta ? String(ta.value) : String(synthNoteDraft || "");
+    }
+    function isSynthNoteDirty() {
+      return getSynthNoteDraftLive() !== String(synthNoteBaseline || "");
     }
     function horseNoteMetaParts(it) {
       const parts = [];
@@ -5754,6 +5766,43 @@
           '<button type="button" class="sr-note-btn is-save" data-note-act="save">保存</button>' +
         "</div>";
     }
+    function renderSynthNotePanelHtml(side, row) {
+      if (side === "hist") {
+        return '<div class="sr-note-hist" id="srNoteHist" aria-label="歷史筆記列表">' +
+          renderHorseNoteHistHtml(horseNoteHistoryOf(row)) + "</div>";
+      }
+      return renderHorseNoteWriteHtml(synthNoteDraft);
+    }
+    function syncSynthNoteCapUi(side, count) {
+      const body = document.getElementById("synthReviewBody");
+      if (!body) return;
+      const cap = body.querySelector(".sr-note-cap");
+      if (!cap) return;
+      const s = side === "hist" ? "hist" : "write";
+      cap.setAttribute("data-side", s);
+      const writeBtn = cap.querySelector('button.sr-note-cap-opt[data-note-side="write"]');
+      const histBtn = cap.querySelector('button.sr-note-cap-opt[data-note-side="hist"]');
+      if (writeBtn) {
+        writeBtn.classList.toggle("is-on", s === "write");
+        writeBtn.setAttribute("aria-selected", s === "write" ? "true" : "false");
+      }
+      if (histBtn) {
+        histBtn.classList.toggle("is-on", s === "hist");
+        histBtn.setAttribute("aria-selected", s === "hist" ? "true" : "false");
+      }
+      const countEl = cap.querySelector(".sr-note-cap-count");
+      if (countEl && count != null) countEl.textContent = "（" + count + "條）";
+    }
+    function fillSynthNotePanelOnly() {
+      const body = document.getElementById("synthReviewBody");
+      const panel = body && body.querySelector(".sr-note-panel");
+      if (!panel || !synthReviewSheetNo) return;
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(synthReviewSheetNo); });
+      const side = synthNoteSide === "hist" ? "hist" : "write";
+      panel.innerHTML = renderSynthNotePanelHtml(side, row);
+      syncSynthNoteCapUi(side, horseNoteCountOf(row));
+    }
     function fillSynthReviewSheet(no) {
       const body = document.getElementById("synthReviewBody");
       const title = document.getElementById("synthReviewTitle");
@@ -5761,7 +5810,6 @@
       const row = runners.find(function (r) { return r && String(r.no) === String(no); });
       const name = row && row.name ? String(row.name) : "";
       const review = synthReviewOf(row);
-      const hist = horseNoteHistoryOf(row);
       const count = horseNoteCountOf(row);
       const side = synthNoteSide === "hist" ? "hist" : "write";
       synthReviewSheetNo = no != null && no !== "" ? String(no) : null;
@@ -5771,10 +5819,6 @@
           : "綜合評述";
       }
       if (body) {
-        const panelHtml = side === "hist"
-          ? ('<div class="sr-note-hist" id="srNoteHist" aria-label="歷史筆記列表">' +
-              renderHorseNoteHistHtml(hist) + "</div>")
-          : renderHorseNoteWriteHtml(synthNoteDraft);
         body.innerHTML =
           '<div class="sr-sheet-block is-review">' +
             '<div class="sr-sheet-text">' + esc(review) + "</div>" +
@@ -5784,36 +5828,48 @@
               '<span class="sr-note-cap-slider" aria-hidden="true"></span>' +
               '<button type="button" class="sr-note-cap-opt' + (side === "write" ? " is-on" : "") +
                 '" data-note-side="write" role="tab" aria-selected="' + (side === "write" ? "true" : "false") + '">' +
-                "馬匹個人筆記" +
+                "為該馬匹創建個人筆記" +
               "</button>" +
               '<button type="button" class="sr-note-cap-opt' + (side === "hist" ? " is-on" : "") +
                 '" data-note-side="hist" role="tab" aria-selected="' + (side === "hist" ? "true" : "false") + '">' +
                 '點擊查看歷史筆記<span class="sr-note-cap-count">（' + count + "條）</span>" +
               "</button>" +
             "</div>" +
-            '<div class="sr-note-panel">' + panelHtml + "</div>" +
+            '<div class="sr-note-panel">' + renderSynthNotePanelHtml(side, row) + "</div>" +
           "</div>";
       }
     }
     function setSynthNoteSide(side) {
       const next = side === "hist" ? "hist" : "write";
-      if (next === "write") {
-        const ta = document.getElementById("srNoteInput");
-        if (ta) synthNoteDraft = ta.value;
-      }
+      synthNoteDraft = getSynthNoteDraftLive();
       if (synthNoteSide === next) return;
+      /* 切到歷史筆記：未保存內容先自動保存 */
+      if (next === "hist" && isSynthNoteDirty()) {
+        saveSynthHorseNote({ silent: true, skipFill: true });
+      }
       synthNoteSide = next;
       if (next === "write") synthNoteExpandedId = null;
-      if (synthReviewSheetNo != null) fillSynthReviewSheet(synthReviewSheetNo);
+      const body = document.getElementById("synthReviewBody");
+      const cap = body && body.querySelector(".sr-note-cap");
+      if (cap && synthReviewSheetNo != null) {
+        /* 先改 data-side 讓滑塊動畫跑起來，再換面板內容 */
+        syncSynthNoteCapUi(next, null);
+        requestAnimationFrame(function () {
+          fillSynthNotePanelOnly();
+        });
+      } else if (synthReviewSheetNo != null) {
+        fillSynthReviewSheet(synthReviewSheetNo);
+      }
     }
-    function saveSynthHorseNote() {
-      const ta = document.getElementById("srNoteInput");
-      const text = ta ? String(ta.value || "").trim() : String(synthNoteDraft || "").trim();
-      if (!synthReviewSheetNo) return;
+    function saveSynthHorseNote(opts) {
+      const o = opts || {};
+      const text = String(getSynthNoteDraftLive() || "").trim();
+      if (!synthReviewSheetNo) return false;
       const runners = currentRunners();
       const row = runners.find(function (r) { return r && String(r.no) === String(synthReviewSheetNo); });
-      if (!row || row.scratched) return;
+      if (!row || row.scratched) return false;
       synthNoteDraft = text;
+      synthNoteBaseline = text;
       row.horseNote = text;
       if (!Array.isArray(row.horseNoteHistory)) row.horseNoteHistory = [];
       if (text) {
@@ -5834,23 +5890,38 @@
           return !(it && String(it.text || it.note || "").trim() === text && String(it.date || "") === String(entry.date));
         }));
         row.horseNoteCount = row.horseNoteHistory.length;
+      } else {
+        row.horseNoteCount = horseNoteHistoryOf(row).length;
       }
-      renderBoard();
-      fillSynthReviewSheet(synthReviewSheetNo);
+      if (!o.silent) renderBoard();
+      else {
+        try { renderBoard(); } catch (e) {}
+      }
+      if (!o.skipFill && synthReviewSheetNo != null) {
+        /* 保存後保持當前側，只刷新計數／面板，避免打掉滑塊動畫 */
+        syncSynthNoteCapUi(synthNoteSide, horseNoteCountOf(row));
+        if (synthNoteSide === "write") {
+          const ta = document.getElementById("srNoteInput");
+          if (ta) ta.value = synthNoteDraft;
+        } else {
+          fillSynthNotePanelOnly();
+        }
+      } else {
+        syncSynthNoteCapUi(synthNoteSide, horseNoteCountOf(row));
+      }
+      return true;
     }
     function cancelSynthHorseNote() {
-      const runners = currentRunners();
-      const row = runners.find(function (r) { return r && String(r.no) === String(synthReviewSheetNo); });
-      synthNoteDraft = horseNoteOf(row) || "";
+      synthNoteDraft = String(synthNoteBaseline || "");
       const ta = document.getElementById("srNoteInput");
       if (ta) ta.value = synthNoteDraft;
-      else if (synthReviewSheetNo != null) fillSynthReviewSheet(synthReviewSheetNo);
+      else if (synthReviewSheetNo != null) fillSynthNotePanelOnly();
     }
     function toggleSynthNoteExpanded(id) {
       const sid = id != null ? String(id) : "";
       if (!sid) return;
       synthNoteExpandedId = String(synthNoteExpandedId) === sid ? null : sid;
-      if (synthReviewSheetNo != null) fillSynthReviewSheet(synthReviewSheetNo);
+      fillSynthNotePanelOnly();
     }
     function openSynthReviewSheet(no) {
       const overlay = document.getElementById("synthReviewOverlay");
@@ -5864,6 +5935,7 @@
       const runners = currentRunners();
       const row = runners.find(function (r) { return r && String(r.no) === String(no); });
       synthNoteDraft = horseNoteOf(row) || "";
+      synthNoteBaseline = synthNoteDraft;
       fillSynthReviewSheet(no);
       syncSynthReviewOverlayTop();
       overlay.removeAttribute("hidden");
@@ -5872,16 +5944,22 @@
         syncSynthReviewOverlayTop();
       });
     }
-    function closeSynthReviewSheet() {
+    /* fromOutside：點遮罩；有未保存新內容時攔截關閉。其餘關閉路徑未保存則自動保存。 */
+    function closeSynthReviewSheet(opts) {
+      const o = opts || {};
       const overlay = document.getElementById("synthReviewOverlay");
-      if (!overlay) return;
-      const ta = document.getElementById("srNoteInput");
-      if (ta) synthNoteDraft = ta.value;
+      if (!overlay || overlay.hasAttribute("hidden")) return false;
+      synthNoteDraft = getSynthNoteDraftLive();
+      if (o.fromOutside && isSynthNoteDirty()) return false;
+      if (isSynthNoteDirty()) saveSynthHorseNote({ silent: true, skipFill: true });
       overlay.setAttribute("hidden", "");
       overlay.setAttribute("aria-hidden", "true");
       synthReviewSheetNo = null;
       synthNoteSide = "write";
       synthNoteExpandedId = null;
+      synthNoteDraft = "";
+      synthNoteBaseline = "";
+      return true;
     }
     function bindSynthReviewSheet() {
       const overlay = document.getElementById("synthReviewOverlay");
@@ -5891,12 +5969,12 @@
       if (closeBtn) {
         closeBtn.addEventListener("click", function (ev) {
           ev.preventDefault();
-          closeSynthReviewSheet();
+          closeSynthReviewSheet({ fromOutside: false });
         });
       }
       if (overlay) {
         overlay.addEventListener("click", function (ev) {
-          if (ev.target === overlay) closeSynthReviewSheet();
+          if (ev.target === overlay) closeSynthReviewSheet({ fromOutside: true });
         });
       }
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
@@ -5933,7 +6011,7 @@
       document.addEventListener("keydown", function (ev) {
         if (ev.key !== "Escape") return;
         const ov = document.getElementById("synthReviewOverlay");
-        if (ov && !ov.hasAttribute("hidden")) closeSynthReviewSheet();
+        if (ov && !ov.hasAttribute("hidden")) closeSynthReviewSheet({ fromOutside: false });
       });
       window.addEventListener("resize", function () {
         const ov = document.getElementById("synthReviewOverlay");
