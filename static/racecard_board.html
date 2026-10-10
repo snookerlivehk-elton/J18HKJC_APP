@@ -2695,6 +2695,29 @@
     }
     .scroll-col .v.stacked .sub.delta-pos { color: #c0392b; }
     .scroll-col .v.stacked .sub.delta-neg { color: #1e8e3e; }
+    /* 裝備變更：上＝上仗（前：…，同位置賠率灰）；下＝本期 */
+    .scroll-col .v.gear-chg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      white-space: nowrap;
+      line-height: 1.12;
+    }
+    .scroll-col .v.gear-chg .gear-prev {
+      display: block;
+      color: #7b8494; /* 同 .odds .pla */
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.1;
+    }
+    .scroll-col .v.gear-chg .gear-now {
+      display: block;
+      color: var(--text);
+      font: inherit;
+      line-height: 1.1;
+    }
     /* 預計跑法：文字 + 四枚向左三角（實心位＝跑法） */
     .scroll-col .v.run-style {
       display: flex;
@@ -4386,7 +4409,8 @@
     html[data-theme="dark"] .odds .pla,
     html[data-theme="dark"] .wp-odds .pla,
     html[data-theme="dark"] .wh-line .fv,
-    html[data-theme="dark"] .wp-tname {
+    html[data-theme="dark"] .wp-tname,
+    html[data-theme="dark"] .scroll-col .v.gear-chg .gear-prev {
       color: #9aa3b2;
     }
     html[data-theme="dark"] .wh-line.pla .wv,
@@ -5019,6 +5043,29 @@
     }
     ensureRace1HistoryPaidDemo();
 
+    /* 演示：若干馬裝備有變更 → 上仗 gearPrev／本期 gear */
+    function ensureGearChangeDemo() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      const specs = [
+        { num: 1, no: 3, gearPrev: "TT", gear: "CP-/SR2/TT" },
+        { num: 1, no: 7, gearPrev: "V", gear: "V-/PC1" },
+        { num: 1, no: 11, gearPrev: "B", gear: "B/TT" },
+        { num: 2, no: 1, gearPrev: "TT", gear: "B/TT" },
+        { num: 2, no: 9, gearPrev: "B", gear: "B/TT" },
+        { num: 5, no: 5, gearPrev: "SR", gear: "SR/TT" },
+        { num: 5, no: 8, gearPrev: "H", gear: "B" }
+      ];
+      specs.forEach(function (sp) {
+        const race = MEETING.races.find(function (r) { return Number(r.num) === sp.num; });
+        if (!race || !Array.isArray(race.runners)) return;
+        const row = race.runners.find(function (r) { return r && Number(r.no) === sp.no; });
+        if (!row || row.scratched) return;
+        row.gearPrev = sp.gearPrev;
+        row.gear = sp.gear;
+      });
+    }
+    ensureGearChangeDemo();
+
     /* 演示：末場標記已派彩，狀態燈可顯示「已派彩」 */
     try {
       if (MEETING && MEETING.races && MEETING.races.length) {
@@ -5355,6 +5402,28 @@
         return '<span class="synth-review-cell is-empty">—</span>';
       }
       return '<span class="synth-review-cell">' + esc(text) + "</span>";
+    }
+    function gearPrevOf(r) {
+      if (!r) return "";
+      const v = r.gearPrev != null ? r.gearPrev : (r.prevGear != null ? r.prevGear : r.lastGear);
+      const s = v == null ? "" : String(v).trim();
+      return s === "—" ? "" : s;
+    }
+    function gearNowOf(r) {
+      if (!r) return "";
+      const s = r.gear == null ? "" : String(r.gear).trim();
+      return s === "—" ? "" : s;
+    }
+    function cellGear(r) {
+      if (!r || r.scratched) return '<span class="v">—</span>';
+      const prev = gearPrevOf(r);
+      const now = gearNowOf(r);
+      if (!prev && !now) return '<span class="v">—</span>';
+      if (!prev) return '<span class="v">' + esc(now) + "</span>";
+      return '<span class="v gear-chg">' +
+        '<span class="gear-prev">前：' + esc(prev) + "</span>" +
+        '<span class="gear-now">' + esc(now || "—") + "</span>" +
+        "</span>";
     }
     let synthReviewSheetNo = null;
     function syncSynthReviewOverlayTop() {
@@ -6516,6 +6585,9 @@
       }
       if (c.key === "synthReview") {
         return cellSynthReview(r);
+      }
+      if (c.key === "gear") {
+        return cellGear(r);
       }
       if (c.key === "prizePair") {
         const season = r.prizeSeason;
