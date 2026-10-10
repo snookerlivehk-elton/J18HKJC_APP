@@ -154,6 +154,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('gear: "CP-/SR2/TT"', r.text)
         self.assertIn(".scroll-col .v.gear-chg .gear-prev {\n      display: block;\n      color: #7b8494;", r.text)
         self.assertIn('sortKey === "tipNote"', r.text)
+        self.assertIn('sortKey === "gear"', r.text)
+        self.assertIn("有更換（有 gearPrev）永遠排前", r.text)
         self.assertIn("tip-check", r.text)
         self.assertIn("tip-ord", r.text)
         self.assertIn("tip-tick", r.text)

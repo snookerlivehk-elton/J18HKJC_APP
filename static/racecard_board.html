@@ -7493,6 +7493,17 @@
           if (ta !== tb) return (ta - tb) * sortDir;
           return Number(a.no) - Number(b.no);
         }
+        /* 裝備變更：有更換（有 gearPrev）永遠排前；組內按本期裝備字串正／反排 */
+        if (sortKey === "gear") {
+          const ha = !!(a && !a.scratched && gearPrevOf(a));
+          const hb = !!(b && !b.scratched && gearPrevOf(b));
+          if (ha !== hb) return ha ? -1 : 1;
+          const av = gearNowOf(a) || "";
+          const bv = gearNowOf(b) || "";
+          let cmp = String(av).localeCompare(String(bv), "zh-Hant");
+          if (cmp === 0) cmp = Number(a.no) - Number(b.no);
+          return cmp * sortDir;
+        }
         const av = sortVal(a, sortKey), bv = sortVal(b, sortKey);
         const an = numOrNull(av), bn = numOrNull(bv);
         let cmp;
