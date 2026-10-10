@@ -159,6 +159,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("有更換（有 gearPrev）永遠排前", r.text)
         self.assertIn("tip-check", r.text)
         self.assertIn("tip-ord", r.text)
+        self.assertIn(".tip-ord {\n      display: inline-block;\n      min-width: 14px;\n      font-size: 15px;", r.text)
         self.assertIn("tip-tick", r.text)
         self.assertIn(".tip-box {\n      position: relative;\n      box-sizing: border-box;\n      width: 20px;\n      height: 20px;", r.text)
         self.assertIn("is-frozen", r.text)
