@@ -68,7 +68,7 @@
       position: relative;
     }
     .topbar .side {
-      min-width: 64px;
+      min-width: 72px;
       font-size: 15px;
       font-weight: 700;
     }
@@ -76,16 +76,20 @@
       display: inline-flex;
       align-items: center;
       gap: 2px;
+      justify-content: flex-start;
     }
     .topbar .side.r {
       position: relative;
-      display: flex;
+      display: inline-flex;
+      align-items: center;
       justify-content: flex-end;
+      gap: 2px;
       text-align: right;
     }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
     .topbar .nav-back,
-    .topbar .nav-menu-btn {
+    .topbar .nav-menu-btn,
+    .topbar .nav-media {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -103,9 +107,21 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    .topbar .nav-media {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+    .topbar .nav-media svg {
+      display: block;
+      width: 22px;
+      height: 22px;
+    }
     .topbar .nav-back:active,
     .topbar .nav-menu-btn:active,
-    .topbar .nav-menu-btn[aria-expanded="true"] {
+    .topbar .nav-menu-btn[aria-expanded="true"],
+    .topbar .nav-media:active {
       background: rgba(255, 255, 255, .14);
     }
     .topbar .nav-back .chev {
@@ -4872,14 +4888,34 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="side l">
-      <button type="button" class="nav-back" id="navBack" aria-label="返回">
-        <span class="chev" aria-hidden="true">‹</span>
-        <span>返回</span>
+    <div class="side l" role="group" aria-label="現場媒體">
+      <button type="button" class="nav-media nav-live-tv" id="navLiveTv" aria-label="現場直播" title="現場直播">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M8.2 3.6 L12 7.2 L15.8 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="3.5" y="7.2" width="17" height="12.2" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+          <rect x="6.2" y="9.6" width="11.6" height="6.2" rx="1" fill="currentColor" opacity=".92"/>
+          <circle cx="8.1" cy="17.7" r="0.7" fill="currentColor"/>
+          <circle cx="10.2" cy="17.7" r="0.7" fill="currentColor"/>
+        </svg>
+      </button>
+      <button type="button" class="nav-media nav-radio" id="navRadio" aria-label="收音機" title="收音機">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M5.2 8.2 L16.5 4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          <rect x="3.5" y="8" width="17" height="11.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+          <circle cx="9" cy="13.6" r="2.6" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="9" cy="13.6" r="0.85" fill="currentColor"/>
+          <path d="M14.2 11.2 H18.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M14.2 13.6 H18.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M14.2 16 H17.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
       </button>
     </div>
     <h1>排位</h1>
     <div class="side r">
+      <button type="button" class="nav-back" id="navBack" aria-label="返回">
+        <span class="chev" aria-hidden="true">‹</span>
+        <span>返回</span>
+      </button>
       <button type="button" class="nav-menu-btn" id="navMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="navMenu">
         <span class="lab">菜單</span>
         <span class="caret" aria-hidden="true">▼</span>
@@ -10245,6 +10281,21 @@
         back.addEventListener("click", function () {
           setOpen(false);
           if (window.history.length > 1) window.history.back();
+        });
+      }
+      /* 現場直播／收音機：入口預留，日後接直播與音訊源 */
+      const liveTv = document.getElementById("navLiveTv");
+      const radio = document.getElementById("navRadio");
+      if (liveTv) {
+        liveTv.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          setOpen(false);
+        });
+      }
+      if (radio) {
+        radio.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          setOpen(false);
         });
       }
       document.addEventListener("keydown", function (ev) {
