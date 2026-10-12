@@ -1878,6 +1878,14 @@
     .hrow:not(.head) .cell.scroll-col[data-open="water"]:active {
       background: rgba(47, 86, 73, .08);
     }
+    /* 點預計跑法（文字＋三角示意）打開全場速勢走位圖 */
+    .hrow:not(.head) .cell.scroll-col[data-open="speedMap"] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
+      background: rgba(61, 90, 128, .1);
+    }
     .horse-sheet-bar {
       position: relative;
       flex: 0 0 auto;
@@ -3803,6 +3811,47 @@
     }
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
+    /* 速勢走位圖：與賽期彈窗同殼；圖可內滾 */
+    .speed-map-sheet .cal-head {
+      margin-bottom: 8px;
+    }
+    .speed-map-sheet .cal-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+      padding-left: 2px;
+    }
+    .speed-map-meta {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--muted);
+      letter-spacing: .02em;
+    }
+    .speed-map-body {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      max-height: min(62vh, 520px);
+      border-radius: 10px;
+      background: #f3f5f8;
+    }
+    .speed-map-body img {
+      display: block;
+      width: 100%;
+      height: auto;
+      vertical-align: top;
+    }
+    .speed-map-loading,
+    .speed-map-error {
+      padding: 28px 16px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .speed-map-error { color: #b45309; }
     /* 派彩詳情：與賽期日曆同殼同寬；橙頭＋三列表，內容超出可內滾 */
     .payout-detail-sheet {
       padding: 0;
@@ -4265,6 +4314,12 @@
         0 18px 48px rgba(0, 0, 0, .58),
         0 0 0 1px rgba(0, 0, 0, .45),
         inset 0 1px 0 rgba(255, 255, 255, .14);
+    }
+    html[data-theme="dark"] .speed-map-body {
+      background: #1e242c;
+    }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
+      background: rgba(120, 160, 210, .12);
     }
     html[data-theme="dark"] .payout-detail-head {
       background: #b87840;
@@ -5094,6 +5149,17 @@
           <span class="lg"><i class="dot os-ae"></i>阿聯酋</span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="cal-overlay" id="speedMapOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet speed-map-sheet" id="speedMapSheet" role="dialog" aria-modal="true" aria-labelledby="speedMapTitle">
+      <div class="cal-head">
+        <div class="cal-title" id="speedMapTitle">速勢走位圖</div>
+        <button type="button" class="cal-close" id="speedMapClose" aria-label="關閉">×</button>
+      </div>
+      <div class="speed-map-meta" id="speedMapMeta"></div>
+      <div class="speed-map-body" id="speedMapBody" aria-label="全場馬匹跑位圖"></div>
     </div>
   </div>
 
@@ -6055,6 +6121,7 @@
       closeRaceDateCalendar();
       closePayoutDetail();
       closeColSortSheet();
+      closeSpeedMapSheet();
       closeHorseSheet();
       synthNoteSide = "write";
       synthNoteExpandedId = null;
@@ -6159,6 +6226,149 @@
         });
       });
     }
+
+    /* 速勢走位圖：點預計跑法列 → 賽期規格彈窗展示馬會 RaceMap */
+    const SPEEDMAP_CMS = "https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_";
+    const speedMapCache = Object.create(null);
+    let speedMapReqToken = 0;
+    function syncSpeedMapOverlayTop() {
+      syncBoardOverlayTop("speedMapOverlay");
+    }
+    function closeSpeedMapSheet() {
+      const overlay = document.getElementById("speedMapOverlay");
+      if (!overlay) return;
+      overlay.setAttribute("hidden", "");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+    function speedMapMetaText(info, raceNo) {
+      const bits = [];
+      bits.push("第" + raceNo + "場");
+      if (info && info.Racecourse) bits.push(String(info.Racecourse));
+      if (info && info.Distance) bits.push(String(info.Distance));
+      if (info && info.RaceName) bits.push(String(info.RaceName));
+      if (info && info.Date) bits.push(String(info.Date));
+      return bits.join(" · ");
+    }
+    function renderSpeedMapLoading(raceNo) {
+      const meta = document.getElementById("speedMapMeta");
+      const body = document.getElementById("speedMapBody");
+      if (meta) meta.textContent = "第" + raceNo + "場 · 載入走位圖…";
+      if (body) body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
+    }
+    function renderSpeedMapError(raceNo, msg) {
+      const meta = document.getElementById("speedMapMeta");
+      const body = document.getElementById("speedMapBody");
+      if (meta) meta.textContent = "第" + raceNo + "場";
+      if (body) {
+        body.innerHTML =
+          '<div class="speed-map-error">' + esc(msg || "暫未能載入走位圖") + "</div>";
+      }
+    }
+    function renderSpeedMapImage(raceNo, data) {
+      const meta = document.getElementById("speedMapMeta");
+      const body = document.getElementById("speedMapBody");
+      const info = (data && data.info) || {};
+      if (meta) meta.textContent = speedMapMetaText(info, raceNo);
+      if (!body) return;
+      if (!data || !data.map) {
+        renderSpeedMapError(raceNo, "此場暫無走位圖");
+        return;
+      }
+      body.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = data.map;
+      img.alt = "第" + raceNo + "場速勢走位圖";
+      img.decoding = "async";
+      body.appendChild(img);
+    }
+    function fetchSpeedMap(raceNo) {
+      const key = String(raceNo);
+      if (speedMapCache[key]) return Promise.resolve(speedMapCache[key]);
+      return fetch(SPEEDMAP_CMS + raceNo, {
+        method: "GET",
+        headers: { Accept: "application/json,text/plain,*/*" },
+        credentials: "omit",
+        cache: "default"
+      }).then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      }).then(function (payload) {
+        const block = (payload && (payload["zh-hk"] || payload["en-us"])) || null;
+        const map = block && block.RaceMap ? String(block.RaceMap) : "";
+        const info = (block && (block.RaceInfoChi || block.RaceInfoEng)) || {};
+        if (!map || map.indexOf("data:image") !== 0) throw new Error("no RaceMap");
+        const packed = { map: map, info: info };
+        speedMapCache[key] = packed;
+        return packed;
+      });
+    }
+    function openSpeedMapSheet() {
+      const overlay = document.getElementById("speedMapOverlay");
+      if (!overlay) return;
+      closeRaceDateCalendar();
+      closePayoutDetail();
+      closeColSortSheet();
+      closeSynthReviewSheet();
+      closeHorseSheet();
+      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      const raceNo = Number(currentRace) || 1;
+      const token = ++speedMapReqToken;
+      renderSpeedMapLoading(raceNo);
+      syncSpeedMapOverlayTop();
+      overlay.removeAttribute("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () { syncSpeedMapOverlayTop(); });
+      fetchSpeedMap(raceNo).then(function (data) {
+        if (token !== speedMapReqToken) return;
+        renderSpeedMapImage(raceNo, data);
+        syncSpeedMapOverlayTop();
+      }).catch(function () {
+        if (token !== speedMapReqToken) return;
+        renderSpeedMapError(raceNo, "暫未能載入走位圖，請稍後再試");
+      });
+    }
+    function bindSpeedMapSheet() {
+      const overlay = document.getElementById("speedMapOverlay");
+      const sheet = document.getElementById("speedMapSheet");
+      const closeBtn = document.getElementById("speedMapClose");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeSpeedMapSheet();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+          if (ev.target === overlay) closeSpeedMapSheet();
+        });
+      }
+      if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        const ov = document.getElementById("speedMapOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeSpeedMapSheet();
+      });
+      window.addEventListener("resize", function () {
+        const ov = document.getElementById("speedMapOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncSpeedMapOverlayTop();
+      });
+    }
+    function bindSpeedMapOpens() {
+      document.querySelectorAll('#board .hrow:not(.head) .cell[data-open="speedMap"]').forEach(function (cell) {
+        cell.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openSpeedMapSheet();
+        });
+        cell.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            openSpeedMapSheet();
+          }
+        });
+      });
+    }
+    bindSpeedMapSheet();
     function cycleRowMark(no) {
       const k = rowMarkKey(no);
       const next = ((rowMarks[k] || 0) + 1) % 3;
@@ -9410,6 +9620,9 @@
           let openAttr = "";
           if (c.key === "water" || c.key === "flow") {
             openAttr = ' data-open="water" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 水位／流量詳情"';
+          } else if (c.key === "runStyle") {
+            openAttr = ' data-open="speedMap" role="button" tabindex="0" aria-label="查看第' +
+              esc(currentRace) + '場全場速勢走位圖"';
           } else if (c.key === "synthReview" && !r.scratched) {
             openAttr = ' data-open="synthReview" data-synth-review-no="' + esc(r.no) +
               '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 綜合評述與筆記"';
@@ -9461,6 +9674,7 @@
       });
       bindWaterSheetOpens();
       bindSynthReviewOpens();
+      bindSpeedMapOpens();
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindRowFlags();
@@ -9813,7 +10027,7 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
@@ -9940,6 +10154,7 @@
       closeRaceDateCalendar();
       closeColSortSheet();
       closeSynthReviewSheet();
+      closeSpeedMapSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10061,6 +10276,7 @@
       closeRaceDateCalendar();
       closePayoutDetail();
       closeSynthReviewSheet();
+      closeSpeedMapSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10138,6 +10354,7 @@
       closePayoutDetail();
       closeColSortSheet();
       closeSynthReviewSheet();
+      closeSpeedMapSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -10430,6 +10647,11 @@
           const revOv = document.getElementById("synthReviewOverlay");
           if (revOv && !revOv.hasAttribute("hidden")) {
             closeSynthReviewSheet();
+            return;
+          }
+          const speedOv = document.getElementById("speedMapOverlay");
+          if (speedOv && !speedOv.hasAttribute("hidden")) {
+            closeSpeedMapSheet();
             return;
           }
           closeHorseSheet();
