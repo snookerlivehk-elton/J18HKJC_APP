@@ -158,14 +158,30 @@
       50% { fill: var(--yellow); }
       75% { fill: var(--green); }
     }
+    /* 收音機錶盤：無訊號灰斜杠／有訊號綠燈呼吸 */
+    .nav-radio .radio-sig-off { display: none; }
+    .nav-radio .radio-sig-on { display: none; }
+    .nav-radio[data-signal="off"] .radio-sig-off { display: block; }
+    .nav-radio[data-signal="on"] .radio-sig-on { display: block; }
+    .nav-radio[data-signal="on"] .radio-led {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: radio-led-breathe 1.35s ease-in-out infinite;
+    }
+    @keyframes radio-led-breathe {
+      0%, 100% { opacity: .45; transform: scale(.82); }
+      50% { opacity: 1; transform: scale(1.12); }
+    }
     @media (prefers-reduced-motion: reduce) {
       .nav-live-tv[data-signal="off"] .tv-snow-pat-a,
       .nav-live-tv[data-signal="off"] .tv-snow-pat-b,
       .nav-live-tv[data-signal="off"] .tv-snow-flick,
-      .nav-live-tv[data-signal="on"] .tv-lcd-signal {
+      .nav-live-tv[data-signal="on"] .tv-lcd-signal,
+      .nav-radio[data-signal="on"] .radio-led {
         animation: none;
       }
       .nav-live-tv[data-signal="on"] .tv-lcd-signal { fill: var(--blue); }
+      .nav-radio[data-signal="on"] .radio-led { opacity: 1; transform: none; }
     }
     .topbar .nav-back:active,
     .topbar .nav-menu-btn:active,
@@ -4971,12 +4987,18 @@
           <circle cx="10.2" cy="17.65" r="0.55" fill="currentColor"/>
         </svg>
       </button>
-      <button type="button" class="nav-media nav-radio" id="navRadio" aria-label="收音機" title="收音機">
+      <button type="button" class="nav-media nav-radio" id="navRadio" data-signal="off" aria-pressed="false" aria-label="收音機，無訊號" title="收音機（無訊號）· 點按切換">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
           <path d="M5.3 8.2 L16.4 4.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
           <rect x="3.6" y="8.1" width="16.8" height="11.2" rx="2" stroke="currentColor" stroke-width="1.25"/>
           <circle cx="9" cy="13.6" r="2.55" stroke="currentColor" stroke-width="1.15"/>
-          <circle cx="9" cy="13.6" r="0.7" fill="currentColor"/>
+          <g class="radio-sig-off">
+            <circle cx="9" cy="13.6" r="1.2" stroke="#b0b7c2" stroke-width="1.05" fill="none"/>
+            <path d="M8.15 12.75 L9.85 14.45" stroke="#b0b7c2" stroke-width="1.1" stroke-linecap="round"/>
+          </g>
+          <g class="radio-sig-on">
+            <circle class="radio-led" cx="9" cy="13.6" r="1.05" fill="var(--green)"/>
+          </g>
           <path d="M14.3 11.3 H18.1" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
           <path d="M14.3 13.6 H18.1" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
           <path d="M14.3 15.9 H17" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
@@ -10376,6 +10398,12 @@
         radio.addEventListener("click", function (ev) {
           ev.preventDefault();
           setOpen(false);
+          const on = radio.getAttribute("data-signal") === "on";
+          const next = on ? "off" : "on";
+          radio.setAttribute("data-signal", next);
+          radio.setAttribute("aria-pressed", next === "on" ? "true" : "false");
+          radio.setAttribute("aria-label", next === "on" ? "收音機，有訊號" : "收音機，無訊號");
+          radio.title = (next === "on" ? "收音機（有訊號）" : "收音機（無訊號）") + "· 點按切換";
         });
       }
       document.addEventListener("keydown", function (ev) {
