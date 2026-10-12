@@ -116,6 +116,30 @@
     .topbar .nav-live-tv {
       margin-left: -10px;
     }
+    .topbar .nav-live-status {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      width: 12px;
+      max-height: 42px;
+      margin: 0 -4px;
+      padding: 0;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.55);
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+    }
+    .topbar .nav-live-status[data-live="on"] {
+      color: #9be09b;
+    }
     .topbar .nav-radio {
       margin-left: -16px;
     }
@@ -4993,6 +5017,7 @@
           <circle cx="10.2" cy="17.65" r="0.55" fill="currentColor"/>
         </svg>
       </button>
+      <span class="nav-live-status" id="navLiveStatus" data-live="off" aria-live="polite">未開始</span>
       <button type="button" class="nav-media nav-radio" id="navRadio" data-signal="off" aria-pressed="false" aria-label="收音機，無訊號" title="收音機（無訊號）· 點按切換">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
           <path d="M5.3 8.2 L16.4 4.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
@@ -10383,9 +10408,18 @@
           if (window.history.length > 1) window.history.back();
         });
       }
-      /* 現場直播／收音機：入口預留；電視圖標暫以點按切換有／無訊號示意 */
+      /* 現場直播／收音機：入口預留；點按切換有／無訊號，並同步中間開播狀態 */
       const liveTv = document.getElementById("navLiveTv");
       const radio = document.getElementById("navRadio");
+      const liveStatus = document.getElementById("navLiveStatus");
+      function syncNavLiveStatus() {
+        if (!liveStatus) return;
+        const tvOn = liveTv && liveTv.getAttribute("data-signal") === "on";
+        const radioOn = radio && radio.getAttribute("data-signal") === "on";
+        const live = !!(tvOn || radioOn);
+        liveStatus.setAttribute("data-live", live ? "on" : "off");
+        liveStatus.textContent = live ? "直播中" : "未開始";
+      }
       if (liveTv) {
         liveTv.addEventListener("click", function (ev) {
           ev.preventDefault();
@@ -10397,6 +10431,7 @@
           const label = next === "on" ? "現場直播，有訊號" : "現場直播，無訊號";
           liveTv.setAttribute("aria-label", label);
           liveTv.title = (next === "on" ? "現場直播（有訊號）" : "現場直播（無訊號）") + "· 點按切換";
+          syncNavLiveStatus();
         });
       }
       if (radio) {
@@ -10409,8 +10444,10 @@
           radio.setAttribute("aria-pressed", next === "on" ? "true" : "false");
           radio.setAttribute("aria-label", next === "on" ? "收音機，有訊號" : "收音機，無訊號");
           radio.title = (next === "on" ? "收音機（有訊號）" : "收音機（無訊號）") + "· 點按切換";
+          syncNavLiveStatus();
         });
       }
+      syncNavLiveStatus();
       document.addEventListener("keydown", function (ev) {
         if (ev.key === "Escape") {
           if (isOpen()) {
