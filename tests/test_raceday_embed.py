@@ -61,6 +61,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('id="navLiveTv"', r.text)
         self.assertIn('id="navRadio"', r.text)
         self.assertIn("nav-media", r.text)
+        self.assertIn(".topbar .nav-media {\n      width: 46px;\n      height: 46px;", r.text)
+        self.assertIn(".topbar .nav-media svg {\n      display: block;\n      width: 32px;\n      height: 32px;", r.text)
         self.assertIn("現場直播", r.text)
         self.assertIn("收音機", r.text)
         self.assertIn("nav-menu-btn", r.text)
