@@ -118,6 +118,55 @@
       width: 44px;
       height: 44px;
     }
+    /* 電視機螢幕：無訊號雪花／有訊號站內色輪跳 */
+    .nav-live-tv .tv-snow-layer { display: none; }
+    .nav-live-tv .tv-lcd-signal { display: none; }
+    .nav-live-tv[data-signal="off"] .tv-snow-layer { display: block; }
+    .nav-live-tv[data-signal="on"] .tv-lcd-signal {
+      display: block;
+      animation: tv-signal-cycle 2.4s steps(1) infinite;
+    }
+    .nav-live-tv[data-signal="off"] .tv-snow-pat-a {
+      animation: tv-snow-shift-a 0.16s steps(4) infinite;
+    }
+    .nav-live-tv[data-signal="off"] .tv-snow-pat-b {
+      animation: tv-snow-shift-b 0.11s steps(3) infinite;
+    }
+    .nav-live-tv[data-signal="off"] .tv-snow-flick {
+      animation: tv-snow-flick 0.18s steps(2) infinite;
+    }
+    @keyframes tv-snow-shift-a {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-1.1px, 0.5px); }
+      50% { transform: translate(0.7px, -0.8px); }
+      75% { transform: translate(-0.5px, 0.6px); }
+      100% { transform: translate(0, 0); }
+    }
+    @keyframes tv-snow-shift-b {
+      0% { transform: translate(0, 0); }
+      33% { transform: translate(0.9px, -0.6px); }
+      66% { transform: translate(-0.8px, 0.7px); }
+      100% { transform: translate(0, 0); }
+    }
+    @keyframes tv-snow-flick {
+      0%, 100% { opacity: .92; }
+      50% { opacity: .72; }
+    }
+    @keyframes tv-signal-cycle {
+      0% { fill: var(--red); }
+      25% { fill: var(--blue); }
+      50% { fill: var(--yellow); }
+      75% { fill: var(--green); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .nav-live-tv[data-signal="off"] .tv-snow-pat-a,
+      .nav-live-tv[data-signal="off"] .tv-snow-pat-b,
+      .nav-live-tv[data-signal="off"] .tv-snow-flick,
+      .nav-live-tv[data-signal="on"] .tv-lcd-signal {
+        animation: none;
+      }
+      .nav-live-tv[data-signal="on"] .tv-lcd-signal { fill: var(--blue); }
+    }
     .topbar .nav-back:active,
     .topbar .nav-menu-btn:active,
     .topbar .nav-menu-btn[aria-expanded="true"],
@@ -4889,11 +4938,35 @@
 <body>
   <header class="topbar">
     <div class="side l" role="group" aria-label="現場媒體">
-      <button type="button" class="nav-media nav-live-tv" id="navLiveTv" aria-label="現場直播" title="現場直播">
+      <button type="button" class="nav-media nav-live-tv" id="navLiveTv" data-signal="off" aria-pressed="false" aria-label="現場直播，無訊號" title="現場直播（無訊號）· 點按切換">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <defs>
+            <clipPath id="navTvLcdClip">
+              <rect x="6.4" y="9.7" width="11.2" height="5.8" rx=".9"/>
+            </clipPath>
+            <pattern id="navTvSnowPatA" width="2" height="2" patternUnits="userSpaceOnUse">
+              <rect width="1" height="1" fill="#d0d5dc"/>
+              <rect x="1" y="0" width="1" height="1" fill="#8a929e"/>
+              <rect x="0" y="1" width="1" height="1" fill="#9aa3b0"/>
+              <rect x="1" y="1" width="1" height="1" fill="#b4bac4"/>
+            </pattern>
+            <pattern id="navTvSnowPatB" width="2.4" height="2.4" patternUnits="userSpaceOnUse">
+              <rect width="1.2" height="1.2" fill="#c2c8d0"/>
+              <rect x="1.2" y="0" width="1.2" height="1.2" fill="#7e8794"/>
+              <rect x="0" y="1.2" width="1.2" height="1.2" fill="#a7aeb8"/>
+              <rect x="1.2" y="1.2" width="1.2" height="1.2" fill="#949ca8"/>
+            </pattern>
+          </defs>
           <path d="M8.4 3.8 L12 7.1 L15.6 3.8" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="3.6" y="7.2" width="16.8" height="12" rx="2" stroke="currentColor" stroke-width="1.25"/>
-          <rect x="6.4" y="9.7" width="11.2" height="5.8" rx=".9" fill="currentColor" opacity=".7"/>
+          <g clip-path="url(#navTvLcdClip)">
+            <rect class="tv-lcd-base" x="6.4" y="9.7" width="11.2" height="5.8" fill="#8e96a2"/>
+            <g class="tv-snow-layer tv-snow-flick">
+              <rect class="tv-snow-pat-a" x="4.2" y="8" width="16" height="10" fill="url(#navTvSnowPatA)"/>
+              <rect class="tv-snow-pat-b" x="4.2" y="8" width="16" height="10" fill="url(#navTvSnowPatB)" opacity=".55"/>
+            </g>
+            <rect class="tv-lcd-signal" x="6.4" y="9.7" width="11.2" height="5.8" fill="var(--red)"/>
+          </g>
           <circle cx="8.2" cy="17.65" r="0.55" fill="currentColor"/>
           <circle cx="10.2" cy="17.65" r="0.55" fill="currentColor"/>
         </svg>
@@ -10283,13 +10356,20 @@
           if (window.history.length > 1) window.history.back();
         });
       }
-      /* 現場直播／收音機：入口預留，日後接直播與音訊源 */
+      /* 現場直播／收音機：入口預留；電視圖標暫以點按切換有／無訊號示意 */
       const liveTv = document.getElementById("navLiveTv");
       const radio = document.getElementById("navRadio");
       if (liveTv) {
         liveTv.addEventListener("click", function (ev) {
           ev.preventDefault();
           setOpen(false);
+          const on = liveTv.getAttribute("data-signal") === "on";
+          const next = on ? "off" : "on";
+          liveTv.setAttribute("data-signal", next);
+          liveTv.setAttribute("aria-pressed", next === "on" ? "true" : "false");
+          const label = next === "on" ? "現場直播，有訊號" : "現場直播，無訊號";
+          liveTv.setAttribute("aria-label", label);
+          liveTv.title = (next === "on" ? "現場直播（有訊號）" : "現場直播（無訊號）") + "· 點按切換";
         });
       }
       if (radio) {
