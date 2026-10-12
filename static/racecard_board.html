@@ -169,8 +169,8 @@
       animation: radio-led-breathe 1.35s ease-in-out infinite;
     }
     @keyframes radio-led-breathe {
-      0%, 100% { opacity: .45; transform: scale(.82); }
-      50% { opacity: 1; transform: scale(1.12); }
+      0%, 100% { opacity: .4; transform: scale(.92); }
+      50% { opacity: 1; transform: scale(1.06); }
     }
     @media (prefers-reduced-motion: reduce) {
       .nav-live-tv[data-signal="off"] .tv-snow-pat-a,
@@ -4991,13 +4991,12 @@
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
           <path d="M5.3 8.2 L16.4 4.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
           <rect x="3.6" y="8.1" width="16.8" height="11.2" rx="2" stroke="currentColor" stroke-width="1.25"/>
-          <circle cx="9" cy="13.6" r="2.55" stroke="currentColor" stroke-width="1.15"/>
           <g class="radio-sig-off">
-            <circle cx="9" cy="13.6" r="1.2" stroke="#b0b7c2" stroke-width="1.05" fill="none"/>
-            <path d="M8.15 12.75 L9.85 14.45" stroke="#b0b7c2" stroke-width="1.1" stroke-linecap="round"/>
+            <circle cx="9" cy="13.6" r="2.55" stroke="#b0b7c2" stroke-width="1.25" fill="none"/>
+            <path d="M7.15 11.75 L10.85 15.45" stroke="#b0b7c2" stroke-width="1.25" stroke-linecap="round"/>
           </g>
           <g class="radio-sig-on">
-            <circle class="radio-led" cx="9" cy="13.6" r="1.05" fill="var(--green)"/>
+            <circle class="radio-led" cx="9" cy="13.6" r="2.55" fill="var(--green)" fill-opacity=".28" stroke="var(--green)" stroke-width="1.35"/>
           </g>
           <path d="M14.3 11.3 H18.1" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
           <path d="M14.3 13.6 H18.1" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
