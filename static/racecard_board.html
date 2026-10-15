@@ -2218,20 +2218,18 @@
     .hrow.scratched .rs-chip { opacity: .55; }
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
     .hrow.head .cell.head-split {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-rows: auto auto;
+      display: flex;
+      flex-direction: row;
       align-items: center;
-      align-content: center;
-      justify-items: center;
-      column-gap: 1px;
-      row-gap: 0;
+      justify-content: center;
+      gap: 1px;
     }
-    .hrow.head .cell.head-split .odds-sort { grid-column: 1; grid-row: 1; }
-    .hrow.head .cell.head-split .head-static { grid-column: 1; grid-row: 2; }
+    .hrow.head .cell.head-split .odds-sort {
+      flex: 0 1 auto;
+      min-width: 0;
+    }
     .hrow.head .cell.head-split .sort-hit {
-      grid-column: 2; grid-row: 1 / span 2;
-      align-self: center;
+      flex: 0 0 auto;
     }
     /* 獨贏／位置左、檔位豎排右，同一格 */
     .hrow.head .cell.pin-odds {
@@ -9568,7 +9566,7 @@
       const lockHead =
         '<div class="lock-cluster">' +
           '<div class="cell pin-id head-split' + headOn("no") + '">' +
-            headBtn("no", "馬號", false) + headStatic("馬名") + sortHit("no") +
+            headBtn("no", "馬名｜馬號", false) + sortHit("no") +
           "</div>" +
           '<div class="cell pin-odds' + headOn("draw") + '">' +
             '<div class="odds-labs">' + headStatic("獨贏") + headStatic("位置") + "</div>" +

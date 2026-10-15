@@ -388,6 +388,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("margin-top: -1px", r.text)
         self.assertIn(".hrow:not(.head) {\n      height: 49px;\n    }", r.text)
         self.assertIn("馬號", r.text)
+        self.assertIn("馬名｜馬號", r.text)
         self.assertIn("檔位", r.text)
         self.assertIn("draw-lab", r.text)
         self.assertIn("draw-no", r.text)
