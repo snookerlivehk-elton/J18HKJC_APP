@@ -6659,7 +6659,10 @@
       const scope = tipRecordScope === "season" ? "season" : "day";
       body.innerHTML =
         '<section class="tr-sec tr-day">' +
-          '<div class="tr-sec-title">今日心水</div>' +
+          '<div class="tr-sec-head tr-day-head">' +
+            '<div class="tr-sec-title">今日心水</div>' +
+            '<div class="tr-day-prize-lab">個人心水·預計獎金</div>' +
+          "</div>" +
           renderTipRecordDayHtml() +
         "</section>" +
         '<section class="tr-sec tr-stats">' +
