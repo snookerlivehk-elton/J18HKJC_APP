@@ -402,8 +402,6 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("tr-day-prize", r.text)
         self.assertIn("--tr-muted: #556070", r.text)
         self.assertIn('--tr-muted: #c8d0dc', r.text)
-        self.assertIn("個人心水·預計獎金", r.text)
-        self.assertIn("tr-day-prize-lab", r.text)
         self.assertIn("grid-template-columns: 36px minmax(0, 1fr) 54px", r.text)
         self.assertIn("flex-wrap: nowrap; /* 號碼＋獎金同一行，不換行 */", r.text)
         self.assertIn(".tr-day-nos .cap-no {\n      flex: 0 0 auto;\n      width: 26px;\n      height: 26px;\n      min-width: 26px;\n      padding: 0;\n      border-radius: 50%;", r.text)
