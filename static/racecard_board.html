@@ -2791,7 +2791,10 @@
       min-height: 0;
       max-height: none;
       overflow: auto;
+      overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -6327,28 +6330,44 @@
         body.style.maxHeight = "";
         body.style.overflow = "";
         body.style.flex = "";
+        body.style.minHeight = "";
       }
     }
-    /* 內容 ≥ 可視區：貼螢幕底；內容短：按數據高度，不撐空白 */
+    /* 內容 ≥ 可視區：貼螢幕底並內滾；內容短：按數據高度。
+       量高時必須先解除 max-height，否則深色／WebKit 下 scrollHeight 會被夾成可視高，誤走短內容分支導致無法滑動。 */
     function syncTipRecordSheetHeight() {
       const overlay = document.getElementById("tipRecordOverlay");
       const sheet = document.getElementById("tipRecordSheet");
       const body = document.getElementById("tipRecordBody");
       if (!overlay || !sheet || !body || overlay.hasAttribute("hidden")) return;
-      clearTipRecordSheetHeight();
       const avail = Math.max(0, Math.floor(overlay.clientHeight));
       if (!avail) return;
-      const natural = sheet.scrollHeight;
-      if (natural >= avail - 1) {
+
+      sheet.classList.remove("is-fill");
+      sheet.style.height = "auto";
+      sheet.style.maxHeight = "none";
+      body.style.flex = "0 0 auto";
+      body.style.minHeight = "0";
+      body.style.maxHeight = "none";
+      body.style.overflow = "visible";
+      void sheet.offsetHeight;
+
+      const head = sheet.querySelector(".cal-head");
+      const scs = getComputedStyle(sheet);
+      const padY = (parseFloat(scs.paddingTop) || 0) + (parseFloat(scs.paddingBottom) || 0);
+      const headH = head ? head.offsetHeight : 0;
+      const headMb = head ? (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0;
+      const natural = Math.max(
+        sheet.scrollHeight,
+        Math.ceil(padY + headH + headMb + body.scrollHeight)
+      );
+
+      if (natural >= avail) {
         sheet.classList.add("is-fill");
         sheet.style.height = avail + "px";
         sheet.style.maxHeight = avail + "px";
-        const head = sheet.querySelector(".cal-head");
-        const scs = getComputedStyle(sheet);
-        const padY = (parseFloat(scs.paddingTop) || 0) + (parseFloat(scs.paddingBottom) || 0);
-        const headH = head ? head.offsetHeight : 0;
-        const headMb = head ? (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0;
         body.style.flex = "1 1 auto";
+        body.style.minHeight = "0";
         body.style.maxHeight = Math.max(80, Math.floor(avail - padY - headH - headMb)) + "px";
         body.style.overflow = "auto";
       } else {

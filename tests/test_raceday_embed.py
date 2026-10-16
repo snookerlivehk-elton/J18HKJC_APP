@@ -396,6 +396,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("syncTipRecordLayout", r.text)
         self.assertIn("clearTipRecordSheetHeight", r.text)
         self.assertIn("tip-record-sheet.is-fill", r.text)
+        self.assertIn('sheet.style.maxHeight = "none"', r.text)
+        self.assertIn("touch-action: pan-y", r.text)
         self.assertIn("tipRacePrizeTotal", r.text)
         self.assertIn("tr-day-prize", r.text)
         self.assertIn("grid-template-columns: 36px minmax(0, 1fr) 54px", r.text)
