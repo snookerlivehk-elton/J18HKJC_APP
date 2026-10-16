@@ -2781,22 +2781,47 @@
       -webkit-overflow-scrolling: touch;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 8px; /* 段落分區用邊框區隔，段間空隙收緊，避免全篇變高 */
       box-sizing: border-box;
     }
+    /* 三段分區：左色條＋淺底邊框；內文間距同步收緊，淨高度不增加 */
+    .tr-sec {
+      margin: 0;
+      padding: 7px 8px 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f7f9fc;
+      box-shadow: inset 3px 0 0 var(--tr-sec-accent, var(--nav));
+      box-sizing: border-box;
+    }
+    .tr-sec.tr-day { --tr-sec-accent: var(--nav); background: #f5f8fc; }
+    .tr-sec.tr-stats { --tr-sec-accent: #2f8f7a; background: #f4faf8; }
+    .tr-sec.tr-board { --tr-sec-accent: #b06a14; background: #fbf7f0; }
     .tr-sec-title {
-      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
       font-weight: 800;
       letter-spacing: .04em;
       color: var(--text);
-      margin: 0 0 8px;
+      margin: 0 0 5px;
+      line-height: 1.25;
+    }
+    .tr-sec-title::before {
+      content: "";
+      flex: 0 0 auto;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--tr-sec-accent, var(--nav));
     }
     .tr-sec-head {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px 8px;
-      margin-bottom: 8px;
+      gap: 4px 6px;
+      margin-bottom: 5px;
     }
     .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
     .tr-scope {
@@ -2805,12 +2830,12 @@
       gap: 0;
       padding: 2px;
       border-radius: 999px;
-      background: #eef2f6;
+      background: rgba(255, 255, 255, .72);
       border: 1px solid var(--line);
     }
     .tr-scope-btn {
       margin: 0;
-      padding: 4px 10px;
+      padding: 3px 9px;
       border: 0;
       border-radius: 999px;
       background: transparent;
@@ -2828,10 +2853,10 @@
     }
     .tr-help-btn {
       margin: 0;
-      padding: 3px 8px;
+      padding: 2px 7px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: #fff;
+      background: rgba(255, 255, 255, .8);
       color: var(--muted);
       font: inherit;
       font-size: 11px;
@@ -2845,13 +2870,14 @@
       color: var(--text);
     }
     .tr-help {
-      margin: 0 0 8px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: #f3f5f8;
+      margin: 0 0 5px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .65);
+      border: 1px solid rgba(45, 62, 80, .08);
       font-size: 11px;
       font-weight: 500;
-      line-height: 1.45;
+      line-height: 1.4;
       color: var(--muted);
     }
     .tr-help[hidden] { display: none !important; }
@@ -2859,16 +2885,17 @@
     .tr-day-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 4px;
     }
     .tr-day-row {
       display: grid;
       grid-template-columns: 42px minmax(0, 1fr);
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: #f3f5f8;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(45, 62, 80, .06);
     }
     .tr-day-lab {
       font-size: 12px;
@@ -2879,18 +2906,18 @@
     .tr-day-nos {
       display: flex;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 4px;
       align-items: center;
       min-width: 0;
     }
     .tr-day-nos .cap-no {
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       font-size: 12px;
     }
     .tr-day-nos .cap-no .cap-badge {
-      width: 13px;
-      height: 13px;
+      width: 12px;
+      height: 12px;
       font-size: 8px;
       padding: 1px 0 0 1px;
     }
@@ -2900,12 +2927,12 @@
       color: var(--muted);
     }
     .tr-prize-total {
-      margin: 0 0 8px;
-      padding: 8px 10px;
-      border-radius: 10px;
+      margin: 0 0 5px;
+      padding: 6px 8px;
+      border-radius: 8px;
       background: linear-gradient(180deg, #fff7e8 0%, #ffefd2 100%);
       border: 1px solid #f0d49a;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
       color: #8a5a12;
       letter-spacing: .02em;
@@ -2913,18 +2940,19 @@
     .tr-stat-list {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
     .tr-stat-row {
       display: grid;
       grid-template-columns: 52px minmax(0, 1fr) auto;
-      gap: 6px 8px;
+      gap: 4px 6px;
       align-items: center;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: #f3f5f8;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(45, 62, 80, .06);
       font-size: 12px;
-      line-height: 1.3;
+      line-height: 1.25;
     }
     .tr-stat-name {
       font-weight: 800;
@@ -2949,11 +2977,12 @@
     .tr-lb-list {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
     .tr-lb-row {
-      border-radius: 10px;
-      background: #f3f5f8;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(45, 62, 80, .06);
       overflow: hidden;
     }
     .tr-lb-sum {
@@ -2963,7 +2992,7 @@
       align-items: center;
       width: 100%;
       margin: 0;
-      padding: 8px 10px;
+      padding: 5px 8px;
       border: 0;
       background: transparent;
       color: inherit;
@@ -2974,13 +3003,13 @@
     }
     .tr-lb-sum:active { background: rgba(61, 90, 128, .08); }
     .tr-lb-rank {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 800;
       color: var(--nav);
     }
     .tr-lb-name {
       min-width: 0;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--text);
       overflow: hidden;
@@ -2994,10 +3023,10 @@
       white-space: nowrap;
     }
     .tr-lb-detail {
-      padding: 0 10px 8px;
+      padding: 0 8px 6px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
     .tr-lb-detail[hidden] { display: none !important; }
     .tr-lb-detail-row {
@@ -3007,7 +3036,7 @@
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
-      line-height: 1.35;
+      line-height: 1.3;
     }
     .tr-lb-detail-row b { color: var(--text); font-weight: 700; }
     .cap-no.is-4,
@@ -3019,21 +3048,28 @@
       border-color: #8a6bb8 !important;
       color: #fff !important;
     }
+    html[data-theme="dark"] .tr-sec.tr-day,
+    html[data-theme="dark"] .tr-sec.tr-stats,
+    html[data-theme="dark"] .tr-sec.tr-board {
+      background: #1a2028;
+      border-color: rgba(210, 222, 236, .18);
+    }
     html[data-theme="dark"] .tr-day-row,
     html[data-theme="dark"] .tr-stat-row,
     html[data-theme="dark"] .tr-lb-row,
     html[data-theme="dark"] .tr-help,
     html[data-theme="dark"] .tr-scope {
-      background: #1e242c;
+      background: #242b34;
+      border-color: rgba(210, 222, 236, .12);
+    }
+    html[data-theme="dark"] .tr-help-btn {
+      background: #2a313c;
+      border-color: rgba(210, 222, 236, .28);
     }
     html[data-theme="dark"] .tr-prize-total {
       background: linear-gradient(180deg, #3a2f1c 0%, #2e2618 100%);
       border-color: #6a5430;
       color: #e8cf7a;
-    }
-    html[data-theme="dark"] .tr-help-btn {
-      background: #2a313c;
-      border-color: rgba(210, 222, 236, .28);
     }
     .synth-review-sheet-body {
       min-height: 300px;
@@ -6351,11 +6387,11 @@
       if (!body) return;
       const scope = tipRecordScope === "season" ? "season" : "day";
       body.innerHTML =
-        '<section class="tr-day">' +
+        '<section class="tr-sec tr-day">' +
           '<div class="tr-sec-title">今日心水</div>' +
           renderTipRecordDayHtml() +
         "</section>" +
-        '<section class="tr-stats">' +
+        '<section class="tr-sec tr-stats">' +
           '<div class="tr-sec-head">' +
             '<div class="tr-sec-title">戰績統計</div>' +
             '<button type="button" class="tr-help-btn" data-tr-act="help" aria-expanded="' +
@@ -6372,8 +6408,8 @@
           "</div>" +
           '<div id="tipRecordStatsPanel">' + renderTipRecordStatsHtml(scope) + "</div>" +
         "</section>" +
-        '<section class="tr-board">' +
-          '<div class="tr-sec-title">J18 心水名家榜 · 獎金 Top 10</div>' +
+        '<section class="tr-sec tr-board">' +
+          '<div class="tr-sec-title">心水名家榜 · 獎金 Top 10</div>' +
           renderTipRecordLeaderboardHtml() +
         "</section>";
     }
