@@ -2824,16 +2824,45 @@
       margin-bottom: 5px;
     }
     .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
+    /* 本日／本賽季：對齊筆記膠囊彈力滑塊 */
     .tr-scope {
-      display: inline-flex;
-      align-items: center;
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
       gap: 0;
+      min-width: 132px;
       padding: 2px;
       border-radius: 999px;
       background: rgba(255, 255, 255, .72);
       border: 1px solid var(--line);
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tr-scope-slider {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      left: 2px;
+      width: calc(50% - 2px);
+      border-radius: 999px;
+      background: var(--nav);
+      box-shadow: 0 1px 3px rgba(45, 62, 80, .22);
+      transform: translateX(0);
+      transition: transform .32s cubic-bezier(.22, 1.35, .36, 1);
+      will-change: transform;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .tr-scope[data-scope="season"] .tr-scope-slider {
+      transform: translateX(100%);
     }
     .tr-scope-btn {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       margin: 0;
       padding: 3px 9px;
       border: 0;
@@ -2846,10 +2875,12 @@
       line-height: 1.2;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      transition: color .22s ease;
     }
-    .tr-scope-btn.is-on {
-      background: var(--nav);
-      color: #fff;
+    .tr-scope-btn.is-on { color: #fff; }
+    @media (prefers-reduced-motion: reduce) {
+      .tr-scope-slider { transition: none; }
+      .tr-scope-btn { transition: none; }
     }
     .tr-help-btn {
       margin: 0;
@@ -2910,10 +2941,40 @@
       align-items: center;
       min-width: 0;
     }
+    /* 與綜合指數下展號圈統一：圓形＋描邊；未中淺色可讀 */
     .tr-day-nos .cap-no {
+      flex: 0 0 auto;
       width: 26px;
       height: 26px;
+      min-width: 26px;
+      padding: 0;
+      border-radius: 50%;
+      background: #fff !important;
+      color: #1e2a38 !important;
+      border: 1.5px solid #e88b2a !important;
       font-size: 12px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+    .tr-day-nos .cap-no.is-w {
+      background: #cc453f !important;
+      border-color: #cc453f !important;
+      color: #fff !important;
+    }
+    .tr-day-nos .cap-no.is-q {
+      background: #2f70ca !important;
+      border-color: #2f70ca !important;
+      color: #fff !important;
+    }
+    .tr-day-nos .cap-no.is-p {
+      background: #3f8f4a !important;
+      border-color: #3f8f4a !important;
+      color: #fff !important;
+    }
+    .tr-day-nos .cap-no.is-4 {
+      background: #8a6bb8 !important;
+      border-color: #8a6bb8 !important;
+      color: #fff !important;
     }
     .tr-day-nos .cap-no .cap-badge {
       width: 12px;
@@ -2942,9 +3003,10 @@
       flex-direction: column;
       gap: 4px;
     }
+    /* 名稱｜勝率｜場次｜獎金 同一行，固定欄寬對齊 */
     .tr-stat-row {
       display: grid;
-      grid-template-columns: 52px minmax(0, 1fr) auto;
+      grid-template-columns: 44px 48px 62px minmax(56px, 1fr);
       gap: 4px 6px;
       align-items: center;
       padding: 5px 8px;
@@ -2957,22 +3019,29 @@
     .tr-stat-name {
       font-weight: 800;
       color: var(--text);
-    }
-    .tr-stat-meta {
-      min-width: 0;
-      font-weight: 600;
-      color: var(--muted);
+      white-space: nowrap;
     }
     .tr-stat-rate {
       font-weight: 800;
       color: var(--nav);
+      text-align: right;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .tr-stat-meta {
+      font-weight: 600;
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
     .tr-stat-prize {
-      grid-column: 2 / -1;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
       color: #b06a14;
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
     .tr-lb-list {
       display: flex;
@@ -3029,16 +3098,41 @@
       gap: 3px;
     }
     .tr-lb-detail[hidden] { display: none !important; }
+    /* 與戰績統計同欄：勝率｜場次｜細項獎金（色與總額略區分） */
     .tr-lb-detail-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: 44px 48px 62px minmax(56px, 1fr);
+      gap: 4px 6px;
+      align-items: center;
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
       line-height: 1.3;
     }
-    .tr-lb-detail-row b { color: var(--text); font-weight: 700; }
+    .tr-lb-d-name {
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .tr-lb-d-rate {
+      font-weight: 800;
+      color: var(--nav);
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .tr-lb-d-meta {
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .tr-lb-d-prize {
+      font-weight: 700;
+      color: #4a6fa5;
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .cap-no.is-4,
     .capsule[data-capsule="index"] .cap-no.is-4,
     .capsule[data-capsule="payout"] .cap-no.is-4,
@@ -3062,6 +3156,12 @@
       background: #242b34;
       border-color: rgba(210, 222, 236, .12);
     }
+    html[data-theme="dark"] .tr-day-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
+      background: #2a313c !important;
+      color: #e8eef6 !important;
+      border-color: #e88b2a !important;
+    }
+    html[data-theme="dark"] .tr-lb-d-prize { color: #7eb0e0; }
     html[data-theme="dark"] .tr-help-btn {
       background: #2a313c;
       border-color: rgba(210, 222, 236, .28);
@@ -6144,18 +6244,27 @@
       { key: "qpl", name: "孖寶", range: "全部號碼", help: "心水全部號碼同時包含冠亞、冠季或亞季任一對" },
       { key: "quartet", name: "四連環", range: "全部號碼", help: "心水全部號碼同時包含前四名" }
     ];
+    /* stats[key] = [勝場, 參與場, 細項獎金] */
     const TIP_LEADERBOARD_DEMO = [
-      { id: "u1", name: "谷草快手", prize: 18640, stats: { win: [18, 42], qin: [12, 40], top3: [16, 40], fourth: [9, 38], tierce: [7, 36], qpl: [14, 40], quartet: [4, 32] } },
-      { id: "u2", name: "沙田夜鷹", prize: 15220, stats: { win: [15, 48], qin: [11, 46], top3: [14, 46], fourth: [8, 44], tierce: [6, 40], qpl: [12, 46], quartet: [3, 30] } },
-      { id: "u3", name: "欄位獵人", prize: 12880, stats: { win: [14, 50], qin: [10, 48], top3: [13, 48], fourth: [7, 45], tierce: [5, 38], qpl: [11, 48], quartet: [3, 28] } },
-      { id: "u4", name: "初段節奏", prize: 10950, stats: { win: [12, 44], qin: [9, 42], top3: [11, 42], fourth: [6, 40], tierce: [4, 34], qpl: [10, 42], quartet: [2, 26] } },
-      { id: "u5", name: "直路勁抽", prize: 9740, stats: { win: [11, 46], qin: [8, 44], top3: [10, 44], fourth: [6, 42], tierce: [4, 36], qpl: [9, 44], quartet: [2, 24] } },
-      { id: "u6", name: "班次升級", prize: 8620, stats: { win: [10, 40], qin: [7, 38], top3: [9, 38], fourth: [5, 36], tierce: [3, 30], qpl: [8, 38], quartet: [2, 22] } },
-      { id: "u7", name: "泥地專家", prize: 7910, stats: { win: [9, 42], qin: [7, 40], top3: [8, 40], fourth: [5, 38], tierce: [3, 32], qpl: [7, 40], quartet: [1, 20] } },
-      { id: "u8", name: "外檔奇兵", prize: 6840, stats: { win: [8, 38], qin: [6, 36], top3: [7, 36], fourth: [4, 34], tierce: [2, 28], qpl: [6, 36], quartet: [1, 18] } },
-      { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36], qin: [5, 34], top3: [6, 34], fourth: [4, 32], tierce: [2, 26], qpl: [5, 34], quartet: [1, 16] } },
-      { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34], qin: [5, 32], top3: [6, 32], fourth: [3, 30], tierce: [2, 24], qpl: [5, 32], quartet: [1, 14] } }
+      { id: "u1", name: "谷草快手", prize: 18640, stats: { win: [18, 42, 5200], qin: [12, 40, 3800], top3: [16, 40, 3200], fourth: [9, 38, 1400], tierce: [7, 36, 2100], qpl: [14, 40, 2200], quartet: [4, 32, 740] } },
+      { id: "u2", name: "沙田夜鷹", prize: 15220, stats: { win: [15, 48, 4300], qin: [11, 46, 3100], top3: [14, 46, 2700], fourth: [8, 44, 1200], tierce: [6, 40, 1700], qpl: [12, 46, 1800], quartet: [3, 30, 420] } },
+      { id: "u3", name: "欄位獵人", prize: 12880, stats: { win: [14, 50, 3600], qin: [10, 48, 2600], top3: [13, 48, 2300], fourth: [7, 45, 980], tierce: [5, 38, 1400], qpl: [11, 48, 1600], quartet: [3, 28, 400] } },
+      { id: "u4", name: "初段節奏", prize: 10950, stats: { win: [12, 44, 3100], qin: [9, 42, 2200], top3: [11, 42, 1900], fourth: [6, 40, 820], tierce: [4, 34, 1200], qpl: [10, 42, 1400], quartet: [2, 26, 330] } },
+      { id: "u5", name: "直路勁抽", prize: 9740, stats: { win: [11, 46, 2800], qin: [8, 44, 1900], top3: [10, 44, 1700], fourth: [6, 42, 760], tierce: [4, 36, 1100], qpl: [9, 44, 1200], quartet: [2, 24, 280] } },
+      { id: "u6", name: "班次升級", prize: 8620, stats: { win: [10, 40, 2500], qin: [7, 38, 1700], top3: [9, 38, 1500], fourth: [5, 36, 680], tierce: [3, 30, 900], qpl: [8, 38, 1100], quartet: [2, 22, 240] } },
+      { id: "u7", name: "泥地專家", prize: 7910, stats: { win: [9, 42, 2300], qin: [7, 40, 1600], top3: [8, 40, 1400], fourth: [5, 38, 640], tierce: [3, 32, 820], qpl: [7, 40, 980], quartet: [1, 20, 170] } },
+      { id: "u8", name: "外檔奇兵", prize: 6840, stats: { win: [8, 38, 2000], qin: [6, 36, 1400], top3: [7, 36, 1200], fourth: [4, 34, 520], tierce: [2, 28, 700], qpl: [6, 36, 860], quartet: [1, 18, 160] } },
+      { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36, 1800], qin: [5, 34, 1200], top3: [6, 34, 1050], fourth: [4, 32, 480], tierce: [2, 26, 620], qpl: [5, 34, 740], quartet: [1, 16, 130] } },
+      { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34, 1600], qin: [5, 32, 1100], top3: [6, 32, 980], fourth: [3, 30, 400], tierce: [2, 24, 560], qpl: [5, 32, 660], quartet: [1, 14, 110] } }
     ];
+    function tipStatTriple(pair) {
+      const wins = Number(pair && pair[0]) || 0;
+      const plays = Number(pair && pair[1]) || 0;
+      const prize = pair && pair[2] != null
+        ? Math.round(Number(pair[2]) || 0)
+        : Math.round(wins * 180 + plays * 4);
+      return { wins: wins, plays: plays, prize: prize };
+    }
     function tipRecordOverlayAnchorTop() {
       /* 頂邊對齊公告下方；公告滾出視口時至少不遮頂欄 */
       const topbar = document.querySelector(".topbar");
@@ -6348,9 +6457,9 @@
         const s = agg[d.key];
         return '<div class="tr-stat-row">' +
           '<div class="tr-stat-name">' + esc(d.name) + "</div>" +
-          '<div class="tr-stat-meta">' + esc(s.wins + "/" + s.plays + " 場") + "</div>" +
           '<div class="tr-stat-rate">' + esc(tipFmtRate(s.wins, s.plays)) + "</div>" +
-          '<div class="tr-stat-prize">累積 ' + esc(tipFmtPrize(s.prize)) + "</div>" +
+          '<div class="tr-stat-meta">' + esc(s.wins + "/" + s.plays) + "</div>" +
+          '<div class="tr-stat-prize">' + esc(tipFmtPrize(s.prize)) + "</div>" +
         "</div>";
       }).join("");
       return '<div class="tr-prize-total">估算累積獎金 ' + esc(tipFmtPrize(totalPrize)) +
@@ -6361,11 +6470,13 @@
       return '<div class="tr-lb-list">' + TIP_LEADERBOARD_DEMO.map(function (u, idx) {
         const open = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(u.id);
         const detail = TIP_STAT_DEFS.map(function (d) {
-          const pair = (u.stats && u.stats[d.key]) || [0, 0];
-          const wins = pair[0] || 0;
-          const plays = pair[1] || 0;
-          return '<div class="tr-lb-detail-row"><span>' + esc(d.name) +
-            "</span><b>" + esc(tipFmtRate(wins, plays)) + " · " + wins + "/" + plays + " 場</b></div>";
+          const t = tipStatTriple((u.stats && u.stats[d.key]) || [0, 0, 0]);
+          return '<div class="tr-lb-detail-row">' +
+            '<span class="tr-lb-d-name">' + esc(d.name) + "</span>" +
+            '<span class="tr-lb-d-rate">' + esc(tipFmtRate(t.wins, t.plays)) + "</span>" +
+            '<span class="tr-lb-d-meta">' + esc(t.wins + "/" + t.plays) + "</span>" +
+            '<span class="tr-lb-d-prize">' + esc(tipFmtPrize(t.prize)) + "</span>" +
+          "</div>";
         }).join("");
         return '<div class="tr-lb-row' + (open ? " is-open" : "") + '" data-tr-user="' + esc(u.id) + '">' +
           '<button type="button" class="tr-lb-sum" data-tr-user="' + esc(u.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' +
@@ -6396,7 +6507,8 @@
             '<div class="tr-sec-title">戰績統計</div>' +
             '<button type="button" class="tr-help-btn" data-tr-act="help" aria-expanded="' +
               (tipRecordHelpOpen ? "true" : "false") + '">規則</button>' +
-            '<div class="tr-scope" role="tablist" aria-label="統計時間範圍">' +
+            '<div class="tr-scope" data-scope="' + scope + '" role="tablist" aria-label="統計時間範圍">' +
+              '<div class="tr-scope-slider" aria-hidden="true"></div>' +
               '<button type="button" class="tr-scope-btn' + (scope === "day" ? " is-on" : "") +
                 '" data-tr-scope="day" role="tab" aria-selected="' + (scope === "day" ? "true" : "false") + '">本日</button>' +
               '<button type="button" class="tr-scope-btn' + (scope === "season" ? " is-on" : "") +
@@ -6457,17 +6569,29 @@
           if (helpBtn && body.contains(helpBtn)) {
             ev.preventDefault();
             tipRecordHelpOpen = !tipRecordHelpOpen;
-            fillTipRecordSheet();
+            const help = document.getElementById("tipRecordHelp");
+            if (help) {
+              if (tipRecordHelpOpen) help.removeAttribute("hidden");
+              else help.setAttribute("hidden", "");
+            }
+            helpBtn.setAttribute("aria-expanded", tipRecordHelpOpen ? "true" : "false");
             return;
           }
           const scopeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-scope]") : null;
           if (scopeBtn && body.contains(scopeBtn)) {
             ev.preventDefault();
             const next = scopeBtn.getAttribute("data-tr-scope") === "season" ? "season" : "day";
-            if (tipRecordScope !== next) {
-              tipRecordScope = next;
-              fillTipRecordSheet();
-            }
+            if (tipRecordScope === next) return;
+            tipRecordScope = next;
+            const scopeEl = body.querySelector(".tr-scope");
+            if (scopeEl) scopeEl.setAttribute("data-scope", next);
+            body.querySelectorAll("[data-tr-scope]").forEach(function (btn) {
+              const on = btn.getAttribute("data-tr-scope") === next;
+              btn.classList.toggle("is-on", on);
+              btn.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            const panel = document.getElementById("tipRecordStatsPanel");
+            if (panel) panel.innerHTML = renderTipRecordStatsHtml(next);
             return;
           }
           const userBtn = ev.target && ev.target.closest ? ev.target.closest("button.tr-lb-sum[data-tr-user]") : null;
@@ -6475,7 +6599,14 @@
             ev.preventDefault();
             const id = userBtn.getAttribute("data-tr-user");
             tipRecordLbOpenId = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(id) ? null : id;
-            fillTipRecordSheet();
+            const board = body.querySelector(".tr-board");
+            if (board) {
+              const listHost = board.querySelector(".tr-lb-list");
+              if (listHost) listHost.outerHTML = renderTipRecordLeaderboardHtml();
+              else board.insertAdjacentHTML("beforeend", renderTipRecordLeaderboardHtml());
+            } else {
+              fillTipRecordSheet();
+            }
           }
         });
       }
