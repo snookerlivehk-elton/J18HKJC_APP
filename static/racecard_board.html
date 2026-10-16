@@ -1886,6 +1886,14 @@
     .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(61, 90, 128, .1);
     }
+    /* 騎師／練馬師列：共用合作戰績彈窗 */
+    .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
+      background: rgba(61, 90, 128, .1);
+    }
     .horse-sheet-bar {
       position: relative;
       flex: 0 0 auto;
@@ -2676,13 +2684,76 @@
     .synth-review-cell .sr-line.sr-note {
       color: #e74c3c; /* 筆記：紅 */
     }
-    .synth-review-sheet .cal-head {
+    .synth-review-sheet .cal-head,
+    .jt-collab-sheet .cal-head {
       margin-bottom: 10px;
     }
-    .synth-review-sheet .cal-title {
+    .synth-review-sheet .cal-title,
+    .jt-collab-sheet .cal-title {
       flex: 1 1 auto;
       min-width: 0;
       text-align: left;
+    }
+    .jt-collab-sheet-body {
+      min-height: 260px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .jt-collab-pair {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--text);
+      letter-spacing: .02em;
+    }
+    .jt-collab-summary {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .jt-collab-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .jt-collab-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: baseline;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f3f5f8;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .jt-collab-row .jt-main {
+      min-width: 0;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .jt-collab-row .jt-sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .jt-collab-row .jt-finish {
+      flex: 0 0 auto;
+      font-weight: 700;
+      color: var(--nav);
+      white-space: nowrap;
+    }
+    .jt-collab-empty {
+      padding: 28px 12px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
     }
     .synth-review-sheet-body {
       min-height: 300px;
@@ -4319,6 +4390,12 @@
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
     }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
+      background: rgba(120, 160, 210, .12);
+    }
+    html[data-theme="dark"] .jt-collab-row {
+      background: #1e242c;
+    }
     html[data-theme="dark"] .payout-detail-head {
       background: #b87840;
     }
@@ -5178,6 +5255,16 @@
         <button type="button" class="cal-close" id="synthReviewClose" aria-label="關閉">×</button>
       </div>
       <div class="synth-review-sheet-body" id="synthReviewBody" aria-label="綜合評述全文"></div>
+    </div>
+  </div>
+
+  <div class="cal-overlay" id="jtCollabOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet jt-collab-sheet" id="jtCollabSheet" role="dialog" aria-modal="true" aria-labelledby="jtCollabTitle">
+      <div class="cal-head">
+        <div class="cal-title" id="jtCollabTitle">騎練合作</div>
+        <button type="button" class="cal-close" id="jtCollabClose" aria-label="關閉">×</button>
+      </div>
+      <div class="jt-collab-sheet-body" id="jtCollabBody" aria-label="騎師與練馬師歷史合作戰績"></div>
     </div>
   </div>
 
@@ -6120,6 +6207,7 @@
       closePayoutDetail();
       closeColSortSheet();
       closeSpeedMapSheet();
+      closeJtCollabSheet();
       closeHorseSheet();
       synthNoteSide = "write";
       synthNoteExpandedId = null;
@@ -6225,6 +6313,155 @@
       });
     }
 
+    /* 騎師／練馬師：同一彈窗顯示該組合歷史合作戰績（演示數據） */
+    let jtCollabSheetNo = null;
+    function syncJtCollabOverlayTop() {
+      syncBoardOverlayTop("jtCollabOverlay");
+    }
+    function closeJtCollabSheet() {
+      const overlay = document.getElementById("jtCollabOverlay");
+      if (!overlay) return;
+      overlay.setAttribute("hidden", "");
+      overlay.setAttribute("aria-hidden", "true");
+      jtCollabSheetNo = null;
+    }
+    function splitPersonName(raw) {
+      const p = splitNameAllow(raw);
+      const name = (p && p.name) || String(raw == null ? "" : raw).trim();
+      return name && name !== "—" ? name : "";
+    }
+    function jtCollabDemoOf(r) {
+      const jockey = splitPersonName(r && r.jockey);
+      const trainer = splitPersonName(r && r.trainer);
+      const no = Number(r && r.no) || 0;
+      const raceNum = Number(currentRace) || 1;
+      const seed = Math.abs(no * 17 + raceNum * 11 + (jockey.length * 3) + (trainer.length * 5));
+      const runs = 6 + (seed % 10);
+      const wins = seed % 4;
+      const seconds = (seed >> 1) % 3;
+      const thirds = (seed >> 2) % 3;
+      const places = wins + seconds + thirds;
+      const winPct = runs ? ((wins / runs) * 100).toFixed(1) : "0.0";
+      const placePct = runs ? ((places / runs) * 100).toFixed(1) : "0.0";
+      const courses = ["沙田", "跑馬地", "沙田", "跑馬地"];
+      const dists = ["1200米", "1400米", "1650米", "1000米", "1800米"];
+      const hist = [];
+      for (let i = 0; i < Math.min(runs, 6); i++) {
+        const finRoll = (seed + i * 9) % 11;
+        const finish = finRoll === 0 ? 1 : finRoll === 1 ? 2 : finRoll === 2 ? 3 : (4 + (finRoll % 7));
+        const mo = ((9 - (i % 6)) + 11) % 12 + 1;
+        const day = 3 + ((seed + i * 5) % 24);
+        hist.push({
+          date: "2026-" + String(mo).padStart(2, "0") + "-" + String(day).padStart(2, "0"),
+          course: courses[(seed + i) % courses.length],
+          dist: dists[(seed + i * 2) % dists.length],
+          finish: finish
+        });
+      }
+      return {
+        jockey: jockey,
+        trainer: trainer,
+        summary: "近季合作：" + runs + " 仗 · " + wins + "冠 " + seconds + "亞 " + thirds + "季 · 勝率 " +
+          winPct + "% · 位置率 " + placePct + "%",
+        races: hist
+      };
+    }
+    function fillJtCollabSheet(no) {
+      const body = document.getElementById("jtCollabBody");
+      const title = document.getElementById("jtCollabTitle");
+      const runners = currentRunners();
+      const row = runners.find(function (r) { return r && String(r.no) === String(no); });
+      const data = jtCollabDemoOf(row);
+      const horse = row && row.name ? String(row.name) : "";
+      jtCollabSheetNo = no != null && no !== "" ? String(no) : null;
+      if (title) {
+        title.textContent = jtCollabSheetNo
+          ? ("騎練合作 · " + jtCollabSheetNo + (horse ? (" " + horse) : ""))
+          : "騎練合作";
+      }
+      if (!body) return;
+      if (!data.jockey && !data.trainer) {
+        body.innerHTML = '<div class="jt-collab-empty">暫無騎練資料</div>';
+        return;
+      }
+      const pair = (data.jockey || "—") + " × " + (data.trainer || "—");
+      const listHtml = data.races.length
+        ? '<div class="jt-collab-list">' + data.races.map(function (it) {
+            const finLab = it.finish != null ? ("第" + it.finish + "名") : "—";
+            return '<div class="jt-collab-row">' +
+              '<div class="jt-main">' + esc(it.date) +
+                '<span class="jt-sub">' + esc(it.course) + " · " + esc(it.dist) + "</span>" +
+              "</div>" +
+              '<div class="jt-finish">' + esc(finLab) + "</div>" +
+            "</div>";
+          }).join("") + "</div>"
+        : '<div class="jt-collab-empty">暫無歷史合作戰績</div>';
+      body.innerHTML =
+        '<div class="jt-collab-pair">' + esc(pair) + "</div>" +
+        '<div class="jt-collab-summary">' + esc(data.summary) + "</div>" +
+        listHtml;
+    }
+    function openJtCollabSheet(no) {
+      const overlay = document.getElementById("jtCollabOverlay");
+      if (!overlay) return;
+      closeRaceDateCalendar();
+      closePayoutDetail();
+      closeColSortSheet();
+      closeSpeedMapSheet();
+      closeSynthReviewSheet();
+      closeHorseSheet();
+      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      fillJtCollabSheet(no);
+      syncJtCollabOverlayTop();
+      overlay.removeAttribute("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () { syncJtCollabOverlayTop(); });
+    }
+    function bindJtCollabSheet() {
+      const overlay = document.getElementById("jtCollabOverlay");
+      const sheet = document.getElementById("jtCollabSheet");
+      const closeBtn = document.getElementById("jtCollabClose");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeJtCollabSheet();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+          if (ev.target === overlay) closeJtCollabSheet();
+        });
+      }
+      if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        const ov = document.getElementById("jtCollabOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeJtCollabSheet();
+      });
+      window.addEventListener("resize", function () {
+        const ov = document.getElementById("jtCollabOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncJtCollabOverlayTop();
+      });
+    }
+    function bindJtCollabOpens() {
+      document.querySelectorAll('#board .hrow:not(.head) .cell[data-open="jtCollab"]').forEach(function (cell) {
+        cell.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const no = cell.getAttribute("data-jt-no");
+          if (no != null && no !== "") openJtCollabSheet(no);
+        });
+        cell.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            const no = cell.getAttribute("data-jt-no");
+            if (no != null && no !== "") openJtCollabSheet(no);
+          }
+        });
+      });
+    }
+    bindJtCollabSheet();
+
     /* 速勢走位圖：點預計跑法列 → 賽期規格彈窗展示馬會 RaceMap */
     const SPEEDMAP_CMS = "https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_";
     const speedMapCache = Object.create(null);
@@ -6307,6 +6544,7 @@
       closePayoutDetail();
       closeColSortSheet();
       closeSynthReviewSheet();
+      closeJtCollabSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       const raceNo = Number(currentRace) || 1;
@@ -8397,6 +8635,7 @@
       waterCrossFocus = null;
       closeHorseSheet();
       closeSynthReviewSheet();
+      closeJtCollabSheet();
       renderPills();
       renderMeta();
       renderBoard();
@@ -9621,6 +9860,9 @@
           } else if (c.key === "runStyle") {
             openAttr = ' data-open="speedMap" role="button" tabindex="0" aria-label="查看第' +
               esc(currentRace) + '場全場速勢走位圖"';
+          } else if ((c.key === "jockey" || c.key === "trainer") && !r.scratched) {
+            openAttr = ' data-open="jtCollab" data-jt-no="' + esc(r.no) +
+              '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 騎練合作戰績"';
           } else if (c.key === "synthReview" && !r.scratched) {
             openAttr = ' data-open="synthReview" data-synth-review-no="' + esc(r.no) +
               '" role="button" tabindex="0" aria-label="查看 ' + esc(r.name) + ' 綜合評述與筆記"';
@@ -9673,6 +9915,7 @@
       bindWaterSheetOpens();
       bindSynthReviewOpens();
       bindSpeedMapOpens();
+      bindJtCollabOpens();
       bindHorseSheetOpens();
       bindHorseHeadScroll();
       bindRowFlags();
@@ -10025,7 +10268,7 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
@@ -10153,6 +10396,7 @@
       closeColSortSheet();
       closeSynthReviewSheet();
       closeSpeedMapSheet();
+      closeJtCollabSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10275,6 +10519,7 @@
       closePayoutDetail();
       closeSynthReviewSheet();
       closeSpeedMapSheet();
+      closeJtCollabSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10353,6 +10598,7 @@
       closeColSortSheet();
       closeSynthReviewSheet();
       closeSpeedMapSheet();
+      closeJtCollabSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -10650,6 +10896,11 @@
           const speedOv = document.getElementById("speedMapOverlay");
           if (speedOv && !speedOv.hasAttribute("hidden")) {
             closeSpeedMapSheet();
+            return;
+          }
+          const jtOv = document.getElementById("jtCollabOverlay");
+          if (jtOv && !jtOv.hasAttribute("hidden")) {
+            closeJtCollabSheet();
             return;
           }
           closeHorseSheet();
