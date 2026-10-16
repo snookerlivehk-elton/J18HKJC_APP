@@ -62,10 +62,12 @@
     .topbar {
       flex: 0 0 auto;
       display: flex; align-items: center; justify-content: space-between;
-      height: 44px; padding: 0 10px;
+      /* 須 ≥ 媒體按鈕 55px，否則頂／底邊會横切電視／收音機圖標 */
+      height: 56px; padding: 0 10px;
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
       color: #fff; z-index: 60;
       position: relative;
+      overflow: visible;
     }
     .topbar .side {
       min-width: 72px;
