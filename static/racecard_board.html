@@ -2933,7 +2933,7 @@
     }
     .tr-day-row {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-columns: 42px minmax(0, 1fr) minmax(52px, auto);
       gap: 6px;
       align-items: center;
       padding: 5px 8px;
@@ -2953,6 +2953,25 @@
       gap: 4px;
       align-items: center;
       min-width: 0;
+    }
+    /* 派彩結算後顯示該場心水估算獎金 */
+    .tr-day-prize {
+      justify-self: end;
+      min-width: 52px;
+      text-align: right;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    .tr-day-prize.is-hit {
+      color: #b06a14;
+    }
+    .tr-day-prize.is-pending {
+      min-height: 1em;
+      visibility: hidden;
     }
     /* 與綜合指數下展號圈統一：圓形＋描邊；未中淺色可讀 */
     .tr-day-nos .cap-no {
@@ -3174,6 +3193,7 @@
       color: #e8eef6 !important;
       border-color: #e88b2a !important;
     }
+    html[data-theme="dark"] .tr-day-prize.is-hit { color: #e8cf7a; }
     html[data-theme="dark"] .tr-lb-d-prize { color: #7eb0e0; }
     html[data-theme="dark"] .tr-help-btn {
       background: #2a313c;
@@ -6487,6 +6507,13 @@
       if (!plays) return "—";
       return ((wins / plays) * 100).toFixed(1) + "%";
     }
+    function tipRacePrizeTotal(race) {
+      const ev = tipEvalRace(race);
+      if (!ev.settled || !ev.picks.length) return null;
+      let sum = 0;
+      TIP_STAT_DEFS.forEach(function (d) { sum += ev.prizes[d.key] || 0; });
+      return sum;
+    }
     function renderTipRecordDayHtml() {
       const races = (MEETING && MEETING.races) || [];
       if (!races.length) return '<div class="tr-day-empty">暫無場次</div>';
@@ -6499,9 +6526,16 @@
               return renderCapNoHtml(no, kind, title);
             }).join("")
           : '<span class="tr-day-empty">未標記</span>';
+        const prizeTotal = tipRacePrizeTotal(race);
+        const prizeHtml = prizeTotal != null
+          ? ('<div class="tr-day-prize' + (prizeTotal > 0 ? " is-hit" : "") +
+              '" title="該場心水估算獎金（每注' + TIP_RECORD_STAKE + '元）">' +
+              esc(tipFmtPrize(prizeTotal)) + "</div>")
+          : '<div class="tr-day-prize is-pending" aria-hidden="true">$0</div>';
         return '<div class="tr-day-row">' +
           '<div class="tr-day-lab">第' + esc(race.num) + "場</div>" +
           '<div class="tr-day-nos">' + nos + "</div>" +
+          prizeHtml +
         "</div>";
       }).join("") + "</div>";
     }
