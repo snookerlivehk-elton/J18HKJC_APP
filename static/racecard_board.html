@@ -2219,10 +2219,30 @@
     .hrow.head .lock-cluster .cell { padding: 0 2px; }
     .hrow.head .cell.head-split {
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      padding-top: 1px;
+      padding-bottom: 1px;
+    }
+    .hrow.head .cell.head-split .head-race-day {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.1;
+      letter-spacing: .02em;
+      color: inherit;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .hrow.head .cell.head-split .head-split-main {
+      display: inline-flex;
       flex-direction: row;
       align-items: center;
       justify-content: center;
       gap: 1px;
+      min-width: 0;
     }
     .hrow.head .cell.head-split .odds-sort {
       flex: 0 1 auto;
@@ -8451,6 +8471,15 @@
     function headStatic(label) {
       return '<span class="head-static">' + esc(label) + "</span>";
     }
+    function meetingDayLabel() {
+      const meet = MEETING || {};
+      if (meet.d != null && meet.m != null && String(meet.d).trim() !== "" && String(meet.m).trim() !== "") {
+        return String(Number(meet.d)) + "/" + String(Number(meet.m));
+      }
+      const p = String(meet.date || "").split("-");
+      if (p.length === 3) return String(Number(p[2])) + "/" + String(Number(p[1]));
+      return "—";
+    }
 
     function applyColFitRule() {
       const root = document.documentElement;
@@ -9566,7 +9595,10 @@
       const lockHead =
         '<div class="lock-cluster">' +
           '<div class="cell pin-id head-split' + headOn("no") + '">' +
-            headBtn("no", "馬名｜馬號", false) + sortHit("no") +
+            '<span class="head-race-day">賽日：' + esc(meetingDayLabel()) + "</span>" +
+            '<span class="head-split-main">' +
+              headBtn("no", "馬名｜馬號", false) + sortHit("no") +
+            "</span>" +
           "</div>" +
           '<div class="cell pin-odds' + headOn("draw") + '">' +
             '<div class="odds-labs">' + headStatic("獨贏") + headStatic("位置") + "</div>" +
