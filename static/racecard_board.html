@@ -2757,6 +2757,274 @@
       font-weight: 600;
       color: var(--muted);
     }
+    /* 心水戰績彈窗 */
+    .tip-record-sheet .cal-head { margin-bottom: 10px; }
+    .tip-record-sheet .cal-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+    }
+    .tip-record-sheet-body {
+      min-height: 280px;
+      max-height: min(70vh, 560px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-sizing: border-box;
+    }
+    .tr-sec-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--text);
+      margin: 0 0 8px;
+    }
+    .tr-sec-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      margin-bottom: 8px;
+    }
+    .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
+    .tr-scope {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      padding: 2px;
+      border-radius: 999px;
+      background: #eef2f6;
+      border: 1px solid var(--line);
+    }
+    .tr-scope-btn {
+      margin: 0;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tr-scope-btn.is-on {
+      background: var(--nav);
+      color: #fff;
+    }
+    .tr-help-btn {
+      margin: 0;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tr-help-btn[aria-expanded="true"] {
+      background: #eef2f6;
+      color: var(--text);
+    }
+    .tr-help {
+      margin: 0 0 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f3f5f8;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .tr-help[hidden] { display: none !important; }
+    .tr-help b { color: var(--text); font-weight: 700; }
+    .tr-day-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tr-day-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f3f5f8;
+    }
+    .tr-day-lab {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--nav);
+      white-space: nowrap;
+    }
+    .tr-day-nos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+      min-width: 0;
+    }
+    .tr-day-nos .cap-no {
+      width: 28px;
+      height: 28px;
+      font-size: 12px;
+    }
+    .tr-day-nos .cap-no .cap-badge {
+      width: 13px;
+      height: 13px;
+      font-size: 8px;
+      padding: 1px 0 0 1px;
+    }
+    .tr-day-empty {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .tr-prize-total {
+      margin: 0 0 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fff7e8 0%, #ffefd2 100%);
+      border: 1px solid #f0d49a;
+      font-size: 13px;
+      font-weight: 800;
+      color: #8a5a12;
+      letter-spacing: .02em;
+    }
+    .tr-stat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tr-stat-row {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) auto;
+      gap: 6px 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f3f5f8;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .tr-stat-name {
+      font-weight: 800;
+      color: var(--text);
+    }
+    .tr-stat-meta {
+      min-width: 0;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .tr-stat-rate {
+      font-weight: 800;
+      color: var(--nav);
+      white-space: nowrap;
+    }
+    .tr-stat-prize {
+      grid-column: 2 / -1;
+      font-size: 11px;
+      font-weight: 700;
+      color: #b06a14;
+    }
+    .tr-lb-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tr-lb-row {
+      border-radius: 10px;
+      background: #f3f5f8;
+      overflow: hidden;
+    }
+    .tr-lb-sum {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      width: 100%;
+      margin: 0;
+      padding: 8px 10px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tr-lb-sum:active { background: rgba(61, 90, 128, .08); }
+    .tr-lb-rank {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--nav);
+    }
+    .tr-lb-name {
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tr-lb-prize {
+      font-size: 12px;
+      font-weight: 800;
+      color: #b06a14;
+      white-space: nowrap;
+    }
+    .tr-lb-detail {
+      padding: 0 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tr-lb-detail[hidden] { display: none !important; }
+    .tr-lb-detail-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .tr-lb-detail-row b { color: var(--text); font-weight: 700; }
+    .cap-no.is-4,
+    .capsule[data-capsule="index"] .cap-no.is-4,
+    .capsule[data-capsule="payout"] .cap-no.is-4,
+    .cap-drop-bar .cap-no.is-4,
+    .tip-record-sheet .cap-no.is-4 {
+      background: #8a6bb8 !important;
+      border-color: #8a6bb8 !important;
+      color: #fff !important;
+    }
+    html[data-theme="dark"] .tr-day-row,
+    html[data-theme="dark"] .tr-stat-row,
+    html[data-theme="dark"] .tr-lb-row,
+    html[data-theme="dark"] .tr-help,
+    html[data-theme="dark"] .tr-scope {
+      background: #1e242c;
+    }
+    html[data-theme="dark"] .tr-prize-total {
+      background: linear-gradient(180deg, #3a2f1c 0%, #2e2618 100%);
+      border-color: #6a5430;
+      color: #e8cf7a;
+    }
+    html[data-theme="dark"] .tr-help-btn {
+      background: #2a313c;
+      border-color: rgba(210, 222, 236, .28);
+    }
     .synth-review-sheet-body {
       min-height: 300px;
       box-sizing: border-box;
@@ -5160,7 +5428,7 @@
           </span>
           <span class="menu-date-hint">查看賽期和歷史數據</span>
         </button>
-        <button type="button" role="menuitem" data-nav="history">歷史排位</button>
+        <button type="button" role="menuitem" data-nav="tipRecord">心水戰績</button>
         <button type="button" role="menuitem" data-nav="colSort">馬匹數據排序</button>
         <button type="button" role="menuitem" data-nav="fav">我的收藏</button>
         <div class="sep" role="separator"></div>
@@ -5267,6 +5535,16 @@
         <button type="button" class="cal-close" id="jtCollabClose" aria-label="關閉">×</button>
       </div>
       <div class="jt-collab-sheet-body" id="jtCollabBody" aria-label="騎師與練馬師歷史合作戰績"></div>
+    </div>
+  </div>
+
+  <div class="cal-overlay" id="tipRecordOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet tip-record-sheet" id="tipRecordSheet" role="dialog" aria-modal="true" aria-labelledby="tipRecordTitle">
+      <div class="cal-head">
+        <div class="cal-title" id="tipRecordTitle">心水戰績</div>
+        <button type="button" class="cal-close" id="tipRecordClose" aria-label="關閉">×</button>
+      </div>
+      <div class="tip-record-sheet-body" id="tipRecordBody" aria-label="心水戰績詳情"></div>
     </div>
   </div>
 
@@ -5806,6 +6084,354 @@
       });
     }
 
+    /* 心水戰績：今日場次心水匯總＋統計／獎金／名家榜（演示） */
+    let tipRecordScope = "day"; /* day | season */
+    let tipRecordHelpOpen = false;
+    let tipRecordLbOpenId = null;
+    const TIP_RECORD_STAKE = 10;
+    const TIP_STAT_DEFS = [
+      { key: "win", name: "獨贏", range: "前2個號碼", help: "心水序號第1–2名中有冠軍即計中" },
+      { key: "qin", name: "連贏", range: "前3個號碼", help: "心水序號第1–3名同時包含冠、亞軍" },
+      { key: "top3", name: "前三", range: "前4個號碼", help: "心水序號第1–4名同時包含冠、亞、季軍" },
+      { key: "fourth", name: "第四名", range: "全部號碼", help: "心水全部號碼中含第四名" },
+      { key: "tierce", name: "單T", range: "全部號碼", help: "心水全部號碼同時包含冠、亞、季軍" },
+      { key: "qpl", name: "孖寶", range: "全部號碼", help: "心水全部號碼同時包含冠亞、冠季或亞季任一對" },
+      { key: "quartet", name: "四連環", range: "全部號碼", help: "心水全部號碼同時包含前四名" }
+    ];
+    const TIP_LEADERBOARD_DEMO = [
+      { id: "u1", name: "谷草快手", prize: 18640, stats: { win: [18, 42], qin: [12, 40], top3: [16, 40], fourth: [9, 38], tierce: [7, 36], qpl: [14, 40], quartet: [4, 32] } },
+      { id: "u2", name: "沙田夜鷹", prize: 15220, stats: { win: [15, 48], qin: [11, 46], top3: [14, 46], fourth: [8, 44], tierce: [6, 40], qpl: [12, 46], quartet: [3, 30] } },
+      { id: "u3", name: "欄位獵人", prize: 12880, stats: { win: [14, 50], qin: [10, 48], top3: [13, 48], fourth: [7, 45], tierce: [5, 38], qpl: [11, 48], quartet: [3, 28] } },
+      { id: "u4", name: "初段節奏", prize: 10950, stats: { win: [12, 44], qin: [9, 42], top3: [11, 42], fourth: [6, 40], tierce: [4, 34], qpl: [10, 42], quartet: [2, 26] } },
+      { id: "u5", name: "直路勁抽", prize: 9740, stats: { win: [11, 46], qin: [8, 44], top3: [10, 44], fourth: [6, 42], tierce: [4, 36], qpl: [9, 44], quartet: [2, 24] } },
+      { id: "u6", name: "班次升級", prize: 8620, stats: { win: [10, 40], qin: [7, 38], top3: [9, 38], fourth: [5, 36], tierce: [3, 30], qpl: [8, 38], quartet: [2, 22] } },
+      { id: "u7", name: "泥地專家", prize: 7910, stats: { win: [9, 42], qin: [7, 40], top3: [8, 40], fourth: [5, 38], tierce: [3, 32], qpl: [7, 40], quartet: [1, 20] } },
+      { id: "u8", name: "外檔奇兵", prize: 6840, stats: { win: [8, 38], qin: [6, 36], top3: [7, 36], fourth: [4, 34], tierce: [2, 28], qpl: [6, 36], quartet: [1, 18] } },
+      { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36], qin: [5, 34], top3: [6, 34], fourth: [4, 32], tierce: [2, 26], qpl: [5, 34], quartet: [1, 16] } },
+      { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34], qin: [5, 32], top3: [6, 32], fourth: [3, 30], tierce: [2, 24], qpl: [5, 32], quartet: [1, 14] } }
+    ];
+    function syncTipRecordOverlayTop() {
+      syncBoardOverlayTop("tipRecordOverlay");
+    }
+    function closeTipRecordSheet() {
+      const overlay = document.getElementById("tipRecordOverlay");
+      if (!overlay) return;
+      overlay.setAttribute("hidden", "");
+      overlay.setAttribute("aria-hidden", "true");
+      tipRecordHelpOpen = false;
+      tipRecordLbOpenId = null;
+    }
+    function ensureTipNoteDemoForMeeting() {
+      if (!MEETING || !Array.isArray(MEETING.races)) return;
+      let changed = false;
+      MEETING.races.forEach(function (race) {
+        if (!race || tipNoteList(race.num).length) return;
+        const runners = (race.runners || []).filter(function (r) { return r && !r.scratched && numOrNull(r.win) != null; });
+        runners.sort(function (a, b) {
+          const aw = numOrNull(a.win);
+          const bw = numOrNull(b.win);
+          if (aw !== bw) return aw - bw;
+          return Number(a.no) - Number(b.no);
+        });
+        const picks = runners.slice(0, Math.min(TIP_NOTE_MAX, runners.length)).map(function (r) { return String(r.no); });
+        if (!picks.length) return;
+        tipNotePicks[tipNoteRaceKey(race.num)] = picks;
+        changed = true;
+      });
+      if (changed) saveTipNotePicks();
+    }
+    function tipRaceSettled(race) {
+      if (!race) return false;
+      if (raceHasPayout(race) || race.paid === true) return true;
+      /* 演示：當前場次之前視為已派彩 */
+      return Number(race.num) < Number(currentRace);
+    }
+    function tipFinishKindByNo(race, no) {
+      if (!tipRaceSettled(race)) return "";
+      const finish = payoutFinishNosForRace(race);
+      const s = String(no);
+      if (finish[0] != null && String(finish[0]) === s) return "w";
+      if (finish[1] != null && String(finish[1]) === s) return "q";
+      if (finish[2] != null && String(finish[2]) === s) return "p";
+      if (finish[3] != null && String(finish[3]) === s) return "4";
+      return "";
+    }
+    function tipRunnerWinOdds(race, no) {
+      const runners = (race && race.runners) || [];
+      const row = runners.find(function (r) { return r && String(r.no) === String(no); });
+      return numOrNull(row && row.win);
+    }
+    function tipEvalRace(race) {
+      const picks = tipNoteList(race.num).slice(0, TIP_NOTE_MAX);
+      const empty = {
+        picks: picks,
+        settled: false,
+        win: false, qin: false, top3: false, fourth: false, tierce: false, qpl: false, quartet: false,
+        prizes: { win: 0, qin: 0, top3: 0, fourth: 0, tierce: 0, qpl: 0, quartet: 0 }
+      };
+      if (!picks.length || !tipRaceSettled(race)) return empty;
+      const finish = payoutFinishNosForRace(race).map(String);
+      const f1 = finish[0] || "";
+      const f2 = finish[1] || "";
+      const f3 = finish[2] || "";
+      const f4 = finish[3] || "";
+      const setAll = {};
+      picks.forEach(function (n) { setAll[n] = 1; });
+      const set2 = {};
+      picks.slice(0, 2).forEach(function (n) { set2[n] = 1; });
+      const set3 = {};
+      picks.slice(0, 3).forEach(function (n) { set3[n] = 1; });
+      const set4 = {};
+      picks.slice(0, 4).forEach(function (n) { set4[n] = 1; });
+      const winHit = !!(f1 && set2[f1]);
+      const qinHit = !!(f1 && f2 && set3[f1] && set3[f2]);
+      const top3Hit = !!(f1 && f2 && f3 && set4[f1] && set4[f2] && set4[f3]);
+      const fourthHit = !!(f4 && setAll[f4]);
+      const tierceHit = !!(f1 && f2 && f3 && setAll[f1] && setAll[f2] && setAll[f3]);
+      const qplHit = !!(
+        (f1 && f2 && setAll[f1] && setAll[f2]) ||
+        (f1 && f3 && setAll[f1] && setAll[f3]) ||
+        (f2 && f3 && setAll[f2] && setAll[f3])
+      );
+      const quartetHit = !!(f1 && f2 && f3 && f4 && setAll[f1] && setAll[f2] && setAll[f3] && setAll[f4]);
+      const winOdds = tipRunnerWinOdds(race, f1) || 8;
+      const prizes = {
+        win: winHit ? Math.round(winOdds * TIP_RECORD_STAKE) : 0,
+        qin: qinHit ? Math.round((winOdds * 0.55 + 12) * TIP_RECORD_STAKE) : 0,
+        top3: top3Hit ? Math.round((winOdds * 0.35 + 18) * TIP_RECORD_STAKE) : 0,
+        fourth: fourthHit ? Math.round(14 * TIP_RECORD_STAKE) : 0,
+        tierce: tierceHit ? Math.round((winOdds * 1.8 + 40) * TIP_RECORD_STAKE) : 0,
+        qpl: qplHit ? Math.round((winOdds * 0.4 + 10) * TIP_RECORD_STAKE) : 0,
+        quartet: quartetHit ? Math.round((winOdds * 2.4 + 60) * TIP_RECORD_STAKE) : 0
+      };
+      return {
+        picks: picks,
+        settled: true,
+        win: winHit, qin: qinHit, top3: top3Hit, fourth: fourthHit,
+        tierce: tierceHit, qpl: qplHit, quartet: quartetHit,
+        prizes: prizes
+      };
+    }
+    function tipAggregateStats(scope) {
+      const races = (MEETING && MEETING.races) || [];
+      const out = {};
+      TIP_STAT_DEFS.forEach(function (d) {
+        out[d.key] = { wins: 0, plays: 0, prize: 0 };
+      });
+      races.forEach(function (race) {
+        const ev = tipEvalRace(race);
+        if (!ev.picks.length) return;
+        if (!ev.settled && scope === "day") return;
+        if (!ev.settled) return;
+        TIP_STAT_DEFS.forEach(function (d) {
+          out[d.key].plays += 1;
+          if (ev[d.key]) out[d.key].wins += 1;
+          out[d.key].prize += ev.prizes[d.key] || 0;
+        });
+      });
+      if (scope === "season") {
+        /* 演示：本賽季在本日基礎上放大參與與獎金 */
+        TIP_STAT_DEFS.forEach(function (d) {
+          const s = out[d.key];
+          s.plays = Math.max(s.plays, 1) * 6 + (d.key.length % 3);
+          s.wins = Math.min(s.plays, s.wins * 5 + (d.key.charCodeAt(0) % 2));
+          s.prize = Math.round(s.prize * 5.2 + 120);
+        });
+      }
+      return out;
+    }
+    function tipMeetingDayLabel() {
+      const meet = MEETING || {};
+      if (meet.d != null && meet.m != null && String(meet.d).trim() !== "" && String(meet.m).trim() !== "") {
+        return String(Number(meet.d)) + "/" + String(Number(meet.m));
+      }
+      const p = String(meet.date || "").split("-");
+      if (p.length === 3) return String(Number(p[2])) + "/" + String(Number(p[1]));
+      return "";
+    }
+    function tipFmtPrize(n) {
+      const x = Math.round(Number(n) || 0);
+      return "$" + x.toLocaleString("en-US");
+    }
+    function tipFmtRate(wins, plays) {
+      if (!plays) return "—";
+      return ((wins / plays) * 100).toFixed(1) + "%";
+    }
+    function renderTipRecordDayHtml() {
+      const races = (MEETING && MEETING.races) || [];
+      if (!races.length) return '<div class="tr-day-empty">暫無場次</div>';
+      return '<div class="tr-day-list">' + races.map(function (race) {
+        const picks = tipNoteList(race.num).slice(0, TIP_NOTE_MAX);
+        const nos = picks.length
+          ? picks.map(function (no) {
+              const kind = tipFinishKindByNo(race, no);
+              const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
+              return renderCapNoHtml(no, kind, title);
+            }).join("")
+          : '<span class="tr-day-empty">未標記</span>';
+        return '<div class="tr-day-row">' +
+          '<div class="tr-day-lab">第' + esc(race.num) + "場</div>" +
+          '<div class="tr-day-nos">' + nos + "</div>" +
+        "</div>";
+      }).join("") + "</div>";
+    }
+    function renderTipRecordHelpHtml() {
+      return TIP_STAT_DEFS.map(function (d) {
+        return "<div><b>" + esc(d.name) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+      }).join("") +
+        "<div style=\"margin-top:4px\">投注基礎按每注 " + TIP_RECORD_STAKE + " 元估算累積獎金；準確率同時顯示勝場／參與場，避免單場中獎即 100%。</div>";
+    }
+    function renderTipRecordStatsHtml(scope) {
+      const agg = tipAggregateStats(scope);
+      let totalPrize = 0;
+      TIP_STAT_DEFS.forEach(function (d) { totalPrize += agg[d.key].prize || 0; });
+      const rows = TIP_STAT_DEFS.map(function (d) {
+        const s = agg[d.key];
+        return '<div class="tr-stat-row">' +
+          '<div class="tr-stat-name">' + esc(d.name) + "</div>" +
+          '<div class="tr-stat-meta">' + esc(s.wins + "/" + s.plays + " 場") + "</div>" +
+          '<div class="tr-stat-rate">' + esc(tipFmtRate(s.wins, s.plays)) + "</div>" +
+          '<div class="tr-stat-prize">累積 ' + esc(tipFmtPrize(s.prize)) + "</div>" +
+        "</div>";
+      }).join("");
+      return '<div class="tr-prize-total">估算累積獎金 ' + esc(tipFmtPrize(totalPrize)) +
+        '　<span style="font-weight:600;opacity:.85">（每注' + TIP_RECORD_STAKE + "元）</span></div>" +
+        '<div class="tr-stat-list">' + rows + "</div>";
+    }
+    function renderTipRecordLeaderboardHtml() {
+      return '<div class="tr-lb-list">' + TIP_LEADERBOARD_DEMO.map(function (u, idx) {
+        const open = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(u.id);
+        const detail = TIP_STAT_DEFS.map(function (d) {
+          const pair = (u.stats && u.stats[d.key]) || [0, 0];
+          const wins = pair[0] || 0;
+          const plays = pair[1] || 0;
+          return '<div class="tr-lb-detail-row"><span>' + esc(d.name) +
+            "</span><b>" + esc(tipFmtRate(wins, plays)) + " · " + wins + "/" + plays + " 場</b></div>";
+        }).join("");
+        return '<div class="tr-lb-row' + (open ? " is-open" : "") + '" data-tr-user="' + esc(u.id) + '">' +
+          '<button type="button" class="tr-lb-sum" data-tr-user="' + esc(u.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' +
+            '<span class="tr-lb-rank">' + (idx + 1) + "</span>" +
+            '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
+            '<span class="tr-lb-prize">' + esc(tipFmtPrize(u.prize)) + "</span>" +
+          "</button>" +
+          '<div class="tr-lb-detail"' + (open ? "" : " hidden") + ">" + detail + "</div>" +
+        "</div>";
+      }).join("") + "</div>";
+    }
+    function fillTipRecordSheet() {
+      const body = document.getElementById("tipRecordBody");
+      const title = document.getElementById("tipRecordTitle");
+      if (title) {
+        const day = tipMeetingDayLabel();
+        title.textContent = day ? ("心水戰績 · " + day) : "心水戰績";
+      }
+      if (!body) return;
+      const scope = tipRecordScope === "season" ? "season" : "day";
+      body.innerHTML =
+        '<section class="tr-day">' +
+          '<div class="tr-sec-title">今日心水</div>' +
+          renderTipRecordDayHtml() +
+        "</section>" +
+        '<section class="tr-stats">' +
+          '<div class="tr-sec-head">' +
+            '<div class="tr-sec-title">戰績統計</div>' +
+            '<button type="button" class="tr-help-btn" data-tr-act="help" aria-expanded="' +
+              (tipRecordHelpOpen ? "true" : "false") + '">規則</button>' +
+            '<div class="tr-scope" role="tablist" aria-label="統計時間範圍">' +
+              '<button type="button" class="tr-scope-btn' + (scope === "day" ? " is-on" : "") +
+                '" data-tr-scope="day" role="tab" aria-selected="' + (scope === "day" ? "true" : "false") + '">本日</button>' +
+              '<button type="button" class="tr-scope-btn' + (scope === "season" ? " is-on" : "") +
+                '" data-tr-scope="season" role="tab" aria-selected="' + (scope === "season" ? "true" : "false") + '">本賽季</button>' +
+            "</div>" +
+          "</div>" +
+          '<div class="tr-help" id="tipRecordHelp"' + (tipRecordHelpOpen ? "" : " hidden") + ">" +
+            renderTipRecordHelpHtml() +
+          "</div>" +
+          '<div id="tipRecordStatsPanel">' + renderTipRecordStatsHtml(scope) + "</div>" +
+        "</section>" +
+        '<section class="tr-board">' +
+          '<div class="tr-sec-title">J18 心水名家榜 · 獎金 Top 10</div>' +
+          renderTipRecordLeaderboardHtml() +
+        "</section>";
+    }
+    function openTipRecordSheet() {
+      const overlay = document.getElementById("tipRecordOverlay");
+      if (!overlay) return;
+      closeRaceDateCalendar();
+      closePayoutDetail();
+      closeColSortSheet();
+      closeSpeedMapSheet();
+      closeSynthReviewSheet();
+      closeJtCollabSheet();
+      closeHorseSheet();
+      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      ensureTipNoteDemoForMeeting();
+      tipRecordHelpOpen = false;
+      tipRecordLbOpenId = null;
+      fillTipRecordSheet();
+      syncTipRecordOverlayTop();
+      overlay.removeAttribute("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () { syncTipRecordOverlayTop(); });
+    }
+    function bindTipRecordSheet() {
+      const overlay = document.getElementById("tipRecordOverlay");
+      const sheet = document.getElementById("tipRecordSheet");
+      const body = document.getElementById("tipRecordBody");
+      const closeBtn = document.getElementById("tipRecordClose");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeTipRecordSheet();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+          if (ev.target === overlay) closeTipRecordSheet();
+        });
+      }
+      if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      if (body && body.dataset.trBound !== "1") {
+        body.dataset.trBound = "1";
+        body.addEventListener("click", function (ev) {
+          const helpBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-act=\"help\"]") : null;
+          if (helpBtn && body.contains(helpBtn)) {
+            ev.preventDefault();
+            tipRecordHelpOpen = !tipRecordHelpOpen;
+            fillTipRecordSheet();
+            return;
+          }
+          const scopeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-scope]") : null;
+          if (scopeBtn && body.contains(scopeBtn)) {
+            ev.preventDefault();
+            const next = scopeBtn.getAttribute("data-tr-scope") === "season" ? "season" : "day";
+            if (tipRecordScope !== next) {
+              tipRecordScope = next;
+              fillTipRecordSheet();
+            }
+            return;
+          }
+          const userBtn = ev.target && ev.target.closest ? ev.target.closest("button.tr-lb-sum[data-tr-user]") : null;
+          if (userBtn && body.contains(userBtn)) {
+            ev.preventDefault();
+            const id = userBtn.getAttribute("data-tr-user");
+            tipRecordLbOpenId = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(id) ? null : id;
+            fillTipRecordSheet();
+          }
+        });
+      }
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        const ov = document.getElementById("tipRecordOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeTipRecordSheet();
+      });
+      window.addEventListener("resize", function () {
+        const ov = document.getElementById("tipRecordOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncTipRecordOverlayTop();
+      });
+    }
+    bindTipRecordSheet();
+
     /* 綜合評述：上「評述：」黑一行＋下「筆記：」紅一行；彈層評述無標籤，筆記為場次綠左右滑動膠囊 */
     const SYNTH_REVIEW_DEMO =
       "在第五班1200米全天候跑道賽事中表現穩定，模型勝率達22.56%，預測排名第一，顯示其競爭力不俗。" +
@@ -6210,6 +6836,7 @@
       closeColSortSheet();
       closeSpeedMapSheet();
       closeJtCollabSheet();
+      closeTipRecordSheet();
       closeHorseSheet();
       synthNoteSide = "write";
       synthNoteExpandedId = null;
@@ -6411,6 +7038,7 @@
       closeColSortSheet();
       closeSpeedMapSheet();
       closeSynthReviewSheet();
+      closeTipRecordSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       fillJtCollabSheet(no);
@@ -6547,6 +7175,7 @@
       closeColSortSheet();
       closeSynthReviewSheet();
       closeJtCollabSheet();
+      closeTipRecordSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       const raceNo = Number(currentRace) || 1;
@@ -8264,6 +8893,9 @@
       } else if (kind === "q") {
         cls += " is-q";
         badge = '<i class="cap-badge" aria-hidden="true">Q</i>';
+      } else if (kind === "4" || kind === "fourth") {
+        cls += " is-4";
+        badge = '<i class="cap-badge" aria-hidden="true">四</i>';
       } else if (kind === "hot") {
         cls += " is-hot";
       }
@@ -9097,6 +9729,7 @@
     }
     function openHorseSheet(no) {
       closeWaterSheet();
+      closeTipRecordSheet();
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       const meet = currentMeet();
@@ -10270,7 +10903,7 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay", "tipRecordOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
@@ -10399,6 +11032,7 @@
       closeSynthReviewSheet();
       closeSpeedMapSheet();
       closeJtCollabSheet();
+      closeTipRecordSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10522,6 +11156,7 @@
       closeSynthReviewSheet();
       closeSpeedMapSheet();
       closeJtCollabSheet();
+      closeTipRecordSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -10601,6 +11236,7 @@
       closeSynthReviewSheet();
       closeSpeedMapSheet();
       closeJtCollabSheet();
+      closeTipRecordSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -10820,6 +11456,8 @@
         const act = item.getAttribute("data-nav");
         if (act === "raceDate") {
           openRaceDateCalendar();
+        } else if (act === "tipRecord") {
+          openTipRecordSheet();
         } else if (act === "colSort") {
           openColSortSheet();
         } else if (act === "service") {
@@ -10903,6 +11541,11 @@
           const jtOv = document.getElementById("jtCollabOverlay");
           if (jtOv && !jtOv.hasAttribute("hidden")) {
             closeJtCollabSheet();
+            return;
+          }
+          const tipOv = document.getElementById("tipRecordOverlay");
+          if (tipOv && !tipOv.hasAttribute("hidden")) {
+            closeTipRecordSheet();
             return;
           }
           closeHorseSheet();
