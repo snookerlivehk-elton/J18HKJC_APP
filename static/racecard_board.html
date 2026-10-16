@@ -2933,8 +2933,8 @@
     }
     .tr-day-row {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) minmax(52px, auto);
-      gap: 6px;
+      grid-template-columns: 36px minmax(0, 1fr) 54px;
+      gap: 4px;
       align-items: center;
       padding: 5px 8px;
       border-radius: 8px;
@@ -2949,15 +2949,16 @@
     }
     .tr-day-nos {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      flex-wrap: nowrap; /* 號碼＋獎金同一行，不換行 */
+      gap: 3px;
       align-items: center;
       min-width: 0;
+      overflow: hidden;
     }
     /* 派彩結算後顯示該場心水估算獎金 */
     .tr-day-prize {
       justify-self: end;
-      min-width: 52px;
+      width: 54px;
       text-align: right;
       font-size: 11px;
       font-weight: 800;
@@ -2976,15 +2977,15 @@
     /* 與綜合指數下展號圈統一：圓形＋描邊；未中淺色可讀 */
     .tr-day-nos .cap-no {
       flex: 0 0 auto;
-      width: 26px;
-      height: 26px;
-      min-width: 26px;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
       padding: 0;
       border-radius: 50%;
       background: #fff !important;
       color: #1e2a38 !important;
       border: 1.5px solid #e88b2a !important;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 800;
       box-shadow: none;
     }
@@ -3009,9 +3010,9 @@
       color: #fff !important;
     }
     .tr-day-nos .cap-no .cap-badge {
-      width: 12px;
-      height: 12px;
-      font-size: 8px;
+      width: 11px;
+      height: 11px;
+      font-size: 7px;
       padding: 1px 0 0 1px;
     }
     .tr-day-empty {
