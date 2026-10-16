@@ -2757,18 +2757,25 @@
       font-weight: 600;
       color: var(--muted);
     }
-    /* 心水戰績：頂貼公告下、底可抵螢幕底；內容短則收縮，不留空白 */
+    /* 心水戰績：頂貼公告下；內容夠高則 JS 貼底（is-fill），否則按內容收縮 */
     #tipRecordOverlay {
-      padding-bottom: 8px;
+      padding: 0 10px 0;
       align-items: flex-start;
+      box-sizing: border-box;
     }
     .cal-sheet.tip-record-sheet {
       display: flex;
       flex-direction: column;
       overflow: hidden;
       height: auto;
-      max-height: calc(100% - 8px);
+      max-height: 100%;
       margin-bottom: 0;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      box-sizing: border-box;
+    }
+    .cal-sheet.tip-record-sheet.is-fill {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
     }
     .tip-record-sheet .cal-head {
       flex: 0 0 auto;
@@ -2780,7 +2787,7 @@
       text-align: left;
     }
     .tip-record-sheet-body {
-      flex: 0 1 auto; /* 不撐高空白；內容超高時再收縮並內滾 */
+      flex: 0 1 auto;
       min-height: 0;
       max-height: none;
       overflow: auto;
@@ -6287,6 +6294,54 @@
       if (!overlay) return;
       overlay.style.top = tipRecordOverlayAnchorTop() + "px";
     }
+    function clearTipRecordSheetHeight() {
+      const sheet = document.getElementById("tipRecordSheet");
+      const body = document.getElementById("tipRecordBody");
+      if (sheet) {
+        sheet.classList.remove("is-fill");
+        sheet.style.height = "";
+        sheet.style.maxHeight = "";
+      }
+      if (body) {
+        body.style.maxHeight = "";
+        body.style.overflow = "";
+        body.style.flex = "";
+      }
+    }
+    /* 內容 ≥ 可視區：貼螢幕底；內容短：按數據高度，不撐空白 */
+    function syncTipRecordSheetHeight() {
+      const overlay = document.getElementById("tipRecordOverlay");
+      const sheet = document.getElementById("tipRecordSheet");
+      const body = document.getElementById("tipRecordBody");
+      if (!overlay || !sheet || !body || overlay.hasAttribute("hidden")) return;
+      clearTipRecordSheetHeight();
+      const avail = Math.max(0, Math.floor(overlay.clientHeight));
+      if (!avail) return;
+      const natural = sheet.scrollHeight;
+      if (natural >= avail - 1) {
+        sheet.classList.add("is-fill");
+        sheet.style.height = avail + "px";
+        sheet.style.maxHeight = avail + "px";
+        const head = sheet.querySelector(".cal-head");
+        const scs = getComputedStyle(sheet);
+        const padY = (parseFloat(scs.paddingTop) || 0) + (parseFloat(scs.paddingBottom) || 0);
+        const headH = head ? head.offsetHeight : 0;
+        const headMb = head ? (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0;
+        body.style.flex = "1 1 auto";
+        body.style.maxHeight = Math.max(80, Math.floor(avail - padY - headH - headMb)) + "px";
+        body.style.overflow = "auto";
+      } else {
+        sheet.style.height = "auto";
+        sheet.style.maxHeight = avail + "px";
+        body.style.flex = "0 0 auto";
+        body.style.maxHeight = "none";
+        body.style.overflow = "visible";
+      }
+    }
+    function syncTipRecordLayout() {
+      syncTipRecordOverlayTop();
+      syncTipRecordSheetHeight();
+    }
     function closeTipRecordSheet() {
       const overlay = document.getElementById("tipRecordOverlay");
       if (!overlay) return;
@@ -6294,6 +6349,7 @@
       overlay.setAttribute("aria-hidden", "true");
       tipRecordHelpOpen = false;
       tipRecordLbOpenIds = {};
+      clearTipRecordSheetHeight();
     }
     function ensureTipNoteDemoForMeeting() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
@@ -6557,7 +6613,10 @@
       syncTipRecordOverlayTop();
       overlay.removeAttribute("hidden");
       overlay.setAttribute("aria-hidden", "false");
-      requestAnimationFrame(function () { syncTipRecordOverlayTop(); });
+      requestAnimationFrame(function () {
+        syncTipRecordLayout();
+        requestAnimationFrame(syncTipRecordSheetHeight);
+      });
     }
     function bindTipRecordSheet() {
       const overlay = document.getElementById("tipRecordOverlay");
@@ -6589,6 +6648,7 @@
               else help.setAttribute("hidden", "");
             }
             helpBtn.setAttribute("aria-expanded", tipRecordHelpOpen ? "true" : "false");
+            requestAnimationFrame(syncTipRecordSheetHeight);
             return;
           }
           const scopeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-scope]") : null;
@@ -6606,6 +6666,7 @@
             });
             const panel = document.getElementById("tipRecordStatsPanel");
             if (panel) panel.innerHTML = renderTipRecordStatsHtml(next);
+            requestAnimationFrame(syncTipRecordSheetHeight);
             return;
           }
           const userBtn = ev.target && ev.target.closest ? ev.target.closest("button.tr-lb-sum[data-tr-user]") : null;
@@ -6621,6 +6682,7 @@
             } else {
               fillTipRecordSheet();
             }
+            requestAnimationFrame(syncTipRecordSheetHeight);
           }
         });
       }
@@ -6629,13 +6691,13 @@
         const ov = document.getElementById("tipRecordOverlay");
         if (ov && !ov.hasAttribute("hidden")) closeTipRecordSheet();
       });
-      function syncTipTopIfOpen() {
+      function syncTipLayoutIfOpen() {
         const ov = document.getElementById("tipRecordOverlay");
-        if (ov && !ov.hasAttribute("hidden")) syncTipRecordOverlayTop();
+        if (ov && !ov.hasAttribute("hidden")) syncTipRecordLayout();
       }
-      window.addEventListener("resize", syncTipTopIfOpen);
+      window.addEventListener("resize", syncTipLayoutIfOpen);
       const boardWrap = document.getElementById("board");
-      if (boardWrap) boardWrap.addEventListener("scroll", syncTipTopIfOpen, { passive: true });
+      if (boardWrap) boardWrap.addEventListener("scroll", syncTipLayoutIfOpen, { passive: true });
     }
     bindTipRecordSheet();
 
@@ -11115,7 +11177,7 @@
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
       const tipOv = document.getElementById("tipRecordOverlay");
-      if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordOverlayTop();
+      if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordLayout();
     }
     function syncRaceCalOverlayTop() {
       syncBoardOverlayTop("raceCalOverlay");
