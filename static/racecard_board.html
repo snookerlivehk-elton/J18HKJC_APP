@@ -2938,8 +2938,8 @@
     }
     .tr-day-row {
       display: grid;
-      grid-template-columns: 36px minmax(0, 1fr) 54px;
-      gap: 4px;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 6px;
       align-items: center;
       padding: 5px 8px;
       border-radius: 8px;
@@ -2954,43 +2954,24 @@
     }
     .tr-day-nos {
       display: flex;
-      flex-wrap: nowrap; /* 號碼＋獎金同一行，不換行 */
-      gap: 3px;
+      flex-wrap: nowrap;
+      gap: 4px;
       align-items: center;
       min-width: 0;
       overflow: hidden;
     }
-    /* 派彩結算後顯示該場心水估算獎金 */
-    .tr-day-prize {
-      justify-self: end;
-      width: 54px;
-      text-align: right;
-      font-size: 11px;
-      font-weight: 800;
-      line-height: 1.2;
-      white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-      color: var(--tr-muted);
-    }
-    .tr-day-prize.is-hit {
-      color: #9a5a10;
-    }
-    .tr-day-prize.is-pending {
-      min-height: 1em;
-      visibility: hidden;
-    }
     /* 與綜合指數下展號圈統一：圓形＋描邊；未中淺色可讀 */
     .tr-day-nos .cap-no {
       flex: 0 0 auto;
-      width: 24px;
-      height: 24px;
-      min-width: 24px;
+      width: 26px;
+      height: 26px;
+      min-width: 26px;
       padding: 0;
       border-radius: 50%;
       background: #fff !important;
       color: #1e2a38 !important;
       border: 1.5px solid #e88b2a !important;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
       box-shadow: none;
     }
@@ -3015,9 +2996,9 @@
       color: #fff !important;
     }
     .tr-day-nos .cap-no .cap-badge {
-      width: 11px;
-      height: 11px;
-      font-size: 7px;
+      width: 12px;
+      height: 12px;
+      font-size: 8px;
       padding: 1px 0 0 1px;
     }
     .tr-day-empty {
@@ -3209,7 +3190,6 @@
       color: #e8eef6 !important;
       border-color: #e88b2a !important;
     }
-    html[data-theme="dark"] .tr-day-prize.is-hit,
     html[data-theme="dark"] .tr-stat-prize,
     html[data-theme="dark"] .tr-lb-prize {
       color: #f0d78a;
@@ -6547,13 +6527,6 @@
       if (!plays) return "—";
       return ((wins / plays) * 100).toFixed(1) + "%";
     }
-    function tipRacePrizeTotal(race) {
-      const ev = tipEvalRace(race);
-      if (!ev.settled || !ev.picks.length) return null;
-      let sum = 0;
-      TIP_STAT_DEFS.forEach(function (d) { sum += ev.prizes[d.key] || 0; });
-      return sum;
-    }
     function renderTipRecordDayHtml() {
       const races = (MEETING && MEETING.races) || [];
       if (!races.length) return '<div class="tr-day-empty">暫無場次</div>';
@@ -6566,16 +6539,9 @@
               return renderCapNoHtml(no, kind, title);
             }).join("")
           : '<span class="tr-day-empty">未標記</span>';
-        const prizeTotal = tipRacePrizeTotal(race);
-        const prizeHtml = prizeTotal != null
-          ? ('<div class="tr-day-prize' + (prizeTotal > 0 ? " is-hit" : "") +
-              '" title="該場心水估算獎金（每注' + TIP_RECORD_STAKE + '元）">' +
-              esc(tipFmtPrize(prizeTotal)) + "</div>")
-          : '<div class="tr-day-prize is-pending" aria-hidden="true">$0</div>';
         return '<div class="tr-day-row">' +
           '<div class="tr-day-lab">第' + esc(race.num) + "場</div>" +
           '<div class="tr-day-nos">' + nos + "</div>" +
-          prizeHtml +
         "</div>";
       }).join("") + "</div>";
     }
