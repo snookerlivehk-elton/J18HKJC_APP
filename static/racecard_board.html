@@ -2757,16 +2757,26 @@
       font-weight: 600;
       color: var(--muted);
     }
-    /* 心水戰績彈窗 */
-    .tip-record-sheet .cal-head { margin-bottom: 10px; }
+    /* 心水戰績彈窗：頂邊對齊公告下方，盡量拉高可視高度 */
+    .cal-sheet.tip-record-sheet {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-height: calc(100% - 8px);
+    }
+    .tip-record-sheet .cal-head {
+      flex: 0 0 auto;
+      margin-bottom: 10px;
+    }
     .tip-record-sheet .cal-title {
       flex: 1 1 auto;
       min-width: 0;
       text-align: left;
     }
     .tip-record-sheet-body {
-      min-height: 280px;
-      max-height: min(70vh, 560px);
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
       display: flex;
@@ -6110,8 +6120,21 @@
       { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36], qin: [5, 34], top3: [6, 34], fourth: [4, 32], tierce: [2, 26], qpl: [5, 34], quartet: [1, 16] } },
       { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34], qin: [5, 32], top3: [6, 32], fourth: [3, 30], tierce: [2, 24], qpl: [5, 32], quartet: [1, 14] } }
     ];
+    function tipRecordOverlayAnchorTop() {
+      /* 頂邊對齊公告下方；公告滾出視口時至少不遮頂欄 */
+      const topbar = document.querySelector(".topbar");
+      const anno = document.querySelector(".anno");
+      const topbarBottom = topbar ? Math.round(topbar.getBoundingClientRect().bottom) : 0;
+      if (anno) {
+        const bottom = Math.round(anno.getBoundingClientRect().bottom);
+        if (bottom > topbarBottom) return Math.max(0, bottom);
+      }
+      return Math.max(0, topbarBottom);
+    }
     function syncTipRecordOverlayTop() {
-      syncBoardOverlayTop("tipRecordOverlay");
+      const overlay = document.getElementById("tipRecordOverlay");
+      if (!overlay) return;
+      overlay.style.top = tipRecordOverlayAnchorTop() + "px";
     }
     function closeTipRecordSheet() {
       const overlay = document.getElementById("tipRecordOverlay");
@@ -6425,10 +6448,13 @@
         const ov = document.getElementById("tipRecordOverlay");
         if (ov && !ov.hasAttribute("hidden")) closeTipRecordSheet();
       });
-      window.addEventListener("resize", function () {
+      function syncTipTopIfOpen() {
         const ov = document.getElementById("tipRecordOverlay");
         if (ov && !ov.hasAttribute("hidden")) syncTipRecordOverlayTop();
-      });
+      }
+      window.addEventListener("resize", syncTipTopIfOpen);
+      const boardWrap = document.getElementById("board");
+      if (boardWrap) boardWrap.addEventListener("scroll", syncTipTopIfOpen, { passive: true });
     }
     bindTipRecordSheet();
 
@@ -10903,10 +10929,12 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay", "tipRecordOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
+      const tipOv = document.getElementById("tipRecordOverlay");
+      if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordOverlayTop();
     }
     function syncRaceCalOverlayTop() {
       syncBoardOverlayTop("raceCalOverlay");
