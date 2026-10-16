@@ -2842,6 +2842,22 @@
       margin-bottom: 5px;
     }
     .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
+    .tr-day-head {
+      flex-wrap: nowrap;
+      gap: 6px;
+      align-items: flex-end;
+    }
+    .tr-day-prize-lab {
+      flex: 0 0 auto;
+      margin: 0;
+      max-width: 6.8em;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: .02em;
+      color: var(--tr-muted);
+    }
     /* 本日／本賽季：對齊筆記膠囊彈力滑塊 */
     .tr-scope {
       position: relative;
@@ -6643,7 +6659,10 @@
       const scope = tipRecordScope === "season" ? "season" : "day";
       body.innerHTML =
         '<section class="tr-sec tr-day">' +
-          '<div class="tr-sec-title">今日心水</div>' +
+          '<div class="tr-sec-head tr-day-head">' +
+            '<div class="tr-sec-title">今日心水</div>' +
+            '<div class="tr-day-prize-lab">個人心水·預計獎金</div>' +
+          "</div>" +
           renderTipRecordDayHtml() +
         "</section>" +
         '<section class="tr-sec tr-stats">' +
