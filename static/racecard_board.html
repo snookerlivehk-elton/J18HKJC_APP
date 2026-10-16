@@ -2757,12 +2757,18 @@
       font-weight: 600;
       color: var(--muted);
     }
-    /* 心水戰績彈窗：頂邊對齊公告下方，盡量拉高可視高度 */
+    /* 心水戰績：頂貼公告下、底可抵螢幕底；內容短則收縮，不留空白 */
+    #tipRecordOverlay {
+      padding-bottom: 8px;
+      align-items: flex-start;
+    }
     .cal-sheet.tip-record-sheet {
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      height: auto;
       max-height: calc(100% - 8px);
+      margin-bottom: 0;
     }
     .tip-record-sheet .cal-head {
       flex: 0 0 auto;
@@ -2774,14 +2780,14 @@
       text-align: left;
     }
     .tip-record-sheet-body {
-      flex: 1 1 auto;
+      flex: 0 1 auto; /* 不撐高空白；內容超高時再收縮並內滾 */
       min-height: 0;
       max-height: none;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
       display: flex;
       flex-direction: column;
-      gap: 8px; /* 段落分區用邊框區隔，段間空隙收緊，避免全篇變高 */
+      gap: 8px;
       box-sizing: border-box;
     }
     /* 三段分區：左色條＋淺底邊框；內文間距同步收緊，淨高度不增加 */
@@ -3006,7 +3012,7 @@
     /* 名稱｜勝率｜場次｜獎金 同一行，固定欄寬對齊 */
     .tr-stat-row {
       display: grid;
-      grid-template-columns: 44px 48px 62px minmax(56px, 1fr);
+      grid-template-columns: 44px 48px 72px minmax(56px, 1fr);
       gap: 4px 6px;
       align-items: center;
       padding: 5px 8px;
@@ -3101,7 +3107,7 @@
     /* 與戰績統計同欄：勝率｜場次｜細項獎金（色與總額略區分） */
     .tr-lb-detail-row {
       display: grid;
-      grid-template-columns: 44px 48px 62px minmax(56px, 1fr);
+      grid-template-columns: 44px 48px 72px minmax(56px, 1fr);
       gap: 4px 6px;
       align-items: center;
       font-size: 11px;
@@ -6233,7 +6239,7 @@
     /* 心水戰績：今日場次心水匯總＋統計／獎金／名家榜（演示） */
     let tipRecordScope = "day"; /* day | season */
     let tipRecordHelpOpen = false;
-    let tipRecordLbOpenId = null;
+    let tipRecordLbOpenIds = {}; /* id -> true，支援多開對比 */
     const TIP_RECORD_STAKE = 10;
     const TIP_STAT_DEFS = [
       { key: "win", name: "獨贏", range: "前2個號碼", help: "心水序號第1–2名中有冠軍即計中" },
@@ -6287,7 +6293,7 @@
       overlay.setAttribute("hidden", "");
       overlay.setAttribute("aria-hidden", "true");
       tipRecordHelpOpen = false;
-      tipRecordLbOpenId = null;
+      tipRecordLbOpenIds = {};
     }
     function ensureTipNoteDemoForMeeting() {
       if (!MEETING || !Array.isArray(MEETING.races)) return;
@@ -6458,7 +6464,7 @@
         return '<div class="tr-stat-row">' +
           '<div class="tr-stat-name">' + esc(d.name) + "</div>" +
           '<div class="tr-stat-rate">' + esc(tipFmtRate(s.wins, s.plays)) + "</div>" +
-          '<div class="tr-stat-meta">' + esc(s.wins + "/" + s.plays) + "</div>" +
+          '<div class="tr-stat-meta">' + esc(s.wins + "/" + s.plays + "場") + "</div>" +
           '<div class="tr-stat-prize">' + esc(tipFmtPrize(s.prize)) + "</div>" +
         "</div>";
       }).join("");
@@ -6466,15 +6472,23 @@
         '　<span style="font-weight:600;opacity:.85">（每注' + TIP_RECORD_STAKE + "元）</span></div>" +
         '<div class="tr-stat-list">' + rows + "</div>";
     }
+    function tipRecordLbIsOpen(id) {
+      return !!(tipRecordLbOpenIds && tipRecordLbOpenIds[String(id)]);
+    }
+    function tipRecordLbToggle(id) {
+      const key = String(id);
+      if (tipRecordLbOpenIds[key]) delete tipRecordLbOpenIds[key];
+      else tipRecordLbOpenIds[key] = true;
+    }
     function renderTipRecordLeaderboardHtml() {
       return '<div class="tr-lb-list">' + TIP_LEADERBOARD_DEMO.map(function (u, idx) {
-        const open = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(u.id);
+        const open = tipRecordLbIsOpen(u.id);
         const detail = TIP_STAT_DEFS.map(function (d) {
           const t = tipStatTriple((u.stats && u.stats[d.key]) || [0, 0, 0]);
           return '<div class="tr-lb-detail-row">' +
             '<span class="tr-lb-d-name">' + esc(d.name) + "</span>" +
             '<span class="tr-lb-d-rate">' + esc(tipFmtRate(t.wins, t.plays)) + "</span>" +
-            '<span class="tr-lb-d-meta">' + esc(t.wins + "/" + t.plays) + "</span>" +
+            '<span class="tr-lb-d-meta">' + esc(t.wins + "/" + t.plays + "場") + "</span>" +
             '<span class="tr-lb-d-prize">' + esc(tipFmtPrize(t.prize)) + "</span>" +
           "</div>";
         }).join("");
@@ -6538,7 +6552,7 @@
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       ensureTipNoteDemoForMeeting();
       tipRecordHelpOpen = false;
-      tipRecordLbOpenId = null;
+      tipRecordLbOpenIds = {};
       fillTipRecordSheet();
       syncTipRecordOverlayTop();
       overlay.removeAttribute("hidden");
@@ -6598,7 +6612,7 @@
           if (userBtn && body.contains(userBtn)) {
             ev.preventDefault();
             const id = userBtn.getAttribute("data-tr-user");
-            tipRecordLbOpenId = tipRecordLbOpenId != null && String(tipRecordLbOpenId) === String(id) ? null : id;
+            tipRecordLbToggle(id);
             const board = body.querySelector(".tr-board");
             if (board) {
               const listHost = board.querySelector(".tr-lb-list");
