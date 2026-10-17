@@ -6303,13 +6303,13 @@
       return { wins: wins, plays: plays, prize: prize };
     }
     function tipRecordOverlayAnchorTop() {
-      /* 頂邊對齊公告下方；公告滾出視口時至少不遮頂欄 */
+      /* 頂邊與公告欄頂端齊平；公告滾出視口時至少不遮頂欄 */
       const topbar = document.querySelector(".topbar");
       const anno = document.querySelector(".anno");
       const topbarBottom = topbar ? Math.round(topbar.getBoundingClientRect().bottom) : 0;
       if (anno) {
-        const bottom = Math.round(anno.getBoundingClientRect().bottom);
-        if (bottom > topbarBottom) return Math.max(0, bottom);
+        const top = Math.round(anno.getBoundingClientRect().top);
+        if (top >= topbarBottom - 1) return Math.max(0, top);
       }
       return Math.max(0, topbarBottom);
     }

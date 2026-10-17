@@ -376,6 +376,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("tipAggregateStats", r.text)
         self.assertIn("ensureTipNoteDemoForMeeting", r.text)
         self.assertIn("tipRecordOverlayAnchorTop", r.text)
+        self.assertIn("getBoundingClientRect().top", r.text)
+        self.assertIn("與公告欄頂端齊平", r.text)
         self.assertIn("syncTipRecordOverlayTop", r.text)
         self.assertIn(".cal-sheet.tip-record-sheet", r.text)
         self.assertIn('class="tr-sec tr-day"', r.text)
