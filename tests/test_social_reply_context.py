@@ -73,6 +73,7 @@ def _sample_copy() -> Dict[str, Any]:
             {
                 "race_id": "20260715HV01",
                 "race_no": 1,
+                "post_time": "2026-07-15T19:15:00+08:00",
                 "fused_picks": [
                     {
                         "horse_no": 4,
@@ -91,6 +92,7 @@ def _sample_copy() -> Dict[str, Any]:
             {
                 "race_id": "20260715HV02",
                 "race_no": 2,
+                "post_time": "2026-07-15T19:45:00+08:00",
                 "fused_picks": [
                     {
                         "horse_no": 3,
@@ -188,8 +190,14 @@ class BuildAndPromptTest(unittest.TestCase):
             self.assertEqual(ctx["purpose"], "social_reply")
             self.assertEqual(ctx["meta"]["n_ai_evals"], 3)
             self.assertEqual(ctx["meta"]["n_horses"], 3)
+            self.assertEqual(ctx.get("timezone"), "Asia/Hong_Kong")
+            self.assertEqual(len(ctx.get("schedule") or []), 2)
+            self.assertEqual(ctx["schedule"][0]["post_time_hk"], "19:15")
+            self.assertEqual(ctx["tips"][0].get("post_time_hk"), "19:15")
             pub = public_reply_payload(ctx)
             self.assertIn("tips", pub)
+            self.assertIn("schedule", pub)
+            self.assertIn("timezone", pub)
             self.assertNotIn("webhook", pub)
 
             text = format_reply_context_prompt(ctx)
@@ -197,6 +205,9 @@ class BuildAndPromptTest(unittest.TestCase):
             self.assertIn("近績穩陣", text)
             self.assertIn("第1場", text)
             self.assertIn("社交精選評述", text)
+            self.assertIn("開跑時間", text)
+            self.assertIn("19:15", text)
+            self.assertIn("19:45", text)
 
 
 class PublishAndWebhookTest(unittest.TestCase):

@@ -132,6 +132,7 @@ def _ensure_upcoming_tables() -> None:
                     distance_m INTEGER,
                     track TEXT,
                     ground TEXT,
+                    post_time TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -157,6 +158,12 @@ def _ensure_upcoming_tables() -> None:
                 )
                 """
             )
+            cols = {
+                row[1]
+                for row in c.execute("PRAGMA table_info(upcoming_races)").fetchall()
+            }
+            if "post_time" not in cols:
+                c.execute("ALTER TABLE upcoming_races ADD COLUMN post_time TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -177,6 +184,7 @@ def _ensure_upcoming_tables() -> None:
                     distance_m INT,
                     track VARCHAR(50),
                     ground VARCHAR(50),
+                    post_time TIMESTAMPTZ,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
                 """
@@ -202,6 +210,11 @@ def _ensure_upcoming_tables() -> None:
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 )
                 """
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE upcoming_races ADD COLUMN IF NOT EXISTS post_time TIMESTAMPTZ"
             )
         )
 
@@ -246,10 +259,10 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         """
                         INSERT INTO upcoming_races
                           (race_id, racing_date, race_num, course, race_name, class,
-                           distance_m, track, ground)
+                           distance_m, track, ground, post_time)
                         VALUES
                           (:race_id, :racing_date, :race_num, :course, :race_name, :klass,
-                           :distance_m, :track, :ground)
+                           :distance_m, :track, :ground, :post_time)
                         ON CONFLICT (race_id) DO UPDATE SET
                           racing_date = EXCLUDED.racing_date,
                           race_num = EXCLUDED.race_num,
@@ -258,7 +271,8 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                           class = COALESCE(EXCLUDED.class, upcoming_races.class),
                           distance_m = COALESCE(EXCLUDED.distance_m, upcoming_races.distance_m),
                           track = COALESCE(EXCLUDED.track, upcoming_races.track),
-                          ground = COALESCE(EXCLUDED.ground, upcoming_races.ground)
+                          ground = COALESCE(EXCLUDED.ground, upcoming_races.ground),
+                          post_time = COALESCE(EXCLUDED.post_time, upcoming_races.post_time)
                         """
                     ),
                     {
@@ -271,6 +285,7 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                         "distance_m": _safe_int(race.get("distance_m")),
                         "track": race.get("track") or race.get("surface"),
                         "ground": race.get("ground") or race.get("go_ch") or race.get("go_en"),
+                        "post_time": (str(race.get("post_time") or "").strip() or None),
                     },
                 )
 
