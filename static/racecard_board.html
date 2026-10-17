@@ -90,6 +90,7 @@
     }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .06em; }
     .topbar .nav-back,
+    .topbar .nav-famous,
     .topbar .nav-menu-btn,
     .topbar .nav-media {
       display: inline-flex;
@@ -108,6 +109,15 @@
       line-height: 1;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+    }
+    .topbar .side.l .nav-back {
+      margin-left: 2px;
+      padding: 6px 6px;
+      flex: 0 0 auto;
+    }
+    .topbar .nav-famous {
+      letter-spacing: .04em;
+      padding: 6px 8px;
     }
     .topbar .nav-media {
       width: 55px;
@@ -192,6 +202,7 @@
       .nav-radio[data-signal="on"] .radio-led { opacity: 1; transform: none; }
     }
     .topbar .nav-back:active,
+    .topbar .nav-famous:active,
     .topbar .nav-menu-btn:active,
     .topbar .nav-menu-btn[aria-expanded="true"],
     .topbar .nav-media:active {
@@ -3208,6 +3219,284 @@
     html[data-theme="dark"] .tr-prize-total span {
       color: #d8c48a;
     }
+    /* 名家貼士：頂貼公告下；結構對齊心水戰績，場次膠囊＋分區心水 */
+    #famousTipsOverlay {
+      padding: 0 10px 0;
+      align-items: flex-start;
+      box-sizing: border-box;
+    }
+    .cal-sheet.famous-tips-sheet {
+      --ft-muted: #556070;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: auto;
+      max-height: 100%;
+      margin-bottom: 0;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      box-sizing: border-box;
+    }
+    .cal-sheet.famous-tips-sheet.is-fill {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .famous-tips-sheet .cal-head {
+      flex: 0 0 auto;
+      margin-bottom: 10px;
+    }
+    .famous-tips-sheet .cal-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: left;
+    }
+    .famous-tips-sheet-body {
+      flex: 0 1 auto;
+      min-height: 0;
+      max-height: none;
+      overflow: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-sizing: border-box;
+    }
+    .ft-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 0 0 2px;
+      padding: 0 0 6px;
+      background: linear-gradient(180deg, var(--sheet, #fff) 70%, rgba(255, 255, 255, 0));
+    }
+    .ft-race-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+      scrollbar-width: thin;
+      padding: 1px 2px 2px;
+    }
+    .ft-race-pills::-webkit-scrollbar { height: 3px; }
+    .ft-race-pills::-webkit-scrollbar-thumb {
+      background: #c5ced9;
+      border-radius: 2px;
+    }
+    .ft-race-pills button {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 26px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 800;
+      font-size: 13px;
+      color: #fff;
+      background: var(--green);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ft-race-pills button.is-on { background: var(--blue); }
+    .ft-finish {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: #f5f8fc;
+      border: 1px solid var(--line);
+      box-sizing: border-box;
+    }
+    .ft-finish-lab {
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--ft-muted);
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+    .ft-finish-nos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      min-width: 0;
+    }
+    .ft-finish-empty {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ft-muted);
+    }
+    .ft-sec {
+      margin: 0;
+      padding: 7px 8px 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f7f9fc;
+      box-shadow: inset 3px 0 0 var(--ft-sec-accent, var(--nav));
+      box-sizing: border-box;
+    }
+    .ft-sec.ft-agg { --ft-sec-accent: var(--nav); background: #f5f8fc; }
+    .ft-sec.ft-live { --ft-sec-accent: #c45a3a; background: #fbf6f4; }
+    .ft-sec.ft-breakfast { --ft-sec-accent: #b06a14; background: #fbf7f0; }
+    .ft-sec.ft-stable { --ft-sec-accent: #2f8f7a; background: #f4faf8; }
+    .ft-sec-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 8px;
+      margin-bottom: 5px;
+    }
+    .ft-sec-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--text);
+      margin: 0;
+      line-height: 1.25;
+    }
+    .ft-sec-title::before {
+      content: "";
+      flex: 0 0 auto;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ft-sec-accent, var(--nav));
+    }
+    .ft-sec-hint {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ft-muted);
+      line-height: 1.25;
+    }
+    .ft-agg-nos,
+    .ft-tip-nos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .ft-agg-nos .cap-no,
+    .ft-tip-nos .cap-no,
+    .ft-finish-nos .cap-no {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      min-width: 26px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 12px;
+    }
+    .ft-agg-meta {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ft-muted);
+      line-height: 1.35;
+    }
+    .ft-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ft-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4px 8px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(45, 62, 80, .06);
+      box-sizing: border-box;
+    }
+    .ft-row-top {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .ft-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ft-rate {
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--nav);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .ft-rate-meta {
+      font-weight: 600;
+      color: var(--ft-muted);
+      margin-left: 2px;
+    }
+    .ft-row .ft-tip-nos {
+      grid-column: 1 / -1;
+    }
+    .ft-empty {
+      padding: 10px 4px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ft-muted);
+    }
+    .famous-tips-sheet .cap-no.is-4 {
+      background: #8a6bb8 !important;
+      border-color: #8a6bb8 !important;
+      color: #fff !important;
+    }
+    html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
+      --ft-muted: #c8d0dc;
+    }
+    html[data-theme="dark"] .ft-sticky {
+      background: linear-gradient(180deg, #1e2430 70%, rgba(30, 36, 48, 0));
+    }
+    html[data-theme="dark"] .ft-sec.ft-agg,
+    html[data-theme="dark"] .ft-sec.ft-live,
+    html[data-theme="dark"] .ft-sec.ft-breakfast,
+    html[data-theme="dark"] .ft-sec.ft-stable,
+    html[data-theme="dark"] .ft-finish {
+      background: #1a2028;
+      border-color: rgba(210, 222, 236, .18);
+    }
+    html[data-theme="dark"] .ft-row {
+      background: #242b34;
+      border-color: rgba(210, 222, 236, .12);
+    }
+    html[data-theme="dark"] .ft-race-pills::-webkit-scrollbar-thumb {
+      background: #4a5564;
+    }
+    html[data-theme="dark"] .ft-agg-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
+    html[data-theme="dark"] .ft-tip-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
+      background: #2a313c !important;
+      color: #e8eef6 !important;
+      border-color: #e88b2a !important;
+    }
     .synth-review-sheet-body {
       min-height: 300px;
       box-sizing: border-box;
@@ -5592,12 +5881,15 @@
           <path d="M14.3 15.9 H17" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
         </svg>
       </button>
-    </div>
-    <h1>排位</h1>
-    <div class="side r">
       <button type="button" class="nav-back" id="navBack" aria-label="返回">
         <span class="chev" aria-hidden="true">‹</span>
         <span>返回</span>
+      </button>
+    </div>
+    <h1>排位</h1>
+    <div class="side r">
+      <button type="button" class="nav-famous" id="navFamousBtn" aria-label="名家貼士" aria-haspopup="dialog" aria-controls="famousTipsOverlay">
+        <span>名家</span>
       </button>
       <button type="button" class="nav-menu-btn" id="navMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="navMenu">
         <span class="lab">菜單</span>
@@ -5728,6 +6020,16 @@
         <button type="button" class="cal-close" id="tipRecordClose" aria-label="關閉">×</button>
       </div>
       <div class="tip-record-sheet-body" id="tipRecordBody" aria-label="心水戰績詳情"></div>
+    </div>
+  </div>
+
+  <div class="cal-overlay" id="famousTipsOverlay" hidden aria-hidden="true">
+    <div class="cal-sheet famous-tips-sheet" id="famousTipsSheet" role="dialog" aria-modal="true" aria-labelledby="famousTipsTitle">
+      <div class="cal-head">
+        <div class="cal-title" id="famousTipsTitle">名家貼士</div>
+        <button type="button" class="cal-close" id="famousTipsClose" aria-label="關閉">×</button>
+      </div>
+      <div class="famous-tips-sheet-body" id="famousTipsBody" aria-label="名家心水貼士"></div>
     </div>
   </div>
 
@@ -6644,6 +6946,7 @@
       closeSpeedMapSheet();
       closeSynthReviewSheet();
       closeJtCollabSheet();
+      closeFamousTipsSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       ensureTipNoteDemoForMeeting();
@@ -6740,6 +7043,336 @@
       if (boardWrap) boardWrap.addEventListener("scroll", syncTipLayoutIfOpen, { passive: true });
     }
     bindTipRecordSheet();
+
+    /* 名家貼士：場次膠囊＋綜合權重心水＋臨場／早餐／馬房分區；日期跟全局賽期 */
+    let famousTipsRace = null;
+    const FAMOUS_GROUP_DEFS = [
+      { key: "live", name: "臨場", hint: "開跑前臨場提供", earlyBonus: 0 },
+      { key: "breakfast", name: "早餐", hint: "賽前一日或當日早上", earlyBonus: 20 },
+      { key: "stable", name: "馬房貼士", hint: "練馬師團隊提供", earlyBonus: 10 }
+    ];
+    const FAMOUS_TIPSTERS_DEMO = [
+      { id: "fl1", name: "臨場神算", group: "live", wins: 28, plays: 62, seed: 1, count: 4 },
+      { id: "fl2", name: "即場追擊", group: "live", wins: 21, plays: 58, seed: 2, count: 4 },
+      { id: "fl3", name: "夜場快訊", group: "live", wins: 19, plays: 54, seed: 3, count: 6 },
+      { id: "fb1", name: "晨報心水", group: "breakfast", wins: 24, plays: 70, seed: 4, count: 4 },
+      { id: "fb2", name: "早盤精選", group: "breakfast", wins: 18, plays: 66, seed: 5, count: 4 },
+      { id: "fb3", name: "開賽早餐", group: "breakfast", wins: 16, plays: 60, seed: 6, count: 5 },
+      { id: "fs1", name: "馬房情報", group: "stable", wins: 26, plays: 55, seed: 7, count: 4 },
+      { id: "fs2", name: "練馬師消息", group: "stable", wins: 20, plays: 52, seed: 8, count: 4 },
+      { id: "fs3", name: "馬房貼士王", group: "stable", wins: 15, plays: 48, seed: 9, count: 4 }
+    ];
+    function famousTipsRaceNum() {
+      const races = (MEETING && MEETING.races) || [];
+      const n = Number(famousTipsRace);
+      if (Number.isFinite(n) && races.some(function (r) { return r && Number(r.num) === n; })) return n;
+      const cur = Number(currentRace);
+      if (Number.isFinite(cur) && races.some(function (r) { return r && Number(r.num) === cur; })) return cur;
+      return races[0] ? Number(races[0].num) : 1;
+    }
+    function famousTipsRaceObj() {
+      const n = famousTipsRaceNum();
+      const races = (MEETING && MEETING.races) || [];
+      return races.find(function (r) { return r && Number(r.num) === n; }) || null;
+    }
+    function famousTipsForTipster(tipster, race) {
+      if (!tipster || !race) return [];
+      const runners = (race.runners || []).filter(function (r) {
+        return r && !r.scratched && numOrNull(r.win) != null;
+      }).slice();
+      if (!runners.length) return [];
+      runners.sort(function (a, b) {
+        const aw = numOrNull(a.win);
+        const bw = numOrNull(b.win);
+        if (aw !== bw) return aw - bw;
+        return Number(a.no) - Number(b.no);
+      });
+      const max = Math.min(6, Math.max(1, Number(tipster.count) || 4), runners.length);
+      const start = (Number(tipster.seed) || 0) % Math.max(1, runners.length);
+      const out = [];
+      const seen = {};
+      for (let i = 0; i < runners.length && out.length < max; i++) {
+        const row = runners[(start + i * 2) % runners.length];
+        const no = String(row.no);
+        if (seen[no]) continue;
+        seen[no] = 1;
+        out.push(no);
+      }
+      /* 不足時按賠率序補齊 */
+      for (let j = 0; j < runners.length && out.length < max; j++) {
+        const no = String(runners[j].no);
+        if (seen[no]) continue;
+        seen[no] = 1;
+        out.push(no);
+      }
+      return out;
+    }
+    function famousGroupEarlyBonus(groupKey) {
+      const g = FAMOUS_GROUP_DEFS.find(function (d) { return d.key === groupKey; });
+      return g ? (Number(g.earlyBonus) || 0) : 0;
+    }
+    function famousAggregateTips(race) {
+      const tally = {};
+      FAMOUS_TIPSTERS_DEMO.forEach(function (t) {
+        const tips = famousTipsForTipster(t, race);
+        const earlyG = famousGroupEarlyBonus(t.group);
+        tips.forEach(function (no, idx) {
+          if (!tally[no]) tally[no] = { no: no, votes: 0, early: 0 };
+          tally[no].votes += 1;
+          tally[no].early += (10 - idx) + earlyG;
+        });
+      });
+      return Object.keys(tally).map(function (k) { return tally[k]; }).sort(function (a, b) {
+        if (b.votes !== a.votes) return b.votes - a.votes;
+        if (b.early !== a.early) return b.early - a.early;
+        return Number(a.no) - Number(b.no);
+      }).slice(0, 6).map(function (x) { return x.no; });
+    }
+    function famousCapNosHtml(race, nos) {
+      if (!nos || !nos.length) return '<span class="ft-finish-empty">暫無貼士</span>';
+      return nos.map(function (no) {
+        const kind = tipFinishKindByNo(race, no);
+        const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
+        return renderCapNoHtml(no, kind, title);
+      }).join("");
+    }
+    function syncFamousTipsOverlayTop() {
+      const overlay = document.getElementById("famousTipsOverlay");
+      if (!overlay) return;
+      overlay.style.top = tipRecordOverlayAnchorTop() + "px";
+    }
+    function clearFamousTipsSheetHeight() {
+      const sheet = document.getElementById("famousTipsSheet");
+      const body = document.getElementById("famousTipsBody");
+      if (sheet) {
+        sheet.classList.remove("is-fill");
+        sheet.style.height = "";
+        sheet.style.maxHeight = "";
+      }
+      if (body) {
+        body.style.maxHeight = "";
+        body.style.overflow = "";
+        body.style.flex = "";
+        body.style.minHeight = "";
+      }
+    }
+    function syncFamousTipsSheetHeight() {
+      const overlay = document.getElementById("famousTipsOverlay");
+      const sheet = document.getElementById("famousTipsSheet");
+      const body = document.getElementById("famousTipsBody");
+      if (!overlay || !sheet || !body || overlay.hasAttribute("hidden")) return;
+      const avail = Math.max(0, Math.floor(overlay.clientHeight));
+      if (!avail) return;
+      sheet.classList.remove("is-fill");
+      sheet.style.height = "auto";
+      sheet.style.maxHeight = "none";
+      body.style.flex = "0 0 auto";
+      body.style.minHeight = "0";
+      body.style.maxHeight = "none";
+      body.style.overflow = "visible";
+      void sheet.offsetHeight;
+      const head = sheet.querySelector(".cal-head");
+      const scs = getComputedStyle(sheet);
+      const padY = (parseFloat(scs.paddingTop) || 0) + (parseFloat(scs.paddingBottom) || 0);
+      const headH = head ? head.offsetHeight : 0;
+      const headMb = head ? (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0;
+      const natural = Math.max(
+        sheet.scrollHeight,
+        Math.ceil(padY + headH + headMb + body.scrollHeight)
+      );
+      if (natural >= avail) {
+        sheet.classList.add("is-fill");
+        sheet.style.height = avail + "px";
+        sheet.style.maxHeight = avail + "px";
+        body.style.flex = "1 1 auto";
+        body.style.minHeight = "0";
+        body.style.maxHeight = Math.max(80, Math.floor(avail - padY - headH - headMb)) + "px";
+        body.style.overflow = "auto";
+      } else {
+        sheet.style.height = "auto";
+        sheet.style.maxHeight = avail + "px";
+        body.style.flex = "0 0 auto";
+        body.style.maxHeight = "none";
+        body.style.overflow = "visible";
+      }
+    }
+    function syncFamousTipsLayout() {
+      syncFamousTipsOverlayTop();
+      syncFamousTipsSheetHeight();
+    }
+    function closeFamousTipsSheet() {
+      const overlay = document.getElementById("famousTipsOverlay");
+      if (!overlay) return;
+      overlay.setAttribute("hidden", "");
+      overlay.setAttribute("aria-hidden", "true");
+      clearFamousTipsSheetHeight();
+    }
+    function renderFamousTipsRacePillsHtml() {
+      const races = (MEETING && MEETING.races) || [];
+      const on = famousTipsRaceNum();
+      if (!races.length) return '<div class="ft-empty">暫無場次</div>';
+      return '<div class="ft-race-pills" role="tablist" aria-label="名家貼士場次">' +
+        races.map(function (race) {
+          const n = Number(race.num);
+          const active = n === on;
+          return '<button type="button" role="tab" data-ft-race="' + esc(n) +
+            '" class="' + (active ? "is-on" : "") +
+            '" aria-selected="' + (active ? "true" : "false") + '">' +
+            esc(n) + "</button>";
+        }).join("") +
+      "</div>";
+    }
+    function renderFamousTipsFinishHtml(race) {
+      if (!race || !tipRaceSettled(race)) {
+        return '<div class="ft-finish">' +
+          '<span class="ft-finish-lab">賽果</span>' +
+          '<span class="ft-finish-empty">尚未派彩</span>' +
+        "</div>";
+      }
+      const finish = payoutFinishNosForRace(race).slice(0, 4);
+      const labs = ["W", "Q", "P", "4"];
+      const kinds = ["w", "q", "p", "4"];
+      const nos = finish.map(function (no, i) {
+        if (no == null || no === "") return "";
+        return renderCapNoHtml(no, kinds[i], labs[i] + " · 第" + (i + 1) + "名");
+      }).filter(Boolean).join("");
+      return '<div class="ft-finish">' +
+        '<span class="ft-finish-lab">冠亞季殿</span>' +
+        '<div class="ft-finish-nos">' + (nos || '<span class="ft-finish-empty">暫無名次</span>') + "</div>" +
+      "</div>";
+    }
+    function renderFamousTipsAggHtml(race) {
+      const agg = famousAggregateTips(race);
+      return '<section class="ft-sec ft-agg">' +
+        '<div class="ft-sec-head">' +
+          '<div class="ft-sec-title">綜合心水</div>' +
+          '<div class="ft-sec-hint">全名家加權 · 最多 6 個</div>' +
+        "</div>" +
+        '<div class="ft-agg-nos">' + famousCapNosHtml(race, agg) + "</div>" +
+        '<div class="ft-agg-meta">按「最多人看好」優先，同分再看提供時間早晚與心水順位。</div>' +
+      "</section>";
+    }
+    function renderFamousTipsGroupHtml(groupDef, race) {
+      const list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
+      const rows = list.length
+        ? '<div class="ft-list">' + list.map(function (t) {
+            const tips = famousTipsForTipster(t, race);
+            const rate = tipFmtRate(t.wins, t.plays);
+            return '<div class="ft-row">' +
+              '<div class="ft-row-top">' +
+                '<span class="ft-name">' + esc(t.name) + "</span>" +
+                '<span class="ft-rate">' + esc(rate) +
+                  '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
+                "</span>" +
+              "</div>" +
+              '<div class="ft-tip-nos">' + famousCapNosHtml(race, tips) + "</div>" +
+            "</div>";
+          }).join("") + "</div>"
+        : '<div class="ft-empty">此區暫無名家</div>';
+      return '<section class="ft-sec ft-' + esc(groupDef.key) + '">' +
+        '<div class="ft-sec-head">' +
+          '<div class="ft-sec-title">' + esc(groupDef.name) + "</div>" +
+          '<div class="ft-sec-hint">' + esc(groupDef.hint) + "</div>" +
+        "</div>" +
+        rows +
+      "</section>";
+    }
+    function fillFamousTipsSheet() {
+      const body = document.getElementById("famousTipsBody");
+      const title = document.getElementById("famousTipsTitle");
+      if (title) {
+        const day = tipMeetingDayLabel();
+        title.textContent = day ? ("名家貼士 · " + day) : "名家貼士";
+      }
+      if (!body) return;
+      const race = famousTipsRaceObj();
+      body.innerHTML =
+        '<div class="ft-sticky">' +
+          renderFamousTipsRacePillsHtml() +
+          renderFamousTipsFinishHtml(race) +
+        "</div>" +
+        renderFamousTipsAggHtml(race) +
+        FAMOUS_GROUP_DEFS.map(function (g) { return renderFamousTipsGroupHtml(g, race); }).join("");
+    }
+    function openFamousTipsSheet() {
+      const overlay = document.getElementById("famousTipsOverlay");
+      if (!overlay) return;
+      closeRaceDateCalendar();
+      closePayoutDetail();
+      closeColSortSheet();
+      closeSpeedMapSheet();
+      closeSynthReviewSheet();
+      closeJtCollabSheet();
+      closeTipRecordSheet();
+      closeHorseSheet();
+      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      famousTipsRace = Number(currentRace) || famousTipsRaceNum();
+      fillFamousTipsSheet();
+      syncFamousTipsOverlayTop();
+      overlay.removeAttribute("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(function () {
+        syncFamousTipsLayout();
+        requestAnimationFrame(syncFamousTipsSheetHeight);
+      });
+    }
+    function bindFamousTipsSheet() {
+      const overlay = document.getElementById("famousTipsOverlay");
+      const sheet = document.getElementById("famousTipsSheet");
+      const body = document.getElementById("famousTipsBody");
+      const closeBtn = document.getElementById("famousTipsClose");
+      const famousBtn = document.getElementById("navFamousBtn");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeFamousTipsSheet();
+        });
+      }
+      if (famousBtn) {
+        famousBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const menuBtn = document.getElementById("navMenuBtn");
+          const menu = document.getElementById("navMenu");
+          if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
+          if (menu) menu.setAttribute("hidden", "");
+          openFamousTipsSheet();
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+          if (ev.target === overlay) closeFamousTipsSheet();
+        });
+      }
+      if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      if (body && body.dataset.ftBound !== "1") {
+        body.dataset.ftBound = "1";
+        body.addEventListener("click", function (ev) {
+          const raceBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-race]") : null;
+          if (raceBtn && body.contains(raceBtn)) {
+            ev.preventDefault();
+            const next = Number(raceBtn.getAttribute("data-ft-race"));
+            if (!Number.isFinite(next) || next === famousTipsRaceNum()) return;
+            famousTipsRace = next;
+            fillFamousTipsSheet();
+            requestAnimationFrame(syncFamousTipsSheetHeight);
+          }
+        });
+      }
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        const ov = document.getElementById("famousTipsOverlay");
+        if (ov && !ov.hasAttribute("hidden")) closeFamousTipsSheet();
+      });
+      function syncFamousLayoutIfOpen() {
+        const ov = document.getElementById("famousTipsOverlay");
+        if (ov && !ov.hasAttribute("hidden")) syncFamousTipsLayout();
+      }
+      window.addEventListener("resize", syncFamousLayoutIfOpen);
+      const boardWrap = document.getElementById("board");
+      if (boardWrap) boardWrap.addEventListener("scroll", syncFamousLayoutIfOpen, { passive: true });
+    }
+    bindFamousTipsSheet();
 
     /* 綜合評述：上「評述：」黑一行＋下「筆記：」紅一行；彈層評述無標籤，筆記為場次綠左右滑動膠囊 */
     const SYNTH_REVIEW_DEMO =
@@ -7146,6 +7779,7 @@
       closeSpeedMapSheet();
       closeJtCollabSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       closeHorseSheet();
       synthNoteSide = "write";
       synthNoteExpandedId = null;
@@ -7348,6 +7982,7 @@
       closeSpeedMapSheet();
       closeSynthReviewSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       fillJtCollabSheet(no);
@@ -7485,6 +8120,7 @@
       closeSynthReviewSheet();
       closeJtCollabSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       closeHorseSheet();
       if (typeof closeWaterSheet === "function") closeWaterSheet();
       const raceNo = Number(currentRace) || 1;
@@ -10039,6 +10675,7 @@
     function openHorseSheet(no) {
       closeWaterSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       const meet = currentMeet();
@@ -11218,6 +11855,8 @@
       });
       const tipOv = document.getElementById("tipRecordOverlay");
       if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordLayout();
+      const famOv = document.getElementById("famousTipsOverlay");
+      if (famOv && !famOv.hasAttribute("hidden")) syncFamousTipsLayout();
     }
     function syncRaceCalOverlayTop() {
       syncBoardOverlayTop("raceCalOverlay");
@@ -11344,6 +11983,7 @@
       closeSpeedMapSheet();
       closeJtCollabSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -11468,6 +12108,7 @@
       closeSpeedMapSheet();
       closeJtCollabSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -11548,6 +12189,7 @@
       closeSpeedMapSheet();
       closeJtCollabSheet();
       closeTipRecordSheet();
+      closeFamousTipsSheet();
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -11857,6 +12499,11 @@
           const tipOv = document.getElementById("tipRecordOverlay");
           if (tipOv && !tipOv.hasAttribute("hidden")) {
             closeTipRecordSheet();
+            return;
+          }
+          const famOv = document.getElementById("famousTipsOverlay");
+          if (famOv && !famOv.hasAttribute("hidden")) {
+            closeFamousTipsSheet();
             return;
           }
           closeHorseSheet();
