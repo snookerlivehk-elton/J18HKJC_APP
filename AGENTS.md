@@ -4,6 +4,7 @@
 
 ### j18pro 排位页
 
+- 交接说明见 `docs/J18PRO_RACECARD_HANDOFF.md`（架构、部署、硬规则、近期功能与接 API 建议）。
 - 用户用手机强制刷新线上页验收，**不要录屏、不要截图、不要上传 walkthrough 视频/图片**。
 - 改完 `static/racecard_board.html` 后，必须同步到 SERVER2 `/root/j18pro/public/racecard.html`，PM2 进程名 `j18pro`，端口 `3030`。验收地址：`http://120.77.253.95:3030/racecard.html`。
 - 只动 j18pro。不要改、重启或部署 `finance-18`、`100852`、`cabinet-quoter`。
