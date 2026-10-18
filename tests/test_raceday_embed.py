@@ -432,6 +432,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn(".cal-sheet.famous-tips-sheet", r.text)
         self.assertIn("ft-race-pills", r.text)
         self.assertIn("data-ft-race", r.text)
+        # 名家貼士號圈：淺色未中白底深字（對齊心水戰績）
+        self.assertIn(".ft-agg-nos .cap-no,\n    .ft-tip-nos .cap-no,\n    .ft-finish-nos .cap-no {\n      flex: 0 0 auto;\n      width: 26px;\n      height: 26px;\n      min-width: 26px;\n      padding: 0;\n      border-radius: 50%;\n      background: #fff !important;\n      color: #1e2a38 !important;\n      border: 1.5px solid #e88b2a !important;", r.text)
+        self.assertIn("html[data-theme=\"dark\"] .ft-finish-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4)", r.text)
         self.assertNotIn("今日賽事", r.text)
         self.assertNotIn("關於 J18", r.text)
         self.assertIn("flex-wrap: nowrap", r.text)

@@ -3391,6 +3391,7 @@
       gap: 4px;
       align-items: center;
     }
+    /* 與心水戰績號圈一致：淺色未中白底深字＋橙邊，深色另覆寫 */
     .ft-agg-nos .cap-no,
     .ft-tip-nos .cap-no,
     .ft-finish-nos .cap-no {
@@ -3400,7 +3401,48 @@
       min-width: 26px;
       padding: 0;
       border-radius: 50%;
+      background: #fff !important;
+      color: #1e2a38 !important;
+      border: 1.5px solid #e88b2a !important;
       font-size: 12px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+    .ft-agg-nos .cap-no.is-w,
+    .ft-tip-nos .cap-no.is-w,
+    .ft-finish-nos .cap-no.is-w {
+      background: #cc453f !important;
+      border-color: #cc453f !important;
+      color: #fff !important;
+    }
+    .ft-agg-nos .cap-no.is-q,
+    .ft-tip-nos .cap-no.is-q,
+    .ft-finish-nos .cap-no.is-q {
+      background: #2f70ca !important;
+      border-color: #2f70ca !important;
+      color: #fff !important;
+    }
+    .ft-agg-nos .cap-no.is-p,
+    .ft-tip-nos .cap-no.is-p,
+    .ft-finish-nos .cap-no.is-p {
+      background: #3f8f4a !important;
+      border-color: #3f8f4a !important;
+      color: #fff !important;
+    }
+    .ft-agg-nos .cap-no.is-4,
+    .ft-tip-nos .cap-no.is-4,
+    .ft-finish-nos .cap-no.is-4 {
+      background: #8a6bb8 !important;
+      border-color: #8a6bb8 !important;
+      color: #fff !important;
+    }
+    .ft-agg-nos .cap-no .cap-badge,
+    .ft-tip-nos .cap-no .cap-badge,
+    .ft-finish-nos .cap-no .cap-badge {
+      width: 12px;
+      height: 12px;
+      font-size: 8px;
+      padding: 1px 0 0 1px;
     }
     .ft-agg-meta {
       margin-top: 4px;
@@ -3465,11 +3507,6 @@
       font-weight: 600;
       color: var(--ft-muted);
     }
-    .famous-tips-sheet .cap-no.is-4 {
-      background: #8a6bb8 !important;
-      border-color: #8a6bb8 !important;
-      color: #fff !important;
-    }
     html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
       --ft-muted: #c8d0dc;
     }
@@ -3492,7 +3529,8 @@
       background: #4a5564;
     }
     html[data-theme="dark"] .ft-agg-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
-    html[data-theme="dark"] .ft-tip-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
+    html[data-theme="dark"] .ft-tip-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
+    html[data-theme="dark"] .ft-finish-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
       background: #2a313c !important;
       color: #e8eef6 !important;
       border-color: #e88b2a !important;
