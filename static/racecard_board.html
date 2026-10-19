@@ -2971,8 +2971,11 @@
       min-width: 0;
       overflow: hidden;
     }
-    /* 與綜合指數下展號圈統一：圓形＋描邊；未中淺色可讀 */
-    .tr-day-nos .cap-no {
+    /* 彈層號圈共用：心水戰績＋名家貼士；未中淺色可讀，深色另覆寫 */
+    .tr-day-nos .cap-no,
+    .ft-agg-nos .cap-no,
+    .ft-tip-nos .cap-no,
+    .ft-finish-nos .cap-no {
       flex: 0 0 auto;
       width: 26px;
       height: 26px;
@@ -2986,27 +2989,42 @@
       font-weight: 800;
       box-shadow: none;
     }
-    .tr-day-nos .cap-no.is-w {
+    .tr-day-nos .cap-no.is-w,
+    .ft-agg-nos .cap-no.is-w,
+    .ft-tip-nos .cap-no.is-w,
+    .ft-finish-nos .cap-no.is-w {
       background: #cc453f !important;
       border-color: #cc453f !important;
       color: #fff !important;
     }
-    .tr-day-nos .cap-no.is-q {
+    .tr-day-nos .cap-no.is-q,
+    .ft-agg-nos .cap-no.is-q,
+    .ft-tip-nos .cap-no.is-q,
+    .ft-finish-nos .cap-no.is-q {
       background: #2f70ca !important;
       border-color: #2f70ca !important;
       color: #fff !important;
     }
-    .tr-day-nos .cap-no.is-p {
+    .tr-day-nos .cap-no.is-p,
+    .ft-agg-nos .cap-no.is-p,
+    .ft-tip-nos .cap-no.is-p,
+    .ft-finish-nos .cap-no.is-p {
       background: #3f8f4a !important;
       border-color: #3f8f4a !important;
       color: #fff !important;
     }
-    .tr-day-nos .cap-no.is-4 {
+    .tr-day-nos .cap-no.is-4,
+    .ft-agg-nos .cap-no.is-4,
+    .ft-tip-nos .cap-no.is-4,
+    .ft-finish-nos .cap-no.is-4 {
       background: #8a6bb8 !important;
       border-color: #8a6bb8 !important;
       color: #fff !important;
     }
-    .tr-day-nos .cap-no .cap-badge {
+    .tr-day-nos .cap-no .cap-badge,
+    .ft-agg-nos .cap-no .cap-badge,
+    .ft-tip-nos .cap-no .cap-badge,
+    .ft-finish-nos .cap-no .cap-badge {
       width: 12px;
       height: 12px;
       font-size: 8px;
@@ -3196,7 +3214,10 @@
       background: #242b34;
       border-color: rgba(210, 222, 236, .12);
     }
-    html[data-theme="dark"] .tr-day-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
+    html[data-theme="dark"] .tr-day-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
+    html[data-theme="dark"] .ft-agg-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
+    html[data-theme="dark"] .ft-tip-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
+    html[data-theme="dark"] .ft-finish-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
       background: #2a313c !important;
       color: #e8eef6 !important;
       border-color: #e88b2a !important;
@@ -3391,59 +3412,6 @@
       gap: 4px;
       align-items: center;
     }
-    /* 與心水戰績號圈一致：淺色未中白底深字＋橙邊，深色另覆寫 */
-    .ft-agg-nos .cap-no,
-    .ft-tip-nos .cap-no,
-    .ft-finish-nos .cap-no {
-      flex: 0 0 auto;
-      width: 26px;
-      height: 26px;
-      min-width: 26px;
-      padding: 0;
-      border-radius: 50%;
-      background: #fff !important;
-      color: #1e2a38 !important;
-      border: 1.5px solid #e88b2a !important;
-      font-size: 12px;
-      font-weight: 800;
-      box-shadow: none;
-    }
-    .ft-agg-nos .cap-no.is-w,
-    .ft-tip-nos .cap-no.is-w,
-    .ft-finish-nos .cap-no.is-w {
-      background: #cc453f !important;
-      border-color: #cc453f !important;
-      color: #fff !important;
-    }
-    .ft-agg-nos .cap-no.is-q,
-    .ft-tip-nos .cap-no.is-q,
-    .ft-finish-nos .cap-no.is-q {
-      background: #2f70ca !important;
-      border-color: #2f70ca !important;
-      color: #fff !important;
-    }
-    .ft-agg-nos .cap-no.is-p,
-    .ft-tip-nos .cap-no.is-p,
-    .ft-finish-nos .cap-no.is-p {
-      background: #3f8f4a !important;
-      border-color: #3f8f4a !important;
-      color: #fff !important;
-    }
-    .ft-agg-nos .cap-no.is-4,
-    .ft-tip-nos .cap-no.is-4,
-    .ft-finish-nos .cap-no.is-4 {
-      background: #8a6bb8 !important;
-      border-color: #8a6bb8 !important;
-      color: #fff !important;
-    }
-    .ft-agg-nos .cap-no .cap-badge,
-    .ft-tip-nos .cap-no .cap-badge,
-    .ft-finish-nos .cap-no .cap-badge {
-      width: 12px;
-      height: 12px;
-      font-size: 8px;
-      padding: 1px 0 0 1px;
-    }
     .ft-agg-meta {
       margin-top: 4px;
       font-size: 11px;
@@ -3527,13 +3495,6 @@
     }
     html[data-theme="dark"] .ft-race-pills::-webkit-scrollbar-thumb {
       background: #4a5564;
-    }
-    html[data-theme="dark"] .ft-agg-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
-    html[data-theme="dark"] .ft-tip-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4),
-    html[data-theme="dark"] .ft-finish-nos .cap-no:not(.is-w):not(.is-q):not(.is-p):not(.is-4) {
-      background: #2a313c !important;
-      color: #e8eef6 !important;
-      border-color: #e88b2a !important;
     }
     .synth-review-sheet-body {
       min-height: 300px;
@@ -6653,14 +6614,14 @@
       }
       return Math.max(0, topbarBottom);
     }
-    function syncTipRecordOverlayTop() {
-      const overlay = document.getElementById("tipRecordOverlay");
+    function syncAnnoSheetOverlayTop(overlayId) {
+      const overlay = document.getElementById(overlayId);
       if (!overlay) return;
       overlay.style.top = tipRecordOverlayAnchorTop() + "px";
     }
-    function clearTipRecordSheetHeight() {
-      const sheet = document.getElementById("tipRecordSheet");
-      const body = document.getElementById("tipRecordBody");
+    function clearFillSheetHeight(sheetId, bodyId) {
+      const sheet = document.getElementById(sheetId);
+      const body = document.getElementById(bodyId);
       if (sheet) {
         sheet.classList.remove("is-fill");
         sheet.style.height = "";
@@ -6675,10 +6636,10 @@
     }
     /* 內容 ≥ 可視區：貼螢幕底並內滾；內容短：按數據高度。
        量高時必須先解除 max-height，否則深色／WebKit 下 scrollHeight 會被夾成可視高，誤走短內容分支導致無法滑動。 */
-    function syncTipRecordSheetHeight() {
-      const overlay = document.getElementById("tipRecordOverlay");
-      const sheet = document.getElementById("tipRecordSheet");
-      const body = document.getElementById("tipRecordBody");
+    function syncFillSheetHeight(overlayId, sheetId, bodyId) {
+      const overlay = document.getElementById(overlayId);
+      const sheet = document.getElementById(sheetId);
+      const body = document.getElementById(bodyId);
       if (!overlay || !sheet || !body || overlay.hasAttribute("hidden")) return;
       const avail = Math.max(0, Math.floor(overlay.clientHeight));
       if (!avail) return;
@@ -6718,6 +6679,15 @@
         body.style.overflow = "visible";
       }
     }
+    function syncTipRecordOverlayTop() {
+      syncAnnoSheetOverlayTop("tipRecordOverlay");
+    }
+    function clearTipRecordSheetHeight() {
+      clearFillSheetHeight("tipRecordSheet", "tipRecordBody");
+    }
+    function syncTipRecordSheetHeight() {
+      syncFillSheetHeight("tipRecordOverlay", "tipRecordSheet", "tipRecordBody");
+    }
     function syncTipRecordLayout() {
       syncTipRecordOverlayTop();
       syncTipRecordSheetHeight();
@@ -6750,9 +6720,12 @@
       });
       if (changed) saveTipNotePicks();
     }
+    /* 演示開關：接真賽果後改 false，避免未派彩場次誤顯示冠亞季殿色 */
+    const TIP_SETTLED_TREAT_BEFORE_CURRENT_AS_PAID = true;
     function tipRaceSettled(race) {
       if (!race) return false;
       if (raceHasPayout(race) || race.paid === true) return true;
+      if (!TIP_SETTLED_TREAT_BEFORE_CURRENT_AS_PAID) return false;
       /* 演示：當前場次之前視為已派彩 */
       return Number(race.num) < Number(currentRace);
     }
@@ -6975,18 +6948,25 @@
           renderTipRecordLeaderboardHtml() +
         "</section>";
     }
+    /* 彈層互斥：打開某一層前關閉其餘。賽期表僅在「原本已打開」時才套用選日（見 closeRaceDateCalendar）。 */
+    function closeAllBoardOverlays(exceptId) {
+      const ex = exceptId || "";
+      if (ex !== "raceCalOverlay") closeRaceDateCalendar();
+      if (ex !== "payoutDetailOverlay") closePayoutDetail();
+      if (ex !== "colSortOverlay") closeColSortSheet();
+      if (ex !== "synthReviewOverlay") closeSynthReviewSheet();
+      if (ex !== "speedMapOverlay") closeSpeedMapSheet();
+      if (ex !== "jtCollabOverlay") closeJtCollabSheet();
+      if (ex !== "tipRecordOverlay") closeTipRecordSheet();
+      if (ex !== "famousTipsOverlay") closeFamousTipsSheet();
+      if (ex !== "horseSheet") closeHorseSheet();
+      if (ex !== "waterSheet") closeWaterSheet();
+      if (typeof closeCapsuleDrop === "function") closeCapsuleDrop();
+    }
     function openTipRecordSheet() {
       const overlay = document.getElementById("tipRecordOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSpeedMapSheet();
-      closeSynthReviewSheet();
-      closeJtCollabSheet();
-      closeFamousTipsSheet();
-      closeHorseSheet();
-      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      closeAllBoardOverlays("tipRecordOverlay");
       ensureTipNoteDemoForMeeting();
       tipRecordHelpOpen = false;
       tipRecordLbOpenIds = {};
@@ -7175,64 +7155,13 @@
       }).join("");
     }
     function syncFamousTipsOverlayTop() {
-      const overlay = document.getElementById("famousTipsOverlay");
-      if (!overlay) return;
-      overlay.style.top = tipRecordOverlayAnchorTop() + "px";
+      syncAnnoSheetOverlayTop("famousTipsOverlay");
     }
     function clearFamousTipsSheetHeight() {
-      const sheet = document.getElementById("famousTipsSheet");
-      const body = document.getElementById("famousTipsBody");
-      if (sheet) {
-        sheet.classList.remove("is-fill");
-        sheet.style.height = "";
-        sheet.style.maxHeight = "";
-      }
-      if (body) {
-        body.style.maxHeight = "";
-        body.style.overflow = "";
-        body.style.flex = "";
-        body.style.minHeight = "";
-      }
+      clearFillSheetHeight("famousTipsSheet", "famousTipsBody");
     }
     function syncFamousTipsSheetHeight() {
-      const overlay = document.getElementById("famousTipsOverlay");
-      const sheet = document.getElementById("famousTipsSheet");
-      const body = document.getElementById("famousTipsBody");
-      if (!overlay || !sheet || !body || overlay.hasAttribute("hidden")) return;
-      const avail = Math.max(0, Math.floor(overlay.clientHeight));
-      if (!avail) return;
-      sheet.classList.remove("is-fill");
-      sheet.style.height = "auto";
-      sheet.style.maxHeight = "none";
-      body.style.flex = "0 0 auto";
-      body.style.minHeight = "0";
-      body.style.maxHeight = "none";
-      body.style.overflow = "visible";
-      void sheet.offsetHeight;
-      const head = sheet.querySelector(".cal-head");
-      const scs = getComputedStyle(sheet);
-      const padY = (parseFloat(scs.paddingTop) || 0) + (parseFloat(scs.paddingBottom) || 0);
-      const headH = head ? head.offsetHeight : 0;
-      const headMb = head ? (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0;
-      const natural = Math.max(
-        sheet.scrollHeight,
-        Math.ceil(padY + headH + headMb + body.scrollHeight)
-      );
-      if (natural >= avail) {
-        sheet.classList.add("is-fill");
-        sheet.style.height = avail + "px";
-        sheet.style.maxHeight = avail + "px";
-        body.style.flex = "1 1 auto";
-        body.style.minHeight = "0";
-        body.style.maxHeight = Math.max(80, Math.floor(avail - padY - headH - headMb)) + "px";
-        body.style.overflow = "auto";
-      } else {
-        sheet.style.height = "auto";
-        sheet.style.maxHeight = avail + "px";
-        body.style.flex = "0 0 auto";
-        body.style.maxHeight = "none";
-        body.style.overflow = "visible";
-      }
+      syncFillSheetHeight("famousTipsOverlay", "famousTipsSheet", "famousTipsBody");
     }
     function syncFamousTipsLayout() {
       syncFamousTipsOverlayTop();
@@ -7335,15 +7264,7 @@
     function openFamousTipsSheet() {
       const overlay = document.getElementById("famousTipsOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSpeedMapSheet();
-      closeSynthReviewSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeHorseSheet();
-      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      closeAllBoardOverlays("famousTipsOverlay");
       famousTipsRace = Number(currentRace) || famousTipsRaceNum();
       fillFamousTipsSheet();
       syncFamousTipsOverlayTop();
@@ -7811,14 +7732,7 @@
     function openSynthReviewSheet(no) {
       const overlay = document.getElementById("synthReviewOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSpeedMapSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
-      closeHorseSheet();
+      closeAllBoardOverlays("synthReviewOverlay");
       synthNoteSide = "write";
       synthNoteExpandedId = null;
       const runners = currentRunners();
@@ -8014,15 +7928,7 @@
     function openJtCollabSheet(no) {
       const overlay = document.getElementById("jtCollabOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSpeedMapSheet();
-      closeSynthReviewSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
-      closeHorseSheet();
-      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      closeAllBoardOverlays("jtCollabOverlay");
       fillJtCollabSheet(no);
       syncJtCollabOverlayTop();
       overlay.removeAttribute("hidden");
@@ -8152,15 +8058,7 @@
     function openSpeedMapSheet() {
       const overlay = document.getElementById("speedMapOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSynthReviewSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
-      closeHorseSheet();
-      if (typeof closeWaterSheet === "function") closeWaterSheet();
+      closeAllBoardOverlays("speedMapOverlay");
       const raceNo = Number(currentRace) || 1;
       const token = ++speedMapReqToken;
       renderSpeedMapLoading(raceNo);
@@ -10696,7 +10594,7 @@
     }
     function openWaterSheet() {
       if (!el.waterSheet) return;
-      closeHorseSheet();
+      closeAllBoardOverlays("waterSheet");
       if (el.board) el.board.scrollTop = 0;
       if (el.boardShell) el.boardShell.classList.add("is-water-open");
       fillWaterSheet();
@@ -10711,9 +10609,7 @@
       if (el.waterSheetClose) el.waterSheetClose.focus();
     }
     function openHorseSheet(no) {
-      closeWaterSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
+      closeAllBoardOverlays("horseSheet");
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       const meet = currentMeet();
@@ -12014,14 +11910,7 @@
     function openPayoutDetail() {
       const overlay = document.getElementById("payoutDetailOverlay");
       if (!overlay || payoutStatusKind !== "paid") return;
-      closeCapsuleDrop();
-      closeRaceDateCalendar();
-      closeColSortSheet();
-      closeSynthReviewSheet();
-      closeSpeedMapSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
+      closeAllBoardOverlays("payoutDetailOverlay");
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -12140,13 +12029,7 @@
     function openColSortSheet() {
       const overlay = document.getElementById("colSortOverlay");
       if (!overlay) return;
-      closeRaceDateCalendar();
-      closePayoutDetail();
-      closeSynthReviewSheet();
-      closeSpeedMapSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
+      closeAllBoardOverlays("colSortOverlay");
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -12221,13 +12104,7 @@
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
-      closePayoutDetail();
-      closeColSortSheet();
-      closeSynthReviewSheet();
-      closeSpeedMapSheet();
-      closeJtCollabSheet();
-      closeTipRecordSheet();
-      closeFamousTipsSheet();
+      closeAllBoardOverlays("raceCalOverlay");
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
@@ -12247,9 +12124,15 @@
         syncRaceCalOverlayTop();
       });
     }
+    function isRaceDateCalendarOpen() {
+      const overlay = document.getElementById("raceCalOverlay");
+      return !!(overlay && !overlay.hasAttribute("hidden"));
+    }
     function closeRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
+      /* 未打開時直接返回，避免其它 open 或 Escape 誤觸發 loadMeetingForDate 重渲整表 */
+      if (overlay.hasAttribute("hidden")) return;
       overlay.setAttribute("hidden", "");
       overlay.setAttribute("aria-hidden", "true");
       const iso = raceCalSelected;
@@ -12303,9 +12186,7 @@
         });
       }
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
-      document.addEventListener("keydown", function (ev) {
-        if (ev.key === "Escape") closeRaceDateCalendar();
-      });
+      /* Escape 統一由頂欄菜單處理鏈接管，避免未打開時誤 close＋重載會議 */
       window.addEventListener("resize", function () {
         const ov = document.getElementById("raceCalOverlay");
         if (ov && !ov.hasAttribute("hidden")) syncRaceCalOverlayTop();
@@ -12508,6 +12389,15 @@
           if (isOpen()) {
             setOpen(false);
             btn.focus();
+            return;
+          }
+          if (typeof isRaceDateCalendarOpen === "function" && isRaceDateCalendarOpen()) {
+            closeRaceDateCalendar();
+            return;
+          }
+          const payOv = document.getElementById("payoutDetailOverlay");
+          if (payOv && !payOv.hasAttribute("hidden")) {
+            closePayoutDetail();
             return;
           }
           if (isWaterSheetOpen()) {

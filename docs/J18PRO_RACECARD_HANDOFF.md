@@ -96,8 +96,9 @@ header.topbar
 | `jtCollabOverlay` | 骑练合作战绩 |
 | `waterSheet` / `horseSheet` | 水位、马匹详情 |
 
-约定：打开一个弹层时，应关闭其它互斥弹层（参考 `openTipRecordSheet` / `openFamousTipsSheet` 里的 `close*` 列表）。  
-心水战绩 / 名家贴士顶边对齐 **公告栏顶**（`tipRecordOverlayAnchorTop`），高度用 JS：内容够高则贴底内滚，短则按内容收缩（`sync*SheetHeight`，量高前必须解除 `max-height`，否则深色 WebKit 会误判无法滚动）。
+约定：打开弹层前调用 `closeAllBoardOverlays(exceptId)` 统一互斥（含水位 / 马匹详情）。  
+赛期表 `closeRaceDateCalendar` **仅在 overlay 原本已打开时**才 `loadMeetingForDate`；Escape 由顶栏处理链统一接管（含赛期 / 派彩）。  
+心水战绩 / 名家贴士顶边对齐 **公告栏顶**（`tipRecordOverlayAnchorTop`），高度共用 `syncFillSheetHeight`（量高前必须解除 `max-height`）。号圈浅/深色样式与心水、名家共用同一组选择器。
 
 ---
 
