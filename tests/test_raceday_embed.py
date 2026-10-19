@@ -370,8 +370,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("英國", r.text)
         self.assertIn("澳洲", r.text)
         self.assertNotIn("黃昏馬", r.text)
-        self.assertIn("心水戰績", r.text)
+        self.assertIn("個人心水和戰績", r.text)
         self.assertIn('data-nav="tipRecord"', r.text)
+        self.assertIn("心水戰績", r.text)  # 彈層標題仍用短名
         self.assertIn('id="tipRecordOverlay"', r.text)
         self.assertIn('id="tipRecordBody"', r.text)
         self.assertIn("openTipRecordSheet", r.text)
