@@ -884,6 +884,11 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("cycleRowMark", r.text)
         self.assertIn("mark-1", r.text)
         self.assertIn("mark-2", r.text)
+        # 深色模式燕尾標選中色須壓過默認灰色
+        self.assertIn('html[data-theme="dark"] .row-flag[data-mark="1"]', r.text)
+        self.assertIn('html[data-theme="dark"] .row-flag[data-mark="2"]', r.text)
+        self.assertIn("color: #e8b04a;", r.text)
+        self.assertIn("color: #5dce7a;", r.text)
         self.assertNotIn("qinPreviewN", r.text)
         self.assertNotIn("qin-preview", r.text)
         self.assertNotIn("qin-dense", r.text)
