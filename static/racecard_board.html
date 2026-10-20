@@ -5542,6 +5542,13 @@
     html[data-theme="dark"] .row-flag {
       color: #8a93a3;
     }
+    /* 須壓過上方 .row-flag 灰色；否則 data-mark 選中色在深色下被蓋掉 */
+    html[data-theme="dark"] .row-flag[data-mark="1"] {
+      color: #e8b04a;
+    }
+    html[data-theme="dark"] .row-flag[data-mark="2"] {
+      color: #5dce7a;
+    }
     html[data-theme="dark"] .row-flag:active {
       background: rgba(255, 255, 255, .08);
     }
