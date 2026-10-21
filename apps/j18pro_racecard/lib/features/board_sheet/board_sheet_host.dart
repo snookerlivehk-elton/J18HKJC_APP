@@ -7,6 +7,7 @@ import 'package:j18pro_racecard/features/horse_sheet/horse_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_sheet.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_calendar_sheet.dart';
+import 'package:j18pro_racecard/features/tip_record/tip_record_sheet.dart';
 import 'package:j18pro_racecard/features/water_sheet/water_sheet.dart';
 
 /// Shows at most one modal sheet. A new request replaces the current page.
@@ -55,10 +56,7 @@ class BoardSheetHost extends ConsumerWidget {
     return switch (request.kind) {
       BoardSheetKind.menu => const RacecardMenu(),
       BoardSheetKind.calendar => const RaceCalendarSheet(),
-      BoardSheetKind.tipRecord => const PlaceholderSheet(
-        title: '個人心水和戰績',
-        sheetKey: Key('sheet-tip-record'),
-      ),
+      BoardSheetKind.tipRecord => const TipRecordSheet(),
       BoardSheetKind.famous => const PlaceholderSheet(
         title: '名家',
         sheetKey: Key('sheet-famous'),
@@ -81,11 +79,7 @@ class _PayoutHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final meeting = ref
-        .watch(racecardControllerProvider)
-        .asData
-        ?.value
-        .meeting;
+    final meeting = ref.watch(racecardControllerProvider).asData?.value.meeting;
     final race = meeting?.raceByNum(raceNum);
     if (race == null) {
       return const SafeArea(

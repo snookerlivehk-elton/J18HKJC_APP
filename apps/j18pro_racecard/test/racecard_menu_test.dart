@@ -130,7 +130,10 @@ void main() {
     await tester.tap(find.byKey(const Key('menu-tip-record')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('sheet-tip-record')), findsOneWidget);
-    expect(find.text('跟隨賽日 2026-09-23'), findsOneWidget);
+    expect(find.text('心水戰績 · 23/9'), findsOneWidget);
+    expect(find.text('今日心水'), findsOneWidget);
+    expect(find.text('跟隨賽日 2026-09-23'), findsNothing);
+    expect(find.text('稍後提供'), findsNothing);
     expect(find.byKey(const Key('race-calendar')), findsNothing);
     await _dismissTopSheet(tester);
 
@@ -159,8 +162,12 @@ void main() {
     await _openMenu(tester);
     await tester.tap(find.byKey(const Key('menu-tip-record')));
     await tester.pumpAndSettle();
-    expect(find.text('跟隨賽日 2026-10-01'), findsOneWidget);
+    expect(find.text('心水戰績 · 1/10'), findsOneWidget);
+    expect(find.text('第1場'), findsOneWidget);
+    expect(find.text('未標記'), findsOneWidget);
+    expect(find.text('跟隨賽日 2026-10-01'), findsNothing);
     expect(find.text('上一個月'), findsNothing);
+    expect(find.byKey(const Key('race-calendar')), findsNothing);
   });
 
   testWidgets('menu theme and text scale apply to the main table', (
