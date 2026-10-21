@@ -264,7 +264,7 @@
 
 | Phase | 状态 | 分支/PR | 备注 |
 |-------|------|---------|------|
-| 0 脚手架 | 未开始 | | |
+| 0 脚手架 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21。状态管理锁定 Riverpod。`flutter analyze` 无 error。标题「排位」与深色开关：widget test 通过，并用 Chrome 打开 web 构建核对浅色 `#eef1f5` / 深色 `#1a1f27` 可来回切换。本环境无 iOS Simulator / Android Emulator，真机命令见 `apps/j18pro_racecard/README.md`。Phase 1 fixture 建议（未实现）：从 `static/racecard_board.html` 的 `MEETING` 规范化为 JSON，放到 `apps/j18pro_racecard/assets/fixtures/meeting_YYYYMMDD.json`。 |
 | 1 模型+Demo | 未开始 | | |
 | 2 主表 MVP | 未开始 | | |
 | 3 胶囊+时间轴 | 未开始 | | |

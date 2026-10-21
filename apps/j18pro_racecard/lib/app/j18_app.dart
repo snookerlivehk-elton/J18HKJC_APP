@@ -17,11 +17,7 @@ class J18App extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       locale: const Locale('zh', 'HK'),
       supportedLocales: const [Locale('zh', 'HK')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: J18Theme.light(),
       darkTheme: J18Theme.dark(),
       themeMode: themeMode,
