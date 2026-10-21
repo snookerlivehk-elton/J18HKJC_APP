@@ -129,7 +129,29 @@ class _HorseBody extends ConsumerWidget {
               ),
             ),
             TextButton(
+              key: const Key('open-synth-review'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () {
+                ref
+                    .read(boardSheetProvider.notifier)
+                    .open(BoardSheetRequest.synthReview(runner.no));
+              },
+              child: const Text(
+                '綜合評述',
+                style: TextStyle(fontFamily: 'Noto Sans TC'),
+              ),
+            ),
+            TextButton(
               key: const Key('open-water'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               onPressed: () {
                 ref
                     .read(boardSheetProvider.notifier)

@@ -12,6 +12,7 @@ enum BoardSheetKind {
   payout,
   horse,
   water,
+  synthReview,
 }
 
 @immutable
@@ -35,6 +36,9 @@ class BoardSheetRequest {
     : this._(BoardSheetKind.horse, horseNo: horseNo);
 
   const BoardSheetRequest.water() : this._(BoardSheetKind.water);
+
+  const BoardSheetRequest.synthReview(int horseNo)
+    : this._(BoardSheetKind.synthReview, horseNo: horseNo);
 
   final BoardSheetKind kind;
   final int? horseNo;

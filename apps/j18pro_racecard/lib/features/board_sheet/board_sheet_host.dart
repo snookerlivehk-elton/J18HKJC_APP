@@ -8,6 +8,7 @@ import 'package:j18pro_racecard/features/horse_sheet/horse_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_sheet.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_calendar_sheet.dart';
+import 'package:j18pro_racecard/features/synth_review/synth_review_sheet.dart';
 import 'package:j18pro_racecard/features/tip_record/tip_record_sheet.dart';
 import 'package:j18pro_racecard/features/water_sheet/water_sheet.dart';
 
@@ -63,6 +64,10 @@ class BoardSheetHost extends ConsumerWidget {
       BoardSheetKind.payout => _PayoutHost(raceNum: request.raceNum!),
       BoardSheetKind.horse => HorseSheet(horseNo: request.horseNo!),
       BoardSheetKind.water => const WaterSheet(),
+      BoardSheetKind.synthReview => SynthReviewSheet(
+        key: ValueKey(request.horseNo),
+        horseNo: request.horseNo!,
+      ),
     };
   }
 }
