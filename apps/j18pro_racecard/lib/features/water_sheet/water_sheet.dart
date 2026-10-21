@@ -76,11 +76,17 @@ class _WaterSheetState extends ConsumerState<WaterSheet> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    key: const Key('water-close'),
-                    tooltip: '關閉水位',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
+                  Semantics(
+                    button: true,
+                    label: '關閉水位',
+                    child: ExcludeSemantics(
+                      child: IconButton(
+                        key: const Key('water-close'),
+                        tooltip: '關閉水位',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ),
                   ),
                 ],
               ),

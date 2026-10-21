@@ -168,11 +168,17 @@ class _SynthReviewSheetState extends ConsumerState<SynthReviewSheet> {
                     ),
                   ),
                 ),
-                IconButton(
-                  key: const Key('synth-close'),
-                  tooltip: '關閉',
-                  onPressed: _requestClose,
-                  icon: const Icon(Icons.close),
+                Semantics(
+                  button: true,
+                  label: '關閉',
+                  child: ExcludeSemantics(
+                    child: IconButton(
+                      key: const Key('synth-close'),
+                      tooltip: '關閉',
+                      onPressed: _requestClose,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
                 ),
               ],
             ),

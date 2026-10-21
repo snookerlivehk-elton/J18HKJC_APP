@@ -10,6 +10,7 @@ import 'package:j18pro_racecard/features/racecard_insight/race_insight_bar.dart'
 import 'package:j18pro_racecard/features/col_sort/col_layout.dart';
 import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
 import 'package:j18pro_racecard/features/racecard_table/race_pills.dart';
+import 'package:j18pro_racecard/widgets/nav_media.dart';
 import 'package:j18pro_racecard/widgets/theme_toggle.dart';
 
 class RacecardPage extends ConsumerWidget {
@@ -17,10 +18,11 @@ class RacecardPage extends ConsumerWidget {
 
   static const routeName = '/';
 
+  /// The app bar does not watch the racecard. Changing race rebuilds
+  /// [_RacecardBody] only, not the menu, live/radio placeholders, or theme switch.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = Theme.of(context).extension<J18Tokens>() ?? J18Tokens.light;
-    final racecard = ref.watch(racecardControllerProvider);
     return ColoredBox(
       color: tokens.shell,
       child: Center(
@@ -29,15 +31,21 @@ class RacecardPage extends ConsumerWidget {
           child: Scaffold(
             appBar: AppBar(
               automaticallyImplyLeading: false,
-              leading: IconButton(
-                key: const Key('menu-stub'),
-                tooltip: '選單',
-                onPressed: () {
-                  ref
-                      .read(boardSheetProvider.notifier)
-                      .open(const BoardSheetRequest.menu());
-                },
-                icon: const Icon(Icons.menu),
+              leading: Semantics(
+                button: true,
+                label: '選單',
+                child: ExcludeSemantics(
+                  child: IconButton(
+                    key: const Key('menu-stub'),
+                    tooltip: '選單',
+                    onPressed: () {
+                      ref
+                          .read(boardSheetProvider.notifier)
+                          .open(const BoardSheetRequest.menu());
+                    },
+                    icon: const Icon(Icons.menu),
+                  ),
+                ),
               ),
               title: const Text('排位'),
               backgroundColor: Colors.transparent,
@@ -51,62 +59,72 @@ class RacecardPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              actions: const [ThemeToggle(), SizedBox(width: 4)],
-            ),
-            body: Stack(
-              children: [
-                racecard.when(
-                  loading: () => const Center(
-                    child: Text(
-                      '載入賽事',
-                      key: Key('racecard-loading'),
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans TC',
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  error: (error, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            error is RaceLoadException
-                                ? error.message
-                                : '未能載入賽事',
-                            key: const Key('racecard-error'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: tokens.text,
-                              fontFamily: 'Noto Sans TC',
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            key: const Key('racecard-retry'),
-                            onPressed: () {
-                              ref.invalidate(racecardControllerProvider);
-                            },
-                            child: const Text(
-                              '重試',
-                              style: TextStyle(fontFamily: 'Noto Sans TC'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  data: (state) => _RaceBoard(state: state),
-                ),
-                const BoardSheetAnchor(),
+              actions: const [
+                NavMediaPlaceholders(),
+                ThemeToggle(),
+                SizedBox(width: 4),
               ],
             ),
+            body: const _RacecardBody(),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _RacecardBody extends ConsumerWidget {
+  const _RacecardBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = Theme.of(context).extension<J18Tokens>() ?? J18Tokens.light;
+    final racecard = ref.watch(racecardControllerProvider);
+    return Stack(
+      children: [
+        racecard.when(
+          loading: () => const Center(
+            child: Text(
+              '載入賽事',
+              key: Key('racecard-loading'),
+              style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 15),
+            ),
+          ),
+          error: (error, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    error is RaceLoadException ? error.message : '未能載入賽事',
+                    key: const Key('racecard-error'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: tokens.text,
+                      fontFamily: 'Noto Sans TC',
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    key: const Key('racecard-retry'),
+                    onPressed: () {
+                      ref.invalidate(racecardControllerProvider);
+                    },
+                    child: const Text(
+                      '重試',
+                      style: TextStyle(fontFamily: 'Noto Sans TC'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          data: (state) => _RaceBoard(state: state),
+        ),
+        const BoardSheetAnchor(),
+      ],
     );
   }
 }
@@ -137,21 +155,24 @@ class _RaceBoard extends ConsumerWidget {
                   ),
                 ),
               ),
-              TextButton(
-                key: const Key('open-speed-map'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () {
-                  ref
-                      .read(boardSheetProvider.notifier)
-                      .open(BoardSheetRequest.speedMap(state.currentRaceNum));
-                },
-                child: const Text(
-                  '走位圖',
-                  style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 13),
+              Tooltip(
+                message: '查看全場速勢走位圖',
+                child: TextButton(
+                  key: const Key('open-speed-map'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    ref
+                        .read(boardSheetProvider.notifier)
+                        .open(BoardSheetRequest.speedMap(state.currentRaceNum));
+                  },
+                  child: const Text(
+                    '走位圖',
+                    style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 13),
+                  ),
                 ),
               ),
             ],

@@ -152,11 +152,17 @@ class _TitleBar extends StatelessWidget {
             ),
           ),
         ),
-        IconButton(
-          key: const Key('tip-close'),
-          tooltip: '關閉',
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close),
+        Semantics(
+          button: true,
+          label: '關閉',
+          child: ExcludeSemantics(
+            child: IconButton(
+              key: const Key('tip-close'),
+              tooltip: '關閉',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+            ),
+          ),
         ),
       ],
     );

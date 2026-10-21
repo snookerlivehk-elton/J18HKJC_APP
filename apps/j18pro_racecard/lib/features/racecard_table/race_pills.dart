@@ -35,26 +35,31 @@ class RacePills extends ConsumerWidget {
               button: true,
               selected: active,
               label: '第${race.num}場',
-              child: Material(
-                color: active ? tokens.blue : tokens.green,
-                borderRadius: BorderRadius.circular(6),
-                child: InkWell(
-                  key: Key('race-pill-${race.num}'),
-                  onTap: () {
-                    ref.read(racecardControllerProvider.notifier).selectRace(race.num);
-                  },
-                  child: SizedBox(
-                    width: 32,
-                    height: 26,
-                    child: Center(
-                      child: Text(
-                        '${race.num}',
-                        style: const TextStyle(
-                          fontFamily: 'Noto Sans TC',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1,
+              hint: active ? '目前場次' : '切換至此場',
+              child: ExcludeSemantics(
+                child: Material(
+                  color: active ? tokens.blue : tokens.green,
+                  borderRadius: BorderRadius.circular(6),
+                  child: InkWell(
+                    key: Key('race-pill-${race.num}'),
+                    onTap: () {
+                      ref
+                          .read(racecardControllerProvider.notifier)
+                          .selectRace(race.num);
+                    },
+                    child: SizedBox(
+                      width: 32,
+                      height: 26,
+                      child: Center(
+                        child: Text(
+                          '${race.num}',
+                          style: const TextStyle(
+                            fontFamily: 'Noto Sans TC',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1,
+                          ),
                         ),
                       ),
                     ),

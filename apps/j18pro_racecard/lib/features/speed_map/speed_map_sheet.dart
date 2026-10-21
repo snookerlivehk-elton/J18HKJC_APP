@@ -90,11 +90,17 @@ class _SpeedMapSheetState extends ConsumerState<SpeedMapSheet> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    key: const Key('speed-close'),
-                    tooltip: '關閉',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
+                  Semantics(
+                    button: true,
+                    label: '關閉',
+                    child: ExcludeSemantics(
+                      child: IconButton(
+                        key: const Key('speed-close'),
+                        tooltip: '關閉',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ),
                   ),
                 ],
               ),

@@ -60,11 +60,17 @@ class JtCollabSheet extends ConsumerWidget {
                   ),
                 ),
               ),
-              IconButton(
-                key: const Key('jt-close'),
-                tooltip: '關閉',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
+              Semantics(
+                button: true,
+                label: '關閉',
+                child: ExcludeSemantics(
+                  child: IconButton(
+                    key: const Key('jt-close'),
+                    tooltip: '關閉',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
               ),
             ],
           ),

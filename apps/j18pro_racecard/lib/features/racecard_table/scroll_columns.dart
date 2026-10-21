@@ -116,3 +116,48 @@ List<double> fitScrollWidths({
       ),
   ];
 }
+
+/// Remembers right-column widths for one [Race] instance, column list, and scale.
+///
+/// A horizontal drag rebuilds the table on every pointer move, and a swallowtail
+/// tap rebuilds it again. Both used to run [TextPainter] over every cell.
+/// [resolve] measures only when the race instance, the column list instance,
+/// the text scale, or the style changes. Switching race passes a different
+/// [Race] and measures once. The visible rows still rebuild, because the
+/// horses changed.
+class ScrollWidthCache {
+  Race? _race;
+  List<ScrollColumn>? _columns;
+  double? _scale;
+  TextStyle? _style;
+  List<double>? _widths;
+
+  List<double> resolve({
+    required Race race,
+    required TextScaler textScaler,
+    required List<ScrollColumn> columns,
+    TextStyle style = racecardCellStyle,
+  }) {
+    final scale = textScaler.scale(1);
+    final cached = _widths;
+    if (cached != null &&
+        identical(_race, race) &&
+        identical(_columns, columns) &&
+        _scale == scale &&
+        _style == style) {
+      return cached;
+    }
+    final widths = fitScrollWidths(
+      race: race,
+      textScaler: textScaler,
+      columns: columns,
+      style: style,
+    );
+    _race = race;
+    _columns = columns;
+    _scale = scale;
+    _style = style;
+    _widths = widths;
+    return widths;
+  }
+}

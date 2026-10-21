@@ -118,11 +118,17 @@ class _RaceCalendarSheetState extends ConsumerState<RaceCalendarSheet> {
                       onPressed: () => _shiftMonth(1),
                       icon: const Icon(Icons.chevron_right),
                     ),
-                    IconButton(
-                      key: const Key('cal-close'),
-                      tooltip: '關閉',
-                      onPressed: _requestClose,
-                      icon: const Icon(Icons.close),
+                    Semantics(
+                      button: true,
+                      label: '關閉',
+                      child: ExcludeSemantics(
+                        child: IconButton(
+                          key: const Key('cal-close'),
+                          tooltip: '關閉',
+                          onPressed: _requestClose,
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
                     ),
                   ],
                 ),

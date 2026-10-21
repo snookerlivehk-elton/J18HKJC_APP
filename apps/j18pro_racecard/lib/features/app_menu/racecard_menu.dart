@@ -112,49 +112,68 @@ class RacecardMenu extends ConsumerWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    const Text(
-                      '字體',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans TC',
-                        fontSize: 14,
+                child: Semantics(
+                  container: true,
+                  explicitChildNodes: true,
+                  label: '字號，第${level + 1}級，共${textScaleMaxLevel + 1}級',
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      const Text(
+                        '字體',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans TC',
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      key: const Key('zoom-out'),
-                      tooltip: '縮小',
-                      onPressed: level <= 0
-                          ? null
-                          : () => ref
-                                .read(textScaleLevelProvider.notifier)
-                                .step(-1),
-                      icon: const Icon(Icons.remove),
-                    ),
-                    IconButton(
-                      key: const Key('zoom-in'),
-                      tooltip: '放大',
-                      onPressed: level >= textScaleMaxLevel
-                          ? null
-                          : () => ref
-                                .read(textScaleLevelProvider.notifier)
-                                .step(1),
-                      icon: const Icon(Icons.add),
-                    ),
-                    TextButton(
-                      key: const Key('zoom-reset'),
-                      onPressed: level == 0
-                          ? null
-                          : () => ref
-                                .read(textScaleLevelProvider.notifier)
-                                .reset(),
-                      child: const Text(
-                        '復原',
-                        style: TextStyle(fontFamily: 'Noto Sans TC'),
+                      Semantics(
+                        button: true,
+                        enabled: level > 0,
+                        label: '縮小',
+                        child: ExcludeSemantics(
+                          child: IconButton(
+                            key: const Key('zoom-out'),
+                            tooltip: '縮小',
+                            onPressed: level <= 0
+                                ? null
+                                : () => ref
+                                      .read(textScaleLevelProvider.notifier)
+                                      .step(-1),
+                            icon: const Icon(Icons.remove),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      Semantics(
+                        button: true,
+                        enabled: level < textScaleMaxLevel,
+                        label: '放大',
+                        child: ExcludeSemantics(
+                          child: IconButton(
+                            key: const Key('zoom-in'),
+                            tooltip: '放大',
+                            onPressed: level >= textScaleMaxLevel
+                                ? null
+                                : () => ref
+                                      .read(textScaleLevelProvider.notifier)
+                                      .step(1),
+                            icon: const Icon(Icons.add),
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        key: const Key('zoom-reset'),
+                        onPressed: level == 0
+                            ? null
+                            : () => ref
+                                  .read(textScaleLevelProvider.notifier)
+                                  .reset(),
+                        child: const Text(
+                          '復原',
+                          style: TextStyle(fontFamily: 'Noto Sans TC'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
