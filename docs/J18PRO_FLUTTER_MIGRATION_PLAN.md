@@ -267,7 +267,7 @@
 | 0 脚手架 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21。状态管理锁定 Riverpod。`flutter analyze` 无 error。标题「排位」与深色开关：widget test 通过，并用 Chrome 打开 web 构建核对浅色 `#eef1f5` / 深色 `#1a1f27` 可来回切换。本环境无 iOS Simulator / Android Emulator，真机命令见 `apps/j18pro_racecard/README.md`。Fixture 导出方式已在 Phase 1 落地。 |
 | 1 模型+Demo | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续在 Phase 0 同一 PR。`Meeting`/`Race`/`Runner` + Riverpod `RacecardController`。Fixture `apps/j18pro_racecard/assets/fixtures/meeting_20260923.json`：从 `static/racecard_board.html` 的 `let MEETING` 抽出第 1/5/6 场（源码已是 JSON，未改 HTML），并套用页面绘制前的 `ensureRace6Has10WithScratch7`（7 号雙劍合璧退出、赔率 null）。`flutter analyze` 无 error；`flutter test` 含 fixture 解析与场次切换。未做左锁右滑表。仓库内无 06 清单文件。 |
 | 2 主表 MVP | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。竖屏主表：场次胶囊、左锁马号/马名、右列檔位/獨贏/位置/近績按当场 `TextPainter` 量宽（内容到分隔线 2px + 1px 线）。左右同一 `ListView` 行，横滑共用一个 offset。燕尾无→黄→绿→无，深色选中色 `#e8b04a` / `#5dce7a` 不回落到灰。未做表头排序、综合评述双行、胶囊和时间轴。 |
-| 3 胶囊+时间轴 | 未开始 | | |
+| 3 胶囊+时间轴 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。赛况灯按距开跑分钟（待開賽／出跑道／入閘中／開跑中／已派彩），元信息一行省略。时间轴 10 个静态点，拖动写入 `scrubPointIdx`。综合指数与赛果派彩胶囊互斥展开，箭头下展策略或各场派彩；已派彩才开明细。号圈未中对齐心水／名家（浅色白底橙边，深色 `#2a313c`）。W/Q/P/四色。未做跑马灯、状态灯脉冲、赛期菜单。 |
 | 4 菜单+赛期 | 未开始 | | |
 | 5A 马匹/水位 | 未开始 | | |
 | 5B 个人心水战绩 | 未开始 | | |

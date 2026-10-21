@@ -3,9 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/data/demo_meeting_repository.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
+import 'package:j18pro_racecard/features/racecard_insight/index_picks.dart';
+import 'package:j18pro_racecard/features/racecard_insight/time_scrub.dart';
 
 /// Web demo opens on race 5 (`let currentRace = 5`).
 const demoInitialRaceNum = 5;
+
+/// Web `capsuleActive`. Only one capsule body is open.
+enum OpenCapsule { picks, payout }
+
+/// Web `indexStrategyPinned` default.
+const defaultIndexStrategyId = 'composite';
 
 final raceRepositoryProvider = Provider<RaceRepository>((ref) {
   return DemoMeetingRepository();
@@ -13,8 +21,8 @@ final raceRepositoryProvider = Provider<RaceRepository>((ref) {
 
 final racecardControllerProvider =
     AsyncNotifierProvider<RacecardController, RacecardViewState>(
-  RacecardController.new,
-);
+      RacecardController.new,
+    );
 
 @immutable
 class RacecardViewState {
@@ -22,6 +30,10 @@ class RacecardViewState {
     required this.meeting,
     required this.currentRaceNum,
     this.marks = const {},
+    this.scrubPointIdx = -1,
+    this.openCapsule = OpenCapsule.picks,
+    this.capsuleDropOpen = false,
+    this.indexStrategyId = defaultIndexStrategyId,
   });
 
   final Meeting meeting;
@@ -29,6 +41,18 @@ class RacecardViewState {
 
   /// Swallowtail state keyed `raceNum:horseNo`. 1 yellow, 2 green. Missing is none.
   final Map<String, int> marks;
+
+  /// Web `scrubPointIdx`. `-1` follows the latest point (0').
+  final int scrubPointIdx;
+
+  /// Which capsule body is expanded. The other stays closed.
+  final OpenCapsule openCapsule;
+
+  /// Chevron drop (strategy list or per-race payout). Independent of the body.
+  final bool capsuleDropOpen;
+
+  /// Web `indexStrategyPinned`.
+  final String indexStrategyId;
 
   Race get currentRace {
     final race = meeting.raceByNum(currentRaceNum);
@@ -47,11 +71,19 @@ class RacecardViewState {
   RacecardViewState copyWith({
     int? currentRaceNum,
     Map<String, int>? marks,
+    int? scrubPointIdx,
+    OpenCapsule? openCapsule,
+    bool? capsuleDropOpen,
+    String? indexStrategyId,
   }) {
     return RacecardViewState(
       meeting: meeting,
       currentRaceNum: currentRaceNum ?? this.currentRaceNum,
       marks: marks ?? this.marks,
+      scrubPointIdx: scrubPointIdx ?? this.scrubPointIdx,
+      openCapsule: openCapsule ?? this.openCapsule,
+      capsuleDropOpen: capsuleDropOpen ?? this.capsuleDropOpen,
+      indexStrategyId: indexStrategyId ?? this.indexStrategyId,
     );
   }
 
@@ -60,25 +92,33 @@ class RacecardViewState {
     return other is RacecardViewState &&
         meeting == other.meeting &&
         currentRaceNum == other.currentRaceNum &&
+        scrubPointIdx == other.scrubPointIdx &&
+        openCapsule == other.openCapsule &&
+        capsuleDropOpen == other.capsuleDropOpen &&
+        indexStrategyId == other.indexStrategyId &&
         mapEquals(marks, other.marks);
   }
 
   @override
   int get hashCode => Object.hash(
-        meeting,
-        currentRaceNum,
-        Object.hashAllUnordered([
-          for (final entry in marks.entries) Object.hash(entry.key, entry.value),
-        ]),
-      );
+    meeting,
+    currentRaceNum,
+    scrubPointIdx,
+    openCapsule,
+    capsuleDropOpen,
+    indexStrategyId,
+    Object.hashAllUnordered([
+      for (final entry in marks.entries) Object.hash(entry.key, entry.value),
+    ]),
+  );
 }
 
 class RacecardController extends AsyncNotifier<RacecardViewState> {
   @override
   Future<RacecardViewState> build() async {
-    final meeting = await ref.watch(raceRepositoryProvider).load(
-          DemoMeetingRepository.snapshotDate,
-        );
+    final meeting = await ref
+        .watch(raceRepositoryProvider)
+        .load(DemoMeetingRepository.snapshotDate);
     final initial = meeting.raceByNum(demoInitialRaceNum) != null
         ? demoInitialRaceNum
         : meeting.races.first.num;
@@ -90,14 +130,67 @@ class RacecardController extends AsyncNotifier<RacecardViewState> {
     if (value == null) return;
     if (value.meeting.raceByNum(raceNum) == null) return;
     if (value.currentRaceNum == raceNum) return;
+    // Marks, scrub index, and the open capsule stay. Web `selectRace` does not
+    // reset `scrubPointIdx` or `rowMarks`.
     state = AsyncData(value.copyWith(currentRaceNum: raceNum));
+  }
+
+  /// Clamps onto the static scrub marks. Does not use `-1`.
+  void setScrubIndex(int index) {
+    final value = state.asData?.value;
+    if (value == null) return;
+    final next = index.clamp(0, scrubMarkCount - 1);
+    if (value.scrubPointIdx == next) return;
+    state = AsyncData(value.copyWith(scrubPointIdx: next));
+  }
+
+  /// Switches the open body. Switching closes the drop; tapping the open body
+  /// is handled by [toggleCapsuleDrop].
+  void selectCapsule(OpenCapsule which) {
+    final value = state.asData?.value;
+    if (value == null) return;
+    if (value.openCapsule == which) return;
+    state = AsyncData(
+      value.copyWith(openCapsule: which, capsuleDropOpen: false),
+    );
+  }
+
+  void toggleCapsuleDrop() {
+    final value = state.asData?.value;
+    if (value == null) return;
+    state = AsyncData(value.copyWith(capsuleDropOpen: !value.capsuleDropOpen));
+  }
+
+  /// Web `setIndexStrategyPinned`: a new strategy clears the scrub back to latest.
+  void setIndexStrategy(String id) {
+    final value = state.asData?.value;
+    if (value == null) return;
+    final next = canonicalIndexStrategyId(id);
+    if (next == value.indexStrategyId) return;
+    state = AsyncData(value.copyWith(indexStrategyId: next, scrubPointIdx: -1));
+  }
+
+  /// Web `openPayoutForRace`: jump to that race, open the payout capsule, close the drop.
+  void openPayoutForRace(int raceNum) {
+    final value = state.asData?.value;
+    if (value == null) return;
+    if (value.meeting.raceByNum(raceNum) == null) return;
+    state = AsyncData(
+      value.copyWith(
+        currentRaceNum: raceNum,
+        openCapsule: OpenCapsule.payout,
+        capsuleDropOpen: false,
+      ),
+    );
   }
 
   /// None → yellow → green → none. Marks stay when the visible race changes.
   void cycleMark(int horseNo) {
     final value = state.asData?.value;
     if (value == null) return;
-    final exists = value.currentRace.runners.any((runner) => runner.no == horseNo);
+    final exists = value.currentRace.runners.any(
+      (runner) => runner.no == horseNo,
+    );
     if (!exists) return;
     final key = '${value.currentRaceNum}:$horseNo';
     final next = ((value.marks[key] ?? 0) + 1) % 3;

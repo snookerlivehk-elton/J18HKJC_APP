@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/app_theme.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
+import 'package:j18pro_racecard/features/racecard_insight/race_insight_bar.dart';
 import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
 import 'package:j18pro_racecard/features/racecard_table/race_pills.dart';
 import 'package:j18pro_racecard/widgets/theme_toggle.dart';
@@ -42,10 +43,7 @@ class RacecardPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              actions: const [
-                ThemeToggle(),
-                SizedBox(width: 4),
-              ],
+              actions: const [ThemeToggle(), SizedBox(width: 4)],
             ),
             body: racecard.when(
               loading: () => const Center(child: Text('載入賽事')),
@@ -94,10 +92,7 @@ class RacecardPage extends ConsumerWidget {
                 SizedBox(height: 8),
                 Text(
                   '稍後提供',
-                  style: TextStyle(
-                    fontFamily: 'Noto Sans TC',
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 15),
                 ),
               ],
             ),
@@ -131,10 +126,8 @@ class _RaceBoard extends ConsumerWidget {
             ),
           ),
         ),
-        RacePills(
-          races: meeting.races,
-          currentRaceNum: state.currentRaceNum,
-        ),
+        RacePills(races: meeting.races, currentRaceNum: state.currentRaceNum),
+        const RaceInsightBar(),
         Expanded(
           child: RacecardTable(
             race: state.currentRace,

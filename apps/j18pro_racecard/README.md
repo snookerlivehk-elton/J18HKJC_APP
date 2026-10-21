@@ -1,6 +1,6 @@
 # j18pro 排位（Flutter）
 
-`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 2 主表）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
+`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 3 赛况条与胶囊）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
 
 ## 双轨
 
@@ -24,11 +24,11 @@ lib/
   app/        应用壳、路由、主题 token、主题状态
   domain/     `Meeting` / `Race` / `Runner`（不可变，对齐 Web `MEETING`）
   data/       `RaceRepository` 与 `DemoMeetingRepository`
-  features/   `RacecardPage`：场次胶囊 + 左锁右滑主表
+  features/   `RacecardPage`：场次胶囊、赛况条、时间轴、指数/派彩胶囊、左锁右滑主表
   widgets/    跨功能控件（主题开关）
 ```
 
-路由：`RacecardPage`，路径 `/`。竖屏主表左锁马号/马名，右列按当场内容量宽（檔位、獨贏、位置、近績）。燕尾标三态存在 `RacecardController`，换场保留。顶栏菜单是空壳。
+路由：`RacecardPage`，路径 `/`。主表上方是赛况灯、元信息、赛前时间轴，以及综合指数 / 赛果派彩胶囊。竖屏主表左锁马号/马名，右列按当场内容量宽（檔位、獨贏、位置、近績）。燕尾标三态存在 `RacecardController`，换场保留。顶栏菜单是空壳。
 
 ## 如何运行
 
@@ -75,4 +75,4 @@ flutter run
 
 ## 非目标
 
-表头多列排序、综合评述双行单元格、赛况条、时间轴、胶囊、赛期菜单、名家、心水、真 API、WebView。右滑列目前固定为檔位 / 獨贏 / 位置 / 近績。
+表头多列排序、综合评述双行单元格、赛期菜单、名家、心水、真 API、WebView。右滑列目前固定为檔位 / 獨贏 / 位置 / 近績。赛况元信息过长时省略，不跑马；开跑状态灯不脉冲。
