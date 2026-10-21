@@ -145,6 +145,24 @@ class _HorseBody extends ConsumerWidget {
                 style: TextStyle(fontFamily: 'Noto Sans TC'),
               ),
             ),
+            if (!runner.scratched)
+              TextButton(
+                key: const Key('open-jt-collab'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  ref
+                      .read(boardSheetProvider.notifier)
+                      .open(BoardSheetRequest.jtCollab(runner.no));
+                },
+                child: const Text(
+                  '騎練合作',
+                  style: TextStyle(fontFamily: 'Noto Sans TC'),
+                ),
+              ),
             TextButton(
               key: const Key('open-water'),
               style: TextButton.styleFrom(

@@ -5,6 +5,7 @@ import 'package:j18pro_racecard/features/famous_tips/famous_tips_sheet.dart';
 import 'package:j18pro_racecard/features/app_menu/racecard_menu.dart';
 import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/horse_sheet/horse_sheet.dart';
+import 'package:j18pro_racecard/features/jt_collab/jt_collab_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_sheet.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_calendar_sheet.dart';
@@ -65,6 +66,10 @@ class BoardSheetHost extends ConsumerWidget {
       BoardSheetKind.horse => HorseSheet(horseNo: request.horseNo!),
       BoardSheetKind.water => const WaterSheet(),
       BoardSheetKind.synthReview => SynthReviewSheet(
+        key: ValueKey(request.horseNo),
+        horseNo: request.horseNo!,
+      ),
+      BoardSheetKind.jtCollab => JtCollabSheet(
         key: ValueKey(request.horseNo),
         horseNo: request.horseNo!,
       ),

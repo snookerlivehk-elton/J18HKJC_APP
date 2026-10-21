@@ -275,7 +275,8 @@
 | 5D 列排序 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「馬匹數據排序」打开未顯示 / 已顯示，上移下移和左右显隐会立刻改主表，复位回到檔位、獨贏、位置、近績。配置写入 `j18-scroll-col-layout-v1`。水位、心水勾选和综合评述不进可排序列。Phase 5 到此结束。未做 Phase 6 真 API。 |
 | 6 真 API | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。`ApiRaceRepository` 按 `jjjc.racecard.v1` / `jjjc.results.v1` 拉排位和赛果。未设 `JJJC_API_BASE` 时仍用演示快照。断网显示「未能連線，請檢查網絡」，空赛日显示「該日暫無賽事」。两个「当前场之前视为已派彩」开关默认关闭。彩衣走 HKJC CDN，失败退回色块。`live_odds` 无 export。未做 Phase 7。 |
 | 7A 综合评述+笔记 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。马匹详情「綜合評述」打开评述和个人笔记。笔记写入 `j18-horse-notes-v1`，键是 `日期:场次:马号`。已保存记录覆盖演示种子。主表双行「評述／筆記」单元格是「Web only 暂缓」，不进列排序。未做走位图、骑练、qin、顶栏直播。 |
-| 7B 次要+打磨 | 未开始 | | 走位图、骑练合作、qin、顶栏直播、无障碍与性能仍待后续。 |
+| 7B 骑练+连赢 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。马匹详情「騎練合作」和騎師／練馬師格打开合作战绩（演示，无 API）。主表下方连赢矩阵由独赢／位置合成，正Q／位置Q 可切换。超过 14 匹可横滑，首行首列不 sticky。未做走位图、顶栏直播、性能。 |
+| 7C 次要+打磨 | 未开始 | | 走位图、顶栏直播、无障碍与性能仍待后续。 |
 | 8 上架 | 未开始 | | |
 
 ---

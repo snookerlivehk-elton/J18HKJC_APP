@@ -13,6 +13,7 @@ enum BoardSheetKind {
   horse,
   water,
   synthReview,
+  jtCollab,
 }
 
 @immutable
@@ -39,6 +40,9 @@ class BoardSheetRequest {
 
   const BoardSheetRequest.synthReview(int horseNo)
     : this._(BoardSheetKind.synthReview, horseNo: horseNo);
+
+  const BoardSheetRequest.jtCollab(int horseNo)
+    : this._(BoardSheetKind.jtCollab, horseNo: horseNo);
 
   final BoardSheetKind kind;
   final int? horseNo;

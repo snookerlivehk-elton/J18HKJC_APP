@@ -160,6 +160,11 @@ class _RaceBoard extends ConsumerWidget {
               .read(boardSheetProvider.notifier)
               .open(BoardSheetRequest.horse(horseNo));
         },
+        onOpenJtCollab: (horseNo) {
+          ref
+              .read(boardSheetProvider.notifier)
+              .open(BoardSheetRequest.jtCollab(horseNo));
+        },
       ),
     );
   }

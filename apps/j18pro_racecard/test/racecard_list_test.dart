@@ -16,9 +16,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   final preferences = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(preferences),
-      ],
+      overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
       child: const J18App(),
     ),
   );
@@ -26,7 +24,9 @@ Future<void> _pumpApp(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('switching races updates the table and marks scratched horses', (tester) async {
+  testWidgets('switching races updates the table and marks scratched horses', (
+    tester,
+  ) async {
     await _pumpApp(tester);
 
     expect(find.text('本領非凡'), findsOneWidget);
@@ -53,7 +53,13 @@ void main() {
     expect(find.text('堅多福'), findsNothing);
     expect(find.text('雙劍合璧'), findsOneWidget);
     expect(find.text('已退出'), findsOneWidget);
-    expect(find.text('37'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('row-6-7')),
+        matching: find.text('37'),
+      ),
+      findsNothing,
+    );
     expect(find.byType(RowBand), findsNWidgets(10));
     final name = tester.widget<Text>(find.text('雙劍合璧'));
     expect(name.style?.decoration, TextDecoration.lineThrough);
