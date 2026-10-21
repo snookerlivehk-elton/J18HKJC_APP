@@ -1,7 +1,8 @@
 import 'package:j18pro_racecard/domain/meeting.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 
-/// Phase 6 will add an API implementation beside [DemoMeetingRepository].
+/// [DemoMeetingRepository] is the fallback. [ApiRaceRepository] loads api_jjjc
+/// when `JJJC_API_BASE` is set.
 abstract interface class RaceRepository {
   /// Loads the meeting for an ISO date (`YYYY-MM-DD`).
   ///

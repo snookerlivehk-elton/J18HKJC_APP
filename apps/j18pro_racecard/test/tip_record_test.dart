@@ -81,13 +81,14 @@ void main() {
       final race5 = meeting.raceByNum(5)!;
       final race6 = meeting.raceByNum(6)!;
 
-      expect(tipRaceSettled(race1, currentRaceNum: 5), isTrue);
+      expect(tipSettledTreatBeforeCurrentAsPaid, isFalse);
+      expect(tipRaceSettled(race1, currentRaceNum: 5), isFalse);
       expect(tipRaceSettled(race5, currentRaceNum: 5), isFalse);
       expect(tipRaceSettled(race6, currentRaceNum: 5), isFalse);
-      expect(tipCircleKind(race1, 11, currentRaceNum: 5), CircleKind.win);
-      expect(tipCircleKind(race1, 8, currentRaceNum: 5), CircleKind.quinella);
-      expect(tipCircleKind(race1, 3, currentRaceNum: 5), CircleKind.place);
-      expect(tipCircleKind(race1, 4, currentRaceNum: 5), CircleKind.fourth);
+      expect(tipCircleKind(race1, 11, currentRaceNum: 5), CircleKind.plain);
+      expect(tipCircleKind(race1, 8, currentRaceNum: 5), CircleKind.plain);
+      expect(tipCircleKind(race1, 3, currentRaceNum: 5), CircleKind.plain);
+      expect(tipCircleKind(race1, 4, currentRaceNum: 5), CircleKind.plain);
       expect(tipCircleKind(race1, 6, currentRaceNum: 5), CircleKind.plain);
       expect(tipCircleKind(race5, 5, currentRaceNum: 5), CircleKind.plain);
 
@@ -117,18 +118,11 @@ void main() {
     final meeting = await DemoMeetingRepository().load(
       DemoMeetingRepository.snapshotDate,
     );
+    expect(tipSettledTreatBeforeCurrentAsPaid, isFalse);
     final day = tipAggregateStats(meeting, currentRaceNum: 5, scope: 'day');
-    expect(day['win']!.plays, 1);
-    expect(day['win']!.wins, 1);
-    expect(day['win']!.prize, 34);
-    expect(tipFmtRate(day['win']!.wins, day['win']!.plays), '100.0%');
-    expect(day['qin']!.prize, 139);
-    expect(day['top3']!.prize, 192);
-    expect(day['fourth']!.prize, 140);
-    expect(day['tierce']!.prize, 461);
-    expect(day['qpl']!.prize, 114);
-    expect(day['quartet']!.prize, 682);
-    expect(tipFmtPrize(tipTotalPrize(day)), r'$1,762');
+    expect(day['win']!.plays, 0);
+    expect(tipFmtRate(day['win']!.wins, day['win']!.plays), '—');
+    expect(tipFmtPrize(tipTotalPrize(day)), r'$0');
 
     final season = tipAggregateStats(
       meeting,
@@ -136,12 +130,11 @@ void main() {
       scope: 'season',
     );
     expect(season['win']!.plays, 6);
-    expect(season['win']!.wins, 6);
-    expect(season['top3']!.plays, 7);
-    expect(season['top3']!.wins, 5);
-    expect(tipFmtRate(season['top3']!.wins, season['top3']!.plays), '71.4%');
-    expect(season['top3']!.prize, 1118);
-    expect(tipFmtPrize(tipTotalPrize(season)), r'$10,002');
+    expect(season['win']!.wins, 1);
+    expect(season['win']!.prize, 120);
+    expect(season['top3']!.wins, 0);
+    expect(tipFmtRate(season['top3']!.wins, season['top3']!.plays), '0.0%');
+    expect(tipFmtPrize(tipTotalPrize(season)), r'$840');
     expect(season['win']!.plays, isNot(day['win']!.plays));
   });
 

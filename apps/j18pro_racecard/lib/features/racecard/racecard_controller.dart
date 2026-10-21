@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:j18pro_racecard/data/api_race_repository.dart';
 import 'package:j18pro_racecard/data/demo_meeting_repository.dart';
+import 'package:j18pro_racecard/data/jjjc_api_config.dart';
+import 'package:j18pro_racecard/data/jjjc_transport.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
 import 'package:j18pro_racecard/features/racecard_insight/index_picks.dart';
@@ -16,8 +19,27 @@ enum OpenCapsule { picks, payout }
 /// Web `indexStrategyPinned` default.
 const defaultIndexStrategyId = 'composite';
 
+final jjjcApiConfigProvider = Provider<JjjcApiConfig>((ref) {
+  return JjjcApiConfig.fromEnvironment();
+});
+
+final jjjcTransportProvider = Provider<JjjcTransport>((ref) {
+  return HttpJjjcTransport();
+});
+
+/// Demo snapshot until `JJJC_API_BASE` (or `JJJC_RESULTS_API_BASE`) is set.
 final raceRepositoryProvider = Provider<RaceRepository>((ref) {
-  return DemoMeetingRepository();
+  final config = ref.watch(jjjcApiConfigProvider);
+  final demo = DemoMeetingRepository();
+  if (!config.isConfigured) return demo;
+  return FallbackRaceRepository(
+    demo: demo,
+    api: ApiRaceRepository(
+      config: config,
+      transport: ref.watch(jjjcTransportProvider),
+    ),
+    config: config,
+  );
 });
 
 final racecardControllerProvider =
@@ -186,14 +208,24 @@ class RacecardController extends AsyncNotifier<RacecardViewState> {
     String iso, {
     RaceCalendarScope scope = RaceCalendarScope.hk,
   }) async {
-    final value = state.asData?.value;
-    if (value == null) return;
-    if (value.meeting.date == iso && value.calendarScope == scope) return;
-    final meeting = await ref
-        .read(raceRepositoryProvider)
-        .load(iso, scope: scope);
     final latest = state.asData?.value;
-    if (latest == null || meeting.races.isEmpty) return;
+    if (latest == null) return;
+    if (latest.meeting.date == iso && latest.calendarScope == scope) return;
+    state = const AsyncLoading();
+    final Meeting meeting;
+    try {
+      meeting = await ref.read(raceRepositoryProvider).load(iso, scope: scope);
+    } on RaceLoadException catch (error, stack) {
+      state = AsyncError(error, stack);
+      return;
+    } catch (error, stack) {
+      state = AsyncError(RaceLoadException('未能載入賽事'), stack);
+      return;
+    }
+    if (meeting.races.isEmpty) {
+      state = AsyncError(RaceLoadException('該日暫無賽事'), StackTrace.current);
+      return;
+    }
     final fromStub =
         latest.meeting.date != DemoMeetingRepository.snapshotDate ||
         latest.calendarScope != RaceCalendarScope.hk;

@@ -1,0 +1,307 @@
+{
+  "schema": "jjjc.results.v1",
+  "race_date": "2026-09-23",
+  "venue_code": "HV",
+  "source_preference": [
+    "official_hkjc",
+    "j18_fallback"
+  ],
+  "generated_at": "2026-10-21T12:29:08.715Z",
+  "race_count": 1,
+  "runner_count": 12,
+  "races": [
+    {
+      "race_id": "20260923HV01",
+      "meeting_id": "2026-09-23_HV",
+      "race_date": "2026-09-23",
+      "venue_code": "HV",
+      "race_no": 1,
+      "race_name": "NAM FUNG HANDICAP",
+      "race_class": "Class 5",
+      "cla_code": "5",
+      "distance_m": 1650,
+      "going": "好地",
+      "course": "TURF - \"C\" Course",
+      "source": "official_hkjc",
+      "fetched_at": "2026-09-24T16:16:58.345Z",
+      "dividends": [
+        {
+          "pool": "Pool",
+          "amount": null,
+          "combination": "Winning Combination"
+        },
+        {
+          "pool": "WIN",
+          "amount": 45.5,
+          "combination": "4"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 16,
+          "combination": "4"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 16.5,
+          "combination": "11"
+        },
+        {
+          "pool": "PLACE",
+          "amount": 35.5,
+          "combination": "10"
+        },
+        {
+          "pool": "QUINELLA",
+          "amount": 96.5,
+          "combination": "4,11"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 38,
+          "combination": "4,11"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 94,
+          "combination": "4,10"
+        },
+        {
+          "pool": "QUINELLA PLACE",
+          "amount": 83,
+          "combination": "10,11"
+        },
+        {
+          "pool": "FORECAST",
+          "amount": 177,
+          "combination": "4,11"
+        },
+        {
+          "pool": "TIERCE",
+          "amount": 1996,
+          "combination": "4,11,10"
+        },
+        {
+          "pool": "TRIO",
+          "amount": 408,
+          "combination": "4,10,11"
+        },
+        {
+          "pool": "FIRST 4",
+          "amount": 920,
+          "combination": "4,6,10,11"
+        },
+        {
+          "pool": "QUARTET",
+          "amount": 14789,
+          "combination": "4,11,10,6"
+        }
+      ],
+      "runners": [
+        {
+          "horse_no": 4,
+          "finish_order_num": 1,
+          "finishing_position": 1,
+          "finishing_position_raw": "1",
+          "horse_name": "RED BRICK WARRIOR",
+          "horse_code": "K580",
+          "jockey_name": "C L Chau",
+          "trainer_name": "D Eustace",
+          "actual_weight": 129,
+          "declared_horse_weight": 1110,
+          "draw": 1,
+          "lbw": "---",
+          "running_position": "1 1 1 1",
+          "finish_time": "1:39.21",
+          "win_odds": 4.5
+        },
+        {
+          "horse_no": 11,
+          "finish_order_num": 2,
+          "finishing_position": 2,
+          "finishing_position_raw": "2",
+          "horse_name": "ORIENTAL SURPRISE",
+          "horse_code": "K028",
+          "jockey_name": "Z Purton",
+          "trainer_name": "D A Hayes",
+          "actual_weight": 120,
+          "declared_horse_weight": 1064,
+          "draw": 3,
+          "lbw": "N",
+          "running_position": "6 6 6 2",
+          "finish_time": "1:39.27",
+          "win_odds": 3.8
+        },
+        {
+          "horse_no": 10,
+          "finish_order_num": 3,
+          "finishing_position": 3,
+          "finishing_position_raw": "3",
+          "horse_name": "WINDICATOR FAMILY",
+          "horse_code": "H419",
+          "jockey_name": "K Teetan",
+          "trainer_name": "W K Mo",
+          "actual_weight": 120,
+          "declared_horse_weight": 1012,
+          "draw": 7,
+          "lbw": "1-1/4",
+          "running_position": "9 9 9 3",
+          "finish_time": "1:39.40",
+          "win_odds": 13
+        },
+        {
+          "horse_no": 6,
+          "finish_order_num": 4,
+          "finishing_position": 4,
+          "finishing_position_raw": "4",
+          "horse_name": "ALL ARE MINE",
+          "horse_code": "H293",
+          "jockey_name": "L Hewitson",
+          "trainer_name": "B Crawford",
+          "actual_weight": 128,
+          "declared_horse_weight": 1029,
+          "draw": 11,
+          "lbw": "2-1/2",
+          "running_position": "12 12 11 4",
+          "finish_time": "1:39.62",
+          "win_odds": 11
+        },
+        {
+          "horse_no": 3,
+          "finish_order_num": 5,
+          "finishing_position": 5,
+          "finishing_position_raw": "5",
+          "horse_name": "SOARING BRONCO",
+          "horse_code": "J162",
+          "jockey_name": "L Ferraris",
+          "trainer_name": "M Newnham",
+          "actual_weight": 132,
+          "declared_horse_weight": 1121,
+          "draw": 4,
+          "lbw": "3-1/4",
+          "running_position": "5 4 3 5",
+          "finish_time": "1:39.72",
+          "win_odds": 4.8
+        },
+        {
+          "horse_no": 1,
+          "finish_order_num": 6,
+          "finishing_position": 6,
+          "finishing_position_raw": "6",
+          "horse_name": "SUPER SICARIO",
+          "horse_code": "K306",
+          "jockey_name": "C Y Ho",
+          "trainer_name": "C Fownes",
+          "actual_weight": 135,
+          "declared_horse_weight": 1225,
+          "draw": 12,
+          "lbw": "5-1/2",
+          "running_position": "4 2 2 6",
+          "finish_time": "1:40.07",
+          "win_odds": 18
+        },
+        {
+          "horse_no": 12,
+          "finish_order_num": 7,
+          "finishing_position": 7,
+          "finishing_position_raw": "7",
+          "horse_name": "PERFECT PAIRING",
+          "horse_code": "J331",
+          "jockey_name": "A Atzeni",
+          "trainer_name": "J Size",
+          "actual_weight": 118,
+          "declared_horse_weight": 1012,
+          "draw": 9,
+          "lbw": "5-1/2",
+          "running_position": "11 11 12 7",
+          "finish_time": "1:40.09",
+          "win_odds": 52
+        },
+        {
+          "horse_no": 7,
+          "finish_order_num": 8,
+          "finishing_position": 8,
+          "finishing_position_raw": "8",
+          "horse_name": "CIRCUIT DUFFY",
+          "horse_code": "J501",
+          "jockey_name": "M L Yeung",
+          "trainer_name": "W Y So",
+          "actual_weight": 127,
+          "declared_horse_weight": 1105,
+          "draw": 6,
+          "lbw": "5-3/4",
+          "running_position": "8 8 8 8",
+          "finish_time": "1:40.13",
+          "win_odds": 114
+        },
+        {
+          "horse_no": 8,
+          "finish_order_num": 9,
+          "finishing_position": 9,
+          "finishing_position_raw": "9",
+          "horse_name": "TELECOM POWER",
+          "horse_code": "J332",
+          "jockey_name": "H Y Yuen",
+          "trainer_name": "Y S Tsui",
+          "actual_weight": 115,
+          "declared_horse_weight": 1063,
+          "draw": 8,
+          "lbw": "6",
+          "running_position": "10 10 10 9",
+          "finish_time": "1:40.15",
+          "win_odds": 5.8
+        },
+        {
+          "horse_no": 9,
+          "finish_order_num": 10,
+          "finishing_position": 10,
+          "finishing_position_raw": "10",
+          "horse_name": "KOLACHI",
+          "horse_code": "J395",
+          "jockey_name": "K C Leung",
+          "trainer_name": "D J Whyte",
+          "actual_weight": 123,
+          "declared_horse_weight": 1019,
+          "draw": 2,
+          "lbw": "7-1/4",
+          "running_position": "3 5 5 10",
+          "finish_time": "1:40.38",
+          "win_odds": 16
+        },
+        {
+          "horse_no": 5,
+          "finish_order_num": 11,
+          "finishing_position": 11,
+          "finishing_position_raw": "11",
+          "horse_name": "TO INFINITY",
+          "horse_code": "G277",
+          "jockey_name": "J Orman",
+          "trainer_name": "J Richards",
+          "actual_weight": 130,
+          "declared_horse_weight": 1039,
+          "draw": 10,
+          "lbw": "7-1/2",
+          "running_position": "2 3 4 11",
+          "finish_time": "1:40.40",
+          "win_odds": 29
+        },
+        {
+          "horse_no": 2,
+          "finish_order_num": 12,
+          "finishing_position": 12,
+          "finishing_position_raw": "12",
+          "horse_name": "SMILING ONE",
+          "horse_code": "K336",
+          "jockey_name": "R Kingscote",
+          "trainer_name": "K H Ting",
+          "actual_weight": 134,
+          "declared_horse_weight": 1264,
+          "draw": 5,
+          "lbw": "10-1/2",
+          "running_position": "7 7 7 12",
+          "finish_time": "1:40.88",
+          "win_odds": 77
+        }
+      ]
+    }
+  ]
+}

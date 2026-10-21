@@ -37,17 +37,17 @@ void main() {
       );
       final race1 = meeting.raceByNum(1)!;
       final race5 = meeting.raceByNum(5)!;
-      expect(famousSettledTreatBeforeCurrentAsPaid, isTrue);
-      expect(tipSettledTreatBeforeCurrentAsPaid, isTrue);
-      expect(famousRaceSettled(race1, currentRaceNum: 5), isTrue);
+      expect(famousSettledTreatBeforeCurrentAsPaid, isFalse);
+      expect(tipSettledTreatBeforeCurrentAsPaid, isFalse);
+      expect(famousRaceSettled(race1, currentRaceNum: 5), isFalse);
       expect(famousRaceSettled(race5, currentRaceNum: 5), isFalse);
       expect(
         famousRaceSettled(
           race1,
           currentRaceNum: 5,
-          treatBeforeCurrentAsPaid: false,
+          treatBeforeCurrentAsPaid: true,
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         famousRaceSettled(
@@ -57,7 +57,16 @@ void main() {
         ),
         isTrue,
       );
-      expect(famousCircleKind(race1, 11, currentRaceNum: 5), CircleKind.win);
+      expect(famousCircleKind(race1, 11, currentRaceNum: 5), CircleKind.plain);
+      expect(
+        famousCircleKind(
+          race1,
+          11,
+          currentRaceNum: 5,
+          treatBeforeCurrentAsPaid: true,
+        ),
+        CircleKind.win,
+      );
       expect(
         famousCircleKind(
           race1,

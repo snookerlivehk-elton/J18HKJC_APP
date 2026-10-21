@@ -130,8 +130,8 @@ void main() {
       '6',
       '1',
     ]);
-    expect(circles.first.kind, CircleKind.win);
-    expect(circles.elementAt(3).kind, CircleKind.fourth);
+    expect(circles.first.kind, CircleKind.plain);
+    expect(circles.elementAt(3).kind, CircleKind.plain);
     expect(circles.last.kind, CircleKind.plain);
 
     final race5 = find.byKey(const Key('tip-day-race-5'));
@@ -161,16 +161,16 @@ void main() {
 
     expect(
       tester.widget<Text>(find.byKey(const Key('tip-stat-rate-top3'))).data,
-      '100.0%',
+      '—',
     );
-    expect(find.textContaining(r'$1,762'), findsOneWidget);
+    expect(find.textContaining(r'$0'), findsWidgets);
     await tester.tap(find.byKey(const Key('tip-scope-season')));
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.byKey(const Key('tip-stat-rate-top3'))).data,
-      '71.4%',
+      '0.0%',
     );
-    expect(find.textContaining(r'$10,002'), findsOneWidget);
+    expect(find.textContaining(r'$840'), findsOneWidget);
 
     expect(find.byKey(const Key('tip-lb-detail-u1')), findsNothing);
     await tester.scrollUntilVisible(

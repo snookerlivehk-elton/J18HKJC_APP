@@ -273,7 +273,7 @@
 | 5B 个人心水战绩 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「個人心水和戰績」打开心水战绩：今日心水（演示最多 6 个最短独赢）、战绩统计（本日/本赛季、规则）、心水名家榜 Top 10。日期只跟全局赛日。弹层按内容收缩，超出后内部滚动。打开时替换其它主弹层。名家贴士与列排序仍是占位。未做 5C/5D。 |
 | 5C 名家贴士 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「名家」打开名家贴士：场次胶囊、综合心水、临场/早餐/马房、胜率、冠亚季殿。演示开关 `famousSettledTreatBeforeCurrentAsPaid` 与心水战绩分开。日期只跟全局赛日。场次胶囊不改主表。心水名家榜仍在心水战绩里。列排序仍是占位。未做 5D。 |
 | 5D 列排序 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「馬匹數據排序」打开未顯示 / 已顯示，上移下移和左右显隐会立刻改主表，复位回到檔位、獨贏、位置、近績。配置写入 `j18-scroll-col-layout-v1`。水位、心水勾选和综合评述不进可排序列。Phase 5 到此结束。未做 Phase 6 真 API。 |
-| 6 真 API | 未开始 | | |
+| 6 真 API | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。`ApiRaceRepository` 按 `jjjc.racecard.v1` / `jjjc.results.v1` 拉排位和赛果。未设 `JJJC_API_BASE` 时仍用演示快照。断网显示「未能連線，請檢查網絡」，空赛日显示「該日暫無賽事」。两个「当前场之前视为已派彩」开关默认关闭。彩衣走 HKJC CDN，失败退回色块。`live_odds` 无 export。未做 Phase 7。 |
 | 7 次要+打磨 | 未开始 | | |
 | 8 上架 | 未开始 | | |
 

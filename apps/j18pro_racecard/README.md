@@ -1,6 +1,6 @@
 # j18pro 排位（Flutter）
 
-`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 5D 列排序）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
+`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 6 真 API）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
 
 ## 双轨
 
@@ -23,12 +23,12 @@
 lib/
   app/        应用壳、路由、主题 token、主题状态
   domain/     `Meeting` / `Race` / `Runner`（不可变，对齐 Web `MEETING`）
-  data/       `RaceRepository` 与 `DemoMeetingRepository`
+  data/       `RaceRepository`、`DemoMeetingRepository`、`ApiRaceRepository`
   features/   `RacecardPage`：场次胶囊、赛况条、时间轴、指数/派彩胶囊、左锁右滑主表
   widgets/    跨功能控件（主题开关）
 ```
 
-路由：`RacecardPage`，路径 `/`。主表上方是赛况灯、元信息、赛前时间轴，以及综合指数 / 赛果派彩胶囊。竖屏主表左锁马号/马名，右列按当场内容量宽。默认仍是檔位、獨贏、位置、近績。菜单「馬匹數據排序」可显隐和调整顺序，并写回 `SharedPreferences`（键 `j18-scroll-col-layout-v1`，与 Web `localStorage` 同名）。负磅、骑师等额外字段默认在「未顯示」。点马号或马名打开马匹详情；详情里的「水位」打开全场水位表。菜单「個人心水和戰績」打开心水战绩：今日心水、战绩统计（本日 / 本赛季、规则）、心水名家榜（演示数据）。菜单「名家」打开名家贴士：场次胶囊、综合心水、临场 / 早餐 / 马房、胜率和冠亚季殿。这两层不是同一页。日期只跟全局赛日，没有独立月历。内容短时弹层跟着收缩，内容超出屏幕时在弹层内滚动。同一时间只保留一个主弹层。燕尾标三态存在 `RacecardController`，换场保留，换赛日清空。从 stub 回到 `2026-09-23` 时回到第 5 场。顶栏菜单含赛期月历（香港马 / 外国马）、主题和字号。
+路由：`RacecardPage`，路径 `/`。主表上方是赛况灯、元信息、赛前时间轴，以及综合指数 / 赛果派彩胶囊。竖屏主表左锁马号/马名，右列按当场内容量宽。默认仍是檔位、獨贏、位置、近績。菜单「馬匹數據排序」可显隐和调整顺序，并写回 `SharedPreferences`（键 `j18-scroll-col-layout-v1`，与 Web `localStorage` 同名）。负磅、骑师等额外字段默认在「未顯示」。点马号或马名打开马匹详情；详情里的「水位」打开全场水位表。菜单「個人心水和戰績」打开心水战绩：今日心水、战绩统计（本日 / 本赛季、规则）、心水名家榜（演示数据）。菜单「名家」打开名家贴士：场次胶囊、综合心水、临场 / 早餐 / 马房、胜率和冠亚季殿。这两层不是同一页。日期只跟全局赛日，没有独立月历。内容短时弹层跟着收缩，内容超出屏幕时在弹层内滚动。同一时间只保留一个主弹层。燕尾标三态存在 `RacecardController`，换场保留，换赛日清空。从 stub 回到 `2026-09-23` 时回到第 5 场。顶栏菜单含赛期月历（香港马 / 外国马）、主题和字号。未设置 `JJJC_API_BASE` 时仍用演示快照。设置后香港赛日改走 api_jjjc 的排位和赛果；断网显示「未能連線，請檢查網絡」，空赛日显示「該日暫無賽事」。马匹详情里的彩衣走 HKJC CDN，失败时退回色块。
 
 ## 如何运行
 
@@ -73,6 +73,14 @@ flutter run
 
 `DemoMeetingRepository` 在香港范围下提供这一日（`2026-09-23`）的真实快照。其它日期，以及外国马范围，按 Web `buildStubMeeting` 返回一场空卡（马名为「賽事資料載入中」或场地名）。打开时默认第 5 场，与 Web `currentRace = 5` 一致。
 
+接真接口（不设则继续用上面的演示快照）：
+
+```bash
+flutter run --dart-define=JJJC_API_BASE=https://apicc.up.railway.app
+```
+
+`JJJC_RESULTS_API_BASE` 可代替上一行。契约见 `docs/JJJC_DOWNSTREAM_CONTRACT.md`。当前公开目录不要求密钥；若部署要求 Bearer，再加 `--dart-define=JJJC_API_KEY=...`。彩衣根路径可用 `J18_SILK_BASE` 换成同源代理，默认是 `https://racing.hkjc.com/racing/content/Images/RaceColor`。
+
 ## 非目标
 
-表头多列排序的真实面板、综合评述双行单元格、真 API、WebView。没有独立日期选择。名家贴士和心水战绩都是演示数据。心水战绩用每场最多 6 个最短独赢，主表没有心水勾选列。名家场次胶囊只切换贴士页，不改主表当前场。水位在详情里的水位表，不占主表一列，也不能在列排序里打开。彩衣是色块，不请求 HKJC 图片。赛况元信息过长时省略，不跑马；开跑状态灯不脉冲。
+表头多列排序的真实面板、综合评述双行单元格、WebView。没有独立日期选择。名家贴士和心水战绩都是演示数据。两个「当前场之前视为已派彩」开关默认关闭，需要时用 `J18_DEMO_TIP_SETTLE_BEFORE_CURRENT` 和 `J18_DEMO_FAMOUS_SETTLE_BEFORE_CURRENT` 打开。心水战绩用每场最多 6 个最短独赢，主表没有心水勾选列。名家场次胶囊只切换贴士页，不改主表当前场。水位在详情里的水位表，不占主表一列，也不能在列排序里打开。目录里的 `live_odds` 没有 export 路径，所以位置赔率仍空，独赢只在赛果 `win_odds` 有值时填上。外国马仍是 stub。赛况元信息过长时省略，不跑马；开跑状态灯不脉冲。

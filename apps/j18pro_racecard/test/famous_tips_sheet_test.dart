@@ -111,21 +111,8 @@ void main() {
       tester.widget<Text>(find.byKey(const Key('race-meta'))).data,
       metaBefore,
     );
-    expect(find.text('冠亞季殿'), findsOneWidget);
-    expect(find.text('尚未派彩'), findsNothing);
-    final finish = tester.widgetList<NumberCircle>(
-      find.descendant(
-        of: find.byKey(const Key('famous-finish')),
-        matching: find.byType(NumberCircle),
-      ),
-    );
-    expect(finish.map((circle) => circle.text).toList(), ['11', '8', '3', '4']);
-    expect(finish.map((circle) => circle.kind).toList(), [
-      CircleKind.win,
-      CircleKind.quinella,
-      CircleKind.place,
-      CircleKind.fourth,
-    ]);
+    expect(find.text('冠亞季殿'), findsNothing);
+    expect(find.text('尚未派彩'), findsOneWidget);
     expect(_circleTexts(tester, find.byKey(const Key('famous-agg'))), [
       '9',
       '12',

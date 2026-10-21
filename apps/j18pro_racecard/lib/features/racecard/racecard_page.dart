@@ -56,18 +56,46 @@ class RacecardPage extends ConsumerWidget {
             body: Stack(
               children: [
                 racecard.when(
-                  loading: () => const Center(child: Text('載入賽事')),
+                  loading: () => const Center(
+                    child: Text(
+                      '載入賽事',
+                      key: Key('racecard-loading'),
+                      style: TextStyle(
+                        fontFamily: 'Noto Sans TC',
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
                   error: (error, _) => Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text(
-                        error is RaceLoadException ? error.message : '未能載入賽事',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: tokens.text,
-                          fontFamily: 'Noto Sans TC',
-                          fontSize: 15,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            error is RaceLoadException
+                                ? error.message
+                                : '未能載入賽事',
+                            key: const Key('racecard-error'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: tokens.text,
+                              fontFamily: 'Noto Sans TC',
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            key: const Key('racecard-retry'),
+                            onPressed: () {
+                              ref.invalidate(racecardControllerProvider);
+                            },
+                            child: const Text(
+                              '重試',
+                              style: TextStyle(fontFamily: 'Noto Sans TC'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

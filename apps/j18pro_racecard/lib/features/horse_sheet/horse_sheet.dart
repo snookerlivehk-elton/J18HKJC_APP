@@ -5,8 +5,9 @@ import 'package:j18pro_racecard/domain/meeting.dart';
 import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/horse_sheet/horse_detail.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
+import 'package:j18pro_racecard/widgets/silk_mark.dart';
 
-/// Web `horseSheet`. Silk images stay a colour block until the API phase.
+/// Web `horseSheet`. Silk uses the HKJC CDN and falls back to a colour block.
 class HorseSheet extends ConsumerWidget {
   const HorseSheet({required this.horseNo, super.key});
 
@@ -70,6 +71,13 @@ class _HorseBody extends ConsumerWidget {
       children: [
         Row(
           children: [
+            SilkMark(
+              horseNo: runner.no,
+              url: runner.silk,
+              scratched: runner.scratched,
+              tokens: tokens,
+            ),
+            const SizedBox(width: 8),
             Container(
               width: 36,
               height: 28,

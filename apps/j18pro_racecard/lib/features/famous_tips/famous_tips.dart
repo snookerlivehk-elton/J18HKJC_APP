@@ -8,11 +8,13 @@ import 'package:j18pro_racecard/features/tip_record/tip_record.dart';
 
 /// Demo switch for the famous-tips sheet only.
 ///
-/// Web uses one `TIP_SETTLED_TREAT_BEFORE_CURRENT_AS_PAID` for both tip-record
-/// and famous tips. Flutter keeps a separate switch so this sheet can be turned
-/// off without changing [tipSettledTreatBeforeCurrentAsPaid]. Pass `false` to
-/// [famousRaceSettled] when a real dividend feed should colour only paid races.
-const famousSettledTreatBeforeCurrentAsPaid = true;
+/// Default off, and separate from [tipSettledTreatBeforeCurrentAsPaid].
+/// `--dart-define=J18_DEMO_FAMOUS_SETTLE_BEFORE_CURRENT=true` colours earlier
+/// races again. Real dividends still colour a race when `paid` is set.
+const famousSettledTreatBeforeCurrentAsPaid = bool.fromEnvironment(
+  'J18_DEMO_FAMOUS_SETTLE_BEFORE_CURRENT',
+  defaultValue: false,
+);
 
 const famousGroups = <FamousGroup>[
   FamousGroup(key: 'live', name: '臨場', hint: '開跑前臨場提供', earlyBonus: 0),

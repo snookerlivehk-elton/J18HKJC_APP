@@ -13,10 +13,13 @@ const tipRecordStake = 10;
 
 /// Web `TIP_SETTLED_TREAT_BEFORE_CURRENT_AS_PAID`.
 ///
-/// Demo only: races before the global current race count as settled so the
-/// sheet can colour W/Q/P/4. Turn this off when a real dividend feed exists.
-/// This flag belongs to tip-record, not the famous-tips sheet.
-const tipSettledTreatBeforeCurrentAsPaid = true;
+/// Default off. Earlier races are settled only when the card itself is paid.
+/// `--dart-define=J18_DEMO_TIP_SETTLE_BEFORE_CURRENT=true` turns the demo
+/// colouring back on. This flag belongs to tip-record, not famous tips.
+const tipSettledTreatBeforeCurrentAsPaid = bool.fromEnvironment(
+  'J18_DEMO_TIP_SETTLE_BEFORE_CURRENT',
+  defaultValue: false,
+);
 
 /// Web `TIP_STAT_DEFS`.
 const tipStatDefs = <TipStatDef>[
