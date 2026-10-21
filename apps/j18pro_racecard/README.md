@@ -22,13 +22,13 @@
 ```text
 lib/
   app/        应用壳、路由、主题 token、主题状态
-  domain/     领域模型（Phase 1 才放 Meeting / Race / Runner）
-  data/       仓库实现（后续 Demo / API）
-  features/   功能页。Phase 0 只有 features/racecard/racecard_page.dart 占位
+  domain/     `Meeting` / `Race` / `Runner`（不可变，对齐 Web `MEETING`）
+  data/       `RaceRepository` 与 `DemoMeetingRepository`
+  features/   `RacecardPage`：场次下拉 + 马名 / 独赢 / 位置列表
   widgets/    跨功能控件（主题开关）
 ```
 
-路由占位：`RacecardPage`，路径 `/`。没有赛事列表，也没有左锁右滑主表。
+路由：`RacecardPage`，路径 `/`。Phase 1 是竖向简易列表，不是左锁右滑主表。
 
 ## 如何运行
 
@@ -61,15 +61,18 @@ flutter run
 
 ### 字体
 
-已打包 **Noto Sans TC** 子集（OFL，`assets/fonts/`，字重 400 / 700），不在运行时请求 Google Fonts。子集只覆盖 Phase 0 界面用字；Phase 2 按列宽测量之前要扩大子集，否则缺字会落到系统回退字体上。
+已打包 **Noto Sans TC** 子集（OFL，`assets/fonts/`，字重 400 / 700），不在运行时请求 Google Fonts。子集覆盖当前界面和这份 fixture 里的字。Phase 2 按列宽测量之前，若再加马名或栏目，要同步扩大子集。
 
-## Phase 1 fixture（尚未实现，只记录导出方式）
+## 演示 fixture 怎么来的
 
-1. 打开 `static/racecard_board.html`，定位 `MEETING` 对象字面量。
-2. 规范化为 JSON（JS 里未加引号的键、尾逗号要处理）。
-3. 放到 `apps/j18pro_racecard/assets/fixtures/meeting_YYYYMMDD.json`。
-4. Phase 1 再写 `Meeting` / `Race` / `Runner` 与解析单测。本阶段不要提前建这些模型。
+文件：`assets/fixtures/meeting_20260923.json`。
 
-## 非目标（Phase 0）
+1. 从 `static/racecard_board.html` 的 `let MEETING = { ... }` 抽出对象。源码里这段已是合法 JSON，没有再改 HTML。
+2. 只保留第 1、5、6 场（精简 3 场；全日 9 场仍在 Web 里）。
+3. 第 6 场套用页面在绘制前执行的 `ensureRace6Has10WithScratch7`：按马号留前 10 匹，7 号「雙劍合璧」`scratched: true` 且独赢/位置为 `null`，`meta` 末尾加上「（演示 10 匹，7號退出）」。字面量里所有马的 `scratched` 都是 `false`，这个标记是 Web 演示脚本加上的，不是 Flutter 另造的马。
 
-赛事列表、主表、弹层、赛期、名家、心水、真 API、WebView。
+`DemoMeetingRepository` 只提供这一日（`2026-09-23`）。其它日期会得到「尚未有該日的演示賽事」。打开时默认第 5 场，与 Web `currentRace = 5` 一致。
+
+## 非目标
+
+左锁右滑主表、弹层、赛期、名家、心水、真 API、WebView。

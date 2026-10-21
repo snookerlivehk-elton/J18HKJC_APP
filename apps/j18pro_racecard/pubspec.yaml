@@ -1,5 +1,5 @@
 name: j18pro_racecard
-description: "j18pro racecard Flutter rewrite (Phase 0 scaffold). Web racecard_board.html remains the acceptance source of truth."
+description: "j18pro racecard Flutter rewrite. Web racecard_board.html remains the acceptance source of truth."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -22,6 +22,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fixtures/meeting_20260923.json
   fonts:
     - family: Noto Sans TC
       fonts:
