@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Release needs this for HKJC SpeedPro, silk images, and the optional API.
+         Debug and profile manifests also declare it for the Flutter tool. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="排位"
         android:name="${applicationName}"

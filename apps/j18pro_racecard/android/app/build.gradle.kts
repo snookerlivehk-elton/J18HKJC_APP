@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Release signing stays outside the repo. All four must be set together.
+// When they are absent, release builds keep the debug keystore so a local
+// `flutter run --release` still installs. Do not commit the keystore.
+val uploadStoreFile = System.getenv("J18_UPLOAD_STORE_FILE")
+val uploadStorePassword = System.getenv("J18_UPLOAD_STORE_PASSWORD")
+val uploadKeyAlias = System.getenv("J18_UPLOAD_KEY_ALIAS")
+val uploadKeyPassword = System.getenv("J18_UPLOAD_KEY_PASSWORD")
+val hasReleaseKeystore = !uploadStoreFile.isNullOrBlank()
+
 android {
     namespace = "hk.j18.j18pro_racecard"
     compileSdk = flutter.compileSdkVersion
@@ -15,7 +24,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "hk.j18.j18pro_racecard"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -29,11 +37,24 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(uploadStoreFile!!)
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

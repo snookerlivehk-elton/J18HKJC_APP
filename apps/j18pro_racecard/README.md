@@ -1,12 +1,13 @@
 # j18pro 排位（Flutter）
 
-`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 7D 顶栏占位、无障碍与性能；Phase 7 到此结束）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
+`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 8 上架准备，仓库内部分已完成）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
 
 ## 双轨
 
 - **Web** `static/racecard_board.html` 仍是验收真源，直到某份阶段文档**书面宣布**切换。
 - 本 App 并行开发。不要删除、停更或改写 Web 页的业务行为。
 - 线上 SERVER2 / PM2 部署不在本工程范围内。
+- App 版本以 `pubspec.yaml` 的 `1.0.0+1` 为准，与 Web `0.2.x` 脱钩。网站仍单独发布，并继续作为网站验收真源。签名、TestFlight 和隐私政策网址见 `docs/STORE_RELEASE.md`（上传仍需人工）。
 - 产品界面文案用繁体（zh-HK）。本 README 用简体说明工程。
 
 ## 状态管理（全项目锁定）

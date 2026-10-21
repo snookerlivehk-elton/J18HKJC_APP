@@ -278,7 +278,7 @@
 | 7B 骑练+连赢 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。马匹详情「騎練合作」和騎師／練馬師格打开合作战绩（演示，无 API）。主表下方连赢矩阵由独赢／位置合成，正Q／位置Q 可切换。超过 14 匹可横滑，首行首列不 sticky。未做走位图、顶栏直播、性能。 |
 | 7C 走位图 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。日期行「走位圖」打开速势走位图。GET `https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_{场次}`，内存缓存 10 分钟（`max-age=600`），键只有场次号。失败留在弹层内。Web 的「預計跑法」列不在列目录，故入口是日期行按钮。URL 是马会当前赛事，不是所选赛日。未做顶栏直播、无障碍与性能。 |
 | 7D 顶栏+无障碍+性能 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。顶栏直播和收音机是禁用占位「稍後提供」，没有真实流。菜单、场次胶囊、马匹入口、弹层关闭和字号三档有语义标签。换场不重建顶栏。右列宽在同一场次、列清单和字号下复用，横滑不再逐帧重测。Phase 7 到此结束。未做 Phase 8 上架。 |
-| 8 上架 | 未开始 | | |
+| 8 上架 | 仓库准备完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。版本 `1.0.0+1`，与 Web `0.2.x` 脱钩。iOS 隐私清单（UserDefaults CA92.1）、ATS 保持默认 HTTPS、Android `INTERNET` 与环境变量签名模板已入库。崩溃上报延后。Web 保留并单独发布。TestFlight / Play 上传、证书、真实隐私政策网址仍需人工。未改 HTML。 |
 
 ---
 
