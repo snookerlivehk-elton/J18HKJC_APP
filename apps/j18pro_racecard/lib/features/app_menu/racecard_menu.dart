@@ -2,17 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/text_scale_controller.dart';
 import 'package:j18pro_racecard/app/theme_mode_controller.dart';
-import 'package:j18pro_racecard/features/app_menu/placeholder_sheet.dart';
+import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
-import 'package:j18pro_racecard/features/race_calendar/race_calendar_sheet.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 
-/// Page menu. Theme and text scale stay open; the other entries close it.
+/// Page menu. Theme and text scale stay open; the other entries replace it.
 class RacecardMenu extends ConsumerWidget {
-  const RacecardMenu({required this.pageContext, super.key});
-
-  /// Context under the page, so the next sheet survives this menu closing.
-  final BuildContext pageContext;
+  const RacecardMenu({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,8 +47,9 @@ class RacecardMenu extends ConsumerWidget {
                   '查看賽期和歷史數據',
                   style: TextStyle(fontFamily: 'Noto Sans TC'),
                 ),
-                onTap: () =>
-                    _openAfterClose(() => showRaceCalendar(pageContext)),
+                onTap: () => ref
+                    .read(boardSheetProvider.notifier)
+                    .open(const BoardSheetRequest.calendar()),
               ),
               ListTile(
                 key: const Key('menu-tip-record'),
@@ -60,13 +57,9 @@ class RacecardMenu extends ConsumerWidget {
                   '個人心水和戰績',
                   style: TextStyle(fontFamily: 'Noto Sans TC'),
                 ),
-                onTap: () => _openAfterClose(
-                  () => showPlaceholderSheet(
-                    pageContext,
-                    title: '個人心水和戰績',
-                    sheetKey: const Key('sheet-tip-record'),
-                  ),
-                ),
+                onTap: () => ref
+                    .read(boardSheetProvider.notifier)
+                    .open(const BoardSheetRequest.tipRecord()),
               ),
               ListTile(
                 key: const Key('menu-famous'),
@@ -74,13 +67,9 @@ class RacecardMenu extends ConsumerWidget {
                   '名家',
                   style: TextStyle(fontFamily: 'Noto Sans TC'),
                 ),
-                onTap: () => _openAfterClose(
-                  () => showPlaceholderSheet(
-                    pageContext,
-                    title: '名家',
-                    sheetKey: const Key('sheet-famous'),
-                  ),
-                ),
+                onTap: () => ref
+                    .read(boardSheetProvider.notifier)
+                    .open(const BoardSheetRequest.famous()),
               ),
               ListTile(
                 key: const Key('menu-col-sort'),
@@ -88,13 +77,9 @@ class RacecardMenu extends ConsumerWidget {
                   '馬匹數據排序',
                   style: TextStyle(fontFamily: 'Noto Sans TC'),
                 ),
-                onTap: () => _openAfterClose(
-                  () => showPlaceholderSheet(
-                    pageContext,
-                    title: '馬匹數據排序',
-                    sheetKey: const Key('sheet-col-sort'),
-                  ),
-                ),
+                onTap: () => ref
+                    .read(boardSheetProvider.notifier)
+                    .open(const BoardSheetRequest.colSort()),
               ),
               const Divider(),
               Padding(
@@ -177,10 +162,5 @@ class RacecardMenu extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  void _openAfterClose(Future<void> Function() open) {
-    Navigator.of(pageContext).pop();
-    open();
   }
 }

@@ -20,6 +20,7 @@ class RacecardTable extends StatefulWidget {
     required this.race,
     required this.marks,
     required this.onCycleMark,
+    this.onOpenHorse,
     this.columns = kPhase2ScrollColumns,
     super.key,
   });
@@ -27,6 +28,7 @@ class RacecardTable extends StatefulWidget {
   final Race race;
   final Map<String, int> marks;
   final ValueChanged<int> onCycleMark;
+  final ValueChanged<int>? onOpenHorse;
   final List<ScrollColumn> columns;
 
   @override
@@ -187,6 +189,9 @@ class _RacecardTableState extends State<RacecardTable> {
                               columns: widget.columns,
                               tokens: tokens,
                               onCycleMark: () => widget.onCycleMark(runner.no),
+                              onOpenHorse: widget.onOpenHorse == null
+                                  ? null
+                                  : () => widget.onOpenHorse!(runner.no),
                             ),
                           );
                         },
@@ -258,6 +263,7 @@ class _RunnerRow extends StatelessWidget {
     required this.columns,
     required this.tokens,
     required this.onCycleMark,
+    required this.onOpenHorse,
   });
 
   final int raceNum;
@@ -273,6 +279,7 @@ class _RunnerRow extends StatelessWidget {
   final List<ScrollColumn> columns;
   final J18Tokens tokens;
   final VoidCallback onCycleMark;
+  final VoidCallback? onOpenHorse;
 
   @override
   Widget build(BuildContext context) {
@@ -301,48 +308,68 @@ class _RunnerRow extends StatelessWidget {
                     mark: mark,
                     onPressed: onCycleMark,
                   ),
-                  _HorseNo(no: runner.no, scratched: scratched, tokens: tokens),
-                  const SizedBox(width: 2),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_initial(runner.jockey), style: initialStyle),
-                      Text(_initial(runner.trainer), style: initialStyle),
-                    ],
-                  ),
-                  const SizedBox(width: 4),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          runner.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Noto Sans TC',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: nameColor,
-                            decoration: scratched
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                            decorationColor: tokens.muted,
+                    child: InkWell(
+                      key: Key('horse-open-${runner.no}'),
+                      onTap: onOpenHorse,
+                      child: Row(
+                        children: [
+                          _HorseNo(
+                            no: runner.no,
+                            scratched: scratched,
+                            tokens: tokens,
                           ),
-                        ),
-                        if (scratched)
-                          Text(
-                            '已退出',
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontFamily: 'Noto Sans TC',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: tokens.muted,
+                          const SizedBox(width: 2),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _initial(runner.jockey),
+                                style: initialStyle,
+                              ),
+                              Text(
+                                _initial(runner.trainer),
+                                style: initialStyle,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  runner.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Noto Sans TC',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: nameColor,
+                                    decoration: scratched
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                    decorationColor: tokens.muted,
+                                  ),
+                                ),
+                                if (scratched)
+                                  Text(
+                                    '已退出',
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontFamily: 'Noto Sans TC',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: tokens.muted,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

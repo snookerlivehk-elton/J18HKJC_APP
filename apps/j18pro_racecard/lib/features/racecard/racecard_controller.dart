@@ -194,10 +194,21 @@ class RacecardController extends AsyncNotifier<RacecardViewState> {
         .load(iso, scope: scope);
     final latest = state.asData?.value;
     if (latest == null || meeting.races.isEmpty) return;
-    final raceNum = meeting.raceByNum(latest.currentRaceNum) != null
-        ? latest.currentRaceNum
-        : meeting.raceByNum(demoInitialRaceNum) != null
+    final fromStub =
+        latest.meeting.date != DemoMeetingRepository.snapshotDate ||
+        latest.calendarScope != RaceCalendarScope.hk;
+    final toSnapshot =
+        iso == DemoMeetingRepository.snapshotDate &&
+        scope == RaceCalendarScope.hk;
+    final previous = meeting.raceByNum(latest.currentRaceNum);
+    // Web opens on race 5. A stub only has race 1, so keeping that number
+    // would hide the snapshot's default race after coming back.
+    final preferDefault = previous == null || (fromStub && toSnapshot);
+    final raceNum =
+        preferDefault && meeting.raceByNum(demoInitialRaceNum) != null
         ? demoInitialRaceNum
+        : previous != null
+        ? latest.currentRaceNum
         : meeting.races.first.num;
     state = AsyncData(
       latest.copyWith(

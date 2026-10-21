@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/app_theme.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
+import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/index_picks.dart';
 import 'package:j18pro_racecard/features/racecard_insight/number_circle.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_detail.dart';
-import 'package:j18pro_racecard/features/racecard_insight/payout_sheet.dart';
 import 'package:j18pro_racecard/features/racecard_insight/race_status.dart';
 import 'package:j18pro_racecard/features/racecard_insight/time_scrub.dart';
 
@@ -268,7 +268,9 @@ class _PayoutCapsule extends ConsumerWidget {
                 ),
                 onPressed: () {
                   if (!paid) return;
-                  showPayoutDetailSheet(context, race);
+                  ref
+                      .read(boardSheetProvider.notifier)
+                      .open(BoardSheetRequest.payout(race.num));
                 },
                 child: Text(
                   paid ? '已派彩' : '未派彩',
@@ -571,7 +573,11 @@ class _PayoutRaceRow extends ConsumerWidget {
               ref
                   .read(racecardControllerProvider.notifier)
                   .openPayoutForRace(race.num);
-              if (paid) showPayoutDetailSheet(context, race);
+              if (paid) {
+                ref
+                    .read(boardSheetProvider.notifier)
+                    .open(BoardSheetRequest.payout(race.num));
+              }
             },
             style: TextButton.styleFrom(
               backgroundColor: paid

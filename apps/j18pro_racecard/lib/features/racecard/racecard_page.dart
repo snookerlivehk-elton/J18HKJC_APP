@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/app_theme.dart';
 import 'package:j18pro_racecard/app/text_scale_controller.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
-import 'package:j18pro_racecard/features/app_menu/racecard_menu.dart';
+import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
+import 'package:j18pro_racecard/features/board_sheet/board_sheet_host.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/race_insight_bar.dart';
 import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
@@ -30,7 +31,11 @@ class RacecardPage extends ConsumerWidget {
               leading: IconButton(
                 key: const Key('menu-stub'),
                 tooltip: '選單',
-                onPressed: () => _openMenu(context),
+                onPressed: () {
+                  ref
+                      .read(boardSheetProvider.notifier)
+                      .open(const BoardSheetRequest.menu());
+                },
                 icon: const Icon(Icons.menu),
               ),
               title: const Text('排位'),
@@ -47,36 +52,32 @@ class RacecardPage extends ConsumerWidget {
               ),
               actions: const [ThemeToggle(), SizedBox(width: 4)],
             ),
-            body: racecard.when(
-              loading: () => const Center(child: Text('載入賽事')),
-              error: (error, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    error is RaceLoadException ? error.message : '未能載入賽事',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: tokens.text,
-                      fontFamily: 'Noto Sans TC',
-                      fontSize: 15,
+            body: Stack(
+              children: [
+                racecard.when(
+                  loading: () => const Center(child: Text('載入賽事')),
+                  error: (error, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        error is RaceLoadException ? error.message : '未能載入賽事',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: tokens.text,
+                          fontFamily: 'Noto Sans TC',
+                          fontSize: 15,
+                        ),
+                      ),
                     ),
                   ),
+                  data: (state) => _RaceBoard(state: state),
                 ),
-              ),
-              data: (state) => _RaceBoard(state: state),
+                const BoardSheetAnchor(),
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  void _openMenu(BuildContext pageContext) {
-    showModalBottomSheet<void>(
-      context: pageContext,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => RacecardMenu(pageContext: pageContext),
     );
   }
 }
@@ -123,6 +124,11 @@ class _RaceBoard extends ConsumerWidget {
         marks: state.marks,
         onCycleMark: (horseNo) {
           ref.read(racecardControllerProvider.notifier).cycleMark(horseNo);
+        },
+        onOpenHorse: (horseNo) {
+          ref
+              .read(boardSheetProvider.notifier)
+              .open(BoardSheetRequest.horse(horseNo));
         },
       ),
     );

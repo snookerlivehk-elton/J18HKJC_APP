@@ -54,15 +54,3 @@ class PlaceholderSheet extends ConsumerWidget {
     );
   }
 }
-
-Future<void> showPlaceholderSheet(
-  BuildContext context, {
-  required String title,
-  required Key sheetKey,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => PlaceholderSheet(title: title, sheetKey: sheetKey),
-  );
-}

@@ -5,15 +5,6 @@ import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 
 /// Web race calendar. Closing the sheet applies the selected day.
-Future<void> showRaceCalendar(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (context) => const RaceCalendarSheet(),
-  );
-}
-
 class RaceCalendarSheet extends ConsumerStatefulWidget {
   const RaceCalendarSheet({super.key});
 

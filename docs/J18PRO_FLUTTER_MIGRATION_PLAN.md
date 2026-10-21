@@ -269,7 +269,7 @@
 | 2 主表 MVP | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。竖屏主表：场次胶囊、左锁马号/马名、右列檔位/獨贏/位置/近績按当场 `TextPainter` 量宽（内容到分隔线 2px + 1px 线）。左右同一 `ListView` 行，横滑共用一个 offset。燕尾无→黄→绿→无，深色选中色 `#e8b04a` / `#5dce7a` 不回落到灰。未做表头排序、综合评述双行、胶囊和时间轴。 |
 | 3 胶囊+时间轴 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。赛况灯按距开跑分钟（待開賽／出跑道／入閘中／開跑中／已派彩），元信息一行省略。时间轴 10 个静态点，拖动写入 `scrubPointIdx`。综合指数与赛果派彩胶囊互斥展开，箭头下展策略或各场派彩；已派彩才开明细。号圈未中对齐心水／名家（浅色白底橙边，深色 `#2a313c`）。W/Q/P/四色。未做跑马灯、状态灯脉冲、赛期菜单。 |
 | 4 菜单+赛期 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单含赛期、個人心水和戰績、名家、马匹数据排序、主题、字号。赛期月历港/外切换，关闭时 `load(date, scope)`；非快照日为 stub 空卡。名家与心水占位页只读全局赛日。字号三档只缩放主表。未做 Phase 5 正式浮层。 |
-| 5A 马匹/水位 | 未开始 | | |
+| 5A 马匹/水位 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。点马号/马名开详情（檔位、獨贏、位置、近績到獎金）。详情内「水位」打开全场水位表（近到远 8 个时段，点格十字高亮）。打开任一主弹层会换掉当前弹层。从 stub 回到 `2026-09-23` 或原场次不存在时，回到第 5 场并清燕尾。名家/心水/排序仍是占位。未做 5B/5C/5D。 |
 | 5B 个人心水战绩 | 未开始 | | |
 | 5C 名家贴士 | 未开始 | | |
 | 5D 列排序 | 未开始 | | |

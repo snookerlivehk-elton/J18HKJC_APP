@@ -84,11 +84,9 @@ void main() {
     await _closeCalendar(tester);
 
     expect(find.text('跑馬地 · 2026-09-23'), findsOneWidget);
-    expect(find.text('堅多福'), findsOneWidget);
-    expect(find.byKey(const Key('race-pill-5')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('race-pill-5')));
-    await tester.pump();
     expect(find.text('本領非凡'), findsOneWidget);
+    expect(find.text('堅多福'), findsNothing);
+    expect(find.byKey(const Key('race-pill-5')), findsOneWidget);
     expect(
       tester.widget<SwallowtailFlag>(find.byKey(const Key('flag-5-1'))).color,
       RowChrome.lightIdleFlag,
