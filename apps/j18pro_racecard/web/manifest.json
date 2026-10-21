@@ -1,0 +1,35 @@
+{
+    "name": "排位",
+    "short_name": "排位",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#eef1f5",
+    "theme_color": "#3d5a80",
+    "description": "j18pro racecard Flutter rewrite (Phase 0 scaffold). Web racecard_board.html remains the acceptance source of truth.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

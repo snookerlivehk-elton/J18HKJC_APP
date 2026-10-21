@@ -264,18 +264,21 @@
 
 | Phase | 状态 | 分支/PR | 备注 |
 |-------|------|---------|------|
-| 0 脚手架 | 未开始 | | |
-| 1 模型+Demo | 未开始 | | |
-| 2 主表 MVP | 未开始 | | |
-| 3 胶囊+时间轴 | 未开始 | | |
-| 4 菜单+赛期 | 未开始 | | |
-| 5A 马匹/水位 | 未开始 | | |
-| 5B 个人心水战绩 | 未开始 | | |
-| 5C 名家贴士 | 未开始 | | |
-| 5D 列排序 | 未开始 | | |
-| 6 真 API | 未开始 | | |
-| 7 次要+打磨 | 未开始 | | |
-| 8 上架 | 未开始 | | |
+| 0 脚手架 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21。状态管理锁定 Riverpod。`flutter analyze` 无 error。标题「排位」与深色开关：widget test 通过，并用 Chrome 打开 web 构建核对浅色 `#eef1f5` / 深色 `#1a1f27` 可来回切换。本环境无 iOS Simulator / Android Emulator，真机命令见 `apps/j18pro_racecard/README.md`。Fixture 导出方式已在 Phase 1 落地。 |
+| 1 模型+Demo | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续在 Phase 0 同一 PR。`Meeting`/`Race`/`Runner` + Riverpod `RacecardController`。Fixture `apps/j18pro_racecard/assets/fixtures/meeting_20260923.json`：从 `static/racecard_board.html` 的 `let MEETING` 抽出第 1/5/6 场（源码已是 JSON，未改 HTML），并套用页面绘制前的 `ensureRace6Has10WithScratch7`（7 号雙劍合璧退出、赔率 null）。`flutter analyze` 无 error；`flutter test` 含 fixture 解析与场次切换。未做左锁右滑表。仓库内无 06 清单文件。 |
+| 2 主表 MVP | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。竖屏主表：场次胶囊、左锁马号/马名、右列檔位/獨贏/位置/近績按当场 `TextPainter` 量宽（内容到分隔线 2px + 1px 线）。左右同一 `ListView` 行，横滑共用一个 offset。燕尾无→黄→绿→无，深色选中色 `#e8b04a` / `#5dce7a` 不回落到灰。未做表头排序、综合评述双行、胶囊和时间轴。 |
+| 3 胶囊+时间轴 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。赛况灯按距开跑分钟（待開賽／出跑道／入閘中／開跑中／已派彩），元信息一行省略。时间轴 10 个静态点，拖动写入 `scrubPointIdx`。综合指数与赛果派彩胶囊互斥展开，箭头下展策略或各场派彩；已派彩才开明细。号圈未中对齐心水／名家（浅色白底橙边，深色 `#2a313c`）。W/Q/P/四色。未做跑马灯、状态灯脉冲、赛期菜单。 |
+| 4 菜单+赛期 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单含赛期、個人心水和戰績、名家、马匹数据排序、主题、字号。赛期月历港/外切换，关闭时 `load(date, scope)`；非快照日为 stub 空卡。名家与心水占位页只读全局赛日。字号三档只缩放主表。未做 Phase 5 正式浮层。 |
+| 5A 马匹/水位 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。点马号/马名开详情（檔位、獨贏、位置、近績到獎金）。详情内「水位」打开全场水位表（近到远 8 个时段，点格十字高亮）。打开任一主弹层会换掉当前弹层。从 stub 回到 `2026-09-23` 或原场次不存在时，回到第 5 场并清燕尾。名家/心水/排序仍是占位。未做 5B/5C/5D。 |
+| 5B 个人心水战绩 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「個人心水和戰績」打开心水战绩：今日心水（演示最多 6 个最短独赢）、战绩统计（本日/本赛季、规则）、心水名家榜 Top 10。日期只跟全局赛日。弹层按内容收缩，超出后内部滚动。打开时替换其它主弹层。名家贴士与列排序仍是占位。未做 5C/5D。 |
+| 5C 名家贴士 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「名家」打开名家贴士：场次胶囊、综合心水、临场/早餐/马房、胜率、冠亚季殿。演示开关 `famousSettledTreatBeforeCurrentAsPaid` 与心水战绩分开。日期只跟全局赛日。场次胶囊不改主表。心水名家榜仍在心水战绩里。列排序仍是占位。未做 5D。 |
+| 5D 列排序 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「馬匹數據排序」打开未顯示 / 已顯示，上移下移和左右显隐会立刻改主表，复位回到檔位、獨贏、位置、近績。配置写入 `j18-scroll-col-layout-v1`。水位、心水勾选和综合评述不进可排序列。Phase 5 到此结束。未做 Phase 6 真 API。 |
+| 6 真 API | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。`ApiRaceRepository` 按 `jjjc.racecard.v1` / `jjjc.results.v1` 拉排位和赛果。未设 `JJJC_API_BASE` 时仍用演示快照。断网显示「未能連線，請檢查網絡」，空赛日显示「該日暫無賽事」。两个「当前场之前视为已派彩」开关默认关闭。彩衣走 HKJC CDN，失败退回色块。`live_odds` 无 export。未做 Phase 7。 |
+| 7A 综合评述+笔记 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。马匹详情「綜合評述」打开评述和个人笔记。笔记写入 `j18-horse-notes-v1`，键是 `日期:场次:马号`。已保存记录覆盖演示种子。主表双行「評述／筆記」单元格是「Web only 暂缓」，不进列排序。未做走位图、骑练、qin、顶栏直播。 |
+| 7B 骑练+连赢 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。马匹详情「騎練合作」和騎師／練馬師格打开合作战绩（演示，无 API）。主表下方连赢矩阵由独赢／位置合成，正Q／位置Q 可切换。超过 14 匹可横滑，首行首列不 sticky。未做走位图、顶栏直播、性能。 |
+| 7C 走位图 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。日期行「走位圖」打开速势走位图。GET `https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_{场次}`，内存缓存 10 分钟（`max-age=600`），键只有场次号。失败留在弹层内。Web 的「預計跑法」列不在列目录，故入口是日期行按钮。URL 是马会当前赛事，不是所选赛日。未做顶栏直播、无障碍与性能。 |
+| 7D 顶栏+无障碍+性能 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。顶栏直播和收音机是禁用占位「稍後提供」，没有真实流。菜单、场次胶囊、马匹入口、弹层关闭和字号三档有语义标签。换场不重建顶栏。右列宽在同一场次、列清单和字号下复用，横滑不再逐帧重测。Phase 7 到此结束。未做 Phase 8 上架。 |
+| 8 上架 | 仓库准备完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。版本 `1.0.0+1`，与 Web `0.2.x` 脱钩。iOS 隐私清单（UserDefaults CA92.1）、ATS 保持默认 HTTPS、Android `INTERNET` 与环境变量签名模板已入库。崩溃上报延后。Web 保留并单独发布。TestFlight / Play 上传、证书、真实隐私政策网址仍需人工。未改 HTML。 |
 
 ---
 
