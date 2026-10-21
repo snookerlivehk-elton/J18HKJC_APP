@@ -145,7 +145,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('sheet-col-sort')), findsOneWidget);
     expect(find.text('馬匹數據排序'), findsOneWidget);
-    expect(find.text('稍後提供'), findsOneWidget);
+    expect(find.text('未顯示'), findsOneWidget);
+    expect(find.text('已顯示'), findsOneWidget);
+    expect(find.text('稍後提供'), findsNothing);
     await _dismissTopSheet(tester);
 
     await _openCalendar(tester);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
+import 'package:j18pro_racecard/features/horse_sheet/horse_detail.dart';
 import 'package:j18pro_racecard/features/racecard_table/column_fit.dart';
 
 /// Header and cells share this style so measured width matches paint.
@@ -9,13 +10,37 @@ const racecardCellStyle = TextStyle(
   fontWeight: FontWeight.w400,
 );
 
-/// Phase 2 right-hand columns. Later phases can pass a different list.
+/// Phase 2 right-hand columns. The sort sheet can show a different order.
 const kPhase2ScrollColumns = <ScrollColumn>[
   ScrollColumn(id: 'draw', header: '檔位', text: drawColumnText),
   ScrollColumn(id: 'win', header: '獨贏', text: winColumnText),
   ScrollColumn(id: 'place', header: '位置', text: placeColumnText),
   ScrollColumn(id: 'form6', header: '近績', text: formColumnText),
 ];
+
+/// Fields the table can paint. Water, flow, tip marks, and synth review stay out.
+const kAllScrollColumns = <ScrollColumn>[
+  ...kPhase2ScrollColumns,
+  ScrollColumn(id: 'hw', header: '負磅', text: hwColumnText),
+  ScrollColumn(id: 'jockey', header: '騎師', text: jockeyColumnText),
+  ScrollColumn(id: 'trainer', header: '練馬師', text: trainerColumnText),
+  ScrollColumn(id: 'age', header: '年齡', text: ageColumnText),
+  ScrollColumn(id: 'rating', header: '評分', text: ratingColumnText),
+  ScrollColumn(id: 'career', header: '出道至今', text: careerColumnText),
+  ScrollColumn(id: 'gear', header: '配備', text: gearColumnText),
+  ScrollColumn(id: 'dam', header: '母系', text: damColumnText),
+  ScrollColumn(id: 'sire', header: '父系', text: sireColumnText),
+  ScrollColumn(id: 'damsire', header: '外祖父', text: damsireColumnText),
+  ScrollColumn(id: 'owner', header: '馬主', text: ownerColumnText),
+  ScrollColumn(id: 'prize', header: '獎金', text: prizeColumnText),
+];
+
+ScrollColumn? scrollColumnById(String id) {
+  for (final column in kAllScrollColumns) {
+    if (column.id == id) return column;
+  }
+  return null;
+}
 
 class ScrollColumn {
   const ScrollColumn({
@@ -48,6 +73,32 @@ String formColumnText(Runner runner) {
   if (recent != null && recent.isNotEmpty) return recent;
   return '—';
 }
+
+String hwColumnText(Runner runner) => withDelta(runner.hw, hwDeltaOf(runner));
+
+String jockeyColumnText(Runner runner) => jockeyLine(runner);
+
+String trainerColumnText(Runner runner) => sheetText(runner.trainer);
+
+String ageColumnText(Runner runner) => sheetText(runner.age);
+
+String ratingColumnText(Runner runner) {
+  return withDelta(runner.rating, fmtDelta(runner.rtgDelta));
+}
+
+String careerColumnText(Runner runner) => formatCareer(runner.career);
+
+String gearColumnText(Runner runner) => sheetText(runner.gear);
+
+String damColumnText(Runner runner) => sheetText(runner.dam);
+
+String sireColumnText(Runner runner) => sheetText(runner.sire);
+
+String damsireColumnText(Runner runner) => sheetText(runner.damsire);
+
+String ownerColumnText(Runner runner) => sheetText(runner.owner);
+
+String prizeColumnText(Runner runner) => sheetText(runner.prize);
 
 List<double> fitScrollWidths({
   required Race race,

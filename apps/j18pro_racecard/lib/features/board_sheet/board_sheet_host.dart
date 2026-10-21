@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:j18pro_racecard/features/app_menu/placeholder_sheet.dart';
+import 'package:j18pro_racecard/features/col_sort/col_sort_sheet.dart';
 import 'package:j18pro_racecard/features/famous_tips/famous_tips_sheet.dart';
 import 'package:j18pro_racecard/features/app_menu/racecard_menu.dart';
 import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
@@ -59,10 +59,7 @@ class BoardSheetHost extends ConsumerWidget {
       BoardSheetKind.calendar => const RaceCalendarSheet(),
       BoardSheetKind.tipRecord => const TipRecordSheet(),
       BoardSheetKind.famous => const FamousTipsSheet(),
-      BoardSheetKind.colSort => const PlaceholderSheet(
-        title: '馬匹數據排序',
-        sheetKey: Key('sheet-col-sort'),
-      ),
+      BoardSheetKind.colSort => const ColSortSheet(),
       BoardSheetKind.payout => _PayoutHost(raceNum: request.raceNum!),
       BoardSheetKind.horse => HorseSheet(horseNo: request.horseNo!),
       BoardSheetKind.water => const WaterSheet(),

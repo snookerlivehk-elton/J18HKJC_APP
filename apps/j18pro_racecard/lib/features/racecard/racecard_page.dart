@@ -7,6 +7,7 @@ import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/board_sheet/board_sheet_host.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/race_insight_bar.dart';
+import 'package:j18pro_racecard/features/col_sort/col_layout.dart';
 import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
 import 'package:j18pro_racecard/features/racecard_table/race_pills.dart';
 import 'package:j18pro_racecard/widgets/theme_toggle.dart';
@@ -122,6 +123,7 @@ class _RaceBoard extends ConsumerWidget {
       child: RacecardTable(
         race: state.currentRace,
         marks: state.marks,
+        columns: ref.watch(visibleScrollColumnsProvider),
         onCycleMark: (horseNo) {
           ref.read(racecardControllerProvider.notifier).cycleMark(horseNo);
         },
