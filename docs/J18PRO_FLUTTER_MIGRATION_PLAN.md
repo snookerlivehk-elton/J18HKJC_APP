@@ -271,7 +271,7 @@
 | 4 菜单+赛期 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单含赛期、個人心水和戰績、名家、马匹数据排序、主题、字号。赛期月历港/外切换，关闭时 `load(date, scope)`；非快照日为 stub 空卡。名家与心水占位页只读全局赛日。字号三档只缩放主表。未做 Phase 5 正式浮层。 |
 | 5A 马匹/水位 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。点马号/马名开详情（檔位、獨贏、位置、近績到獎金）。详情内「水位」打开全场水位表（近到远 8 个时段，点格十字高亮）。打开任一主弹层会换掉当前弹层。从 stub 回到 `2026-09-23` 或原场次不存在时，回到第 5 场并清燕尾。名家/心水/排序仍是占位。未做 5B/5C/5D。 |
 | 5B 个人心水战绩 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「個人心水和戰績」打开心水战绩：今日心水（演示最多 6 个最短独赢）、战绩统计（本日/本赛季、规则）、心水名家榜 Top 10。日期只跟全局赛日。弹层按内容收缩，超出后内部滚动。打开时替换其它主弹层。名家贴士与列排序仍是占位。未做 5C/5D。 |
-| 5C 名家贴士 | 未开始 | | |
+| 5C 名家贴士 | 完成 | `cursor/flutter-phase0-scaffold-e86b` / https://github.com/snookerlivehk-elton/J18HKJC_APP/pull/104 | 2026-10-21，续同一 PR。菜单「名家」打开名家贴士：场次胶囊、综合心水、临场/早餐/马房、胜率、冠亚季殿。演示开关 `famousSettledTreatBeforeCurrentAsPaid` 与心水战绩分开。日期只跟全局赛日。场次胶囊不改主表。心水名家榜仍在心水战绩里。列排序仍是占位。未做 5D。 |
 | 5D 列排序 | 未开始 | | |
 | 6 真 API | 未开始 | | |
 | 7 次要+打磨 | 未开始 | | |

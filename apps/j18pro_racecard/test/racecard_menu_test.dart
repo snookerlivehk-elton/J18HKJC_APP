@@ -119,8 +119,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('sheet-famous')), findsOneWidget);
-    expect(find.text('跟隨賽日 2026-09-23'), findsOneWidget);
-    expect(find.text('稍後提供'), findsOneWidget);
+    expect(find.text('名家貼士 · 23/9'), findsOneWidget);
+    expect(find.text('綜合心水'), findsOneWidget);
+    expect(find.text('臨場'), findsOneWidget);
+    expect(find.text('跟隨賽日 2026-09-23'), findsNothing);
+    expect(find.text('稍後提供'), findsNothing);
     expect(find.byKey(const Key('race-calendar')), findsNothing);
     expect(find.text('上一個月'), findsNothing);
     expect(find.text('香港馬'), findsNothing);
@@ -155,7 +158,11 @@ void main() {
     await _openMenu(tester);
     await tester.tap(find.byKey(const Key('menu-famous')));
     await tester.pumpAndSettle();
-    expect(find.text('跟隨賽日 2026-10-01'), findsOneWidget);
+    expect(find.text('名家貼士 · 1/10'), findsOneWidget);
+    expect(find.text('尚未派彩'), findsOneWidget);
+    expect(find.text('暫無貼士'), findsWidgets);
+    expect(find.text('跟隨賽日 2026-10-01'), findsNothing);
+    expect(find.text('稍後提供'), findsNothing);
     expect(find.byKey(const Key('race-calendar')), findsNothing);
 
     await _dismissTopSheet(tester);

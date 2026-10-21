@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/features/app_menu/placeholder_sheet.dart';
+import 'package:j18pro_racecard/features/famous_tips/famous_tips_sheet.dart';
 import 'package:j18pro_racecard/features/app_menu/racecard_menu.dart';
 import 'package:j18pro_racecard/features/board_sheet/board_sheet.dart';
 import 'package:j18pro_racecard/features/horse_sheet/horse_sheet.dart';
@@ -57,10 +58,7 @@ class BoardSheetHost extends ConsumerWidget {
       BoardSheetKind.menu => const RacecardMenu(),
       BoardSheetKind.calendar => const RaceCalendarSheet(),
       BoardSheetKind.tipRecord => const TipRecordSheet(),
-      BoardSheetKind.famous => const PlaceholderSheet(
-        title: '名家',
-        sheetKey: Key('sheet-famous'),
-      ),
+      BoardSheetKind.famous => const FamousTipsSheet(),
       BoardSheetKind.colSort => const PlaceholderSheet(
         title: '馬匹數據排序',
         sheetKey: Key('sheet-col-sort'),
