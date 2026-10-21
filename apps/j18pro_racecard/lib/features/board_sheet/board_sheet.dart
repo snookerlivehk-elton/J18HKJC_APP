@@ -14,6 +14,7 @@ enum BoardSheetKind {
   water,
   synthReview,
   jtCollab,
+  speedMap,
 }
 
 @immutable
@@ -43,6 +44,9 @@ class BoardSheetRequest {
 
   const BoardSheetRequest.jtCollab(int horseNo)
     : this._(BoardSheetKind.jtCollab, horseNo: horseNo);
+
+  const BoardSheetRequest.speedMap(int raceNum)
+    : this._(BoardSheetKind.speedMap, raceNum: raceNum);
 
   final BoardSheetKind kind;
   final int? horseNo;

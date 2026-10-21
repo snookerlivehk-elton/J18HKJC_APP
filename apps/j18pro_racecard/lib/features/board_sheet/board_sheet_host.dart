@@ -9,6 +9,7 @@ import 'package:j18pro_racecard/features/jt_collab/jt_collab_sheet.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_sheet.dart';
 import 'package:j18pro_racecard/features/race_calendar/race_calendar_sheet.dart';
+import 'package:j18pro_racecard/features/speed_map/speed_map_sheet.dart';
 import 'package:j18pro_racecard/features/synth_review/synth_review_sheet.dart';
 import 'package:j18pro_racecard/features/tip_record/tip_record_sheet.dart';
 import 'package:j18pro_racecard/features/water_sheet/water_sheet.dart';
@@ -72,6 +73,10 @@ class BoardSheetHost extends ConsumerWidget {
       BoardSheetKind.jtCollab => JtCollabSheet(
         key: ValueKey(request.horseNo),
         horseNo: request.horseNo!,
+      ),
+      BoardSheetKind.speedMap => SpeedMapSheet(
+        key: ValueKey(request.raceNum),
+        raceNum: request.raceNum ?? 0,
       ),
     };
   }

@@ -124,14 +124,37 @@ class _RaceBoard extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-          child: Text(
-            '${meeting.courseLabel} · ${meeting.date}',
-            style: TextStyle(
-              fontFamily: 'Noto Sans TC',
-              fontSize: 13,
-              color: tokens.muted,
-            ),
+          padding: const EdgeInsets.fromLTRB(12, 6, 4, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${meeting.courseLabel} · ${meeting.date}',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans TC',
+                    fontSize: 13,
+                    color: tokens.muted,
+                  ),
+                ),
+              ),
+              TextButton(
+                key: const Key('open-speed-map'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  ref
+                      .read(boardSheetProvider.notifier)
+                      .open(BoardSheetRequest.speedMap(state.currentRaceNum));
+                },
+                child: const Text(
+                  '走位圖',
+                  style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 13),
+                ),
+              ),
+            ],
           ),
         ),
         RacePills(races: meeting.races, currentRaceNum: state.currentRaceNum),
