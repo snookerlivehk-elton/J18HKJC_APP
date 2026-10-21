@@ -1,6 +1,6 @@
 # j18pro 排位（Flutter）
 
-`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 0 脚手架）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
+`apps/j18pro_racecard/` 是排位页的 **Flutter 重写** 工程（Phase 2 主表）。这不是 Capacitor，也不是用 WebView 包一层 `static/racecard_board.html`。
 
 ## 双轨
 
@@ -24,11 +24,11 @@ lib/
   app/        应用壳、路由、主题 token、主题状态
   domain/     `Meeting` / `Race` / `Runner`（不可变，对齐 Web `MEETING`）
   data/       `RaceRepository` 与 `DemoMeetingRepository`
-  features/   `RacecardPage`：场次下拉 + 马名 / 独赢 / 位置列表
+  features/   `RacecardPage`：场次胶囊 + 左锁右滑主表
   widgets/    跨功能控件（主题开关）
 ```
 
-路由：`RacecardPage`，路径 `/`。Phase 1 是竖向简易列表，不是左锁右滑主表。
+路由：`RacecardPage`，路径 `/`。竖屏主表左锁马号/马名，右列按当场内容量宽（檔位、獨贏、位置、近績）。燕尾标三态存在 `RacecardController`，换场保留。顶栏菜单是空壳。
 
 ## 如何运行
 
@@ -61,7 +61,7 @@ flutter run
 
 ### 字体
 
-已打包 **Noto Sans TC** 子集（OFL，`assets/fonts/`，字重 400 / 700），不在运行时请求 Google Fonts。子集覆盖当前界面和这份 fixture 里的字。Phase 2 按列宽测量之前，若再加马名或栏目，要同步扩大子集。
+已打包 **Noto Sans TC** 子集（OFL，`assets/fonts/`，字重 400 / 700），不在运行时请求 Google Fonts。子集覆盖当前界面和这份 fixture 里的字。再加栏目或马名时要同步扩大子集，否则列宽会按缺字测量。
 
 ## 演示 fixture 怎么来的
 
@@ -75,4 +75,4 @@ flutter run
 
 ## 非目标
 
-左锁右滑主表、弹层、赛期、名家、心水、真 API、WebView。
+表头多列排序、综合评述双行单元格、赛况条、时间轴、胶囊、赛期菜单、名家、心水、真 API、WebView。右滑列目前固定为檔位 / 獨贏 / 位置 / 近績。

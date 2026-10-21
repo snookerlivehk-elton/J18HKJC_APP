@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/app_theme.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
-import 'package:j18pro_racecard/features/racecard/runner_odds_row.dart';
+import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
+import 'package:j18pro_racecard/features/racecard_table/race_pills.dart';
 import 'package:j18pro_racecard/widgets/theme_toggle.dart';
 
 class RacecardPage extends ConsumerWidget {
@@ -22,6 +23,13 @@ class RacecardPage extends ConsumerWidget {
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
             appBar: AppBar(
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                key: const Key('menu-stub'),
+                tooltip: '選單',
+                onPressed: () => _openMenu(context),
+                icon: const Icon(Icons.menu),
+              ),
               title: const Text('排位'),
               backgroundColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
@@ -55,17 +63,53 @@ class RacecardPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              data: (state) => _RaceList(state: state),
+              data: (state) => _RaceBoard(state: state),
             ),
           ),
         ),
       ),
     );
   }
+
+  void _openMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return const SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '選單',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans TC',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '稍後提供',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans TC',
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _RaceList extends ConsumerWidget {
-  const _RaceList({required this.state});
+class _RaceBoard extends ConsumerWidget {
+  const _RaceBoard({required this.state});
 
   final RacecardViewState state;
 
@@ -73,18 +117,11 @@ class _RaceList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = Theme.of(context).extension<J18Tokens>() ?? J18Tokens.light;
     final meeting = state.meeting;
-    final race = state.currentRace;
-    final labelStyle = TextStyle(
-      fontFamily: 'Noto Sans TC',
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
-      color: tokens.muted,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
           child: Text(
             '${meeting.courseLabel} · ${meeting.date}',
             style: TextStyle(
@@ -94,60 +131,16 @@ class _RaceList extends ConsumerWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: DropdownButton<int>(
-            key: const Key('race-selector'),
-            isExpanded: true,
-            value: state.currentRaceNum,
-            underline: Container(height: 1, color: tokens.line),
-            style: TextStyle(
-              fontFamily: 'Noto Sans TC',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: tokens.text,
-            ),
-            items: [
-              for (final item in meeting.races)
-                DropdownMenuItem<int>(
-                  value: item.num,
-                  child: Text(
-                    item.selectorLabel,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-            ],
-            onChanged: (raceNum) {
-              if (raceNum == null) return;
-              ref.read(racecardControllerProvider.notifier).selectRace(raceNum);
-            },
-          ),
+        RacePills(
+          races: meeting.races,
+          currentRaceNum: state.currentRaceNum,
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(
-            children: [
-              SizedBox(width: runnerNoWidth, child: Text('馬號', style: labelStyle)),
-              Expanded(child: Text('馬名', style: labelStyle)),
-              SizedBox(
-                width: runnerOddsWidth,
-                child: Text('獨贏', textAlign: TextAlign.end, style: labelStyle),
-              ),
-              SizedBox(
-                width: runnerOddsWidth,
-                child: Text('位置', textAlign: TextAlign.end, style: labelStyle),
-              ),
-            ],
-          ),
-        ),
-        Divider(height: 1, color: tokens.line),
         Expanded(
-          child: ListView.separated(
-            key: const Key('runner-list'),
-            itemCount: race.runners.length,
-            separatorBuilder: (_, _) => Divider(height: 1, color: tokens.line),
-            itemBuilder: (context, index) {
-              return RunnerOddsRow(runner: race.runners[index]);
+          child: RacecardTable(
+            race: state.currentRace,
+            marks: state.marks,
+            onCycleMark: (horseNo) {
+              ref.read(racecardControllerProvider.notifier).cycleMark(horseNo);
             },
           ),
         ),

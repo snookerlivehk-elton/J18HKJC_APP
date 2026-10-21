@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:j18pro_racecard/app/j18_app.dart';
 import 'package:j18pro_racecard/app/theme_mode_controller.dart';
-import 'package:j18pro_racecard/features/racecard/runner_odds_row.dart';
+import 'package:j18pro_racecard/features/racecard_table/row_chrome.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
@@ -26,44 +26,38 @@ Future<void> _pumpApp(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('switching races updates the list and marks scratched horses', (tester) async {
+  testWidgets('switching races updates the table and marks scratched horses', (tester) async {
     await _pumpApp(tester);
 
     expect(find.text('本領非凡'), findsOneWidget);
     expect(find.text('堅多福'), findsNothing);
     expect(find.text('已退出'), findsNothing);
     expect(find.text('跑馬地 · 2026-09-23'), findsOneWidget);
+    expect(find.byType(RowBand), findsNWidgets(11));
+    expect(find.text('載入賽事'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('race-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('第1場 南風讓賽').last);
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('race-pill-1')));
+    await tester.pump();
 
+    expect(find.text('載入賽事'), findsNothing);
     expect(find.text('堅多福'), findsOneWidget);
     expect(find.text('本領非凡'), findsNothing);
-    final race1 = tester.widget<RunnerOddsRow>(
-      find.widgetWithText(RunnerOddsRow, '堅多福'),
-    );
-    expect(race1.runner.scratched, isFalse);
-    expect(race1.runner.win, 13);
-    expect(race1.runner.place, 4);
+    expect(find.byType(RowBand), findsNWidgets(12));
     expect(find.text('13'), findsWidgets);
     expect(find.text('4'), findsWidgets);
 
-    await tester.tap(find.byKey(const Key('race-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('第6場 香島讓賽').last);
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('race-pill-6')));
+    await tester.pump();
 
     expect(find.text('本領非凡'), findsNothing);
+    expect(find.text('堅多福'), findsNothing);
     expect(find.text('雙劍合璧'), findsOneWidget);
     expect(find.text('已退出'), findsOneWidget);
-    final scratched = tester.widget<RunnerOddsRow>(
-      find.widgetWithText(RunnerOddsRow, '雙劍合璧'),
-    );
-    expect(scratched.runner.scratched, isTrue);
-    expect(scratched.runner.win, isNull);
+    expect(find.text('37'), findsNothing);
+    expect(find.byType(RowBand), findsNWidgets(10));
     final name = tester.widget<Text>(find.text('雙劍合璧'));
     expect(name.style?.decoration, TextDecoration.lineThrough);
+    final scratched = tester.widget<RowBand>(find.byKey(const Key('row-6-7')));
+    expect(scratched.color, RowChrome.lightRow);
   });
 }

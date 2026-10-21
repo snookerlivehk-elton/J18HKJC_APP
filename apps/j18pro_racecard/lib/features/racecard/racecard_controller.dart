@@ -21,10 +21,14 @@ class RacecardViewState {
   const RacecardViewState({
     required this.meeting,
     required this.currentRaceNum,
+    this.marks = const {},
   });
 
   final Meeting meeting;
   final int currentRaceNum;
+
+  /// Swallowtail state keyed `raceNum:horseNo`. 1 yellow, 2 green. Missing is none.
+  final Map<String, int> marks;
 
   Race get currentRace {
     final race = meeting.raceByNum(currentRaceNum);
@@ -34,12 +38,39 @@ class RacecardViewState {
     return race;
   }
 
-  RacecardViewState copyWith({int? currentRaceNum}) {
+  int markFor(int horseNo) {
+    final mark = marks['$currentRaceNum:$horseNo'] ?? 0;
+    if (mark == 1 || mark == 2) return mark;
+    return 0;
+  }
+
+  RacecardViewState copyWith({
+    int? currentRaceNum,
+    Map<String, int>? marks,
+  }) {
     return RacecardViewState(
       meeting: meeting,
       currentRaceNum: currentRaceNum ?? this.currentRaceNum,
+      marks: marks ?? this.marks,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RacecardViewState &&
+        meeting == other.meeting &&
+        currentRaceNum == other.currentRaceNum &&
+        mapEquals(marks, other.marks);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        meeting,
+        currentRaceNum,
+        Object.hashAllUnordered([
+          for (final entry in marks.entries) Object.hash(entry.key, entry.value),
+        ]),
+      );
 }
 
 class RacecardController extends AsyncNotifier<RacecardViewState> {
@@ -60,5 +91,22 @@ class RacecardController extends AsyncNotifier<RacecardViewState> {
     if (value.meeting.raceByNum(raceNum) == null) return;
     if (value.currentRaceNum == raceNum) return;
     state = AsyncData(value.copyWith(currentRaceNum: raceNum));
+  }
+
+  /// None → yellow → green → none. Marks stay when the visible race changes.
+  void cycleMark(int horseNo) {
+    final value = state.asData?.value;
+    if (value == null) return;
+    final exists = value.currentRace.runners.any((runner) => runner.no == horseNo);
+    if (!exists) return;
+    final key = '${value.currentRaceNum}:$horseNo';
+    final next = ((value.marks[key] ?? 0) + 1) % 3;
+    final updated = Map<String, int>.of(value.marks);
+    if (next == 0) {
+      updated.remove(key);
+    } else {
+      updated[key] = next;
+    }
+    state = AsyncData(value.copyWith(marks: Map.unmodifiable(updated)));
   }
 }

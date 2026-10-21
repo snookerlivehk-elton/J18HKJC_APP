@@ -21,7 +21,9 @@ class DemoMeetingRepository implements RaceRepository {
     }
     final cached = _cached;
     if (cached != null) return cached;
-    final raw = await _bundle.loadString(assetPath);
+    // `cache: false` so a future completed in one widget-test zone is not
+    // awaited again from the next test (that shared future never resumes).
+    final raw = await _bundle.loadString(assetPath, cache: false);
     final decoded = jsonDecode(raw);
     if (decoded is! Map) {
       throw const FormatException('賽事資料不是物件');
