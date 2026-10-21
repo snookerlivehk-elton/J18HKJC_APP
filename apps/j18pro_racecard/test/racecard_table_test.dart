@@ -46,7 +46,9 @@ Future<void> _pumpTable(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('cycleMark is per race and returns to none on the third tap', (tester) async {
+  testWidgets('cycleMark is per race and returns to none on the third tap', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final initial = await container.read(racecardControllerProvider.future);
@@ -55,29 +57,60 @@ void main() {
 
     final notifier = container.read(racecardControllerProvider.notifier);
     notifier.cycleMark(1);
-    expect(container.read(racecardControllerProvider).requireValue.markFor(1), 1);
+    expect(
+      container.read(racecardControllerProvider).requireValue.markFor(1),
+      1,
+    );
     notifier.selectRace(1);
-    expect(container.read(racecardControllerProvider).requireValue.currentRaceNum, 1);
-    expect(container.read(racecardControllerProvider).requireValue.markFor(1), 0);
+    expect(
+      container.read(racecardControllerProvider).requireValue.currentRaceNum,
+      1,
+    );
+    expect(
+      container.read(racecardControllerProvider).requireValue.markFor(1),
+      0,
+    );
     notifier.selectRace(5);
-    expect(container.read(racecardControllerProvider).requireValue.markFor(1), 1);
+    expect(
+      container.read(racecardControllerProvider).requireValue.markFor(1),
+      1,
+    );
 
     notifier.cycleMark(1);
-    expect(container.read(racecardControllerProvider).requireValue.markFor(1), 2);
+    expect(
+      container.read(racecardControllerProvider).requireValue.markFor(1),
+      2,
+    );
     notifier.cycleMark(1);
-    expect(container.read(racecardControllerProvider).requireValue.markFor(1), 0);
+    expect(
+      container.read(racecardControllerProvider).requireValue.markFor(1),
+      0,
+    );
     notifier.cycleMark(99);
-    expect(container.read(racecardControllerProvider).requireValue.marks, isEmpty);
+    expect(
+      container.read(racecardControllerProvider).requireValue.marks,
+      isEmpty,
+    );
   });
 
-  testWidgets('right columns use the measured width of this race', (tester) async {
+  testWidgets('right columns use the measured width of this race', (
+    tester,
+  ) async {
     final meeting = await _meeting();
     final race = meeting.raceByNum(5)!;
     await _pumpTable(tester, race: race, size: const Size(430, 640));
 
-    final widths = fitScrollWidths(race: race, textScaler: TextScaler.noScaling);
-    final header = tester.renderObject<RenderBox>(find.byKey(const Key('scroll-header')));
-    expect(header.size.width, widths.fold<double>(0, (sum, width) => sum + width));
+    final widths = fitScrollWidths(
+      race: race,
+      textScaler: TextScaler.noScaling,
+    );
+    final header = tester.renderObject<RenderBox>(
+      find.byKey(const Key('scroll-header')),
+    );
+    expect(
+      header.size.width,
+      widths.fold<double>(0, (sum, width) => sum + width),
+    );
     expect(find.text('檔位'), findsOneWidget);
     expect(find.text('獨贏'), findsOneWidget);
     expect(find.text('位置'), findsOneWidget);
@@ -86,52 +119,54 @@ void main() {
     expect(find.text('4.2'), findsWidgets);
   });
 
-  testWidgets('horizontal drag moves header and body together and leaves the lock', (
-    tester,
-  ) async {
-    final meeting = await _meeting();
-    final race = meeting.raceByNum(5)!;
-    await _pumpTable(tester, race: race);
+  testWidgets(
+    'horizontal drag moves header and body together and leaves the lock',
+    (tester) async {
+      final meeting = await _meeting();
+      final race = meeting.raceByNum(5)!;
+      await _pumpTable(tester, race: race);
 
-    final header = find.byKey(const Key('scroll-header'));
-    final body = find.byKey(const Key('scroll-row-1'));
-    final lock = find.byKey(const Key('lock-1'));
-    final headerStart = tester.getTopLeft(header);
-    final bodyStart = tester.getTopLeft(body);
-    final lockStart = tester.getTopLeft(lock);
+      final header = find.byKey(const Key('scroll-header'));
+      final body = find.byKey(const Key('scroll-row-1'));
+      final lock = find.byKey(const Key('lock-1'));
+      final headerStart = tester.getTopLeft(header);
+      final bodyStart = tester.getTopLeft(body);
+      final lockStart = tester.getTopLeft(lock);
 
-    await _drag(tester, const Offset(-140, 0));
+      await _drag(tester, const Offset(-140, 0));
 
-    final headerDelta = tester.getTopLeft(header) - headerStart;
-    final bodyDelta = tester.getTopLeft(body) - bodyStart;
-    expect(headerDelta.dx, lessThan(-10));
-    expect(bodyDelta.dx, closeTo(headerDelta.dx, 0.5));
-    expect(headerDelta.dy, closeTo(0, 0.5));
-    expect(bodyDelta.dy, closeTo(0, 0.5));
-    expect(tester.getTopLeft(lock).dx, closeTo(lockStart.dx, 0.5));
-  });
+      final headerDelta = tester.getTopLeft(header) - headerStart;
+      final bodyDelta = tester.getTopLeft(body) - bodyStart;
+      expect(headerDelta.dx, lessThan(-10));
+      expect(bodyDelta.dx, closeTo(headerDelta.dx, 0.5));
+      expect(headerDelta.dy, closeTo(0, 0.5));
+      expect(bodyDelta.dy, closeTo(0, 0.5));
+      expect(tester.getTopLeft(lock).dx, closeTo(lockStart.dx, 0.5));
+    },
+  );
 
-  testWidgets('vertical drag keeps the lock and the right columns on the same row', (
-    tester,
-  ) async {
-    final meeting = await _meeting();
-    final race = meeting.raceByNum(5)!;
-    await _pumpTable(tester, race: race);
+  testWidgets(
+    'vertical drag keeps the lock and the right columns on the same row',
+    (tester) async {
+      final meeting = await _meeting();
+      final race = meeting.raceByNum(5)!;
+      await _pumpTable(tester, race: race);
 
-    final body = find.byKey(const Key('scroll-row-1'));
-    final lock = find.byKey(const Key('lock-1'));
-    final bodyStart = tester.getTopLeft(body);
-    final lockStart = tester.getTopLeft(lock);
+      final body = find.byKey(const Key('scroll-row-1'));
+      final lock = find.byKey(const Key('lock-1'));
+      final bodyStart = tester.getTopLeft(body);
+      final lockStart = tester.getTopLeft(lock);
 
-    await _drag(tester, const Offset(0, -40));
+      await _drag(tester, const Offset(0, -40));
 
-    final bodyDelta = tester.getTopLeft(body) - bodyStart;
-    final lockDelta = tester.getTopLeft(lock) - lockStart;
-    expect(bodyDelta.dy, lessThan(-10));
-    expect(lockDelta.dy, closeTo(bodyDelta.dy, 0.5));
-    expect(lockDelta.dx, closeTo(0, 0.5));
-    expect(bodyDelta.dx, closeTo(0, 0.5));
-  });
+      final bodyDelta = tester.getTopLeft(body) - bodyStart;
+      final lockDelta = tester.getTopLeft(lock) - lockStart;
+      expect(bodyDelta.dy, lessThan(-10));
+      expect(lockDelta.dy, closeTo(bodyDelta.dy, 0.5));
+      expect(lockDelta.dx, closeTo(0, 0.5));
+      expect(bodyDelta.dx, closeTo(0, 0.5));
+    },
+  );
 
   testWidgets('switching race resets the horizontal offset', (tester) async {
     final meeting = await _meeting();
@@ -150,14 +185,12 @@ void main() {
     expect(find.text('本領非凡'), findsNothing);
   });
 
-  testWidgets('zebra stripes alternate and a marked row follows the flag', (tester) async {
+  testWidgets('zebra stripes alternate and a marked row follows the flag', (
+    tester,
+  ) async {
     final meeting = await _meeting();
     final race = meeting.raceByNum(5)!;
-    await _pumpTable(
-      tester,
-      race: race,
-      marks: const {'5:2': 1},
-    );
+    await _pumpTable(tester, race: race, marks: const {'5:2': 1});
 
     final first = tester.widget<RowBand>(find.byKey(const Key('row-5-1')));
     final second = tester.widget<RowBand>(find.byKey(const Key('row-5-2')));
@@ -171,7 +204,9 @@ void main() {
     );
   });
 
-  testWidgets('swallowtail cycles and stays visible in light and dark', (tester) async {
+  testWidgets('swallowtail cycles and stays visible in light and dark', (
+    tester,
+  ) async {
     await _pumpApp(tester);
 
     expect(find.byType(RowBand), findsNWidgets(11));
@@ -240,7 +275,11 @@ void main() {
     await tester.tap(find.byKey(const Key('menu-stub')));
     await tester.pumpAndSettle();
     expect(find.text('選單'), findsOneWidget);
-    expect(find.text('稍後提供'), findsOneWidget);
+    expect(find.text('個人心水和戰績'), findsOneWidget);
+    expect(find.text('名家'), findsOneWidget);
+    expect(find.text('馬匹數據排序'), findsOneWidget);
+    expect(find.text('查看賽期和歷史數據'), findsOneWidget);
+    expect(find.text('稍後提供'), findsNothing);
     expect(find.text('排位'), findsOneWidget);
   });
 }
@@ -264,9 +303,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   final preferences = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(preferences),
-      ],
+      overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
       child: const J18App(),
     ),
   );

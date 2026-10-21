@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:j18pro_racecard/app/app_theme.dart';
+import 'package:j18pro_racecard/app/text_scale_controller.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
+import 'package:j18pro_racecard/features/app_menu/racecard_menu.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
 import 'package:j18pro_racecard/features/racecard_insight/race_insight_bar.dart';
 import 'package:j18pro_racecard/features/racecard_table/racecard_table.dart';
@@ -69,36 +71,12 @@ class RacecardPage extends ConsumerWidget {
     );
   }
 
-  void _openMenu(BuildContext context) {
+  void _openMenu(BuildContext pageContext) {
     showModalBottomSheet<void>(
-      context: context,
+      context: pageContext,
       showDragHandle: true,
-      builder: (context) {
-        return const SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '選單',
-                  style: TextStyle(
-                    fontFamily: 'Noto Sans TC',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '稍後提供',
-                  style: TextStyle(fontFamily: 'Noto Sans TC', fontSize: 15),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      isScrollControlled: true,
+      builder: (_) => RacecardMenu(pageContext: pageContext),
     );
   }
 }
@@ -128,16 +106,25 @@ class _RaceBoard extends ConsumerWidget {
         ),
         RacePills(races: meeting.races, currentRaceNum: state.currentRaceNum),
         const RaceInsightBar(),
-        Expanded(
-          child: RacecardTable(
-            race: state.currentRace,
-            marks: state.marks,
-            onCycleMark: (horseNo) {
-              ref.read(racecardControllerProvider.notifier).cycleMark(horseNo);
-            },
-          ),
-        ),
+        Expanded(child: _scaledTable(context, ref)),
       ],
+    );
+  }
+
+  /// Web list zoom applies to the board table only, not the title or insight bar.
+  Widget _scaledTable(BuildContext context, WidgetRef ref) {
+    final factor = textScaleFactor(ref.watch(textScaleLevelProvider));
+    final scaled = MediaQuery.textScalerOf(context).scale(factor);
+    return MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(scaled)),
+      child: RacecardTable(
+        race: state.currentRace,
+        marks: state.marks,
+        onCycleMark: (horseNo) {
+          ref.read(racecardControllerProvider.notifier).cycleMark(horseNo);
+        },
+      ),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
 import 'package:j18pro_racecard/features/racecard_insight/index_picks.dart';
 import 'package:j18pro_racecard/features/racecard_insight/time_scrub.dart';
+import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 
 /// Web demo opens on race 5 (`let currentRace = 5`).
 const demoInitialRaceNum = 5;
@@ -34,10 +35,14 @@ class RacecardViewState {
     this.openCapsule = OpenCapsule.picks,
     this.capsuleDropOpen = false,
     this.indexStrategyId = defaultIndexStrategyId,
+    this.calendarScope = RaceCalendarScope.hk,
   });
 
   final Meeting meeting;
   final int currentRaceNum;
+
+  /// Web `raceCalScope` of the meeting currently on the table.
+  final RaceCalendarScope calendarScope;
 
   /// Swallowtail state keyed `raceNum:horseNo`. 1 yellow, 2 green. Missing is none.
   final Map<String, int> marks;
@@ -69,21 +74,24 @@ class RacecardViewState {
   }
 
   RacecardViewState copyWith({
+    Meeting? meeting,
     int? currentRaceNum,
     Map<String, int>? marks,
     int? scrubPointIdx,
     OpenCapsule? openCapsule,
     bool? capsuleDropOpen,
     String? indexStrategyId,
+    RaceCalendarScope? calendarScope,
   }) {
     return RacecardViewState(
-      meeting: meeting,
+      meeting: meeting ?? this.meeting,
       currentRaceNum: currentRaceNum ?? this.currentRaceNum,
       marks: marks ?? this.marks,
       scrubPointIdx: scrubPointIdx ?? this.scrubPointIdx,
       openCapsule: openCapsule ?? this.openCapsule,
       capsuleDropOpen: capsuleDropOpen ?? this.capsuleDropOpen,
       indexStrategyId: indexStrategyId ?? this.indexStrategyId,
+      calendarScope: calendarScope ?? this.calendarScope,
     );
   }
 
@@ -92,6 +100,7 @@ class RacecardViewState {
     return other is RacecardViewState &&
         meeting == other.meeting &&
         currentRaceNum == other.currentRaceNum &&
+        calendarScope == other.calendarScope &&
         scrubPointIdx == other.scrubPointIdx &&
         openCapsule == other.openCapsule &&
         capsuleDropOpen == other.capsuleDropOpen &&
@@ -103,6 +112,7 @@ class RacecardViewState {
   int get hashCode => Object.hash(
     meeting,
     currentRaceNum,
+    calendarScope,
     scrubPointIdx,
     openCapsule,
     capsuleDropOpen,
@@ -168,6 +178,37 @@ class RacecardController extends AsyncNotifier<RacecardViewState> {
     final next = canonicalIndexStrategyId(id);
     if (next == value.indexStrategyId) return;
     state = AsyncData(value.copyWith(indexStrategyId: next, scrubPointIdx: -1));
+  }
+
+  /// Web `loadMeetingForDate`. Replaces the table's meeting. Marks reset
+  /// because horse numbers belong to the previous card.
+  Future<void> selectDate(
+    String iso, {
+    RaceCalendarScope scope = RaceCalendarScope.hk,
+  }) async {
+    final value = state.asData?.value;
+    if (value == null) return;
+    if (value.meeting.date == iso && value.calendarScope == scope) return;
+    final meeting = await ref
+        .read(raceRepositoryProvider)
+        .load(iso, scope: scope);
+    final latest = state.asData?.value;
+    if (latest == null || meeting.races.isEmpty) return;
+    final raceNum = meeting.raceByNum(latest.currentRaceNum) != null
+        ? latest.currentRaceNum
+        : meeting.raceByNum(demoInitialRaceNum) != null
+        ? demoInitialRaceNum
+        : meeting.races.first.num;
+    state = AsyncData(
+      latest.copyWith(
+        meeting: meeting,
+        currentRaceNum: raceNum,
+        calendarScope: scope,
+        marks: const {},
+        scrubPointIdx: -1,
+        capsuleDropOpen: false,
+      ),
+    );
   }
 
   /// Web `openPayoutForRace`: jump to that race, open the payout capsule, close the drop.

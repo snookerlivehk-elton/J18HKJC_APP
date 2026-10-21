@@ -84,6 +84,9 @@ class _RacecardTableState extends State<RacecardTable> {
     final tokens = Theme.of(context).extension<J18Tokens>() ?? J18Tokens.light;
     final brightness = Theme.of(context).brightness;
     final textScaler = MediaQuery.textScalerOf(context);
+    final scale = textScaler.scale(1);
+    final headerHeight = racecardHeaderHeight * scale;
+    final rowHeight = racecardRowHeight * scale;
     final widths = fitScrollWidths(
       race: widget.race,
       textScaler: textScaler,
@@ -92,14 +95,19 @@ class _RacecardTableState extends State<RacecardTable> {
     final contentWidth = widths.fold<double>(0, (sum, width) => sum + width);
     final dark = brightness == Brightness.dark;
     final headerColor = dark ? RowChrome.darkHeader : RowChrome.lightHeader;
-    final headerText = dark ? RowChrome.darkHeaderText : RowChrome.lightHeaderText;
+    final headerText = dark
+        ? RowChrome.darkHeaderText
+        : RowChrome.lightHeaderText;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final lockWidth = constraints.maxWidth < racecardLockWidth + 48
             ? (constraints.maxWidth * 0.62).clamp(96.0, racecardLockWidth)
             : racecardLockWidth;
-        final viewport = (constraints.maxWidth - lockWidth).clamp(0.0, double.infinity);
+        final viewport = (constraints.maxWidth - lockWidth).clamp(
+          0.0,
+          double.infinity,
+        );
         _maxOffset = (contentWidth - viewport).clamp(0.0, double.infinity);
         if (_offset > _maxOffset) _offset = _maxOffset;
         final offset = _offset;
@@ -112,7 +120,7 @@ class _RacecardTableState extends State<RacecardTable> {
           child: Column(
             children: [
               _TableBand(
-                height: racecardHeaderHeight,
+                height: headerHeight,
                 color: headerColor,
                 lineColor: tokens.line,
                 lockWidth: lockWidth,
@@ -123,7 +131,7 @@ class _RacecardTableState extends State<RacecardTable> {
                   offset: offset,
                   child: _ScrollCells(
                     widths: widths,
-                    height: racecardHeaderHeight,
+                    height: headerHeight,
                     texts: [for (final column in widget.columns) column.header],
                     style: racecardCellStyle.copyWith(color: headerText),
                     ruleColor: tokens.line,
@@ -137,40 +145,52 @@ class _RacecardTableState extends State<RacecardTable> {
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  key: const Key('runner-list'),
-                  itemCount: widget.race.runners.length,
-                  itemExtent: racecardRowHeight,
-                  itemBuilder: (context, index) {
-                    final runner = widget.race.runners[index];
-                    final mark = _markFor(runner.no);
-                    final chrome = RowChrome.resolve(
-                      mark: mark,
-                      alt: index.isOdd,
-                      brightness: brightness,
-                    );
-                    return RowBand(
-                      key: Key('row-${widget.race.num}-${runner.no}'),
-                      color: chrome.background,
-                      lineColor: tokens.line,
-                      accent: chrome.accent,
-                      child: _RunnerRow(
-                        raceNum: widget.race.num,
-                        runner: runner,
-                        mark: mark,
-                        flagColor: chrome.flag,
-                        lockWidth: lockWidth,
-                        viewportWidth: viewport,
-                        contentWidth: contentWidth,
-                        offset: offset,
-                        widths: widths,
-                        columns: widget.columns,
-                        tokens: tokens,
-                        onCycleMark: () => widget.onCycleMark(runner.no),
+                child: widget.race.runners.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '暫無馬匹',
+                          key: Key('empty-runners'),
+                          style: TextStyle(
+                            fontFamily: 'Noto Sans TC',
+                            fontSize: 15,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        key: const Key('runner-list'),
+                        itemCount: widget.race.runners.length,
+                        itemExtent: rowHeight,
+                        itemBuilder: (context, index) {
+                          final runner = widget.race.runners[index];
+                          final mark = _markFor(runner.no);
+                          final chrome = RowChrome.resolve(
+                            mark: mark,
+                            alt: index.isOdd,
+                            brightness: brightness,
+                          );
+                          return RowBand(
+                            key: Key('row-${widget.race.num}-${runner.no}'),
+                            color: chrome.background,
+                            lineColor: tokens.line,
+                            accent: chrome.accent,
+                            child: _RunnerRow(
+                              raceNum: widget.race.num,
+                              runner: runner,
+                              mark: mark,
+                              flagColor: chrome.flag,
+                              rowHeight: rowHeight,
+                              lockWidth: lockWidth,
+                              viewportWidth: viewport,
+                              contentWidth: contentWidth,
+                              offset: offset,
+                              widths: widths,
+                              columns: widget.columns,
+                              tokens: tokens,
+                              onCycleMark: () => widget.onCycleMark(runner.no),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -229,6 +249,7 @@ class _RunnerRow extends StatelessWidget {
     required this.runner,
     required this.mark,
     required this.flagColor,
+    required this.rowHeight,
     required this.lockWidth,
     required this.viewportWidth,
     required this.contentWidth,
@@ -243,6 +264,7 @@ class _RunnerRow extends StatelessWidget {
   final Runner runner;
   final int mark;
   final Color flagColor;
+  final double rowHeight;
   final double lockWidth;
   final double viewportWidth;
   final double contentWidth;
@@ -263,7 +285,7 @@ class _RunnerRow extends StatelessWidget {
       color: scratched ? tokens.muted : tokens.text,
     );
     return SizedBox(
-      height: racecardRowHeight,
+      height: rowHeight,
       child: Row(
         children: [
           SizedBox(
@@ -335,7 +357,7 @@ class _RunnerRow extends StatelessWidget {
               offset: offset,
               child: _ScrollCells(
                 widths: widths,
-                height: racecardRowHeight,
+                height: rowHeight,
                 texts: [for (final column in columns) column.text(runner)],
                 style: racecardCellStyle.copyWith(
                   color: scratched ? tokens.muted : tokens.text,

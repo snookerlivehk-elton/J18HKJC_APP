@@ -7,6 +7,7 @@ import 'package:j18pro_racecard/data/demo_meeting_repository.dart';
 import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
 import 'package:j18pro_racecard/features/racecard/racecard_controller.dart';
+import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 import 'package:j18pro_racecard/features/racecard_insight/index_picks.dart';
 import 'package:j18pro_racecard/features/racecard_insight/payout_detail.dart';
 import 'package:j18pro_racecard/features/racecard_insight/race_status.dart';
@@ -545,9 +546,13 @@ class _PaidRace5Repository implements RaceRepository {
   final DemoMeetingRepository _inner = DemoMeetingRepository();
 
   @override
-  Future<Meeting> load(String date) async {
-    final meeting = await _inner.load(date);
-    final race = meeting.raceByNum(5)!;
+  Future<Meeting> load(
+    String date, {
+    RaceCalendarScope scope = RaceCalendarScope.hk,
+  }) async {
+    final meeting = await _inner.load(date, scope: scope);
+    final race = meeting.raceByNum(5);
+    if (race == null) return meeting;
     return meeting.replaceRace(race.copyWith(paid: true));
   }
 }

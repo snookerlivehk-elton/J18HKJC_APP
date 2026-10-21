@@ -3,17 +3,15 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:j18pro_racecard/data/demo_meeting_repository.dart';
-import 'package:j18pro_racecard/data/race_repository.dart';
 import 'package:j18pro_racecard/domain/meeting.dart';
+import 'package:j18pro_racecard/features/race_calendar/race_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('parses the Web MEETING fixture', () async {
     final raw = await rootBundle.loadString(DemoMeetingRepository.assetPath);
-    final meeting = Meeting.fromJson(
-      jsonDecode(raw) as Map<String, dynamic>,
-    );
+    final meeting = Meeting.fromJson(jsonDecode(raw) as Map<String, dynamic>);
 
     expect(meeting.date, '2026-09-23');
     expect(meeting.courseLabel, '跑馬地');
@@ -42,7 +40,18 @@ void main() {
 
     final race6 = meeting.raceByNum(6)!;
     expect(race6.runners, hasLength(10));
-    expect(race6.runners.map((runner) => runner.no), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(race6.runners.map((runner) => runner.no), [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+    ]);
     final scratched = race6.runners.singleWhere((runner) => runner.no == 7);
     expect(scratched.name, '雙劍合璧');
     expect(scratched.scratched, isTrue);
@@ -59,28 +68,31 @@ void main() {
   });
 
   test('rejects a runner without a name', () {
-    expect(
-      () => Runner.fromJson({'no': 1, 'draw': 1}),
-      throwsFormatException,
-    );
+    expect(() => Runner.fromJson({'no': 1, 'draw': 1}), throwsFormatException);
   });
 
-  test('DemoMeetingRepository loads the snapshot and rejects other dates', () async {
-    final repository = DemoMeetingRepository();
-    final meeting = await repository.load(DemoMeetingRepository.snapshotDate);
-    expect(meeting.races, hasLength(3));
-    final again = await repository.load(DemoMeetingRepository.snapshotDate);
-    expect(identical(meeting, again), isTrue);
+  test(
+    'DemoMeetingRepository caches the snapshot and stubs other dates',
+    () async {
+      final repository = DemoMeetingRepository();
+      final meeting = await repository.load(DemoMeetingRepository.snapshotDate);
+      expect(meeting.races, hasLength(3));
+      final again = await repository.load(DemoMeetingRepository.snapshotDate);
+      expect(identical(meeting, again), isTrue);
 
-    expect(
-      () => repository.load('2026-01-01'),
-      throwsA(
-        isA<RaceLoadException>().having(
-          (error) => error.message,
-          'message',
-          contains('2026-01-01'),
-        ),
-      ),
-    );
-  });
+      final stub = await repository.load('2026-01-01');
+      expect(stub.date, '2026-01-01');
+      expect(stub.courseLabel, isEmpty);
+      expect(stub.races, hasLength(1));
+      expect(stub.races.single.name, '賽事資料載入中');
+      expect(stub.races.single.runners, isEmpty);
+
+      final overseas = await repository.load(
+        '2026-09-27',
+        scope: RaceCalendarScope.os,
+      );
+      expect(overseas.courseLabel, '雅士谷');
+      expect(overseas.races.single.runners, isEmpty);
+    },
+  );
 }
