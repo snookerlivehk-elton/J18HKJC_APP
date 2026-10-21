@@ -256,7 +256,8 @@ SSH 密钥：环境里的 `SERVER2_SSH_PRIVATE_KEY`（或既有 `~/.ssh/server2_
 2. **接名家 API**：替换 `FAMOUS_TIPSTERS_DEMO` 与 `famousTipsForTipster`；综合心水与胜率改为后端或统一公式。  
 3. **接心水战绩真统计**：替换 `TIP_LEADERBOARD_DEMO` 与本地 tip 估算。  
 4. **工程拆分（可选）**：单文件过大时，可逐步拆 CSS/JS 模块，但需保证 SERVER2 仍能以单页或构建产物部署到 `public/racecard.html`。  
-5. **缓存策略**：若上 CDN/强缓存，需与「强制刷新验收」流程对齐（query `?v=` 或短 Cache-Control）。
+5. **缓存策略**：若上 CDN/强缓存，需与「强制刷新验收」流程对齐（query `?v=` 或短 Cache-Control）。  
+6. **Flutter 重写（若立项）**：严格按 `docs/J18PRO_FLUTTER_MIGRATION_PLAN.md` 分 Phase 执行；未切换前本 Web 页仍为验收真源。
 
 ---
 
