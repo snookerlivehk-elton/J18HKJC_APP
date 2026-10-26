@@ -1347,7 +1347,7 @@
       display: flex;
       flex-direction: column;
     }
-    /* 縱向：board-wrap；橫向馬匹：board-x；連贏在 board-x 外，左右滑互不干擾 */
+    /* 縱向：board-wrap；橫向馬匹：board-x；連贏／二重彩在 board-x 外，左右滑互不干擾 */
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
@@ -4573,6 +4573,160 @@
       letter-spacing: 0;
     }
 
+    /* 二重彩：有序矩陣（左＝第一名，上＝第二名）；>14 僅橫滑，豎向隨頁展開 */
+    .fc-panel {
+      position: relative;
+      z-index: 2;
+      box-sizing: border-box;
+      width: 100%;
+      background: #eef1f5;
+      border-top: 8px solid #eef1f5;
+      padding: 0 0 10px;
+      --fc-cell: 24px;
+      --fc-title-w: 24px;
+    }
+    .fc-block {
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .fc-x {
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .fc-tbl {
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums lining-nums;
+      line-height: 1;
+    }
+    .fc-tbl col.fc-col-rh { width: var(--fc-title-w); }
+    .fc-tbl col.fc-col-c { width: var(--fc-cell); }
+    .fc-tbl th,
+    .fc-tbl td {
+      border: 1px solid #cfd6e0;
+      text-align: center;
+      vertical-align: middle;
+      padding: 0;
+      height: var(--fc-cell);
+      min-width: var(--fc-cell);
+      width: var(--fc-cell);
+      font-weight: 400;
+      color: var(--text);
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .fc-tbl .fc-corner {
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      background: #cfd5de;
+      min-width: var(--fc-title-w);
+      width: var(--fc-title-w);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: 0;
+      color: #2a3544;
+      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
+      padding: 1px;
+    }
+    .fc-corner-lab {
+      display: block;
+      writing-mode: horizontal-tb;
+      white-space: pre-line;
+    }
+    .fc-tbl .fc-ch {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: #4a7aad;
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .fc-tbl .fc-rh {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #4a7aad;
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      min-width: var(--fc-title-w);
+      width: var(--fc-title-w);
+      box-shadow: 3px 0 6px rgba(45, 62, 80, .12);
+    }
+    .fc-tbl .fc-h {
+      background: #e8eef5;
+      color: #5b6575;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .fc-tbl .fc-c.hot { background: #e74c3c; color: #fff; }
+    .fc-tbl .fc-c.drop20 { background: var(--green); color: #fff; }
+    .fc-tbl .fc-c.drop50 { background: #c47a3a; color: #fff; }
+    .fc-tbl .fc-c[data-fc-key] {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fc-tbl .fc-ch.scratch,
+    .fc-tbl .fc-rh.scratch,
+    .fc-tbl .fc-h.scratch {
+      background: #9aa3b0;
+      color: #eef1f5;
+      text-decoration: line-through;
+    }
+    .fc-tbl .fc-c.scratch {
+      background: #eef1f5;
+      color: #9aa3b0;
+      cursor: default;
+    }
+    .fc-tbl .fc-c.is-fc-focus {
+      outline: 2px solid #d97808;
+      outline-offset: 0;
+      position: relative;
+      z-index: 2;
+      animation: qinFocusPulse 1.05s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fc-tbl .fc-c.is-fc-focus {
+        animation: none;
+        outline-color: #ff4d00;
+        outline-offset: 1px;
+      }
+    }
+    .fc-legend {
+      padding: 8px 10px 2px 5px;
+      background: #eef1f5;
+      font-size: 11px;
+      color: #5b6575;
+      line-height: 1.55;
+    }
+    .fc-legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 3px 8px;
+      margin-bottom: 2px;
+    }
+    .fc-legend-row .lab {
+      flex: 0 0 auto;
+      font-weight: 700;
+      color: #3d5a80;
+      white-space: nowrap;
+    }
+    .fc-leg {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
     /* —— 菜單：最近賽日（日期選擇欄）；寬度跟內容收緊 —— */
     .topbar-menu {
       min-width: 0;
@@ -5912,20 +6066,47 @@
     }
 
     html[data-theme="dark"] .qin-panel,
-    html[data-theme="dark"] .qin-legend {
+    html[data-theme="dark"] .qin-legend,
+    html[data-theme="dark"] .fc-panel,
+    html[data-theme="dark"] .fc-legend {
       background: #1a1f27;
       border-top-color: #1a1f27;
       color: #9aa3b2;
     }
-    html[data-theme="dark"] .qin-block {
+    html[data-theme="dark"] .qin-block,
+    html[data-theme="dark"] .fc-block {
       background: #1e242d;
     }
     html[data-theme="dark"] .qin-tbl th,
-    html[data-theme="dark"] .qin-tbl td {
+    html[data-theme="dark"] .qin-tbl td,
+    html[data-theme="dark"] .fc-tbl th,
+    html[data-theme="dark"] .fc-tbl td {
       border-color: #3a4250;
       color: var(--text);
       background: #1e242d;
     }
+    html[data-theme="dark"] .fc-tbl .fc-corner {
+      background: #323a46;
+      color: #d0d7e2;
+      box-shadow: 3px 0 6px rgba(0, 0, 0, .28);
+    }
+    html[data-theme="dark"] .fc-tbl .fc-ch,
+    html[data-theme="dark"] .fc-tbl .fc-rh {
+      background: #4a7aad;
+      color: #fff;
+      box-shadow: 3px 0 6px rgba(0, 0, 0, .28);
+    }
+    html[data-theme="dark"] .fc-tbl .fc-h {
+      background: #2a3340;
+      color: #8a94a3;
+    }
+    html[data-theme="dark"] .fc-tbl .fc-c.scratch {
+      background: #2a313c;
+      color: #707888;
+    }
+    html[data-theme="dark"] .fc-tbl .fc-c.hot { background: #c94a3d; color: #fff; }
+    html[data-theme="dark"] .fc-tbl .fc-c.drop20 { background: var(--green); color: #fff; }
+    html[data-theme="dark"] .fc-tbl .fc-c.drop50 { background: #d4924a; color: #fff; }
     html[data-theme="dark"] .qin-tbl .qin-switch-cell {
       background: #323a46;
       box-shadow: 0 2px 4px rgba(0, 0, 0, .3), 3px 0 6px rgba(0, 0, 0, .28);
@@ -11219,6 +11400,268 @@
         "</div>"
       );
     }
+
+    /* 二重彩（Forecast）：有序對 第一名→第二名；示意賠率，日後可換真實盤 */
+    function fcPairKey(first, second) {
+      return String(first) + ">" + String(second);
+    }
+    function synthFcOdds(wa, wb) {
+      const a = numOrNull(wa), b = numOrNull(wb);
+      if (a == null || b == null) return null;
+      /* 有序組合，略高於連贏無序合成 */
+      let v = a * b * 0.48;
+      if (v >= 999) return 999;
+      if (v >= 100) return Math.round(v);
+      if (v >= 20) return Math.round(v * 2) / 2;
+      return Math.round(v * 10) / 10;
+    }
+    function fcDropClass(a, b, raceNum) {
+      const s = (a * 19 + b * 29 + (raceNum + 3) * 11) % 23;
+      if (s === 0) return "drop50";
+      if (s === 1 || s === 2) return "drop20";
+      return "";
+    }
+    function buildFcPairs() {
+      let runners = currentRunners()
+        .filter(function (r) { return numOrNull(r.no) != null; })
+        .slice()
+        .sort(function (a, b) { return a.no - b.no; });
+      if (runners.length > QIN_MAX_N) runners = runners.slice(0, QIN_MAX_N);
+      const nos = runners.map(function (r) { return r.no; });
+      const byNo = {};
+      const scratch = {};
+      runners.forEach(function (r) {
+        byNo[r.no] = r;
+        if (r.scratched) scratch[r.no] = true;
+      });
+      const oddsMap = {};
+      let hotKey = null;
+      let hotOdds = Infinity;
+      for (let i = 0; i < nos.length; i++) {
+        for (let j = 0; j < nos.length; j++) {
+          if (i === j) continue;
+          const a = nos[i], b = nos[j];
+          const key = fcPairKey(a, b);
+          if (scratch[a] || scratch[b]) {
+            oddsMap[key] = null;
+            continue;
+          }
+          const od = synthFcOdds(byNo[a].win, byNo[b].win);
+          oddsMap[key] = od;
+          if (od != null && od < hotOdds) {
+            hotOdds = od;
+            hotKey = key;
+          }
+        }
+      }
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, scratch: scratch };
+    }
+    function fcHorseScratched(fc, no) {
+      return !!(fc && fc.scratch && fc.scratch[no]);
+    }
+    function fcPairInvolvesScratch(fc, a, b) {
+      return fcHorseScratched(fc, a) || fcHorseScratched(fc, b);
+    }
+    function renderFcTable(fc) {
+      const nos = fc.nos;
+      const n = nos.length;
+      if (n < 2) {
+        return '<div class="fc-block"><div class="fc-legend" style="padding:12px 10px">暫無二重彩組合</div></div>';
+      }
+      let html =
+        '<div class="fc-block">' +
+          '<div class="fc-x" id="fcX">' +
+            '<table class="fc-tbl" data-n="' + n + '" aria-label="二重彩賠率：左列第一名、上行第二名">' +
+            '<colgroup><col class="fc-col-rh" />';
+      for (let c = 0; c < n; c++) html += '<col class="fc-col-c" />';
+      html +=
+            "</colgroup>" +
+            "<thead><tr>" +
+            '<th class="fc-corner" scope="col"><span class="fc-corner-lab">二重\n彩</span></th>';
+      for (let j = 0; j < n; j++) {
+        const sc = fcHorseScratched(fc, nos[j]) ? " scratch" : "";
+        html += '<th class="fc-ch' + sc + '" title="第二名">' + esc(nos[j]) + "</th>";
+      }
+      html += "</tr></thead><tbody>";
+      for (let i = 0; i < n; i++) {
+        const rowHorse = nos[i];
+        const rowSc = fcHorseScratched(fc, rowHorse) ? " scratch" : "";
+        html += "<tr>";
+        html += '<th class="fc-rh' + rowSc + '" scope="row" title="第一名">' + esc(rowHorse) + "</th>";
+        for (let j = 0; j < n; j++) {
+          const colHorse = nos[j];
+          if (i === j) {
+            html += '<th class="fc-h' + rowSc + '">' + esc(rowHorse) + "</th>";
+            continue;
+          }
+          const key = fcPairKey(rowHorse, colHorse);
+          const scratched = fcPairInvolvesScratch(fc, rowHorse, colHorse);
+          const od = scratched ? null : fc.oddsMap[key];
+          let cls = "fc-c";
+          let text = "—";
+          let attrs = ' data-fc-key="' + esc(key) + '"';
+          if (scratched) {
+            cls += " scratch";
+            attrs += ' data-fc-scratch="1" aria-disabled="true" aria-label="退出 ' + esc(key) + '"';
+          } else {
+            text = fmtQinOdds(od);
+            if (key === fc.hotKey) cls += " hot";
+            else {
+              const drop = fcDropClass(rowHorse, colHorse, currentRace);
+              if (drop) cls += " " + drop;
+            }
+            attrs += ' role="button" tabindex="0" aria-label="二重彩 ' + esc(rowHorse) + "→" + esc(colHorse) + '"';
+          }
+          html += '<td class="' + cls + '"' + attrs + ">" + esc(text) + "</td>";
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table></div></div>";
+      return html;
+    }
+    function renderFcLegend() {
+      return (
+        '<div class="fc-legend">' +
+          '<div class="fc-legend-row">' +
+            '<span class="lab">二重彩</span>' +
+            '<span class="fc-leg">左列第一名 · 上行第二名</span>' +
+            '<span class="fc-leg"><span class="qin-swatch hot">00</span>大熱</span>' +
+            '<span class="fc-leg"><span class="qin-swatch drop20">00</span>降20%</span>' +
+            '<span class="fc-leg"><span class="qin-swatch drop50">00</span>降50%</span>' +
+          "</div>" +
+        "</div>"
+      );
+    }
+    function renderFcPanelHtml() {
+      const fc = buildFcPairs();
+      return (
+        '<div class="fc-panel" id="fcPanel">' +
+          renderFcTable(fc) +
+          renderFcLegend() +
+        "</div>"
+      );
+    }
+    function fitFcTableWidths() {
+      /* ≤14 等分鋪滿；>14 按 14 密度鎖列寬並橫滑；不設 maxHeight，豎向隨頁展開 */
+      const panel = document.getElementById("fcPanel");
+      const tbl = panel && panel.querySelector(".fc-tbl");
+      if (!panel || !tbl) return;
+      const n = Number(tbl.getAttribute("data-n") || 0);
+      if (n < 2) return;
+      const colCount = n + 1;
+      const avail = Math.max(panel.clientWidth, 200);
+      let cell;
+      let total;
+      if (n <= QIN_FIT_N) {
+        cell = avail / colCount;
+        total = avail;
+      } else {
+        cell = Math.max(1, Math.floor(avail / (QIN_FIT_N + 1)));
+        total = cell * colCount;
+      }
+      panel.style.setProperty("--fc-title-w", cell + "px");
+      panel.style.setProperty("--fc-cell", cell + "px");
+      tbl.style.width = total + "px";
+      tbl.style.minWidth = total + "px";
+      const fs = cell >= 28 ? 12 : cell >= 24 ? 11 : 10;
+      tbl.style.fontSize = fs + "px";
+    }
+    let fcFocusKey = "";
+    function clearFcPairFocus(tbl) {
+      const root = tbl || document.querySelector("#fcPanel .fc-tbl");
+      if (!root) return;
+      root.querySelectorAll(".fc-c.is-fc-focus").forEach(function (el) {
+        el.classList.remove("is-fc-focus");
+      });
+      fcFocusKey = "";
+    }
+    function setFcPairFocus(key, tbl) {
+      const root = tbl || document.querySelector("#fcPanel .fc-tbl");
+      if (!root || !key) return;
+      clearFcPairFocus(root);
+      const nodes = root.querySelectorAll('.fc-c[data-fc-key="' + key + '"]');
+      if (!nodes.length) return;
+      nodes.forEach(function (el) { el.classList.add("is-fc-focus"); });
+      fcFocusKey = key;
+    }
+    function bindFcPairFocus() {
+      const tbl = document.querySelector("#fcPanel .fc-tbl");
+      const fcX = document.getElementById("fcX");
+      if (!tbl) return;
+      if (fcFocusKey) setFcPairFocus(fcFocusKey, tbl);
+      if (tbl.dataset.focusBound === "1") return;
+      tbl.dataset.focusBound = "1";
+      let tapMoved = false;
+      if (fcX) {
+        fcX.addEventListener("touchstart", function () { tapMoved = false; }, { passive: true });
+        fcX.addEventListener("touchmove", function () { tapMoved = true; }, { passive: true });
+      }
+      function onActivate(cell) {
+        if (!cell) return;
+        if (cell.getAttribute("data-fc-scratch") === "1" || cell.classList.contains("scratch")) return;
+        const key = cell.getAttribute("data-fc-key");
+        if (!key) return;
+        if (fcFocusKey === key) clearFcPairFocus(tbl);
+        else setFcPairFocus(key, tbl);
+      }
+      tbl.addEventListener("click", function (ev) {
+        if (tapMoved) return;
+        const cell = ev.target && ev.target.closest ? ev.target.closest("td.fc-c[data-fc-key]") : null;
+        if (!cell || !tbl.contains(cell)) return;
+        onActivate(cell);
+      });
+      tbl.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        const cell = ev.target && ev.target.closest ? ev.target.closest("td.fc-c[data-fc-key]") : null;
+        if (!cell || !tbl.contains(cell)) return;
+        ev.preventDefault();
+        onActivate(cell);
+      });
+    }
+    function bindFcOverscrollGuard() {
+      /* 豎向無內部捲動：觸豎一律帶頁；橫向觸邊擋回彈 */
+      const fcX = document.getElementById("fcX");
+      const wrap = el.board;
+      if (!fcX || !wrap || fcX.dataset.overscrollBound === "1") return;
+      fcX.dataset.overscrollBound = "1";
+      let startX = 0;
+      let startY = 0;
+      let lastY = 0;
+      let axis = "";
+      fcX.addEventListener("touchstart", function (ev) {
+        axis = "";
+        if (!ev.touches || !ev.touches[0]) return;
+        startX = ev.touches[0].clientX;
+        startY = ev.touches[0].clientY;
+        lastY = startY;
+      }, { passive: true });
+      fcX.addEventListener("touchmove", function (ev) {
+        if (!ev.touches || !ev.touches[0]) return;
+        const x = ev.touches[0].clientX;
+        const y = ev.touches[0].clientY;
+        const dx = x - startX;
+        const dy = y - startY;
+        const deltaY = y - lastY;
+        lastY = y;
+        if (!axis) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+        }
+        const maxL = Math.max(0, fcX.scrollWidth - fcX.clientWidth);
+        const sl = fcX.scrollLeft;
+        if (axis === "h") {
+          if ((sl <= 0 && dx > 0) || (sl >= maxL - 0.5 && dx < 0)) ev.preventDefault();
+          return;
+        }
+        wrap.scrollTop -= deltaY;
+        ev.preventDefault();
+      }, { passive: false });
+      fcX.addEventListener("wheel", function (ev) {
+        if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+        wrap.scrollTop += ev.deltaY;
+        ev.preventDefault();
+      }, { passive: false });
+    }
     function refreshQinPanel() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
@@ -11698,12 +12141,14 @@
           '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
           '<div class="board-x" id="boardX">' + body + "</div>" +
         "</div>" +
-        renderQinPanelHtml();
+        renderQinPanelHtml() +
+        renderFcPanelHtml();
       el.boardX = document.getElementById("boardX");
       el.boardHeadX = document.getElementById("boardHeadX");
       headScrollBound = false;
       fitScrollColWidths();
       fitQinTableWidths();
+      fitFcTableWidths();
       if (el.boardX) el.boardX.scrollLeft = sl;
       syncHeadScrollLeft();
       el.board.scrollTop = st;
@@ -11730,6 +12175,8 @@
       bindQinOverscrollGuard();
       bindQinPairFocus();
       bindQinModeSwitch();
+      bindFcOverscrollGuard();
+      bindFcPairFocus();
       if (isWaterSheetOpen()) {
         syncWaterSheetTop();
         fillWaterSheet();
@@ -12555,6 +13002,7 @@
         syncZoomButtons();
         fitScrollColWidths();
         fitQinTableWidths();
+        fitFcTableWidths();
         syncHeadScrollLeft();
         /* zoom 改變後立刻重算表頭 sticky top（÷ zoom） */
         if (typeof syncInsightStickyHeight === "function") {
@@ -12737,6 +13185,7 @@
           if (listZoomLevel > 0) {
             fitScrollColWidths();
             fitQinTableWidths();
+            fitFcTableWidths();
             syncHeadScrollLeft();
             if (typeof syncInsightStickyHeight === "function") syncInsightStickyHeight();
           }
@@ -12749,6 +13198,7 @@
     }
     window.addEventListener("resize", function () {
       fitQinTableWidths();
+      fitFcTableWidths();
       syncHeadScrollLeft();
     });
   })();
