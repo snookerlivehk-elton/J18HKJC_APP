@@ -3489,6 +3489,34 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .ft-fav {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #9aa5b5;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ft-fav svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+    .ft-fav.is-on {
+      color: #e74c3c;
+    }
+    .ft-fav:focus-visible {
+      outline: 2px solid var(--orange);
+      outline-offset: 1px;
+    }
     .ft-rate {
       flex: 0 0 auto;
       font-size: 11px;
@@ -3517,6 +3545,9 @@
     }
     html[data-theme="dark"] .famous-tips-sheet .ft-head-meta {
       color: #c8d0dc;
+    }
+    html[data-theme="dark"] .ft-fav:not(.is-on) {
+      color: #7a8698;
     }
     html[data-theme="dark"] .ft-sticky {
       background: linear-gradient(180deg, #1e2430 70%, rgba(30, 36, 48, 0));
@@ -7289,29 +7320,84 @@
       const wins = Number(t && t.wins) || 0;
       return plays > 0 ? (wins / plays) : -1;
     }
+    /* 早餐／馬房名家收藏（紅心置頂）；臨場不加心 */
+    const FAMOUS_FAV_STORE = "j18-famous-tipster-favs-v1";
+    let famousTipsterFavIds = [];
+    function loadFamousTipsterFavs() {
+      let raw = null;
+      try { raw = localStorage.getItem(FAMOUS_FAV_STORE); } catch (e) {}
+      if (!raw) { famousTipsterFavIds = []; return; }
+      try {
+        const data = JSON.parse(raw);
+        famousTipsterFavIds = Array.isArray(data) ? data.map(String) : [];
+      } catch (e) {
+        famousTipsterFavIds = [];
+      }
+    }
+    function saveFamousTipsterFavs() {
+      try { localStorage.setItem(FAMOUS_FAV_STORE, JSON.stringify(famousTipsterFavIds)); } catch (e) {}
+    }
+    loadFamousTipsterFavs();
+    function isFamousTipsterFav(id) {
+      return famousTipsterFavIds.indexOf(String(id)) >= 0;
+    }
+    function toggleFamousTipsterFav(id) {
+      const s = String(id || "");
+      if (!s) return;
+      const i = famousTipsterFavIds.indexOf(s);
+      if (i >= 0) famousTipsterFavIds.splice(i, 1);
+      else famousTipsterFavIds.push(s);
+      saveFamousTipsterFavs();
+    }
+    function famousFavHeartSvg() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+      "</svg>";
+    }
+    function compareFamousTipsterByRate(a, b) {
+      const ra = famousTipsterWinRate(a);
+      const rb = famousTipsterWinRate(b);
+      if (rb !== ra) return rb - ra;
+      const wa = Number(a.wins) || 0;
+      const wb = Number(b.wins) || 0;
+      if (wb !== wa) return wb - wa;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-HK");
+    }
     function renderFamousTipsGroupHtml(groupDef, race) {
       let list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
-      /* 早餐／馬房：按勝率排序並加序號；臨場維持原序不加號 */
+      /* 早餐／馬房：紅心置頂，其餘按勝率排序並加序號；臨場維持原序不加號／心 */
       const rankByRate = groupDef.key === "breakfast" || groupDef.key === "stable";
       if (rankByRate) {
-        list = list.slice().sort(function (a, b) {
-          const ra = famousTipsterWinRate(a);
-          const rb = famousTipsterWinRate(b);
-          if (rb !== ra) return rb - ra;
-          const wa = Number(a.wins) || 0;
-          const wb = Number(b.wins) || 0;
-          if (wb !== wa) return wb - wa;
-          return String(a.name || "").localeCompare(String(b.name || ""), "zh-HK");
+        const favs = [];
+        const rest = [];
+        list.forEach(function (t) {
+          if (isFamousTipsterFav(t.id)) favs.push(t);
+          else rest.push(t);
         });
+        favs.sort(function (a, b) {
+          return famousTipsterFavIds.indexOf(String(a.id)) - famousTipsterFavIds.indexOf(String(b.id));
+        });
+        rest.sort(compareFamousTipsterByRate);
+        list = favs.concat(rest);
       }
       const rows = list.length
         ? '<div class="ft-list">' + list.map(function (t, idx) {
             const tips = famousTipsForTipster(t, race);
             const rate = tipFmtRate(t.wins, t.plays);
             const nameLab = rankByRate ? ((idx + 1) + "." + t.name) : t.name;
-            return '<div class="ft-row">' +
+            const favOn = rankByRate && isFamousTipsterFav(t.id);
+            const favBtn = rankByRate
+              ? ('<button type="button" class="ft-fav' + (favOn ? " is-on" : "") +
+                  '" data-ft-fav="' + esc(t.id) +
+                  '" aria-label="' + esc((favOn ? "取消收藏 " : "收藏 ") + t.name) +
+                  '" aria-pressed="' + (favOn ? "true" : "false") + '">' +
+                  famousFavHeartSvg() +
+                "</button>")
+              : "";
+            return '<div class="ft-row' + (favOn ? " is-fav" : "") + '">' +
               '<div class="ft-row-top">' +
                 '<span class="ft-name">' + esc(nameLab) + "</span>" +
+                favBtn +
                 '<span class="ft-rate">' + esc(rate) +
                   '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
                 "</span>" +
@@ -7398,6 +7484,15 @@
       if (body && body.dataset.ftBound !== "1") {
         body.dataset.ftBound = "1";
         body.addEventListener("click", function (ev) {
+          const favBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-fav]") : null;
+          if (favBtn && body.contains(favBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleFamousTipsterFav(favBtn.getAttribute("data-ft-fav"));
+            fillFamousTipsSheet();
+            requestAnimationFrame(syncFamousTipsSheetHeight);
+            return;
+          }
           const raceBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-race]") : null;
           if (raceBtn && body.contains(raceBtn)) {
             ev.preventDefault();
