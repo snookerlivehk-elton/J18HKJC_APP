@@ -1484,16 +1484,6 @@
       letter-spacing: .06em;
       line-height: 1.15;
     }
-    .water-sheet-title .sub {
-      display: block;
-      margin-top: 3px;
-      font-size: 12px;
-      opacity: .9;
-      line-height: 1.25;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .water-sheet-close {
       position: absolute;
       top: 8px;
@@ -4776,16 +4766,6 @@
       letter-spacing: .06em;
       line-height: 1.15;
     }
-    .speed-map-title .sub {
-      display: block;
-      margin-top: 3px;
-      font-size: 12px;
-      opacity: .9;
-      line-height: 1.25;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .speed-map-close {
       position: absolute;
       top: 8px;
@@ -6327,7 +6307,6 @@
         <div class="water-sheet-bar">
           <div class="water-sheet-title">
             <span class="nm" id="waterSheetTitle">水位彈窗</span>
-            <span class="sub" id="waterSheetRace"></span>
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
@@ -6339,7 +6318,6 @@
       <div class="speed-map-bar">
         <div class="speed-map-title">
           <span class="nm" id="speedMapTitle">速勢走位圖</span>
-          <span class="sub" id="speedMapMeta"></span>
         </div>
         <button type="button" class="speed-map-close" id="speedMapClose" aria-label="關閉走位圖">×</button>
       </div>
@@ -6564,7 +6542,6 @@
       sheetBody: document.getElementById("horseSheetBody"),
       sheetClose: document.getElementById("horseSheetClose"),
       waterSheet: document.getElementById("waterSheet"),
-      waterSheetRace: document.getElementById("waterSheetRace"),
       waterSheetBody: document.getElementById("waterSheetBody"),
       waterSheetClose: document.getElementById("waterSheetClose"),
     };
@@ -8351,35 +8328,19 @@
       sheet.setAttribute("aria-hidden", "true");
       if (el.boardShell) el.boardShell.classList.remove("is-speed-map-open");
     }
-    function speedMapMetaText(info, raceNo) {
-      const bits = [];
-      bits.push("第" + raceNo + "場");
-      if (info && info.Racecourse) bits.push(String(info.Racecourse));
-      if (info && info.Distance) bits.push(String(info.Distance));
-      if (info && info.RaceName) bits.push(String(info.RaceName));
-      if (info && info.Date) bits.push(String(info.Date));
-      return bits.join(" · ");
-    }
     function renderSpeedMapLoading(raceNo) {
-      const meta = document.getElementById("speedMapMeta");
       const body = document.getElementById("speedMapBody");
-      if (meta) meta.textContent = "第" + raceNo + "場 · 載入走位圖…";
       if (body) body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
     }
     function renderSpeedMapError(raceNo, msg) {
-      const meta = document.getElementById("speedMapMeta");
       const body = document.getElementById("speedMapBody");
-      if (meta) meta.textContent = "第" + raceNo + "場";
       if (body) {
         body.innerHTML =
           '<div class="speed-map-error">' + esc(msg || "暫未能載入走位圖") + "</div>";
       }
     }
     function renderSpeedMapImage(raceNo, data) {
-      const meta = document.getElementById("speedMapMeta");
       const body = document.getElementById("speedMapBody");
-      const info = (data && data.info) || {};
-      if (meta) meta.textContent = speedMapMetaText(info, raceNo);
       if (!body) return;
       if (!data || !data.map) {
         renderSpeedMapError(raceNo, "此場暫無走位圖");
@@ -10883,9 +10844,7 @@
       });
     }
     function fillWaterSheet() {
-      if (!el.waterSheetBody || !el.waterSheetRace) return;
-      const meet = currentMeet();
-      el.waterSheetRace.textContent = meet.meta || ("第" + currentRace + "場");
+      if (!el.waterSheetBody) return;
       const hours = waterHourLabels(WATER_HOUR_COLS);
       const rows = currentRunners().slice().sort(function (a, b) {
         return (Number(a.no) || 0) - (Number(b.no) || 0);
