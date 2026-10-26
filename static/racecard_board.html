@@ -3263,12 +3263,27 @@
     }
     .famous-tips-sheet .cal-head {
       flex: 0 0 auto;
-      margin-bottom: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      gap: 8px;
     }
     .famous-tips-sheet .cal-title {
       flex: 1 1 auto;
       min-width: 0;
       text-align: left;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0;
+      line-height: 1.25;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      padding: 2px 0 0;
+      color: #5b6575;
+    }
+    .famous-tips-sheet .cal-close {
+      flex: 0 0 auto;
+      margin-top: -2px;
     }
     .famous-tips-sheet-body {
       flex: 0 1 auto;
@@ -3477,6 +3492,9 @@
     }
     html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
       --ft-muted: #c8d0dc;
+    }
+    html[data-theme="dark"] .famous-tips-sheet .cal-title {
+      color: #c8d0dc;
     }
     html[data-theme="dark"] .ft-sticky {
       background: linear-gradient(180deg, #1e2430 70%, rgba(30, 36, 48, 0));
@@ -7270,12 +7288,12 @@
     function fillFamousTipsSheet() {
       const body = document.getElementById("famousTipsBody");
       const title = document.getElementById("famousTipsTitle");
+      const race = famousTipsRaceObj();
       if (title) {
-        const day = tipMeetingDayLabel();
-        title.textContent = day ? ("名家貼士 · " + day) : "名家貼士";
+        /* 頂欄改為場次元信息（同排位頁 raceMeta），非粗體可換行 */
+        title.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
       }
       if (!body) return;
-      const race = famousTipsRaceObj();
       body.innerHTML =
         '<div class="ft-sticky">' +
           renderFamousTipsRacePillsHtml() +
