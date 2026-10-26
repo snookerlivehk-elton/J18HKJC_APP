@@ -7321,11 +7321,15 @@
         meta.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
       }
       if (!body) return;
+      /* 賽果欄：未派彩不吸頂；已派彩才與場次膠囊一起 sticky */
+      const settled = !!(race && tipRaceSettled(race));
+      const finishHtml = renderFamousTipsFinishHtml(race);
       body.innerHTML =
         '<div class="ft-sticky">' +
           renderFamousTipsRacePillsHtml() +
-          renderFamousTipsFinishHtml(race) +
+          (settled ? finishHtml : "") +
         "</div>" +
+        (settled ? "" : finishHtml) +
         renderFamousTipsAggHtml(race) +
         FAMOUS_GROUP_DEFS.map(function (g) { return renderFamousTipsGroupHtml(g, race); }).join("");
     }
