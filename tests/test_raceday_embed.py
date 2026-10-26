@@ -433,6 +433,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("馬房貼士", r.text)
         self.assertIn("綜合心水", r.text)
         self.assertIn("冠亞季殿", r.text)
+        self.assertIn("按名家看好重疊數量的順位排序。", r.text)
+        self.assertNotIn("按「最多人看好」優先，同分再看提供時間早晚與心水順位。", r.text)
         self.assertIn("syncFamousTipsSheetHeight", r.text)
         self.assertIn("syncFamousTipsLayout", r.text)
         self.assertIn(".cal-sheet.famous-tips-sheet", r.text)
