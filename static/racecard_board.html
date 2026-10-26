@@ -2792,49 +2792,12 @@
     }
     .tip-record-sheet .cal-head {
       flex: 0 0 auto;
-      align-items: flex-start;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-    .tip-record-sheet .ft-head-text {
-      flex: 1 1 auto;
-      min-width: 0;
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0 6px;
-      row-gap: 2px;
+      margin-bottom: 10px;
     }
     .tip-record-sheet .cal-title {
-      flex: 0 0 auto;
+      flex: 1 1 auto;
       min-width: 0;
       text-align: left;
-      font-size: 15px;
-      font-weight: 800;
-      letter-spacing: .02em;
-      line-height: 1.25;
-      white-space: nowrap;
-      padding: 2px 0 0;
-      color: var(--text);
-    }
-    .tip-record-sheet .ft-head-meta {
-      flex: 1 1 12em;
-      min-width: 0;
-      margin: 0;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0;
-      line-height: 1.25;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      color: #5b6575;
-      padding: 3px 0 0;
-    }
-    .tip-record-sheet .cal-close {
-      flex: 0 0 auto;
-      margin-top: -2px;
     }
     .tip-record-sheet-body {
       flex: 0 1 auto;
@@ -3626,8 +3589,7 @@
     html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
       --ft-muted: #c8d0dc;
     }
-    html[data-theme="dark"] .famous-tips-sheet .ft-head-meta,
-    html[data-theme="dark"] .tip-record-sheet .ft-head-meta {
+    html[data-theme="dark"] .famous-tips-sheet .ft-head-meta {
       color: #c8d0dc;
     }
     html[data-theme="dark"] .ft-fav:not(.is-on) {
@@ -6190,10 +6152,7 @@
   <div class="cal-overlay" id="tipRecordOverlay" hidden aria-hidden="true">
     <div class="cal-sheet tip-record-sheet" id="tipRecordSheet" role="dialog" aria-modal="true" aria-labelledby="tipRecordTitle">
       <div class="cal-head">
-        <div class="ft-head-text">
-          <div class="cal-title" id="tipRecordTitle">心水戰績</div>
-          <div class="ft-head-meta" id="tipRecordMeta" aria-live="polite"></div>
-        </div>
+        <div class="cal-title" id="tipRecordTitle">心水戰績</div>
         <button type="button" class="cal-close" id="tipRecordClose" aria-label="關閉">×</button>
       </div>
       <div class="tip-record-sheet-body" id="tipRecordBody" aria-label="心水戰績詳情"></div>
@@ -7010,6 +6969,15 @@
       }
       return out;
     }
+    function tipMeetingDayLabel() {
+      const meet = MEETING || {};
+      if (meet.d != null && meet.m != null && String(meet.d).trim() !== "" && String(meet.m).trim() !== "") {
+        return String(Number(meet.d)) + "/" + String(Number(meet.m));
+      }
+      const p = String(meet.date || "").split("-");
+      if (p.length === 3) return String(Number(p[2])) + "/" + String(Number(p[1]));
+      return "";
+    }
     function tipFmtPrize(n) {
       const x = Math.round(Number(n) || 0);
       return "$" + x.toLocaleString("en-US");
@@ -7090,20 +7058,12 @@
         "</div>";
       }).join("") + "</div>";
     }
-    function tipRecordRaceObj() {
-      const races = (MEETING && MEETING.races) || [];
-      const n = Number(currentRace);
-      return races.find(function (r) { return Number(r.num) === n; }) || races[0] || null;
-    }
     function fillTipRecordSheet() {
       const body = document.getElementById("tipRecordBody");
       const title = document.getElementById("tipRecordTitle");
-      const meta = document.getElementById("tipRecordMeta");
-      const race = tipRecordRaceObj();
-      if (title) title.textContent = "心水戰績";
-      if (meta) {
-        /* 與名家貼士表頭一致：標題旁顯示當前場次元信息 */
-        meta.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
+      if (title) {
+        const day = tipMeetingDayLabel();
+        title.textContent = day ? ("心水戰績 · " + day) : "心水戰績";
       }
       if (!body) return;
       const scope = tipRecordScope === "season" ? "season" : "day";

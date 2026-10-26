@@ -375,12 +375,6 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("心水戰績", r.text)  # 彈層標題仍用短名
         self.assertIn('id="tipRecordOverlay"', r.text)
         self.assertIn('id="tipRecordBody"', r.text)
-        self.assertIn('id="tipRecordMeta"', r.text)
-        self.assertIn("tipRecordRaceObj", r.text)
-        self.assertIn('title.textContent = "心水戰績"', r.text)
-        self.assertNotIn("心水戰績 · \" + day", r.text)
-        self.assertNotIn("tipMeetingDayLabel", r.text)
-        self.assertIn(".tip-record-sheet .ft-head-meta {\n      flex: 1 1 12em;\n      min-width: 0;\n      margin: 0;\n      font-size: 12px;\n      font-weight: 500;", r.text)
         self.assertIn("openTipRecordSheet", r.text)
         self.assertIn("closeTipRecordSheet", r.text)
         self.assertIn("fillTipRecordSheet", r.text)
