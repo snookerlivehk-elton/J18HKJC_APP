@@ -4751,8 +4751,16 @@
     }
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
-    /* 速勢走位圖：與賽期彈窗同殼；圖可內滾 */
+    /* 速勢走位圖：殼高對齊馬匹數據排序；圖放大後可左右滑（顯示不完全） */
+    .cal-sheet.speed-map-sheet {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-height: calc(100% - 8px);
+    }
     .speed-map-sheet .cal-head {
+      flex: 0 0 auto;
+      min-height: 52px;
       margin-bottom: 8px;
     }
     .speed-map-sheet .cal-title {
@@ -4762,6 +4770,7 @@
       padding-left: 2px;
     }
     .speed-map-meta {
+      flex: 0 0 auto;
       margin: 0 0 8px;
       font-size: 11px;
       font-weight: 600;
@@ -4770,15 +4779,22 @@
       letter-spacing: .02em;
     }
     .speed-map-body {
+      flex: 1 1 auto;
+      min-height: 326px; /* 與 .col-sort-body 同階加長 */
+      max-height: min(72vh, 560px);
       overflow: auto;
+      overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
-      max-height: min(62vh, 520px);
+      touch-action: pan-x pan-y;
       border-radius: 10px;
       background: #f3f5f8;
+      box-sizing: border-box;
     }
     .speed-map-body img {
       display: block;
-      width: 100%;
+      /* 放大：寬度超過可視區，左右滑查看 */
+      width: 180%;
+      max-width: none;
       height: auto;
       vertical-align: top;
     }
@@ -8319,10 +8335,18 @@
         return;
       }
       body.innerHTML = "";
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
       const img = document.createElement("img");
       img.src = data.map;
       img.alt = "第" + raceNo + "場速勢走位圖";
       img.decoding = "async";
+      /* 載入後按可視寬再鎖一倍半以上，確保可左右滑 */
+      img.onload = function () {
+        const avail = Math.max(body.clientWidth || 0, 200);
+        const target = Math.round(avail * 1.8);
+        if (img.offsetWidth < target - 2) img.style.width = target + "px";
+      };
       body.appendChild(img);
     }
     function fetchSpeedMap(raceNo) {
