@@ -3271,8 +3271,11 @@
       flex: 1 1 auto;
       min-width: 0;
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0 6px;
+      row-gap: 2px;
     }
     .famous-tips-sheet .cal-title {
       flex: 0 0 auto;
@@ -3281,12 +3284,14 @@
       font-size: 15px;
       font-weight: 800;
       letter-spacing: .02em;
-      line-height: 1.2;
+      line-height: 1.25;
       white-space: nowrap;
       padding: 2px 0 0;
       color: var(--text);
     }
     .famous-tips-sheet .ft-head-meta {
+      flex: 1 1 12em;
+      min-width: 0;
       margin: 0;
       font-size: 12px;
       font-weight: 500;
@@ -3296,6 +3301,7 @@
       overflow-wrap: anywhere;
       word-break: break-word;
       color: #5b6575;
+      padding: 3px 0 0;
     }
     .famous-tips-sheet .cal-close {
       flex: 0 0 auto;
@@ -7311,7 +7317,7 @@
       const race = famousTipsRaceObj();
       if (title) title.textContent = "名家貼士";
       if (meta) {
-        /* 標題下為場次元信息（同排位頁 raceMeta），非粗體可換行 */
+        /* 與粗體標題同一行：場次元信息（同排位頁 raceMeta），非粗體；過長再換行 */
         meta.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
       }
       if (!body) return;
