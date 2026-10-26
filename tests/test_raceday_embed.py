@@ -765,6 +765,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn(".water-sheet-title .sub", r.text)
         self.assertNotIn(".speed-map-title .sub", r.text)
         self.assertIn("is-speed-map-open", r.text)
+        self.assertIn(".water-sheet-close {\n      position: absolute;\n      top: 4px;", r.text)
+        self.assertIn(".speed-map-close {\n      position: absolute;\n      top: 4px;", r.text)
         self.assertIn("syncSpeedMapSheetTop", r.text)
         self.assertIn("isSpeedMapSheetOpen", r.text)
         self.assertIn('data-open="speedMap"', r.text)
