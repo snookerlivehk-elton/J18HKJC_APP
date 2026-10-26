@@ -1435,11 +1435,13 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: none; }
     }
-    /* 水位頁：只蓋住馬匹列表（board-main 起），不遮場次／賽道信息 */
-    .board-shell.is-water-open #board {
+    /* 水位／速勢走位：只蓋住馬匹列表（board-main 起），不遮場次／賽道信息 */
+    .board-shell.is-water-open #board,
+    .board-shell.is-speed-map-open #board {
       overflow: hidden;
     }
-    .water-sheet {
+    .water-sheet,
+    .speed-map-sheet {
       position: absolute;
       left: 0;
       right: 0;
@@ -1453,7 +1455,8 @@
       animation: horseSheetIn .22s ease-out;
       overflow: hidden;
     }
-    .water-sheet[hidden] { display: none !important; }
+    .water-sheet[hidden],
+    .speed-map-sheet[hidden] { display: none !important; }
     #waterSheetZoom {
       flex: 1 1 auto;
       min-height: 0;
@@ -4751,42 +4754,66 @@
     }
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
-    /* 速勢走位圖：殼高對齊馬匹數據排序；圖放大後可左右滑（顯示不完全） */
-    .cal-sheet.speed-map-sheet {
+    /* 速勢走位圖：水位同款全幅殼；圖放大後可左右滑 */
+    .speed-map-bar {
+      position: relative;
+      flex: 0 0 auto;
       display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      max-height: calc(100% - 8px);
+      align-items: center;
+      gap: 10px;
+      padding: 10px 44px 10px 12px;
+      background: linear-gradient(180deg, #3a5f8a 0%, #2c4a6e 100%);
+      color: #fff;
     }
-    .speed-map-sheet .cal-head {
-      flex: 0 0 auto;
-      min-height: 52px;
-      margin-bottom: 8px;
-    }
-    .speed-map-sheet .cal-title {
-      flex: 1 1 auto;
+    .speed-map-title {
       min-width: 0;
-      text-align: left;
-      padding-left: 2px;
+      flex: 1 1 auto;
     }
-    .speed-map-meta {
-      flex: 0 0 auto;
-      margin: 0 0 8px;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1.35;
-      color: var(--muted);
-      letter-spacing: .02em;
+    .speed-map-title .nm {
+      display: block;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      line-height: 1.15;
     }
+    .speed-map-title .sub {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      opacity: .9;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .speed-map-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(255,255,255,.14);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .speed-map-close:active { background: rgba(255,255,255,.28); }
     .speed-map-body {
       flex: 1 1 auto;
-      min-height: 326px; /* 與 .col-sort-body 同階加長 */
-      max-height: min(72vh, 560px);
+      min-height: 0;
       overflow: auto;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-x pan-y;
-      border-radius: 10px;
+      padding: 0;
       background: #f3f5f8;
       box-sizing: border-box;
     }
@@ -5270,9 +5297,6 @@
         0 18px 48px rgba(0, 0, 0, .58),
         0 0 0 1px rgba(0, 0, 0, .45),
         inset 0 1px 0 rgba(255, 255, 255, .14);
-    }
-    html[data-theme="dark"] .speed-map-body {
-      background: #1e242c;
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
@@ -5760,7 +5784,8 @@
     html[data-theme="dark"] .finish-wm.is-4 { --wm-r: 240; --wm-g: 193; --wm-b: 74; }
 
     html[data-theme="dark"] .horse-sheet,
-    html[data-theme="dark"] .water-sheet {
+    html[data-theme="dark"] .water-sheet,
+    html[data-theme="dark"] .speed-map-sheet {
       background: #1e242d;
       /* 全幅面板：頂邊亮線＋外輪廓，與上方場次區分開 */
       box-shadow:
@@ -5773,8 +5798,12 @@
     html[data-theme="dark"] .water-sheet-bar {
       background: linear-gradient(180deg, #3d6b5c 0%, #2f5649 100%);
     }
+    html[data-theme="dark"] .speed-map-bar {
+      background: linear-gradient(180deg, #3a5f8a 0%, #2c4a6e 100%);
+    }
     html[data-theme="dark"] .water-sheet-body,
-    html[data-theme="dark"] .horse-sheet-body {
+    html[data-theme="dark"] .horse-sheet-body,
+    html[data-theme="dark"] .speed-map-body {
       background: #181d24;
     }
     html[data-theme="dark"] .water-hint {
@@ -6124,17 +6153,6 @@
     </div>
   </div>
 
-  <div class="cal-overlay" id="speedMapOverlay" hidden aria-hidden="true">
-    <div class="cal-sheet speed-map-sheet" id="speedMapSheet" role="dialog" aria-modal="true" aria-labelledby="speedMapTitle">
-      <div class="cal-head">
-        <div class="cal-title" id="speedMapTitle">速勢走位圖</div>
-        <button type="button" class="cal-close" id="speedMapClose" aria-label="關閉">×</button>
-      </div>
-      <div class="speed-map-meta" id="speedMapMeta"></div>
-      <div class="speed-map-body" id="speedMapBody" aria-label="全場馬匹跑位圖"></div>
-    </div>
-  </div>
-
   <div class="cal-overlay" id="payoutDetailOverlay" hidden aria-hidden="true">
     <div class="cal-sheet payout-detail-sheet" id="payoutDetailSheet" role="dialog" aria-modal="true" aria-labelledby="payoutDetailTitle">
       <div class="payout-detail-head">
@@ -6316,6 +6334,16 @@
         <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上獨贏／中位置／下 WP　時段由近到遠　點格高亮後見水位升降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
+    </div>
+    <div class="speed-map-sheet" id="speedMapSheet" hidden aria-hidden="true" role="dialog" aria-modal="false" aria-labelledby="speedMapTitle">
+      <div class="speed-map-bar">
+        <div class="speed-map-title">
+          <span class="nm" id="speedMapTitle">速勢走位圖</span>
+          <span class="sub" id="speedMapMeta"></span>
+        </div>
+        <button type="button" class="speed-map-close" id="speedMapClose" aria-label="關閉走位圖">×</button>
+      </div>
+      <div class="speed-map-body" id="speedMapBody" aria-label="全場馬匹跑位圖"></div>
     </div>
     <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
       <div class="horse-sheet-bar">
@@ -7118,7 +7146,7 @@
       if (ex !== "payoutDetailOverlay") closePayoutDetail();
       if (ex !== "colSortOverlay") closeColSortSheet();
       if (ex !== "synthReviewOverlay") closeSynthReviewSheet();
-      if (ex !== "speedMapOverlay") closeSpeedMapSheet();
+      if (ex !== "speedMapSheet") closeSpeedMapSheet();
       if (ex !== "jtCollabOverlay") closeJtCollabSheet();
       if (ex !== "tipRecordOverlay") closeTipRecordSheet();
       if (ex !== "famousTipsOverlay") closeFamousTipsSheet();
@@ -8287,18 +8315,41 @@
     }
     bindJtCollabSheet();
 
-    /* 速勢走位圖：點預計跑法列 → 賽期規格彈窗展示馬會 RaceMap */
+    /* 速勢走位圖：點預計跑法列 → 水位同款全幅殼展示馬會 RaceMap */
     const SPEEDMAP_CMS = "https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_";
     const speedMapCache = Object.create(null);
     let speedMapReqToken = 0;
-    function syncSpeedMapOverlayTop() {
-      syncBoardOverlayTop("speedMapOverlay");
+    function isSpeedMapSheetOpen() {
+      const sheet = document.getElementById("speedMapSheet");
+      return !!(sheet && !sheet.hasAttribute("hidden"));
+    }
+    function syncSpeedMapSheetTop() {
+      /* 與水位彈窗同錨：insight／膠囊底邊＝列表頂（layout 座標，不受 zoom 干擾） */
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet || !el.boardShell) return;
+      if (el.board) el.board.scrollTop = 0;
+      const shellRect = el.boardShell.getBoundingClientRect();
+      const pin = document.getElementById("insightPin");
+      let topPx = 0;
+      if (pin) {
+        topPx = Math.round(pin.getBoundingClientRect().bottom - shellRect.top);
+      } else if (el.boardMain) {
+        let y = 0;
+        let n = el.boardMain;
+        while (n && n !== el.boardShell) {
+          y += n.offsetTop;
+          n = n.parentElement;
+        }
+        topPx = Math.round(y);
+      }
+      sheet.style.top = Math.max(0, topPx) + "px";
     }
     function closeSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
-      if (!overlay) return;
-      overlay.setAttribute("hidden", "");
-      overlay.setAttribute("aria-hidden", "true");
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet || sheet.hasAttribute("hidden")) return;
+      sheet.setAttribute("hidden", "");
+      sheet.setAttribute("aria-hidden", "true");
+      if (el.boardShell) el.boardShell.classList.remove("is-speed-map-open");
     }
     function speedMapMetaText(info, raceNo) {
       const bits = [];
@@ -8371,27 +8422,30 @@
       });
     }
     function openSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
-      if (!overlay) return;
-      closeAllBoardOverlays("speedMapOverlay");
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet) return;
+      closeAllBoardOverlays("speedMapSheet");
       const raceNo = Number(currentRace) || 1;
       const token = ++speedMapReqToken;
       renderSpeedMapLoading(raceNo);
-      syncSpeedMapOverlayTop();
-      overlay.removeAttribute("hidden");
-      overlay.setAttribute("aria-hidden", "false");
-      requestAnimationFrame(function () { syncSpeedMapOverlayTop(); });
+      if (el.boardShell) el.boardShell.classList.add("is-speed-map-open");
+      sheet.removeAttribute("hidden");
+      sheet.setAttribute("aria-hidden", "false");
+      syncSpeedMapSheetTop();
+      requestAnimationFrame(function () {
+        syncSpeedMapSheetTop();
+        requestAnimationFrame(syncSpeedMapSheetTop);
+      });
       fetchSpeedMap(raceNo).then(function (data) {
         if (token !== speedMapReqToken) return;
         renderSpeedMapImage(raceNo, data);
-        syncSpeedMapOverlayTop();
+        syncSpeedMapSheetTop();
       }).catch(function () {
         if (token !== speedMapReqToken) return;
         renderSpeedMapError(raceNo, "暫未能載入走位圖，請稍後再試");
       });
     }
     function bindSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
       const sheet = document.getElementById("speedMapSheet");
       const closeBtn = document.getElementById("speedMapClose");
       if (closeBtn) {
@@ -8400,20 +8454,9 @@
           closeSpeedMapSheet();
         });
       }
-      if (overlay) {
-        overlay.addEventListener("click", function (ev) {
-          if (ev.target === overlay) closeSpeedMapSheet();
-        });
-      }
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
-      document.addEventListener("keydown", function (ev) {
-        if (ev.key !== "Escape") return;
-        const ov = document.getElementById("speedMapOverlay");
-        if (ov && !ov.hasAttribute("hidden")) closeSpeedMapSheet();
-      });
       window.addEventListener("resize", function () {
-        const ov = document.getElementById("speedMapOverlay");
-        if (ov && !ov.hasAttribute("hidden")) syncSpeedMapOverlayTop();
+        if (isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       });
     }
     function bindSpeedMapOpens() {
@@ -11758,6 +11801,9 @@
         syncWaterSheetTop();
         fillWaterSheet();
       }
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) {
+        syncSpeedMapSheetTop();
+      }
     }
 
     function applyRowMarkClass(row, mark) {
@@ -11820,6 +11866,7 @@
     }
     window.addEventListener("resize", function () {
       if (isWaterSheetOpen()) syncWaterSheetTop();
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       if (typeof syncRaceMetaScroll === "function") syncRaceMetaScroll();
       if (typeof syncInsightStickyHeight === "function") syncInsightStickyHeight();
     });
@@ -12099,10 +12146,11 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "jtCollabOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       const tipOv = document.getElementById("tipRecordOverlay");
       if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordLayout();
       const famOv = document.getElementById("famousTipsOverlay");
@@ -12590,6 +12638,7 @@
         /* 殼／fixed 彈層不 zoom；放大後按 insight 底邊重鎖（避開 boardMain zoom 量測偏差） */
         function resyncZoomAnchors() {
           if (isWaterSheetOpen()) syncWaterSheetTop();
+          if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
           syncOpenBoardOverlaysTop();
         }
         resyncZoomAnchors();
@@ -12730,8 +12779,7 @@
             closeSynthReviewSheet();
             return;
           }
-          const speedOv = document.getElementById("speedMapOverlay");
-          if (speedOv && !speedOv.hasAttribute("hidden")) {
+          if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) {
             closeSpeedMapSheet();
             return;
           }
