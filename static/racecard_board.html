@@ -7077,10 +7077,10 @@
       { key: "stable", name: "馬房貼士", hint: "練馬師團隊提供", earlyBonus: 10 }
     ];
     const FAMOUS_TIPSTERS_DEMO = [
-      /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家綜合心水 */
-      { id: "ix_composite", name: "綜合指數", group: "live", indexStrategy: "composite", count: 6, inAggregate: false, wins: 0, plays: 0 },
-      { id: "ix_water", name: "水位排名", group: "live", indexStrategy: "water", count: 6, inAggregate: false, wins: 0, plays: 0 },
-      { id: "ix_flow", name: "流量排名", group: "live", indexStrategy: "flow", count: 6, inAggregate: false, wins: 0, plays: 0 },
+      /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家綜合心水；勝率演示數字與其他名家同格式 */
+      { id: "ix_composite", name: "綜合指數", group: "live", indexStrategy: "composite", count: 6, inAggregate: false, wins: 22, plays: 58 },
+      { id: "ix_water", name: "水位排名", group: "live", indexStrategy: "water", count: 6, inAggregate: false, wins: 17, plays: 58 },
+      { id: "ix_flow", name: "流量排名", group: "live", indexStrategy: "flow", count: 6, inAggregate: false, wins: 14, plays: 58 },
       { id: "fl1", name: "臨場神算", group: "live", wins: 28, plays: 62, seed: 1, count: 4 },
       { id: "fl2", name: "即場追擊", group: "live", wins: 21, plays: 58, seed: 2, count: 4 },
       { id: "fl3", name: "夜場快訊", group: "live", wins: 19, plays: 54, seed: 3, count: 6 },
@@ -7246,15 +7246,13 @@
       const rows = list.length
         ? '<div class="ft-list">' + list.map(function (t) {
             const tips = famousTipsForTipster(t, race);
-            const rateHtml = t.indexStrategy
-              ? '<span class="ft-rate"><span class="ft-rate-meta">指數</span></span>'
-              : ('<span class="ft-rate">' + esc(tipFmtRate(t.wins, t.plays)) +
-                  '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
-                "</span>");
+            const rate = tipFmtRate(t.wins, t.plays);
             return '<div class="ft-row">' +
               '<div class="ft-row-top">' +
                 '<span class="ft-name">' + esc(t.name) + "</span>" +
-                rateHtml +
+                '<span class="ft-rate">' + esc(rate) +
+                  '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
+                "</span>" +
               "</div>" +
               '<div class="ft-tip-nos">' + famousCapNosHtml(race, tips) + "</div>" +
             "</div>";
