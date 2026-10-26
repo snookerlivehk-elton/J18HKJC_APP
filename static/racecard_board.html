@@ -6705,10 +6705,10 @@
     let tipRecordLbOpenIds = {}; /* id -> true，支援多開對比 */
     const TIP_RECORD_STAKE = 10;
     const TIP_STAT_DEFS = [
-      { key: "win", name: "獨贏", range: "前2個號碼", help: "心水序號第1–2名中有冠軍即計中" },
-      { key: "qin", name: "連贏", range: "前3個號碼", help: "心水序號第1–3名同時包含冠、亞軍" },
-      { key: "top3", name: "前三", range: "前4個號碼", help: "心水序號第1–4名同時包含冠、亞、季軍" },
-      { key: "fourth", name: "第四名", range: "全部號碼", help: "心水全部號碼中含第四名" },
+      { key: "win", name: "獨贏", helpName: "獨贏显示W", range: "前2個號碼", help: "心水序號第1–2名内有冠軍" },
+      { key: "qin", name: "連贏", helpName: "連贏显示Q", range: "前3個號碼", help: "心水序號第1–3名内有亞軍" },
+      { key: "top3", name: "前三", helpName: "前三显示P", range: "前4個號碼", help: "心水序號第1–4名内有季軍" },
+      { key: "fourth", name: "第四名", helpName: "第四名显示四", range: "全部號碼", help: "心水全部號碼内有第四名" },
       { key: "tierce", name: "單T", range: "全部號碼", help: "心水全部號碼同時包含冠、亞、季軍" },
       { key: "qpl", name: "孖寶", range: "全部號碼", help: "心水全部號碼同時包含冠亞、冠季或亞季任一對" },
       { key: "quartet", name: "四連環", range: "全部號碼", help: "心水全部號碼同時包含前四名" }
@@ -6860,13 +6860,18 @@
       /* 演示：當前場次之前視為已派彩 */
       return Number(race.num) < Number(currentRace);
     }
-    function tipFinishKindByNo(race, no) {
+    function tipFinishKindByNo(race, no, tipIdx) {
+      /* tipIdx：心水序號（0-based）；W 僅前2、Q 僅前3、P 僅前4、四看全部 */
       if (!tipRaceSettled(race)) return "";
       const finish = payoutFinishNosForRace(race);
       const s = String(no);
-      if (finish[0] != null && String(finish[0]) === s) return "w";
-      if (finish[1] != null && String(finish[1]) === s) return "q";
-      if (finish[2] != null && String(finish[2]) === s) return "p";
+      const idx = tipIdx == null ? null : Number(tipIdx);
+      const inWin = idx == null || idx < 2;
+      const inQin = idx == null || idx < 3;
+      const inTop3 = idx == null || idx < 4;
+      if (inWin && finish[0] != null && String(finish[0]) === s) return "w";
+      if (inQin && finish[1] != null && String(finish[1]) === s) return "q";
+      if (inTop3 && finish[2] != null && String(finish[2]) === s) return "p";
       if (finish[3] != null && String(finish[3]) === s) return "4";
       return "";
     }
@@ -6897,9 +6902,10 @@
       picks.slice(0, 3).forEach(function (n) { set3[n] = 1; });
       const set4 = {};
       picks.slice(0, 4).forEach(function (n) { set4[n] = 1; });
+      /* 與規則說明一致：W＝前2有冠、Q＝前3有亞、P＝前4有季、四＝全部有第四 */
       const winHit = !!(f1 && set2[f1]);
-      const qinHit = !!(f1 && f2 && set3[f1] && set3[f2]);
-      const top3Hit = !!(f1 && f2 && f3 && set4[f1] && set4[f2] && set4[f3]);
+      const qinHit = !!(f2 && set3[f2]);
+      const top3Hit = !!(f3 && set4[f3]);
       const fourthHit = !!(f4 && setAll[f4]);
       const tierceHit = !!(f1 && f2 && f3 && setAll[f1] && setAll[f2] && setAll[f3]);
       const qplHit = !!(
@@ -6977,8 +6983,8 @@
       return '<div class="tr-day-list">' + races.map(function (race) {
         const picks = tipNoteList(race.num).slice(0, TIP_NOTE_MAX);
         const nos = picks.length
-          ? picks.map(function (no) {
-              const kind = tipFinishKindByNo(race, no);
+          ? picks.map(function (no, tipIdx) {
+              const kind = tipFinishKindByNo(race, no, tipIdx);
               const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
               return renderCapNoHtml(no, kind, title);
             }).join("")
@@ -6991,7 +6997,8 @@
     }
     function renderTipRecordHelpHtml() {
       return TIP_STAT_DEFS.map(function (d) {
-        return "<div><b>" + esc(d.name) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+        const title = d.helpName || d.name;
+        return "<div><b>" + esc(title) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
       }).join("") +
         "<div style=\"margin-top:4px\">投注基礎按每注 " + TIP_RECORD_STAKE + " 元估算累積獎金；準確率同時顯示勝場／參與場，避免單場中獎即 100%。</div>";
     }
@@ -7290,8 +7297,8 @@
     /* 名家號圈結算：與心水戰績相同，tipRaceSettled 後按賽果標 W／Q／P／四 */
     function famousCapNosHtml(race, nos) {
       if (!nos || !nos.length) return '<span class="ft-finish-empty">暫無貼士</span>';
-      return nos.map(function (no) {
-        const kind = tipFinishKindByNo(race, no);
+      return nos.map(function (no, tipIdx) {
+        const kind = tipFinishKindByNo(race, no, tipIdx);
         const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
         return renderCapNoHtml(no, kind, title);
       }).join("");
@@ -7357,12 +7364,13 @@
     }
     let famousAggHelpOpen = false;
     function renderFamousAggHelpHtml() {
-      /* 與戰績統計前四項口徑一致：W／連贏／前三／四 */
+      /* 與戰績統計前四項口徑一致：W／Q／P／四 */
       const defs = TIP_STAT_DEFS.filter(function (d) {
         return d.key === "win" || d.key === "qin" || d.key === "top3" || d.key === "fourth";
       });
       return defs.map(function (d) {
-        return "<div><b>" + esc(d.name) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+        const title = d.helpName || d.name;
+        return "<div><b>" + esc(title) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
       }).join("");
     }
     function renderFamousTipsAggHtml(race) {
