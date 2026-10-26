@@ -3267,10 +3267,27 @@
       margin-bottom: 8px;
       gap: 8px;
     }
-    .famous-tips-sheet .cal-title {
+    .famous-tips-sheet .ft-head-text {
       flex: 1 1 auto;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .famous-tips-sheet .cal-title {
+      flex: 0 0 auto;
+      min-width: 0;
       text-align: left;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      line-height: 1.2;
+      white-space: nowrap;
+      padding: 2px 0 0;
+      color: var(--text);
+    }
+    .famous-tips-sheet .ft-head-meta {
+      margin: 0;
       font-size: 12px;
       font-weight: 500;
       letter-spacing: 0;
@@ -3278,7 +3295,6 @@
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: break-word;
-      padding: 2px 0 0;
       color: #5b6575;
     }
     .famous-tips-sheet .cal-close {
@@ -3493,7 +3509,7 @@
     html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
       --ft-muted: #c8d0dc;
     }
-    html[data-theme="dark"] .famous-tips-sheet .cal-title {
+    html[data-theme="dark"] .famous-tips-sheet .ft-head-meta {
       color: #c8d0dc;
     }
     html[data-theme="dark"] .ft-sticky {
@@ -6050,7 +6066,10 @@
   <div class="cal-overlay" id="famousTipsOverlay" hidden aria-hidden="true">
     <div class="cal-sheet famous-tips-sheet" id="famousTipsSheet" role="dialog" aria-modal="true" aria-labelledby="famousTipsTitle">
       <div class="cal-head">
-        <div class="cal-title" id="famousTipsTitle">名家貼士</div>
+        <div class="ft-head-text">
+          <div class="cal-title" id="famousTipsTitle">名家貼士</div>
+          <div class="ft-head-meta" id="famousTipsMeta" aria-live="polite"></div>
+        </div>
         <button type="button" class="cal-close" id="famousTipsClose" aria-label="關閉">×</button>
       </div>
       <div class="famous-tips-sheet-body" id="famousTipsBody" aria-label="名家心水貼士"></div>
@@ -7288,10 +7307,12 @@
     function fillFamousTipsSheet() {
       const body = document.getElementById("famousTipsBody");
       const title = document.getElementById("famousTipsTitle");
+      const meta = document.getElementById("famousTipsMeta");
       const race = famousTipsRaceObj();
-      if (title) {
-        /* 頂欄改為場次元信息（同排位頁 raceMeta），非粗體可換行 */
-        title.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
+      if (title) title.textContent = "名家貼士";
+      if (meta) {
+        /* 標題下為場次元信息（同排位頁 raceMeta），非粗體可換行 */
+        meta.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
       }
       if (!body) return;
       body.innerHTML =
