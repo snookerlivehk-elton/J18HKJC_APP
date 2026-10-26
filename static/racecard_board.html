@@ -7365,9 +7365,14 @@
     }
     function renderFamousTipsGroupHtml(groupDef, race) {
       let list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
-      /* 早餐／馬房：紅心置頂，其餘按勝率排序並加序號；臨場維持原序不加號／心 */
+      /* 早餐／馬房：紅心置頂，其餘按勝率排序；序號永遠跟勝率排名，不因置頂改號；臨場不加號／心 */
       const rankByRate = groupDef.key === "breakfast" || groupDef.key === "stable";
+      const rateRankById = {};
       if (rankByRate) {
+        const byRate = list.slice().sort(compareFamousTipsterByRate);
+        byRate.forEach(function (t, i) {
+          rateRankById[String(t.id)] = i + 1;
+        });
         const favs = [];
         const rest = [];
         list.forEach(function (t) {
@@ -7381,10 +7386,11 @@
         list = favs.concat(rest);
       }
       const rows = list.length
-        ? '<div class="ft-list">' + list.map(function (t, idx) {
+        ? '<div class="ft-list">' + list.map(function (t) {
             const tips = famousTipsForTipster(t, race);
             const rate = tipFmtRate(t.wins, t.plays);
-            const nameLab = rankByRate ? ((idx + 1) + "." + t.name) : t.name;
+            const rateRank = rateRankById[String(t.id)];
+            const nameLab = rankByRate ? (rateRank + "." + t.name) : t.name;
             const favOn = rankByRate && isFamousTipsterFav(t.id);
             const favBtn = rankByRate
               ? ('<button type="button" class="ft-fav' + (favOn ? " is-on" : "") +
