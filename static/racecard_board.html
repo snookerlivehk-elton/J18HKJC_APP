@@ -3334,6 +3334,7 @@
       align-items: center;
       gap: 6px;
       min-height: 28px;
+      min-width: 0;
       padding: 4px 8px;
       border-radius: 8px;
       background: #f5f8fc;
@@ -3350,10 +3351,16 @@
     }
     .ft-finish-nos {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 4px;
       align-items: center;
       min-width: 0;
+      flex: 1 1 auto;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
     }
     .ft-finish-empty {
       font-size: 11px;
@@ -7207,15 +7214,20 @@
           '<span class="ft-finish-empty">尚未派彩</span>' +
         "</div>";
       }
-      const finish = payoutFinishNosForRace(race).slice(0, 4);
-      const labs = ["W", "Q", "P", "4"];
-      const kinds = ["w", "q", "p", "4"];
+      /* 全場有跑馬按名次列出；前四標 W／Q／P／四，超出可橫滑 */
+      const finish = payoutFinishNosForRace(race);
       const nos = finish.map(function (no, i) {
         if (no == null || no === "") return "";
-        return renderCapNoHtml(no, kinds[i], labs[i] + " · 第" + (i + 1) + "名");
+        let kind = "";
+        let title = "第" + (i + 1) + "名";
+        if (i === 0) { kind = "w"; title = "冠軍 W · " + title; }
+        else if (i === 1) { kind = "q"; title = "亞軍 Q · " + title; }
+        else if (i === 2) { kind = "p"; title = "季軍 P · " + title; }
+        else if (i === 3) { kind = "4"; title = "第四名 · " + title; }
+        return renderCapNoHtml(no, kind, title);
       }).filter(Boolean).join("");
       return '<div class="ft-finish">' +
-        '<span class="ft-finish-lab">冠亞季殿</span>' +
+        '<span class="ft-finish-lab">賽果</span>' +
         '<div class="ft-finish-nos">' + (nos || '<span class="ft-finish-empty">暫無名次</span>') + "</div>" +
       "</div>";
     }
