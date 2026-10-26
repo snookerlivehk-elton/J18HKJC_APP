@@ -1347,7 +1347,7 @@
       display: flex;
       flex-direction: column;
     }
-    /* 縱向：board-wrap；橫向馬匹：board-x；連贏在 board-x 外，左右滑互不干擾 */
+    /* 縱向：board-wrap；橫向馬匹：board-x；連贏／走位圖在 board-x 外，左右滑互不干擾 */
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
@@ -4196,6 +4196,40 @@
       --qin-cell: 24px;
       --qin-title-w: 24px;
     }
+    /* 排位頁底部走位圖：接在連贏下；圖放大可橫滑，豎向隨頁展開 */
+    .board-speed-map {
+      position: relative;
+      z-index: 2;
+      box-sizing: border-box;
+      width: 100%;
+      background: #eef1f5;
+      border-top: 8px solid #eef1f5;
+      padding: 0 0 12px;
+    }
+    .board-speed-map-head {
+      padding: 8px 10px 6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .board-speed-map-body {
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y;
+      background: #f3f5f8;
+      max-height: none;
+    }
+    .board-speed-map-body img {
+      display: block;
+      width: 180%;
+      max-width: none;
+      height: auto;
+      vertical-align: top;
+    }
     .qin-block {
       background: #fff;
       position: relative;
@@ -5937,10 +5971,14 @@
     }
 
     html[data-theme="dark"] .qin-panel,
-    html[data-theme="dark"] .qin-legend {
+    html[data-theme="dark"] .qin-legend,
+    html[data-theme="dark"] .board-speed-map {
       background: #1a1f27;
       border-top-color: #1a1f27;
       color: #9aa3b2;
+    }
+    html[data-theme="dark"] .board-speed-map-body {
+      background: #181d24;
     }
     html[data-theme="dark"] .qin-block {
       background: #1e242d;
@@ -8328,22 +8366,11 @@
       sheet.setAttribute("aria-hidden", "true");
       if (el.boardShell) el.boardShell.classList.remove("is-speed-map-open");
     }
-    function renderSpeedMapLoading(raceNo) {
-      const body = document.getElementById("speedMapBody");
-      if (body) body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
-    }
-    function renderSpeedMapError(raceNo, msg) {
-      const body = document.getElementById("speedMapBody");
-      if (body) {
-        body.innerHTML =
-          '<div class="speed-map-error">' + esc(msg || "暫未能載入走位圖") + "</div>";
-      }
-    }
-    function renderSpeedMapImage(raceNo, data) {
-      const body = document.getElementById("speedMapBody");
+    function mountSpeedMapInto(body, raceNo, data, emptyMsg) {
       if (!body) return;
       if (!data || !data.map) {
-        renderSpeedMapError(raceNo, "此場暫無走位圖");
+        body.innerHTML =
+          '<div class="speed-map-error">' + esc(emptyMsg || "此場暫無走位圖") + "</div>";
         return;
       }
       body.innerHTML = "";
@@ -8360,6 +8387,48 @@
         if (img.offsetWidth < target - 2) img.style.width = target + "px";
       };
       body.appendChild(img);
+    }
+    function renderSpeedMapLoading(raceNo) {
+      const body = document.getElementById("speedMapBody");
+      if (body) body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
+    }
+    function renderSpeedMapError(raceNo, msg) {
+      const body = document.getElementById("speedMapBody");
+      if (body) {
+        body.innerHTML =
+          '<div class="speed-map-error">' + esc(msg || "暫未能載入走位圖") + "</div>";
+      }
+    }
+    function renderSpeedMapImage(raceNo, data) {
+      mountSpeedMapInto(document.getElementById("speedMapBody"), raceNo, data, "此場暫無走位圖");
+    }
+    let boardSpeedMapReqToken = 0;
+    function renderBoardSpeedMapHtml() {
+      return (
+        '<section class="board-speed-map" id="boardSpeedMap" aria-label="速勢走位圖">' +
+          '<div class="board-speed-map-head">速勢走位圖</div>' +
+          '<div class="board-speed-map-body" id="boardSpeedMapBody">' +
+            '<div class="speed-map-loading">正在載入全場跑位圖…</div>' +
+          "</div>" +
+        "</section>"
+      );
+    }
+    function fillBoardSpeedMap() {
+      const body = document.getElementById("boardSpeedMapBody");
+      if (!body) return;
+      const raceNo = Number(currentRace) || 1;
+      const token = ++boardSpeedMapReqToken;
+      body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
+      fetchSpeedMap(raceNo).then(function (data) {
+        if (token !== boardSpeedMapReqToken) return;
+        if (!document.getElementById("boardSpeedMapBody")) return;
+        mountSpeedMapInto(body, raceNo, data, "此場暫無走位圖");
+      }).catch(function () {
+        if (token !== boardSpeedMapReqToken) return;
+        if (!document.getElementById("boardSpeedMapBody")) return;
+        body.innerHTML =
+          '<div class="speed-map-error">暫未能載入走位圖，請稍後再試</div>';
+      });
     }
     function fetchSpeedMap(raceNo) {
       const key = String(raceNo);
@@ -11724,7 +11793,8 @@
           '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
           '<div class="board-x" id="boardX">' + body + "</div>" +
         "</div>" +
-        renderQinPanelHtml();
+        renderQinPanelHtml() +
+        renderBoardSpeedMapHtml();
       el.boardX = document.getElementById("boardX");
       el.boardHeadX = document.getElementById("boardHeadX");
       headScrollBound = false;
@@ -11735,6 +11805,7 @@
       el.board.scrollTop = st;
 
       renderCapsuleBodies();
+      fillBoardSpeedMap();
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
