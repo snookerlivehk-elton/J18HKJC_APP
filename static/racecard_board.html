@@ -3456,6 +3456,43 @@
       gap: 4px;
       align-items: center;
     }
+    .ft-agg-foot {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .ft-help-btn {
+      margin: 0;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .8);
+      color: var(--ft-muted);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ft-help-btn[aria-expanded="true"] {
+      background: #eef2f6;
+      color: var(--text);
+    }
+    .ft-help {
+      margin: 4px 0 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .65);
+      border: 1px solid rgba(45, 62, 80, .08);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--ft-muted);
+    }
+    .ft-help[hidden] { display: none !important; }
+    .ft-help b { color: var(--text); font-weight: 700; }
     .ft-list {
       display: flex;
       flex-direction: column;
@@ -3548,6 +3585,19 @@
     }
     html[data-theme="dark"] .ft-fav:not(.is-on) {
       color: #7a8698;
+    }
+    html[data-theme="dark"] .ft-help {
+      background: rgba(36, 43, 52, .85);
+      border-color: rgba(210, 222, 236, .12);
+    }
+    html[data-theme="dark"] .ft-help-btn {
+      background: rgba(36, 43, 52, .9);
+      border-color: rgba(210, 222, 236, .18);
+      color: var(--ft-muted);
+    }
+    html[data-theme="dark"] .ft-help-btn[aria-expanded="true"] {
+      background: #2a323c;
+      color: var(--text);
     }
     html[data-theme="dark"] .ft-sticky {
       background: linear-gradient(180deg, #1e2430 70%, rgba(30, 36, 48, 0));
@@ -7305,6 +7355,16 @@
         '<div class="ft-finish-nos">' + (nos || '<span class="ft-finish-empty">暫無名次</span>') + "</div>" +
       "</div>";
     }
+    let famousAggHelpOpen = false;
+    function renderFamousAggHelpHtml() {
+      /* 與戰績統計前四項口徑一致：W／連贏／前三／四 */
+      const defs = TIP_STAT_DEFS.filter(function (d) {
+        return d.key === "win" || d.key === "qin" || d.key === "top3" || d.key === "fourth";
+      });
+      return defs.map(function (d) {
+        return "<div><b>" + esc(d.name) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+      }).join("");
+    }
     function renderFamousTipsAggHtml(race) {
       const agg = famousAggregateTips(race);
       return '<section class="ft-sec ft-agg">' +
@@ -7313,6 +7373,13 @@
           '<div class="ft-sec-hint">權重由左最強到右，順序排列。</div>' +
         "</div>" +
         '<div class="ft-agg-nos">' + famousCapNosHtml(race, agg) + "</div>" +
+        '<div class="ft-agg-foot">' +
+          '<button type="button" class="ft-help-btn" data-ft-act="help" aria-expanded="' +
+            (famousAggHelpOpen ? "true" : "false") + '" aria-controls="famousAggHelp">規則</button>' +
+        "</div>" +
+        '<div class="ft-help" id="famousAggHelp"' + (famousAggHelpOpen ? "" : " hidden") + ">" +
+          renderFamousAggHelpHtml() +
+        "</div>" +
       "</section>";
     }
     function famousTipsterWinRate(t) {
@@ -7448,6 +7515,7 @@
       const overlay = document.getElementById("famousTipsOverlay");
       if (!overlay) return;
       closeAllBoardOverlays("famousTipsOverlay");
+      famousAggHelpOpen = false;
       famousTipsRace = Number(currentRace) || famousTipsRaceNum();
       fillFamousTipsSheet();
       syncFamousTipsOverlayTop();
@@ -7490,6 +7558,22 @@
       if (body && body.dataset.ftBound !== "1") {
         body.dataset.ftBound = "1";
         body.addEventListener("click", function (ev) {
+          const helpBtn = ev.target && ev.target.closest ? ev.target.closest('[data-ft-act="help"]') : null;
+          if (helpBtn && body.contains(helpBtn)) {
+            ev.preventDefault();
+            famousAggHelpOpen = !famousAggHelpOpen;
+            const help = document.getElementById("famousAggHelp");
+            if (help) {
+              if (famousAggHelpOpen) help.removeAttribute("hidden");
+              else help.setAttribute("hidden", "");
+            }
+            helpBtn.setAttribute("aria-expanded", famousAggHelpOpen ? "true" : "false");
+            requestAnimationFrame(function () {
+              syncFamousTipsSheetHeight();
+              requestAnimationFrame(syncFamousTipsSheetHeight);
+            });
+            return;
+          }
           const favBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-fav]") : null;
           if (favBtn && body.contains(favBtn)) {
             ev.preventDefault();
