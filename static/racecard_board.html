@@ -7284,15 +7284,34 @@
         '<div class="ft-agg-nos">' + famousCapNosHtml(race, agg) + "</div>" +
       "</section>";
     }
+    function famousTipsterWinRate(t) {
+      const plays = Number(t && t.plays) || 0;
+      const wins = Number(t && t.wins) || 0;
+      return plays > 0 ? (wins / plays) : -1;
+    }
     function renderFamousTipsGroupHtml(groupDef, race) {
-      const list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
+      let list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
+      /* 早餐／馬房：按勝率排序並加序號；臨場維持原序不加號 */
+      const rankByRate = groupDef.key === "breakfast" || groupDef.key === "stable";
+      if (rankByRate) {
+        list = list.slice().sort(function (a, b) {
+          const ra = famousTipsterWinRate(a);
+          const rb = famousTipsterWinRate(b);
+          if (rb !== ra) return rb - ra;
+          const wa = Number(a.wins) || 0;
+          const wb = Number(b.wins) || 0;
+          if (wb !== wa) return wb - wa;
+          return String(a.name || "").localeCompare(String(b.name || ""), "zh-HK");
+        });
+      }
       const rows = list.length
-        ? '<div class="ft-list">' + list.map(function (t) {
+        ? '<div class="ft-list">' + list.map(function (t, idx) {
             const tips = famousTipsForTipster(t, race);
             const rate = tipFmtRate(t.wins, t.plays);
+            const nameLab = rankByRate ? ((idx + 1) + "." + t.name) : t.name;
             return '<div class="ft-row">' +
               '<div class="ft-row-top">' +
-                '<span class="ft-name">' + esc(t.name) + "</span>" +
+                '<span class="ft-name">' + esc(nameLab) + "</span>" +
                 '<span class="ft-rate">' + esc(rate) +
                   '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
                 "</span>" +
