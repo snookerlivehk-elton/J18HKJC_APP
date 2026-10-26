@@ -7073,8 +7073,8 @@
     let famousTipsRace = null;
     const FAMOUS_GROUP_DEFS = [
       { key: "live", name: "臨場", hint: "開跑前臨場提供", earlyBonus: 0 },
-      { key: "breakfast", name: "早餐", hint: "賽前一日或當日早上", earlyBonus: 20 },
-      { key: "stable", name: "馬房貼士", hint: "練馬師團隊提供", earlyBonus: 10 }
+      { key: "breakfast", name: "早餐", hint: "", earlyBonus: 20 },
+      { key: "stable", name: "馬房貼士", hint: "", earlyBonus: 10 }
     ];
     const FAMOUS_TIPSTERS_DEMO = [
       /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家綜合心水；勝率演示數字與其他名家同格式 */
@@ -7258,10 +7258,11 @@
             "</div>";
           }).join("") + "</div>"
         : '<div class="ft-empty">此區暫無名家</div>';
+      const hint = String(groupDef.hint || "").trim();
       return '<section class="ft-sec ft-' + esc(groupDef.key) + '">' +
         '<div class="ft-sec-head">' +
           '<div class="ft-sec-title">' + esc(groupDef.name) + "</div>" +
-          '<div class="ft-sec-hint">' + esc(groupDef.hint) + "</div>" +
+          (hint ? ('<div class="ft-sec-hint">' + esc(hint) + "</div>") : "") +
         "</div>" +
         rows +
       "</section>";
