@@ -1,4 +1,4 @@
-"""廣告海報：日馬啡／夜馬藍底圖、中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
+"""廣告海報：日馬橙／夜馬藍底圖、中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -99,6 +99,15 @@ def test_cell_text_no_share_pct():
     s = _cell_text(p)
     assert s == "5 金光飛馳"
     assert "%" not in s
+
+
+def test_day_and_night_share_table_text_color():
+    """橙色日馬版與藍色夜馬版：表內字色必須同為深棕銅。"""
+    assert THEME_STYLES["day"]["text_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["day"]["race_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["night"]["text_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["night"]["race_fg"] == TABLE_TEXT_FG
+    assert TABLE_TEXT_FG == (52, 40, 24)
 
 
 def test_mid_stretch_scales_with_race_count(tmp_path: Path):

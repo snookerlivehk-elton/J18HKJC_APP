@@ -701,7 +701,7 @@ def resolve_poster_theme(
     is_day_meeting: Optional[bool] = None,
 ) -> str:
     """
-    日馬 → day（啡色）；夜馬 → night（藍色）。
+    日馬 → day（橙色）；夜馬 → night（藍色）。
     優先明示 theme，其次 fixtures.session／is_day_meeting，最後以場地慣例（HV=夜、ST=日）。
     """
     t = str(theme or "").strip().lower()
@@ -936,7 +936,7 @@ def render_meeting_poster(
 ) -> Dict[str, Any]:
     """
     空白公司模版疊加：中段按場數垂直拉伸，再只畫日期／場次號／揀馬。
-    theme=day|night（日馬啡色／夜馬藍色）；可由 session／is_day_meeting／場地推斷。
+    theme=day|night（日馬橙色／夜馬藍色）；可由 session／is_day_meeting／場地推斷。
     """
     from PIL import Image, ImageDraw
 
