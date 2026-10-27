@@ -10,6 +10,7 @@ import streamlit as st
 from ad_llm_copy import (
     COMMENT_MAX_CHARS,
     DEFAULT_TONE,
+    SOCIAL_BRAND_INTRO,
     TONE_PRESETS,
     AdSocialCopywriter,
     count_candidate_races,
@@ -41,6 +42,68 @@ page_header(
     "賽前歷史戰績三幅圖 · "
     "賽後：命中評估＋宣傳文案 · 重產：由快照重畫海報",
 )
+
+
+def _copy_text_button(text: str, *, key: str, label: str = "一鍵複製") -> None:
+    """在標籤列右側顯示一鍵複製（寫入系統剪貼簿）。"""
+    import json
+
+    import streamlit.components.v1 as components
+
+    payload = json.dumps(str(text or ""), ensure_ascii=False)
+    btn_id = f"j18_copy_{key}".replace("-", "_")
+    components.html(
+        f"""
+<div style="display:flex;justify-content:flex-end;align-items:center;height:2.2rem;">
+  <button id="{btn_id}" type="button"
+    style="cursor:pointer;border:1px solid #c9c9c9;background:#f7f7f7;color:#222;
+           border-radius:6px;padding:0.28rem 0.75rem;font-size:0.85rem;line-height:1.2;">
+    {label}
+  </button>
+</div>
+<script>
+(function () {{
+  const text = {payload};
+  const btn = document.getElementById({btn_id!r});
+  if (!btn) return;
+  const setLabel = (s) => {{ btn.textContent = s; }};
+  async function copyText() {{
+    try {{
+      const nav = (window.parent && window.parent.navigator) || navigator;
+      if (nav && nav.clipboard && nav.clipboard.writeText) {{
+        await nav.clipboard.writeText(text);
+        setLabel("已複製");
+        setTimeout(() => setLabel({label!r}), 1600);
+        return;
+      }}
+    }} catch (e) {{}}
+    try {{
+      const doc = (window.parent && window.parent.document) || document;
+      const ta = doc.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      doc.body.appendChild(ta);
+      ta.select();
+      doc.execCommand("copy");
+      doc.body.removeChild(ta);
+      setLabel("已複製");
+      setTimeout(() => setLabel({label!r}), 1600);
+    }} catch (e2) {{
+      setLabel("複製失敗");
+      setTimeout(() => setLabel({label!r}), 1600);
+    }}
+  }}
+  btn.addEventListener("click", function (ev) {{
+    ev.preventDefault();
+    copyText();
+  }});
+}})();
+</script>
+        """,
+        height=42,
+    )
 
 
 def _show_remote_push(remote: Optional[Dict[str, Any]]) -> None:
@@ -210,8 +273,11 @@ def _render_social_copy(
             key=_k("prompt"),
             label_visibility="collapsed",
         )
-        st.caption("文末合規聲明由系統自動附加：")
-        st.code(post_footer_text(), language=None)
+        st.caption("范文頭尾由系統自動附加（品牌開場／CTA／免責／hashtag）：")
+        st.code(
+            SOCIAL_BRAND_INTRO + "\n\n" + post_footer_text(),
+            language=None,
+        )
 
     custom_prompt = st.session_state.get(_k("prompt")) or default_prompt
     social_data = load_social_copy(out_root)
@@ -326,22 +392,23 @@ def _render_social_copy(
                 if angle and (not label or f"角度:{angle}" not in label):
                     st.caption(f"觀察角度：{angle}")
 
-    hashtags = list(social_data.get("hashtags") or [])
-    if hashtags:
-        st.code(" ".join(hashtags), language=None)
-
-    post_text = str(social_data.get("post_text") or "").strip()
-    if not post_text:
-        post_text = format_social_post_text(social_data)
+    # 一律按范文重排，方便舊档都一鍵複製最新格式
+    post_text = format_social_post_text(social_data, copy_data=copy_data)
+    label_col, btn_col = st.columns([4, 1], vertical_alignment="center")
+    with label_col:
+        st.markdown("**Facebook / IG 貼文**")
+    with btn_col:
+        _copy_text_button(post_text, key=_k("fb_ig_copy"), label="一鍵複製")
     st.text_area(
         "Facebook / IG 貼文",
         value=post_text,
-        height=240,
+        height=320,
         key=_k("post_preview"),
+        label_visibility="collapsed",
     )
     p = social_copy_path(out_root)
     if p.is_file():
-        st.caption(f"已保存 `{p.name}`")
+        st.caption(f"已保存 `{p.name}` · 撳右側「一鍵複製」即可贴到 Facebook／IG")
 
 
 def _render_regen(out_root: Path) -> None:

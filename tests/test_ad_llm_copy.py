@@ -136,10 +136,49 @@ def test_parse_llm_json_from_fence():
 
 def test_post_footer_contains_required_lines():
     footer = post_footer_text()
-    assert "j18.hk" in footer.lower()
+    assert "即可打開手機瀏覽器登入 j18.hk" in footer
     assert "不構成投注建議" in footer
     assert ("未滿18" in footer) or ("未滿18歲" in footer) or ("18歲" in footer)
     assert "資料研究" in footer or "研究" in footer
+
+
+def test_format_social_post_matches_publish_template():
+    """范文：日期行 → 品牌開場 → 標題 → 精選 → CTA → 免責 → 固定 hashtag。"""
+    from ad_llm_copy import SOCIAL_BRAND_INTRO, SOCIAL_CTA_LINE, SOCIAL_PUBLISH_HASHTAGS
+
+    copy_data = {
+        "meeting": {
+            "racing_date": "2026-10-28",
+            "course": "ST",
+            "session": "夜",
+            "start_time": "18:45",
+        }
+    }
+    social = {
+        "title": "三場焦點數據觀察：步速、走位與路程適應",
+        "subtitle": "綜合模型與公開近績，抽出三組值得追蹤的賽前研究場次。",
+        "featured": [
+            {
+                "race_no": 1,
+                "horse_no": 3,
+                "horse_name": "光輝歲月",
+                "comment": "近績多數留居後列，賽前可對照出閘步速會否延續",
+            }
+        ],
+        "meeting": copy_data["meeting"],
+    }
+    text = format_social_post_text(social, copy_data=copy_data)
+    assert text.startswith("2026年10月28日, 星期三, 沙田, 18:45")
+    assert SOCIAL_BRAND_INTRO in text
+    assert "三場焦點數據觀察：步速、走位與路程適應" in text
+    assert "第1場｜3 光輝歲月" in text
+    assert SOCIAL_CTA_LINE in text
+    assert "不構成投注建議" in text
+    assert SOCIAL_PUBLISH_HASHTAGS in text
+    # 順序：品牌開場先於標題；CTA 先於免責；免責先於 hashtag
+    assert text.index(SOCIAL_BRAND_INTRO) < text.index("三場焦點數據觀察")
+    assert text.index(SOCIAL_CTA_LINE) < text.index("不構成投注建議")
+    assert text.index("不構成投注建議") < text.index("#J18賽馬")
 
 
 def test_build_llm_payload_uses_fused_primary_pool():
@@ -296,11 +335,11 @@ def test_normalize_remaps_outside_fused_top_n_and_adds_pick_reason(monkeypatch):
     assert len(set(angles)) == 3
     endings = [r["comment"] for r in data["featured"]]
     assert len(set(endings)) == 3
-    assert "#夜馬" in data["hashtags"]
-    assert "#日馬" not in data["hashtags"]
-    assert "#跑馬地" in data["hashtags"]
-    assert "#沙田" not in data["hashtags"]
+    assert "#J18賽馬" in data["hashtags"]
+    assert "#香港賽馬" in data["hashtags"]
+    assert "跑馬地" in data["post_text"]  # HV 范文日期行
     assert "#日馬" not in data["post_text"]
+    assert "J18.hk賽前預測" in data["post_text"]
 
 
 def test_normalize_frames_live_sounding_comments():
@@ -378,13 +417,14 @@ def test_social_copy_roundtrip(tmp_path: Path):
 
 
 def test_format_social_day_meeting_no_tonight_or_system():
-    from ad_llm_copy import format_social_post_text
+    from ad_llm_copy import SOCIAL_BRAND_INTRO, SOCIAL_PUBLISH_HASHTAGS, format_social_post_text
 
     copy_data = {
         "meeting": {
             "racing_date": "2026-09-13",
             "course": "ST",
             "session": "日",
+            "start_time": "13:00",
         }
     }
     social = {
@@ -402,15 +442,16 @@ def test_format_social_day_meeting_no_tonight_or_system():
         "footer": post_footer_text(),
     }
     text = format_social_post_text(social, copy_data=copy_data)
+    assert text.startswith("2026年9月13日,")
+    assert ", 沙田, 13:00" in text
+    assert SOCIAL_BRAND_INTRO in text
     assert "今晚" not in text
     assert ("聽日" in text) or ("今日" in text)
     assert "LLM 暫時未能" not in text
     assert "自動補齊" not in text
     assert "能量" not in text
     assert "1W1W" not in text
-    assert "#沙田" in text
-    assert "#日馬" in text
-    assert text.count("#") <= 12  # ≤6 tags roughly
+    assert SOCIAL_PUBLISH_HASHTAGS in text
     assert "j18.hk" in text.lower() or "J18.hk" in text
 
 
@@ -457,6 +498,8 @@ def test_normalize_strips_system_subtitle_for_day():
     assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"])
     assert data["subtitle"] == ""
     assert "能量" not in data["featured"][0]["comment"]
-    assert any(h in data["hashtags"] for h in ["#J18", "#賽事數據", "#模型分析"]) or "#賽事數據" in data["hashtags"]
-    assert len(data["hashtags"]) <= 6
+    assert "#J18賽馬" in data["hashtags"]
+    assert "#香港賽馬" in data["hashtags"]
+    assert "J18.hk賽前預測" in data["post_text"]
+    assert "即可打開手機瀏覽器登入 j18.hk" in data["post_text"]
     assert "LLM 暫時未能" not in data["post_text"]
