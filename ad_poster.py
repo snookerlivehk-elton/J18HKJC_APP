@@ -83,12 +83,14 @@ GRID_LINE_STRONG = (170, 170, 170)
 ROW_TINT = (245, 245, 245)
 # 日馬啡色／夜馬藍色（依 fixtures.session 或 is_day_meeting 選擇）
 THEMES = ("day", "night")
+# 表內字色：深棕銅（對齊用戶樣圖取樣 ≈ #342818）
+TABLE_TEXT_FG = (52, 40, 24)
 THEME_STYLES = {
     "day": {
         "date_pill_fill": (245, 168, 110),
         "date_pill_text": (255, 255, 255),
-        "race_fg": (90, 55, 35),
-        "text_fg": (55, 40, 30),
+        "race_fg": TABLE_TEXT_FG,
+        "text_fg": TABLE_TEXT_FG,
         "grid": (210, 195, 180),
         "grid_strong": (170, 145, 125),
         "row_tint": (250, 244, 236),
@@ -97,8 +99,8 @@ THEME_STYLES = {
     "night": {
         "date_pill_fill": (70, 130, 170),
         "date_pill_text": (255, 255, 255),
-        "race_fg": (40, 75, 105),
-        "text_fg": (35, 55, 75),
+        "race_fg": TABLE_TEXT_FG,
+        "text_fg": TABLE_TEXT_FG,
         "grid": (195, 205, 215),
         "grid_strong": (140, 160, 180),
         "row_tint": (236, 244, 250),
