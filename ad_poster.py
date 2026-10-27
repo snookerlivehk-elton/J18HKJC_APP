@@ -81,12 +81,15 @@ FONT_TABLE_SCALE = 0.81
 GRID_LINE = (210, 210, 210)
 GRID_LINE_STRONG = (170, 170, 170)
 ROW_TINT = (245, 245, 245)
-# 日馬啡色／夜馬藍色（依 fixtures.session 或 is_day_meeting 選擇）
+# 日馬橙色版／夜馬藍色版（依 fixtures.session 或 is_day_meeting 選擇）
+# 注意：外框主題色可不同，但表內排版規則必須一致——
+#   白區滿鋪（少場次不留首尾空行）、字級 FONT_TABLE_SCALE、常規體、
+#   表內字色一律 TABLE_TEXT_FG 深棕銅（日橙版與夜藍版都要用，勿再分主題改回藍／深灰）
 THEMES = ("day", "night")
-# 表內字色：深棕銅（對齊用戶樣圖取樣 ≈ #342818）
+# 表內字色：深棕銅（用戶樣圖取樣 ≈ #342818）；day+night 共用
 TABLE_TEXT_FG = (52, 40, 24)
 THEME_STYLES = {
-    "day": {
+    "day": {  # 橙色版（日馬）
         "date_pill_fill": (245, 168, 110),
         "date_pill_text": (255, 255, 255),
         "race_fg": TABLE_TEXT_FG,
@@ -96,7 +99,7 @@ THEME_STYLES = {
         "row_tint": (250, 244, 236),
         "canvas_bg": (180, 140, 110),
     },
-    "night": {
+    "night": {  # 藍色版（夜馬）
         "date_pill_fill": (70, 130, 170),
         "date_pill_text": (255, 255, 255),
         "race_fg": TABLE_TEXT_FG,

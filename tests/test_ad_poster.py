@@ -17,6 +17,8 @@ from ad_poster import (
     ROW_H_SCALE,
     SLICE_MID_END,
     SLICE_TOP_END,
+    TABLE_TEXT_FG,
+    THEME_STYLES,
     PickItem,
     RaceAdPayload,
     _cell_text,
