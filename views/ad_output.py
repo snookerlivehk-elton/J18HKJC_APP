@@ -45,7 +45,7 @@ page_header(
 
 
 def _copy_text_button(text: str, *, key: str, label: str = "一鍵複製") -> None:
-    """在標籤列右側顯示一鍵複製（寫入系統剪貼簿）。"""
+    """右側可見按鈕；在同一 iframe 內點擊以符合瀏覽器剪貼簿手勢要求。"""
     import json
 
     import streamlit.components.v1 as components
@@ -54,11 +54,14 @@ def _copy_text_button(text: str, *, key: str, label: str = "一鍵複製") -> No
     btn_id = f"j18_copy_{key}".replace("-", "_")
     components.html(
         f"""
-<div style="display:flex;justify-content:flex-end;align-items:center;height:2.2rem;">
+<div style="display:flex;justify-content:flex-end;align-items:center;
+            width:100%;min-height:44px;padding:2px 0;box-sizing:border-box;">
   <button id="{btn_id}" type="button"
-    style="cursor:pointer;border:1px solid #c9c9c9;background:#f7f7f7;color:#222;
-           border-radius:6px;padding:0.28rem 0.75rem;font-size:0.85rem;line-height:1.2;">
-    {label}
+    style="cursor:pointer;border:none;background:#e11d48;color:#fff;
+           font-weight:700;border-radius:8px;padding:10px 14px;
+           font-size:14px;line-height:1.2;white-space:nowrap;
+           box-shadow:0 1px 2px rgba(0,0,0,.12);">
+    📋 {label}
   </button>
 </div>
 <script>
@@ -68,32 +71,30 @@ def _copy_text_button(text: str, *, key: str, label: str = "一鍵複製") -> No
   if (!btn) return;
   const setLabel = (s) => {{ btn.textContent = s; }};
   async function copyText() {{
+    let ok = false;
     try {{
       const nav = (window.parent && window.parent.navigator) || navigator;
       if (nav && nav.clipboard && nav.clipboard.writeText) {{
         await nav.clipboard.writeText(text);
-        setLabel("已複製");
-        setTimeout(() => setLabel({label!r}), 1600);
-        return;
+        ok = true;
       }}
     }} catch (e) {{}}
-    try {{
-      const doc = (window.parent && window.parent.document) || document;
-      const ta = doc.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      doc.body.appendChild(ta);
-      ta.select();
-      doc.execCommand("copy");
-      doc.body.removeChild(ta);
-      setLabel("已複製");
-      setTimeout(() => setLabel({label!r}), 1600);
-    }} catch (e2) {{
-      setLabel("複製失敗");
-      setTimeout(() => setLabel({label!r}), 1600);
+    if (!ok) {{
+      try {{
+        const doc = (window.parent && window.parent.document) || document;
+        const ta = doc.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        doc.body.appendChild(ta);
+        ta.select();
+        ok = !!doc.execCommand("copy");
+        doc.body.removeChild(ta);
+      }} catch (e2) {{ ok = false; }}
     }}
+    setLabel(ok ? "✅ 已複製" : "❌ 複製失敗");
+    setTimeout(() => setLabel("📋 {label}"), 1800);
   }}
   btn.addEventListener("click", function (ev) {{
     ev.preventDefault();
@@ -102,7 +103,7 @@ def _copy_text_button(text: str, *, key: str, label: str = "一鍵複製") -> No
 }})();
 </script>
         """,
-        height=42,
+        height=52,
     )
 
 
@@ -392,23 +393,45 @@ def _render_social_copy(
                 if angle and (not label or f"角度:{angle}" not in label):
                     st.caption(f"觀察角度：{angle}")
 
-    # 一律按范文重排，方便舊档都一鍵複製最新格式
+    # 一律按范文重排，並回寫 post_text，舊档唔使等 LLM 都睇到最新頭尾
     post_text = format_social_post_text(social_data, copy_data=copy_data)
-    label_col, btn_col = st.columns([4, 1], vertical_alignment="center")
+    if post_text and str(social_data.get("post_text") or "").strip() != post_text.strip():
+        social_data = dict(social_data)
+        social_data["post_text"] = post_text
+        try:
+            from ad_llm_copy import (
+                SOCIAL_BRAND_INTRO,
+                SOCIAL_CTA_LINE,
+                SOCIAL_DISCLAIMER_LINE,
+                SOCIAL_PUBLISH_HASHTAGS,
+                post_footer_text,
+            )
+
+            social_data["footer"] = post_footer_text()
+            social_data["brand_intro"] = SOCIAL_BRAND_INTRO
+            social_data["cta"] = SOCIAL_CTA_LINE
+            social_data["disclaimer"] = SOCIAL_DISCLAIMER_LINE
+            social_data["hashtags"] = list(SOCIAL_PUBLISH_HASHTAGS.split())
+            save_social_copy(out_root, social_data)
+            st.session_state[_k("result")] = social_data
+        except Exception:
+            pass
+
+    label_col, btn_col = st.columns([3.2, 1.2])
     with label_col:
         st.markdown("**Facebook / IG 貼文**")
     with btn_col:
         _copy_text_button(post_text, key=_k("fb_ig_copy"), label="一鍵複製")
     st.text_area(
-        "Facebook / IG 貼文",
+        "Facebook / IG 貼文內容",
         value=post_text,
-        height=320,
+        height=360,
         key=_k("post_preview"),
         label_visibility="collapsed",
     )
     p = social_copy_path(out_root)
     if p.is_file():
-        st.caption(f"已保存 `{p.name}` · 撳右側「一鍵複製」即可贴到 Facebook／IG")
+        st.caption(f"已保存 `{p.name}` · 撳右側紅色「一鍵複製」即可贴到 Facebook／IG")
 
 
 def _render_regen(out_root: Path) -> None:

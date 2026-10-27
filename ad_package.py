@@ -36,7 +36,7 @@ HK_TZ = timezone(timedelta(hours=8))
 PACKAGES_SUBDIR = "packages"
 LATEST_ID_NAME = "_latest_id.txt"
 DEFAULT_HASHTAGS = ["#J18", "#賽事數據", "#模型分析"]
-DEFAULT_CTA = "即可打開手機瀏覽器登入 j18.hk 查看即時賽事數據。"
+DEFAULT_CTA = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事資訊。"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
 DEFAULT_DISCLAIMER = "⚠️ 內容只供資料研究及參考，不構成投注建議；未滿18歲切勿參與賭博。"

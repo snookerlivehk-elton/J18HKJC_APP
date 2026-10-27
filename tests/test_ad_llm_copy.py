@@ -136,7 +136,8 @@ def test_parse_llm_json_from_fence():
 
 def test_post_footer_contains_required_lines():
     footer = post_footer_text()
-    assert "即可打開手機瀏覽器登入 j18.hk" in footer
+    assert "即刻打開手機瀏覽器登入 j18.hk" in footer
+    assert "即時賽事資訊" in footer
     assert "不構成投注建議" in footer
     assert ("未滿18" in footer) or ("未滿18歲" in footer) or ("18歲" in footer)
     assert "資料研究" in footer or "研究" in footer
@@ -501,5 +502,8 @@ def test_normalize_strips_system_subtitle_for_day():
     assert "#J18賽馬" in data["hashtags"]
     assert "#香港賽馬" in data["hashtags"]
     assert "J18.hk賽前預測" in data["post_text"]
-    assert "即可打開手機瀏覽器登入 j18.hk" in data["post_text"]
+    assert "即刻打開手機瀏覽器登入 j18.hk" in data["post_text"]
+    assert "即時賽事資訊" in data["post_text"]
+    assert "#tips" in data["post_text"]
+    assert "#跑马" in data["post_text"]
     assert "LLM 暫時未能" not in data["post_text"]

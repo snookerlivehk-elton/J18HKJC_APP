@@ -87,15 +87,15 @@ TONE_PRESETS: Dict[str, Dict[str, str]] = {
 SOCIAL_BRAND_INTRO = (
     "J18.hk賽前預測，各馬匹近賽最近資訊，供各位作參考，祝各馬迷馬運亨通！！"
 )
-SOCIAL_CTA_LINE = "即可打開手機瀏覽器登入 j18.hk 查看即時賽事數據。"
+SOCIAL_CTA_LINE = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事資訊。"
 SOCIAL_DISCLAIMER_LINE = (
     "⚠️ 內容只供資料研究及參考，不構成投注建議；未滿18歲切勿參與賭博。"
 )
-# 范文 hashtag（保留用戶提供嘅重複標籤，方便一鍵複製發佈）
+# 范文 hashtag（用戶確認版；已去掉零寬／物件替換字元）
 SOCIAL_PUBLISH_HASHTAGS = (
-    "#香港賽馬 #賽馬 #賽馬貼士 #賽馬心水 #香港賽馬 #四重彩 #賽馬會 #賽事分析 "
+    "#香港賽馬 #跑马 #賽馬貼士 #賽馬心水 #四重彩 #賽馬會 #賽事分析 "
     "#賽馬預測 #馬龍 #賽馬賠率 #賽馬直播 #香港賽馬 #HKJC #獨贏 #過關 "
-    "#賽馬心水 #賽馬貼士 #J18賽馬 #賽馬 #HorseRacingTips"
+    "#賽馬心水 #賽馬貼士 #J18賽馬 #賽馬 #HorseRacingTips #tips"
 )
 
 # 文末固定：CTA + 免責（程式強制附加，唔依賴 LLM）
@@ -685,7 +685,7 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
       第N場｜馬號 馬名
       {comment}
       …
-      即可打開手機瀏覽器登入 j18.hk …
+      即刻打開手機瀏覽器登入 j18.hk …
       <空行>
       ⚠️ 內容只供…
       <空行>
