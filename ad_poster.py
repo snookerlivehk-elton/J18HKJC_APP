@@ -74,7 +74,9 @@ DATE_PILL_RADIUS = 24
 # 預設字色（會依 theme 覆寫）
 RACE_FG = (55, 55, 55)
 TEXT_FG = (40, 40, 40)
+# 表內正文字級：相對「滿鋪加大」版再縮約 10%；強制常規體（非粗體）
 FONT_BASE_PX = 40
+FONT_TABLE_SCALE = 0.90
 # 表身分隔
 GRID_LINE = (210, 210, 210)
 GRID_LINE_STRONG = (170, 170, 170)
@@ -224,7 +226,8 @@ def _find_font() -> Optional[str]:
     return None
 
 
-def _load_font(size: int):
+def _load_font(size: int, *, regular: bool = True):
+    """載入字型。regular=True 時固定用 face index 0（常規體），避免誤選粗體 face。"""
     from PIL import ImageFont
 
     path = _find_font()
@@ -233,15 +236,18 @@ def _load_font(size: int):
             "找不到 CJK 字型：請確認 assets/fonts/wqy-microhei.ttc 已部署，"
             "或設定環境變數 AD_FONT_PATH"
         )
+    size_i = int(size)
     last_err: Optional[Exception] = None
-    for index in (0, 1):
+    # 常規體優先 index=0；僅在失敗時才試其他 face（避免粗體）
+    indices = (0,) if regular else (0, 1)
+    for index in indices:
         try:
-            return ImageFont.truetype(path, size=int(size), index=index)
+            return ImageFont.truetype(path, size=size_i, index=index)
         except Exception as e:
             last_err = e
             continue
     try:
-        return ImageFont.truetype(path, size=int(size))
+        return ImageFont.truetype(path, size=size_i)
     except Exception as e:
         raise RuntimeError(f"無法載入字型 {path}: {e or last_err}") from e
 
@@ -965,12 +971,14 @@ def render_meeting_poster(
     )
 
     # 字級隨列高；推介／場次號皆欄內水平置中（anchor=mm）
-    # 「第N場」較單數字寬，場次字略細以塞進左欄；列高加大時優先撐滿可讀字級
+    # 「第N場」較單數字寬，場次字略細；再 × FONT_TABLE_SCALE（約縮 10%）
+    # 常規體（index=0），避免粗體 face 造成密、重的觀感
     base = int(FONT_BASE_PX)
-    race_px = int(max(base - 10, min(int(row_h * 0.55), base)))
-    pick_px = int(max(base - 6, min(int(row_h * 0.68), base + 6)))
-    font_race = _load_font(race_px)
-    font_pick = _load_font(pick_px)
+    scale = float(FONT_TABLE_SCALE)
+    race_px = int(round(max(base - 10, min(int(row_h * 0.55), base)) * scale))
+    pick_px = int(round(max(base - 6, min(int(row_h * 0.68), base + 6)) * scale))
+    font_race = _load_font(race_px, regular=True)
+    font_pick = _load_font(pick_px, regular=True)
     race_fg = tuple(style["race_fg"])
     text_fg = tuple(style["text_fg"])
 
