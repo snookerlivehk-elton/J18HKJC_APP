@@ -11,6 +11,9 @@ from ad_llm_copy import (
     COMMENT_MAX_CHARS,
     DEFAULT_TONE,
     SOCIAL_BRAND_INTRO,
+    SOCIAL_CTA_LINE,
+    SOCIAL_DISCLAIMER_LINE,
+    SOCIAL_PUBLISH_HASHTAGS,
     TONE_PRESETS,
     AdSocialCopywriter,
     count_candidate_races,
@@ -399,14 +402,6 @@ def _render_social_copy(
         social_data = dict(social_data)
         social_data["post_text"] = post_text
         try:
-            from ad_llm_copy import (
-                SOCIAL_BRAND_INTRO,
-                SOCIAL_CTA_LINE,
-                SOCIAL_DISCLAIMER_LINE,
-                SOCIAL_PUBLISH_HASHTAGS,
-                post_footer_text,
-            )
-
             social_data["footer"] = post_footer_text()
             social_data["brand_intro"] = SOCIAL_BRAND_INTRO
             social_data["cta"] = SOCIAL_CTA_LINE
