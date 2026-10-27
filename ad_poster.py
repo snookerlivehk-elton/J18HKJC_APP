@@ -74,9 +74,9 @@ DATE_PILL_RADIUS = 24
 # 預設字色（會依 theme 覆寫）
 RACE_FG = (55, 55, 55)
 TEXT_FG = (40, 40, 40)
-# 表內正文字級：相對「滿鋪加大」版再縮約 10%；強制常規體（非粗體）
+# 表內正文字級：相對「滿鋪加大」版再縮約約 19%（兩次各約 10%）；強制常規體（非粗體）
 FONT_BASE_PX = 40
-FONT_TABLE_SCALE = 0.90
+FONT_TABLE_SCALE = 0.81
 # 表身分隔
 GRID_LINE = (210, 210, 210)
 GRID_LINE_STRONG = (170, 170, 170)
