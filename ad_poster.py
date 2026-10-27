@@ -60,8 +60,9 @@ COPY_FILE = "copy.json"
 BLANK_W = 1280
 BLANK_H = 1299
 # 上固定（標題＋J18精選列＋白框上緣）／中拉伸（直線白底）／下固定（白框下圓角＋footer）
-SLICE_TOP_END = 400
-SLICE_MID_END = 980
+# 白底實測約 y=366–1012；切片貼齊白區，避免首尾空行（舊值 400/980 會在第1場上、末場下留白）
+SLICE_TOP_END = 380
+SLICE_MID_END = 1013
 REF_N_ROWS = 10  # 模版中段對應參考場數
 ROW_H_SCALE = 1.0
 RACE_COL = (48, 175)
@@ -73,7 +74,7 @@ DATE_PILL_RADIUS = 24
 # 預設字色（會依 theme 覆寫）
 RACE_FG = (55, 55, 55)
 TEXT_FG = (40, 40, 40)
-FONT_BASE_PX = 34
+FONT_BASE_PX = 40
 # 表身分隔
 GRID_LINE = (210, 210, 210)
 GRID_LINE_STRONG = (170, 170, 170)
@@ -879,6 +880,9 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
     """
     上固定 + 中段垂直拉伸 + 下固定。
     回傳 (canvas, mid_top_y, row_h)。
+
+    - 場數 ≤ REF_N_ROWS：中段保持模版白區滿高，列高 = 滿高/場數（填滿、字更大）
+    - 場數 > REF_N_ROWS：中段按基準列高向上加長
     """
     from PIL import Image
 
@@ -894,8 +898,11 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
     bot = blank.crop((0, mid_end, w, h))
 
     ref_mid_h = mid_end - top_end
-    row_h = (ref_mid_h / float(REF_N_ROWS)) * float(ROW_H_SCALE)
-    new_mid_h = max(1, int(round(n * row_h)))
+    base_row_h = (ref_mid_h / float(REF_N_ROWS)) * float(ROW_H_SCALE)
+    if n <= REF_N_ROWS:
+        new_mid_h = max(1, int(ref_mid_h))
+    else:
+        new_mid_h = max(1, int(round(n * base_row_h)))
     if mid.height != new_mid_h:
         mid = mid.resize((w, new_mid_h), Image.Resampling.LANCZOS)
 
@@ -958,10 +965,10 @@ def render_meeting_poster(
     )
 
     # 字級隨列高；推介／場次號皆欄內水平置中（anchor=mm）
-    # 「第N場」較單數字寬，場次字略細以塞進左欄
+    # 「第N場」較單數字寬，場次字略細以塞進左欄；列高加大時優先撐滿可讀字級
     base = int(FONT_BASE_PX)
-    race_px = int(max(base - 10, min(int(row_h * 0.42), base - 2)))
-    pick_px = int(max(base - 6, min(int(row_h * 0.50), base + 4)))
+    race_px = int(max(base - 10, min(int(row_h * 0.55), base)))
+    pick_px = int(max(base - 6, min(int(row_h * 0.68), base + 6)))
     font_race = _load_font(race_px)
     font_pick = _load_font(pick_px)
     race_fg = tuple(style["race_fg"])
