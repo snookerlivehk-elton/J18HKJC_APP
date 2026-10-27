@@ -138,9 +138,13 @@ def format_social_meeting_header(
     copy_data: Optional[Dict[str, Any]] = None,
 ) -> str:
     """范文首行：2026年10月28日, 星期三, 沙田, 18:45"""
-    m = dict(meeting or {})
-    if not m and copy_data:
-        m = dict((copy_data or {}).get("meeting") or {})
+    # copy.json meeting（含 theme）為底，social.meeting 有值再覆蓋
+    m: Dict[str, Any] = dict((copy_data or {}).get("meeting") or {})
+    if isinstance(meeting, dict) and meeting:
+        for k, v in meeting.items():
+            if v is None or v == "":
+                continue
+            m[k] = v
     race_date = str(m.get("racing_date") or m.get("date") or "")[:10]
     course = str(m.get("course") or m.get("venue_code") or m.get("venue") or "")
     venue = str(m.get("venue_zh") or "").strip() or _social_venue_label(course)
@@ -163,7 +167,7 @@ def format_social_meeting_header(
     is_night = (
         "夜" in session_raw
         or session_raw.lower() == "night"
-        or (course_u == "HV" and "日" not in session_raw)
+        or (course_u == "HV" and "日" not in session_raw and session_raw.lower() != "day")
     )
     start = _social_start_hhmm(m, is_night=is_night)
 

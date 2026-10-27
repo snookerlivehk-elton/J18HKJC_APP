@@ -169,7 +169,7 @@ def test_format_social_post_matches_publish_template():
         "meeting": copy_data["meeting"],
     }
     text = format_social_post_text(social, copy_data=copy_data)
-    assert text.startswith("2026年10月28日, 星期三, 沙田, 18:45")
+    assert text.startswith("2026年10月28日, 星期三, 沙田, 18:45"), text.split("\n", 1)[0]
     assert SOCIAL_BRAND_INTRO in text
     assert "三場焦點數據觀察：步速、走位與路程適應" in text
     assert "第1場｜3 光輝歲月" in text
