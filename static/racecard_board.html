@@ -2845,7 +2845,11 @@
       gap: 4px 6px;
       margin-bottom: 5px;
     }
-    .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
+    .tr-sec-head .tr-sec-title {
+      margin: 0;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
     /* 本日／本賽季：對齊筆記膠囊彈力滑塊 */
     .tr-scope {
       position: relative;
@@ -6768,7 +6772,8 @@
     }
 
     /* 心水戰績：今日場次心水匯總＋統計／獎金／名家榜（演示） */
-    let tipRecordScope = "day"; /* day | season */
+    let tipRecordScope = "day"; /* day | season：個人戰績統計 */
+    let tipRecordLbScope = "day"; /* day | season：心水名家榜 */
     let tipRecordHelpOpen = false;
     let tipRecordLbOpenIds = {}; /* id -> true，支援多開對比 */
     const TIP_RECORD_STAKE = 10;
@@ -7095,8 +7100,42 @@
       if (tipRecordLbOpenIds[key]) delete tipRecordLbOpenIds[key];
       else tipRecordLbOpenIds[key] = true;
     }
-    function renderTipRecordLeaderboardHtml() {
-      return '<div class="tr-lb-list">' + TIP_LEADERBOARD_DEMO.map(function (u, idx) {
+    function tipLeaderboardForScope(scope) {
+      /* 本賽季用完整演示榜；本日縮放獎金並重排，令排名可視差異 */
+      const season = TIP_LEADERBOARD_DEMO;
+      if (scope !== "day") return season.slice();
+      return season.map(function (u, i) {
+        const factor = 0.06 + ((i * 11) % 7) * 0.012;
+        const prize = Math.max(80, Math.round(Number(u.prize) * factor));
+        const stats = {};
+        TIP_STAT_DEFS.forEach(function (d) {
+          const s = (u.stats && u.stats[d.key]) || [0, 0, 0];
+          const plays = Math.max(1, Math.round((Number(s[1]) || 0) * 0.12));
+          const wins = Math.min(plays, Math.round((Number(s[0]) || 0) * factor * 1.4));
+          stats[d.key] = [wins, plays, Math.round((Number(s[2]) || 0) * factor)];
+        });
+        return { id: u.id, name: u.name, prize: prize, stats: stats };
+      }).sort(function (a, b) {
+        if (b.prize !== a.prize) return b.prize - a.prize;
+        return String(a.id).localeCompare(String(b.id));
+      });
+    }
+    function renderTipRecordLbScopeSwitch(scope) {
+      const sc = scope === "season" ? "season" : "day";
+      return (
+        '<div class="tr-scope" data-tr-scope-for="lb" data-scope="' + sc +
+          '" role="tablist" aria-label="名家榜時間範圍">' +
+          '<div class="tr-scope-slider" aria-hidden="true"></div>' +
+          '<button type="button" class="tr-scope-btn' + (sc === "day" ? " is-on" : "") +
+            '" data-tr-lb-scope="day" role="tab" aria-selected="' + (sc === "day" ? "true" : "false") + '">本日</button>' +
+          '<button type="button" class="tr-scope-btn' + (sc === "season" ? " is-on" : "") +
+            '" data-tr-lb-scope="season" role="tab" aria-selected="' + (sc === "season" ? "true" : "false") + '">本賽季</button>' +
+        "</div>"
+      );
+    }
+    function renderTipRecordLeaderboardHtml(scope) {
+      const list = tipLeaderboardForScope(scope === "season" ? "season" : "day");
+      return '<div class="tr-lb-list">' + list.map(function (u, idx) {
         const open = tipRecordLbIsOpen(u.id);
         const detail = TIP_STAT_DEFS.map(function (d) {
           const t = tipStatTriple((u.stats && u.stats[d.key]) || [0, 0, 0]);
@@ -7126,6 +7165,7 @@
       }
       if (!body) return;
       const scope = tipRecordScope === "season" ? "season" : "day";
+      const lbScope = tipRecordLbScope === "season" ? "season" : "day";
       body.innerHTML =
         '<section class="tr-sec tr-day">' +
           '<div class="tr-sec-title">個人心水</div>' +
@@ -7136,7 +7176,7 @@
             '<div class="tr-sec-title">個人戰績統計</div>' +
             '<button type="button" class="tr-help-btn" data-tr-act="help" aria-expanded="' +
               (tipRecordHelpOpen ? "true" : "false") + '">規則</button>' +
-            '<div class="tr-scope" data-scope="' + scope + '" role="tablist" aria-label="統計時間範圍">' +
+            '<div class="tr-scope" data-tr-scope-for="stats" data-scope="' + scope + '" role="tablist" aria-label="統計時間範圍">' +
               '<div class="tr-scope-slider" aria-hidden="true"></div>' +
               '<button type="button" class="tr-scope-btn' + (scope === "day" ? " is-on" : "") +
                 '" data-tr-scope="day" role="tab" aria-selected="' + (scope === "day" ? "true" : "false") + '">本日</button>' +
@@ -7150,8 +7190,11 @@
           '<div id="tipRecordStatsPanel">' + renderTipRecordStatsHtml(scope) + "</div>" +
         "</section>" +
         '<section class="tr-sec tr-board">' +
-          '<div class="tr-sec-title">心水名家榜 · 獎金 Top 10</div>' +
-          renderTipRecordLeaderboardHtml() +
+          '<div class="tr-sec-head">' +
+            '<div class="tr-sec-title">心水名家榜 · 獎金 Top 10</div>' +
+            renderTipRecordLbScopeSwitch(lbScope) +
+          "</div>" +
+          '<div id="tipRecordLbPanel">' + renderTipRecordLeaderboardHtml(lbScope) + "</div>" +
         "</section>";
     }
     /* 彈層互斥：打開某一層前關閉其餘。賽期表僅在「原本已打開」時才套用選日（見 closeRaceDateCalendar）。 */
@@ -7224,7 +7267,7 @@
             const next = scopeBtn.getAttribute("data-tr-scope") === "season" ? "season" : "day";
             if (tipRecordScope === next) return;
             tipRecordScope = next;
-            const scopeEl = body.querySelector(".tr-scope");
+            const scopeEl = body.querySelector('.tr-scope[data-tr-scope-for="stats"]');
             if (scopeEl) scopeEl.setAttribute("data-scope", next);
             body.querySelectorAll("[data-tr-scope]").forEach(function (btn) {
               const on = btn.getAttribute("data-tr-scope") === next;
@@ -7236,16 +7279,32 @@
             requestAnimationFrame(syncTipRecordSheetHeight);
             return;
           }
+          const lbScopeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-lb-scope]") : null;
+          if (lbScopeBtn && body.contains(lbScopeBtn)) {
+            ev.preventDefault();
+            const next = lbScopeBtn.getAttribute("data-tr-lb-scope") === "season" ? "season" : "day";
+            if (tipRecordLbScope === next) return;
+            tipRecordLbScope = next;
+            const scopeEl = body.querySelector('.tr-scope[data-tr-scope-for="lb"]');
+            if (scopeEl) scopeEl.setAttribute("data-scope", next);
+            body.querySelectorAll("[data-tr-lb-scope]").forEach(function (btn) {
+              const on = btn.getAttribute("data-tr-lb-scope") === next;
+              btn.classList.toggle("is-on", on);
+              btn.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            const panel = document.getElementById("tipRecordLbPanel");
+            if (panel) panel.innerHTML = renderTipRecordLeaderboardHtml(next);
+            requestAnimationFrame(syncTipRecordSheetHeight);
+            return;
+          }
           const userBtn = ev.target && ev.target.closest ? ev.target.closest("button.tr-lb-sum[data-tr-user]") : null;
           if (userBtn && body.contains(userBtn)) {
             ev.preventDefault();
             const id = userBtn.getAttribute("data-tr-user");
             tipRecordLbToggle(id);
-            const board = body.querySelector(".tr-board");
-            if (board) {
-              const listHost = board.querySelector(".tr-lb-list");
-              if (listHost) listHost.outerHTML = renderTipRecordLeaderboardHtml();
-              else board.insertAdjacentHTML("beforeend", renderTipRecordLeaderboardHtml());
+            const panel = document.getElementById("tipRecordLbPanel");
+            if (panel) {
+              panel.innerHTML = renderTipRecordLeaderboardHtml(tipRecordLbScope);
             } else {
               fillTipRecordSheet();
             }
