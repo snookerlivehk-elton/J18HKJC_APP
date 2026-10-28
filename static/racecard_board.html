@@ -2775,11 +2775,9 @@
       overflow: hidden;
       height: auto;
       max-height: 100%;
-      width: 100%;
-      max-width: none;
+      /* 外框寬度沿用 .cal-sheet（min(342px, 100%)），不拉滿視窗 */
       margin-bottom: 0;
-      /* 左右收窄留白，三板塊更寬 */
-      padding: 12px 6px max(12px, env(safe-area-inset-bottom, 0px));
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
       box-sizing: border-box;
     }
     .cal-sheet.tip-record-sheet.is-fill {
@@ -2812,7 +2810,7 @@
     /* 三段分區：左色條＋淺底邊框；內文間距同步收緊，淨高度不增加 */
     .tr-sec {
       margin: 0;
-      padding: 7px 6px 6px;
+      padding: 7px 8px 6px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: #f7f9fc;
