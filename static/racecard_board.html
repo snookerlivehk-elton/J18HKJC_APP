@@ -2775,8 +2775,11 @@
       overflow: hidden;
       height: auto;
       max-height: 100%;
+      width: 100%;
+      max-width: none;
       margin-bottom: 0;
-      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      /* 左右收窄留白，三板塊更寬 */
+      padding: 12px 6px max(12px, env(safe-area-inset-bottom, 0px));
       box-sizing: border-box;
     }
     .cal-sheet.tip-record-sheet.is-fill {
@@ -2809,7 +2812,7 @@
     /* 三段分區：左色條＋淺底邊框；內文間距同步收緊，淨高度不增加 */
     .tr-sec {
       margin: 0;
-      padding: 7px 8px 6px;
+      padding: 7px 6px 6px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: #f7f9fc;
@@ -2849,6 +2852,23 @@
       margin: 0;
       flex: 1 1 auto;
       min-width: 0;
+    }
+    /* 名家榜：標題與本日／本賽季膠囊強制同行 */
+    .tr-sec.tr-board .tr-sec-head {
+      flex-wrap: nowrap;
+      gap: 4px;
+    }
+    .tr-sec.tr-board .tr-sec-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tr-sec.tr-board .tr-scope {
+      flex: 0 0 auto;
+      min-width: 118px;
+      width: 118px;
     }
     /* 本日／本賽季：對齊筆記膠囊彈力滑塊 */
     .tr-scope {
