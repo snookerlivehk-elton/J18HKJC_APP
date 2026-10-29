@@ -1876,36 +1876,21 @@
     .water-row.is-wh-cross-row > .water-lock {
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06), inset 0 0 0 1px rgba(47, 86, 73, .4);
     }
-    /* 可開彈窗列：表頭左下小翻起箭頭（高反差橙，對淺灰表頭） */
+    /* 可開彈窗列：表頭左下靜態橙色三角角標 */
     .hrow.head .cell.scroll-col.has-cell-peek {
       position: relative;
     }
     .cell-peek {
       position: absolute;
-      left: 1px;
-      bottom: 1px;
+      left: 0;
+      bottom: 0;
       z-index: 3;
       pointer-events: none;
-      display: block;
-      width: 10px;
-      height: 10px;
-      color: #e67e22;
-      filter: drop-shadow(0 0 0.6px rgba(120, 50, 0, .55));
-      transform-origin: 15% 85%;
-      animation: cellPeekBreath 1.8s ease-in-out infinite;
-    }
-    .cell-peek svg {
-      display: block;
-      width: 10px;
-      height: 10px;
-      overflow: visible;
-    }
-    @keyframes cellPeekBreath {
-      0%, 100% { opacity: .92; transform: translate(0, 0) rotate(0deg); }
-      50% { opacity: 1; transform: translate(1px, -2px) rotate(-12deg); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .cell-peek { animation: none; opacity: 1; }
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 0 0 8px 8px;
+      border-color: transparent transparent #e67e22 transparent;
     }
     /* 點水位／流量數字打開詳情；表頭「水位」「流量」仍負責排序 */
     .hrow:not(.head) .cell.scroll-col[data-open="water"] {
@@ -5448,8 +5433,7 @@
         inset 0 1px 0 rgba(255, 255, 255, .14);
     }
     html[data-theme="dark"] .cell-peek {
-      color: #ffb14a;
-      filter: drop-shadow(0 0 1px rgba(0, 0, 0, .65));
+      border-color: transparent transparent #ffb14a transparent;
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
@@ -12032,11 +12016,7 @@
         let peekHtml = "";
         if (scrollColHasPopupHint(c.key)) {
           peekCls = " has-cell-peek";
-          peekHtml = '<span class="cell-peek" aria-hidden="true">' +
-            '<svg viewBox="0 0 10 10" focusable="false">' +
-              '<path d="M1.6 8.6 V4.2 Q1.6 1.7 4.2 1.7 H7.6" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>' +
-              '<path d="M5.7 0.55 L8.55 1.85 L5.7 3.15 Z" fill="currentColor"/>' +
-            "</svg></span>";
+          peekHtml = '<span class="cell-peek" aria-hidden="true"></span>';
         }
         return '<div class="cell ' + c.cls + headOn(c.key) + peekCls + '">' +
           headBtn(c.key, c.label) + peekHtml + "</div>";
