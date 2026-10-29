@@ -1876,7 +1876,7 @@
     .water-row.is-wh-cross-row > .water-lock {
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06), inset 0 0 0 1px rgba(47, 86, 73, .4);
     }
-    /* 可開彈窗列：表頭左下「詳」角標（比純揭頁角更易發現） */
+    /* 可開彈窗列：表頭左下小翻起箭頭（高反差橙，對淺灰表頭） */
     .hrow.head .cell.scroll-col.has-cell-peek {
       position: relative;
     }
@@ -1886,47 +1886,23 @@
       bottom: 1px;
       z-index: 3;
       pointer-events: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 15px;
-      height: 13px;
-      padding: 0 3px 0 4px;
-      border-radius: 3px;
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: .04em;
-      line-height: 1;
-      color: #fff;
-      background: linear-gradient(180deg, #5b7ea8 0%, var(--nav) 100%);
-      border: 1px solid rgba(30, 48, 72, .35);
-      box-shadow:
-        0 1px 2px rgba(45, 62, 80, .28),
-        inset 0 1px 0 rgba(255, 255, 255, .28);
-      transform-origin: 0 100%;
-      animation: cellPeekBreath 2.4s ease-in-out infinite;
+      display: block;
+      width: 10px;
+      height: 10px;
+      color: #e67e22;
+      filter: drop-shadow(0 0 0.6px rgba(120, 50, 0, .55));
+      transform-origin: 15% 85%;
+      animation: cellPeekBreath 1.8s ease-in-out infinite;
     }
-    .cell-peek::after {
-      /* 左下往右上的小摺角，保留「可掀開」語意 */
-      content: "";
-      position: absolute;
-      left: -1px;
-      bottom: -1px;
-      width: 7px;
-      height: 7px;
-      background: linear-gradient(
-        225deg,
-        transparent 0 42%,
-        rgba(20, 36, 56, .45) 48%,
-        #d7e3f2 54%,
-        #fff 100%
-      );
-      border-radius: 0 0 0 1px;
-      pointer-events: none;
+    .cell-peek svg {
+      display: block;
+      width: 10px;
+      height: 10px;
+      overflow: visible;
     }
     @keyframes cellPeekBreath {
-      0%, 100% { opacity: .88; transform: scale(1) translateY(0); }
-      50% { opacity: 1; transform: scale(1.06) translateY(-1px); }
+      0%, 100% { opacity: .92; transform: translate(0, 0) rotate(0deg); }
+      50% { opacity: 1; transform: translate(1px, -2px) rotate(-12deg); }
     }
     @media (prefers-reduced-motion: reduce) {
       .cell-peek { animation: none; opacity: 1; }
@@ -5472,21 +5448,8 @@
         inset 0 1px 0 rgba(255, 255, 255, .14);
     }
     html[data-theme="dark"] .cell-peek {
-      color: #e8eef6;
-      background: linear-gradient(180deg, #4a6280 0%, #2f4560 100%);
-      border-color: rgba(210, 222, 236, .35);
-      box-shadow:
-        0 1px 2px rgba(0, 0, 0, .45),
-        inset 0 1px 0 rgba(255, 255, 255, .12);
-    }
-    html[data-theme="dark"] .cell-peek::after {
-      background: linear-gradient(
-        225deg,
-        transparent 0 42%,
-        rgba(210, 222, 236, .35) 48%,
-        #5a6a7e 54%,
-        #2a313c 100%
-      );
+      color: #ffb14a;
+      filter: drop-shadow(0 0 1px rgba(0, 0, 0, .65));
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
@@ -12069,7 +12032,11 @@
         let peekHtml = "";
         if (scrollColHasPopupHint(c.key)) {
           peekCls = " has-cell-peek";
-          peekHtml = '<span class="cell-peek" aria-hidden="true">詳</span>';
+          peekHtml = '<span class="cell-peek" aria-hidden="true">' +
+            '<svg viewBox="0 0 10 10" focusable="false">' +
+              '<path d="M1.6 8.6 V4.2 Q1.6 1.7 4.2 1.7 H7.6" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>' +
+              '<path d="M5.7 0.55 L8.55 1.85 L5.7 3.15 Z" fill="currentColor"/>' +
+            "</svg></span>";
         }
         return '<div class="cell ' + c.cls + headOn(c.key) + peekCls + '">' +
           headBtn(c.key, c.label) + peekHtml + "</div>";
