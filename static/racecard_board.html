@@ -1888,8 +1888,9 @@
       height: 11px;
       pointer-events: none;
       z-index: 3;
+      /* 左下角摺頁：實色三角在左下，往右上揭起 */
       background: linear-gradient(
-        135deg,
+        225deg,
         transparent 0 45%,
         rgba(45, 62, 80, .34) 48%,
         #c5d0de 51%,
@@ -1906,7 +1907,7 @@
       position: absolute;
       inset: 0;
       background: linear-gradient(
-        135deg,
+        225deg,
         transparent 0 42%,
         rgba(255, 255, 255, .55) 50%,
         transparent 58%
@@ -1914,8 +1915,8 @@
       pointer-events: none;
     }
     @keyframes cellPeekBreath {
-      0%, 100% { opacity: .82; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.06); }
+      0%, 100% { opacity: .82; transform: scale(1) rotate(0deg); }
+      50% { opacity: 1; transform: scale(1.08) rotate(-6deg); }
     }
     @media (prefers-reduced-motion: reduce) {
       .cell-peek { animation: none; opacity: .95; }
@@ -5462,7 +5463,7 @@
     }
     html[data-theme="dark"] .cell-peek {
       background: linear-gradient(
-        135deg,
+        225deg,
         transparent 0 45%,
         rgba(210, 222, 236, .45) 48%,
         #4a5566 51%,
