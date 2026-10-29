@@ -2715,10 +2715,30 @@
       letter-spacing: .02em;
     }
     .jt-collab-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
       font-size: 13px;
       font-weight: 600;
       line-height: 1.45;
       color: var(--muted);
+    }
+    .jt-sum-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .jt-sum-rates {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      white-space: nowrap;
+      line-height: 1.35;
+    }
+    .jt-sum-rate {
+      font-variant-numeric: tabular-nums;
     }
     .jt-collab-list {
       display: flex;
@@ -8429,8 +8449,9 @@
       return {
         jockey: jockey,
         trainer: trainer,
-        summary: "歷史出賽合作：" + runs + " 仗 · " + wins + "冠 " + seconds + "亞 " + thirds + "季 · 勝出率 " +
-          winPct + "% · 位置率 " + placePct + "%",
+        main: "歷史出賽合作：" + runs + " 仗 · " + wins + "冠 " + seconds + "亞 " + thirds + "季",
+        winRate: "勝出率 " + winPct + "%",
+        placeRate: "位置率 " + placePct + "%",
         races: hist
       };
     }
@@ -8466,7 +8487,13 @@
         : '<div class="jt-collab-empty">暫無歷史合作戰績</div>';
       body.innerHTML =
         '<div class="jt-collab-pair">' + esc(pair) + "</div>" +
-        '<div class="jt-collab-summary">' + esc(data.summary) + "</div>" +
+        '<div class="jt-collab-summary">' +
+          '<div class="jt-sum-main">' + esc(data.main) + "</div>" +
+          '<div class="jt-sum-rates">' +
+            '<div class="jt-sum-rate">' + esc(data.winRate) + "</div>" +
+            '<div class="jt-sum-rate">' + esc(data.placeRate) + "</div>" +
+          "</div>" +
+        "</div>" +
         listHtml;
     }
     function openJtCollabSheet(no) {
