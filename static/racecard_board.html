@@ -1900,6 +1900,15 @@
     .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
       background: rgba(61, 90, 128, .1);
     }
+    /* 本場騎練合作勝出率最高：騎師／練馬師名紅底線 */
+    .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v:not(.stacked),
+    .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v.stacked > .nm {
+      text-decoration: underline;
+      text-decoration-color: #e53935;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 2px;
+      text-decoration-skip-ink: none;
+    }
     .horse-sheet-bar {
       position: relative;
       flex: 0 0 auto;
@@ -5413,6 +5422,10 @@
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
       background: rgba(120, 160, 210, .12);
     }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v:not(.stacked),
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v.stacked > .nm {
+      text-decoration-color: #ff5a5a;
+    }
     html[data-theme="dark"] .jt-collab-row {
       background: #1e242c;
     }
@@ -8418,7 +8431,7 @@
       const name = (p && p.name) || String(raw == null ? "" : raw).trim();
       return name && name !== "—" ? name : "";
     }
-    function jtCollabDemoOf(r) {
+    function jtCollabCoreStats(r) {
       const jockey = splitPersonName(r && r.jockey);
       const trainer = splitPersonName(r && r.trainer);
       const no = Number(r && r.no) || 0;
@@ -8429,29 +8442,65 @@
       const seconds = (seed >> 1) % 3;
       const thirds = (seed >> 2) % 3;
       const places = wins + seconds + thirds;
-      const winPct = runs ? ((wins / runs) * 100).toFixed(1) : "0.0";
-      const placePct = runs ? ((places / runs) * 100).toFixed(1) : "0.0";
+      const winPctNum = runs ? Number(((wins / runs) * 100).toFixed(1)) : 0;
+      const placePctNum = runs ? Number(((places / runs) * 100).toFixed(1)) : 0;
+      return {
+        jockey: jockey,
+        trainer: trainer,
+        seed: seed,
+        runs: runs,
+        wins: wins,
+        seconds: seconds,
+        thirds: thirds,
+        winPctNum: winPctNum,
+        placePctNum: placePctNum,
+        winPct: winPctNum.toFixed(1),
+        placePct: placePctNum.toFixed(1)
+      };
+    }
+    /* 本場未劃走馬中，騎練合作勝出率最高者（並列全標） */
+    function jtBestCollabWinNos() {
+      const out = {};
+      const runners = currentRunners() || [];
+      let best = null;
+      const scored = [];
+      runners.forEach(function (r) {
+        if (!r || r.scratched) return;
+        const st = jtCollabCoreStats(r);
+        if (!st.jockey && !st.trainer) return;
+        scored.push({ no: String(r.no), n: st.winPctNum });
+        if (best == null || st.winPctNum > best) best = st.winPctNum;
+      });
+      if (best == null) return out;
+      scored.forEach(function (s) {
+        if (s.n === best) out[s.no] = true;
+      });
+      return out;
+    }
+    function jtCollabDemoOf(r) {
+      const st = jtCollabCoreStats(r);
       const courses = ["沙田", "跑馬地", "沙田", "跑馬地"];
       const dists = ["1200米", "1400米", "1650米", "1000米", "1800米"];
       const hist = [];
-      for (let i = 0; i < Math.min(runs, 6); i++) {
-        const finRoll = (seed + i * 9) % 11;
+      for (let i = 0; i < Math.min(st.runs, 6); i++) {
+        const finRoll = (st.seed + i * 9) % 11;
         const finish = finRoll === 0 ? 1 : finRoll === 1 ? 2 : finRoll === 2 ? 3 : (4 + (finRoll % 7));
         const mo = ((9 - (i % 6)) + 11) % 12 + 1;
-        const day = 3 + ((seed + i * 5) % 24);
+        const day = 3 + ((st.seed + i * 5) % 24);
         hist.push({
           date: "2026-" + String(mo).padStart(2, "0") + "-" + String(day).padStart(2, "0"),
-          course: courses[(seed + i) % courses.length],
-          dist: dists[(seed + i * 2) % dists.length],
+          course: courses[(st.seed + i) % courses.length],
+          dist: dists[(st.seed + i * 2) % dists.length],
           finish: finish
         });
       }
       return {
-        jockey: jockey,
-        trainer: trainer,
-        main: "歷史出賽合作：" + runs + " 仗 · " + wins + "冠 " + seconds + "亞 " + thirds + "季",
-        winRate: "勝出率 " + winPct + "%",
-        placeRate: "位置率 " + placePct + "%",
+        jockey: st.jockey,
+        trainer: st.trainer,
+        main: "歷史出賽合作：" + st.runs + " 仗 · " + st.wins + "冠 " + st.seconds + "亞 " + st.thirds + "季",
+        winRate: "勝出率 " + st.winPct + "%",
+        placeRate: "位置率 " + st.placePct + "%",
+        winPctNum: st.winPctNum,
         races: hist
       };
     }
@@ -11949,6 +11998,7 @@
           "</div>" +
         "</div>";
 
+      const jtBestWin = jtBestCollabWinNos();
       const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
@@ -12002,6 +12052,9 @@
               "</span>";
           } else if (top4 && c.key === "jockey") {
             extraCls = " finish-wm-pair";
+          }
+          if ((c.key === "jockey" || c.key === "trainer") && !r.scratched && jtBestWin[String(r.no)]) {
+            extraCls += " is-jt-best-win";
           }
           return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openAttr + ">" +
             wmHtml + cellValue(c, r) + "</div>";
