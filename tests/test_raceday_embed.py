@@ -816,6 +816,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("勝出率 ", r.text)
         self.assertIn('· 勝出率 " +', r.text)
         self.assertNotIn('· 勝率 " +', r.text)
+        self.assertIn("歷史出賽合作：", r.text)
+        self.assertNotIn("近季合作：", r.text)
         self.assertIn("最佳\\n時間", r.text)
         self.assertIn('key: "bestTime"', r.text)
         self.assertIn("ensureBestTimeDemo", r.text)
