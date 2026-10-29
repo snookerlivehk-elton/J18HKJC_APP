@@ -1876,6 +1876,47 @@
     .water-row.is-wh-cross-row > .water-lock {
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06), inset 0 0 0 1px rgba(47, 86, 73, .4);
     }
+    /* 可開彈窗列：首個可點格子右下角「揭頁一角」提示 */
+    .cell-peek {
+      position: absolute;
+      right: var(--scroll-col-rule);
+      bottom: 0;
+      width: 11px;
+      height: 11px;
+      pointer-events: none;
+      z-index: 3;
+      background: linear-gradient(
+        225deg,
+        transparent 0 45%,
+        rgba(45, 62, 80, .34) 48%,
+        #c5d0de 51%,
+        #eef2f7 68%,
+        #ffffff 100%
+      );
+      box-shadow: -1px -1px 1.5px rgba(45, 62, 80, .14);
+      transform-origin: 100% 100%;
+      animation: cellPeekBreath 2.6s ease-in-out infinite;
+    }
+    .cell-peek::after {
+      /* 摺痕微光，強化「掀起」感 */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        225deg,
+        transparent 0 42%,
+        rgba(255, 255, 255, .55) 50%,
+        transparent 58%
+      );
+      pointer-events: none;
+    }
+    @keyframes cellPeekBreath {
+      0%, 100% { opacity: .82; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cell-peek { animation: none; opacity: .95; }
+    }
     /* 點水位／流量數字打開詳情；表頭「水位」「流量」仍負責排序 */
     .hrow:not(.head) .cell.scroll-col[data-open="water"] {
       cursor: pointer;
@@ -5415,6 +5456,17 @@
         0 18px 48px rgba(0, 0, 0, .58),
         0 0 0 1px rgba(0, 0, 0, .45),
         inset 0 1px 0 rgba(255, 255, 255, .14);
+    }
+    html[data-theme="dark"] .cell-peek {
+      background: linear-gradient(
+        225deg,
+        transparent 0 45%,
+        rgba(210, 222, 236, .45) 48%,
+        #4a5566 51%,
+        #2f3744 70%,
+        #3a4454 100%
+      );
+      box-shadow: -1px -1px 1.5px rgba(0, 0, 0, .35);
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
@@ -11999,6 +12051,8 @@
         "</div>";
 
       const jtBestWin = jtBestCollabWinNos();
+      /* 每列僅在首個可開彈窗的格子加揭頁角，避免整列噪音 */
+      const cellPeekShown = {};
       const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
@@ -12044,6 +12098,7 @@
           const top4 = raceHasPayout(currentMeet()) && fin != null && fin >= 1 && fin <= 4;
           let extraCls = "";
           let wmHtml = "";
+          let peekHtml = "";
           if (top4 && c.key === "hw") {
             extraCls = " finish-wm-host finish-pos-" + fin;
             wmHtml =
@@ -12056,8 +12111,13 @@
           if ((c.key === "jockey" || c.key === "trainer") && !r.scratched && jtBestWin[String(r.no)]) {
             extraCls += " is-jt-best-win";
           }
+          if (openAttr && !cellPeekShown[c.key]) {
+            cellPeekShown[c.key] = true;
+            extraCls += " has-cell-peek";
+            peekHtml = '<span class="cell-peek" aria-hidden="true"></span>';
+          }
           return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openAttr + ">" +
-            wmHtml + cellValue(c, r) + "</div>";
+            wmHtml + cellValue(c, r) + peekHtml + "</div>";
         }).join("");
         return '<div class="hrow' + alt + scratch + markCls + '" data-no="' + esc(r.no) + '">' + lock + cells + "</div>";
       }).join("");
