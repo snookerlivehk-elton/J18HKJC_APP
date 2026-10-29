@@ -3124,8 +3124,8 @@
     }
     .tr-lb-sum {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
-      gap: 6px;
+      grid-template-columns: 26px minmax(0, 1fr) 40px auto;
+      gap: 5px;
       align-items: center;
       width: 100%;
       margin: 0;
@@ -3144,7 +3144,14 @@
       font-weight: 800;
       color: var(--nav);
     }
+    .tr-lb-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
     .tr-lb-name {
+      flex: 0 1 auto;
       min-width: 0;
       font-size: 12px;
       font-weight: 700;
@@ -3153,11 +3160,44 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* 本人上榜：金色 me 章＋列左側微強調，方便一眼定位 */
+    .tr-lb-me {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 16px;
+      padding: 0 5px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      line-height: 1;
+      text-transform: lowercase;
+      color: #3d2a06;
+      background: linear-gradient(180deg, #f0d078 0%, #d4a12e 100%);
+      border: 1px solid rgba(120, 78, 12, .4);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .45) inset, 0 1px 2px rgba(90, 60, 10, .18);
+    }
+    .tr-lb-row.is-me {
+      background: linear-gradient(90deg, rgba(212, 161, 46, .16) 0%, rgba(255, 255, 255, .88) 42%);
+      border-color: rgba(180, 130, 40, .32);
+      box-shadow: inset 3px 0 0 #d4a12e;
+    }
+    .tr-lb-plays {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--tr-muted);
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .tr-lb-prize {
       font-size: 12px;
       font-weight: 800;
       color: #9a5a10;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
     .tr-lb-detail {
       padding: 0 8px 6px;
@@ -3240,6 +3280,19 @@
     html[data-theme="dark"] .tr-stat-prize,
     html[data-theme="dark"] .tr-lb-prize {
       color: #f0d78a;
+    }
+    html[data-theme="dark"] .tr-lb-row.is-me {
+      background: linear-gradient(90deg, rgba(212, 161, 46, .22) 0%, #242b34 45%);
+      border-color: rgba(240, 215, 138, .28);
+      box-shadow: inset 3px 0 0 #d4a12e;
+    }
+    html[data-theme="dark"] .tr-lb-me {
+      color: #2a1e06;
+      background: linear-gradient(180deg, #e8c56a 0%, #c9962e 100%);
+      border-color: rgba(240, 215, 138, .45);
+    }
+    html[data-theme="dark"] .tr-lb-plays {
+      color: var(--tr-muted);
     }
     html[data-theme="dark"] .tr-lb-d-prize { color: #9ec4ef; }
     html[data-theme="dark"] .tr-help-btn {
@@ -6804,19 +6857,9 @@
       { key: "qpl", name: "孖寶", range: "全部號碼", help: "心水全部號碼同時包含冠亞、冠季或亞季任一對" },
       { key: "quartet", name: "四連環", range: "全部號碼", help: "心水全部號碼同時包含前四名" }
     ];
-    /* stats[key] = [勝場, 參與場, 細項獎金] */
-    const TIP_LEADERBOARD_DEMO = [
-      { id: "u1", name: "谷草快手", prize: 18640, stats: { win: [18, 42, 5200], qin: [12, 40, 3800], top3: [16, 40, 3200], fourth: [9, 38, 1400], tierce: [7, 36, 2100], qpl: [14, 40, 2200], quartet: [4, 32, 740] } },
-      { id: "u2", name: "沙田夜鷹", prize: 15220, stats: { win: [15, 48, 4300], qin: [11, 46, 3100], top3: [14, 46, 2700], fourth: [8, 44, 1200], tierce: [6, 40, 1700], qpl: [12, 46, 1800], quartet: [3, 30, 420] } },
-      { id: "u3", name: "欄位獵人", prize: 12880, stats: { win: [14, 50, 3600], qin: [10, 48, 2600], top3: [13, 48, 2300], fourth: [7, 45, 980], tierce: [5, 38, 1400], qpl: [11, 48, 1600], quartet: [3, 28, 400] } },
-      { id: "u4", name: "初段節奏", prize: 10950, stats: { win: [12, 44, 3100], qin: [9, 42, 2200], top3: [11, 42, 1900], fourth: [6, 40, 820], tierce: [4, 34, 1200], qpl: [10, 42, 1400], quartet: [2, 26, 330] } },
-      { id: "u5", name: "直路勁抽", prize: 9740, stats: { win: [11, 46, 2800], qin: [8, 44, 1900], top3: [10, 44, 1700], fourth: [6, 42, 760], tierce: [4, 36, 1100], qpl: [9, 44, 1200], quartet: [2, 24, 280] } },
-      { id: "u6", name: "班次升級", prize: 8620, stats: { win: [10, 40, 2500], qin: [7, 38, 1700], top3: [9, 38, 1500], fourth: [5, 36, 680], tierce: [3, 30, 900], qpl: [8, 38, 1100], quartet: [2, 22, 240] } },
-      { id: "u7", name: "泥地專家", prize: 7910, stats: { win: [9, 42, 2300], qin: [7, 40, 1600], top3: [8, 40, 1400], fourth: [5, 38, 640], tierce: [3, 32, 820], qpl: [7, 40, 980], quartet: [1, 20, 170] } },
-      { id: "u8", name: "外檔奇兵", prize: 6840, stats: { win: [8, 38, 2000], qin: [6, 36, 1400], top3: [7, 36, 1200], fourth: [4, 34, 520], tierce: [2, 28, 700], qpl: [6, 36, 860], quartet: [1, 18, 160] } },
-      { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36, 1800], qin: [5, 34, 1200], top3: [6, 34, 1050], fourth: [4, 32, 480], tierce: [2, 26, 620], qpl: [5, 34, 740], quartet: [1, 16, 130] } },
-      { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34, 1600], qin: [5, 32, 1100], top3: [6, 32, 980], fourth: [3, 30, 400], tierce: [2, 24, 560], qpl: [5, 32, 660], quartet: [1, 14, 110] } }
-    ];
+    /* 名家榜本人列：演示暱稱；接帳號後替換 name */
+    const TIP_RECORD_SELF_ID = "self";
+    const TIP_RECORD_SELF_NAME = "心水玩家";
     function tipStatTriple(pair) {
       const wins = Number(pair && pair[0]) || 0;
       const plays = Number(pair && pair[1]) || 0;
@@ -7118,25 +7161,90 @@
       if (tipRecordLbOpenIds[key]) delete tipRecordLbOpenIds[key];
       else tipRecordLbOpenIds[key] = true;
     }
-    function tipLeaderboardForScope(scope) {
-      /* 本賽季用完整演示榜；本日縮放獎金並重排，令排名可視差異 */
-      const season = TIP_LEADERBOARD_DEMO;
-      if (scope !== "day") return season.slice();
-      return season.map(function (u, i) {
-        const factor = 0.06 + ((i * 11) % 7) * 0.012;
-        const prize = Math.max(80, Math.round(Number(u.prize) * factor));
+    function tipLbPlays(u) {
+      if (u && u.plays != null) return Math.max(0, Math.round(Number(u.plays) || 0));
+      let m = 0;
+      TIP_STAT_DEFS.forEach(function (d) {
+        const t = tipStatTriple(u && u.stats && u.stats[d.key]);
+        if (t.plays > m) m = t.plays;
+      });
+      return m;
+    }
+    /* 名家榜名單＝名家貼士（不含指數策略行）；細項獎金與個人戰績同口徑便於對比 */
+    function tipFamousLeaderboardBase() {
+      return FAMOUS_TIPSTERS_DEMO.filter(function (t) {
+        return t && !t.indexStrategy;
+      }).map(function (t, i) {
+        const plays = Math.max(1, Number(t.plays) || 0);
+        const wins = Math.min(plays, Math.max(0, Number(t.wins) || 0));
+        const seed = Number(t.seed) || (i + 1);
         const stats = {};
-        TIP_STAT_DEFS.forEach(function (d) {
-          const s = (u.stats && u.stats[d.key]) || [0, 0, 0];
-          const plays = Math.max(1, Math.round((Number(s[1]) || 0) * 0.12));
-          const wins = Math.min(plays, Math.round((Number(s[0]) || 0) * factor * 1.4));
-          stats[d.key] = [wins, plays, Math.round((Number(s[2]) || 0) * factor)];
+        let prize = 0;
+        TIP_STAT_DEFS.forEach(function (d, di) {
+          const p = Math.max(1, plays - (di % 3));
+          const w = Math.min(p, Math.max(0, Math.round(wins * (0.95 - di * 0.09) + (seed % 2))));
+          const pr = Math.round(w * (160 + di * 12) + p * 3 + seed * 40);
+          stats[d.key] = [w, p, pr];
+          prize += pr;
         });
-        return { id: u.id, name: u.name, prize: prize, stats: stats };
-      }).sort(function (a, b) {
+        return { id: t.id, name: t.name, prize: prize, stats: stats, plays: plays, isSelf: false };
+      });
+    }
+    function tipSelfLeaderboardEntry(scope) {
+      const agg = tipAggregateStats(scope === "season" ? "season" : "day");
+      const stats = {};
+      let prize = 0;
+      let plays = 0;
+      TIP_STAT_DEFS.forEach(function (d) {
+        const s = agg[d.key] || { wins: 0, plays: 0, prize: 0 };
+        const pr = Math.round(Number(s.prize) || 0);
+        stats[d.key] = [Number(s.wins) || 0, Number(s.plays) || 0, pr];
+        prize += pr;
+        plays = Math.max(plays, Number(s.plays) || 0);
+      });
+      return {
+        id: TIP_RECORD_SELF_ID,
+        name: TIP_RECORD_SELF_NAME,
+        prize: prize,
+        stats: stats,
+        plays: plays,
+        isSelf: true
+      };
+    }
+    function tipLeaderboardForScope(scope) {
+      /* 名家貼士名單＋個人戰績同榜按獎金 Top 10；本日縮放名家演示量，個人用真實彙總 */
+      const sc = scope === "season" ? "season" : "day";
+      let list = tipFamousLeaderboardBase();
+      if (sc === "day") {
+        list = list.map(function (u, i) {
+          const factor = 0.08 + ((i * 11) % 7) * 0.015;
+          const stats = {};
+          let prize = 0;
+          TIP_STAT_DEFS.forEach(function (d) {
+            const s = (u.stats && u.stats[d.key]) || [0, 0, 0];
+            const plays = Math.max(1, Math.round((Number(s[1]) || 0) * 0.14));
+            const wins = Math.min(plays, Math.round((Number(s[0]) || 0) * factor * 1.5));
+            const pr = Math.round((Number(s[2]) || 0) * factor);
+            stats[d.key] = [wins, plays, pr];
+            prize += pr;
+          });
+          return {
+            id: u.id,
+            name: u.name,
+            prize: Math.max(80, prize),
+            stats: stats,
+            plays: tipLbPlays({ stats: stats }),
+            isSelf: false
+          };
+        });
+      }
+      list = list.concat([tipSelfLeaderboardEntry(sc)]);
+      list.sort(function (a, b) {
         if (b.prize !== a.prize) return b.prize - a.prize;
+        if (!!a.isSelf !== !!b.isSelf) return a.isSelf ? -1 : 1;
         return String(a.id).localeCompare(String(b.id));
       });
+      return list.slice(0, 10);
     }
     function renderTipRecordLbScopeSwitch(scope) {
       const sc = scope === "season" ? "season" : "day";
@@ -7155,6 +7263,10 @@
       const list = tipLeaderboardForScope(scope === "season" ? "season" : "day");
       return '<div class="tr-lb-list">' + list.map(function (u, idx) {
         const open = tipRecordLbIsOpen(u.id);
+        const plays = tipLbPlays(u);
+        const meTag = u.isSelf
+          ? '<span class="tr-lb-me" title="我的戰績" aria-label="我">me</span>'
+          : "";
         const detail = TIP_STAT_DEFS.map(function (d) {
           const t = tipStatTriple((u.stats && u.stats[d.key]) || [0, 0, 0]);
           return '<div class="tr-lb-detail-row">' +
@@ -7164,10 +7276,15 @@
             '<span class="tr-lb-d-prize">' + esc(tipFmtPrize(t.prize)) + "</span>" +
           "</div>";
         }).join("");
-        return '<div class="tr-lb-row' + (open ? " is-open" : "") + '" data-tr-user="' + esc(u.id) + '">' +
+        return '<div class="tr-lb-row' + (open ? " is-open" : "") + (u.isSelf ? " is-me" : "") +
+          '" data-tr-user="' + esc(u.id) + '">' +
           '<button type="button" class="tr-lb-sum" data-tr-user="' + esc(u.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' +
             '<span class="tr-lb-rank">' + (idx + 1) + "</span>" +
-            '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
+            '<span class="tr-lb-name-wrap">' +
+              '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
+              meTag +
+            "</span>" +
+            '<span class="tr-lb-plays">' + esc(plays + "場") + "</span>" +
             '<span class="tr-lb-prize">' + esc(tipFmtPrize(u.prize)) + "</span>" +
           "</button>" +
           '<div class="tr-lb-detail"' + (open ? "" : " hidden") + ">" + detail + "</div>" +
