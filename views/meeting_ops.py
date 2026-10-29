@@ -691,7 +691,19 @@ for stage, label in STAGES:
                 )
             last_res = st.session_state.get("ops_results_result")
             if last_res:
-                if last_res.get("ok"):
+                if last_res.get("waiting"):
+                    st.warning(
+                        last_res.get("detail")
+                        or "賽果尚未就緒（已自動嘗試上游 results fetch）"
+                    )
+                    uf = last_res.get("upstream_fetch") or {}
+                    if uf:
+                        st.caption(
+                            f"upstream fetch：ok={uf.get('ok')} "
+                            f"race_count={uf.get('race_count')} "
+                            f"err={uf.get('error') or '—'}"
+                        )
+                elif last_res.get("ok"):
                     st.success(
                         f"寫入 {last_res.get('runner_upserted')} 匹／"
                         f"{last_res.get('race_count')} 場"
@@ -700,6 +712,7 @@ for stage, label in STAGES:
                             if last_res.get("runner_sections_upserted") is not None
                             else ""
                         )
+                        + ("（含自動 fetch）" if last_res.get("auto_fetched") else "")
                     )
                     auto = last_res.get("auto_settle") or {}
                     if auto.get("settled_batches"):
@@ -709,7 +722,7 @@ for stage, label in STAGES:
                     elif auto.get("message"):
                         st.info(f"自動結算：{auto.get('message')}")
                 else:
-                    st.error(last_res.get("error") or last_res)
+                    st.error(last_res.get("error") or last_res.get("detail") or last_res)
         elif stage == "SETTLED":
             if a2.button("結算快照", key=f"act_set_{stage}", help=help_txt):
                 with st.spinner("settle…"):

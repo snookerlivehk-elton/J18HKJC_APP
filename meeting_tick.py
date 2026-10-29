@@ -1636,6 +1636,7 @@ class MeetingTickRunner:
             else:
                 result = self.pipe.run_action(d, c, "sync_jjjc_results")
                 ok = bool(result.get("ok"))
+                waiting = bool(result.get("waiting"))
                 detail = str(
                     result.get("error")
                     or result.get("msg")
@@ -1643,12 +1644,23 @@ class MeetingTickRunner:
                     or ""
                 )
                 err = str(result.get("error") or "")
-                if ok:
+                # 以歷史庫 readiness 為準：sync 後再 check，避免空 export 誤標 ok
+                ready_after = self.pipe.refresh_readiness(d, c)
+                results_ready = str(
+                    (ready_after.get("RESULTS") or {}).get("status") or ""
+                )
+                if results_ready == STATUS_OK:
                     status = STATUS_OK
                     count_as_success = True
-                elif "尚未" in err or "無賽果" in err or "empty" in err.lower():
+                elif waiting or "尚未" in err or "無賽果" in detail or "empty" in (
+                    err or detail
+                ).lower():
                     status = STATUS_WAITING
-                    count_as_success = True  # 官方未上架：唔累加 fail_count
+                    count_as_success = True  # 官方未上架／已 auto-fetch 仍空：唔累加 fail
+                elif ok:
+                    # sync 自稱 ok 但 check 仍未齊（部分場）→ waiting
+                    status = STATUS_WAITING
+                    count_as_success = True
                 else:
                     status = STATUS_FAILED
                     count_as_success = False
@@ -1658,16 +1670,30 @@ class MeetingTickRunner:
                     "RESULTS",
                     ok=count_as_success,
                     status=status,
-                    detail=detail or err,
+                    detail=detail or err or str((ready_after.get("RESULTS") or {}).get("detail") or ""),
                 )
-                action_rec["ok"] = ok
+                action_rec["ok"] = ok and not waiting and results_ready == STATUS_OK
+                action_rec["waiting"] = status == STATUS_WAITING
                 action_rec["result"] = {
                     k: result.get(k)
-                    for k in ("ok", "error", "n_races", "n_runners", "msg", "runner_sections_upserted")
+                    for k in (
+                        "ok",
+                        "waiting",
+                        "error",
+                        "detail",
+                        "n_races",
+                        "n_runners",
+                        "msg",
+                        "runner_sections_upserted",
+                        "auto_fetched",
+                        "upstream_fetch",
+                        "race_count",
+                        "runner_upserted",
+                    )
                     if k in result
                 } or result
                 # 刷新 readiness
-                out["readiness_after_sync"] = self.pipe.refresh_readiness(d, c)
+                out["readiness_after_sync"] = ready_after
                 # R2 分段：試 jjjc sectionals export（暫無則 waiting，唔 fail）
                 try:
                     sec = self.pipe.run_action(d, c, "sync_jjjc_sectionals")

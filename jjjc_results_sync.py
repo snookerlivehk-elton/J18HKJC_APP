@@ -331,6 +331,69 @@ def fetch_export(
     return payload
 
 
+def _results_fetch_timeout() -> float:
+    try:
+        return float(os.getenv("JJJC_RESULTS_FETCH_TIMEOUT", "120") or 120)
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def trigger_results_fetch(
+    race_date: str,
+    venue: str,
+    *,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    上游主動抓官方賽果：POST {base}/api/results/fetch?date=&venue=
+
+    export 空時必須先打呢步，否則 sync 永遠「無賽果」。
+    """
+    base = _api_base(base_url)
+    if not base:
+        return {"ok": False, "error": "未設定 JJJC_API_BASE"}
+    v = str(venue or "").strip().upper()
+    if v not in {"ST", "HV"}:
+        return {"ok": False, "error": f"venue 必須係 ST|HV，收到：{venue!r}"}
+    params = {"date": _normalize_date(race_date), "venue": v}
+    url = f"{base}/api/results/fetch"
+    to = float(timeout if timeout is not None else _results_fetch_timeout())
+    try:
+        with httpx.Client(timeout=to, follow_redirects=True) as client:
+            r = client.post(url, params=params)
+        body: Dict[str, Any]
+        try:
+            parsed = r.json()
+            body = parsed if isinstance(parsed, dict) else {"raw": parsed}
+        except Exception:
+            body = {"raw_text": (r.text or "")[:300]}
+        if r.status_code >= 400:
+            return {
+                "ok": False,
+                "status_code": r.status_code,
+                "error": f"HTTP {r.status_code}",
+                "url": url,
+                "response": body,
+            }
+        race_count = _safe_int(body.get("race_count"))
+        runner_count = _safe_int(body.get("runner_count"))
+        ok = bool(body.get("ok", True))
+        return {
+            "ok": ok,
+            "status_code": r.status_code,
+            "url": url,
+            "race_date": body.get("race_date") or params["date"],
+            "venue_code": body.get("venue_code") or v,
+            "race_count": race_count,
+            "runner_count": runner_count,
+            "race_ids": body.get("race_ids"),
+            "response": body,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300], "url": url}
+
+
 def load_payload_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
@@ -923,8 +986,15 @@ def sync_meeting(
     race_no: Optional[int] = None,
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
+    *,
+    auto_fetch: bool = True,
 ) -> Dict[str, Any]:
-    """拉取（或讀檔）後 upsert；供 CLI 與 meeting_pipeline 呼叫。"""
+    """拉取（或讀檔）後 upsert；供 CLI 與 meeting_pipeline／meeting_tick 呼叫。
+
+    export 空時（預設）會先 POST /api/results/fetch 再重試 export，
+    避免 tick 永遠卡在「無賽果」而上游其實只差一槍 fetch。
+    """
+    upstream_fetch: Optional[Dict[str, Any]] = None
     if from_file:
         payload = load_payload_file(from_file)
     else:
@@ -934,16 +1004,63 @@ def sync_meeting(
             race_no=race_no,
             base_url=base_url,
         )
-    # 若 API 尚無資料，允許空 races
-    if not payload.get("races") and not from_file:
+        # export 空 → 主動 fetch → 再 export（完整自動鏈）
+        if auto_fetch and not list(payload.get("races") or []):
+            upstream_fetch = trigger_results_fetch(
+                racing_date, course, base_url=base_url
+            )
+            # fetch 成功或即使部分成功都再讀一次；官方未上架則仍空
+            try:
+                payload = fetch_export(
+                    race_date=racing_date,
+                    venue=course,
+                    race_no=race_no,
+                    base_url=base_url,
+                )
+            except Exception as e:
+                return {
+                    "ok": False,
+                    "waiting": False,
+                    "error": f"results fetch 後 re-export 失敗：{e}",
+                    "upstream_fetch": upstream_fetch,
+                    "racing_date": _normalize_date(racing_date),
+                    "course": str(course or "").upper(),
+                }
+
+    races = list(payload.get("races") or [])
+    if not races and not from_file:
+        # 官方未上架／未來賽日：waiting（唔當硬失敗，tick 可按冷卻重試）
+        detail = "export 無賽果"
+        if upstream_fetch is not None:
+            if upstream_fetch.get("ok"):
+                detail = (
+                    "export 無賽果（已自動 results fetch；"
+                    f"fetch race_count={upstream_fetch.get('race_count') or 0}；"
+                    "官方可能尚未上架）"
+                )
+            else:
+                detail = (
+                    "export 無賽果（自動 results fetch 失敗："
+                    f"{upstream_fetch.get('error') or upstream_fetch.get('status_code')}）"
+                )
         return {
-            "ok": False,
-            "error": "export 無賽果（api_jjjc 可能尚未 fetch）。請先對該日跑 results fetch。",
+            "ok": True,
+            "waiting": True,
+            "error": None,
+            "detail": detail,
             "payload_keys": list(payload.keys()),
+            "upstream_fetch": upstream_fetch,
+            "racing_date": _normalize_date(racing_date),
+            "course": str(course or "").upper(),
+            "race_count": 0,
+            "runner_upserted": 0,
         }
     out = upsert_payload(payload)
     out["racing_date"] = _normalize_date(racing_date)
     out["course"] = course.upper()
+    if upstream_fetch is not None:
+        out["upstream_fetch"] = upstream_fetch
+        out["auto_fetched"] = True
     return out
 
 

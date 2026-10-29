@@ -437,6 +437,103 @@ class JjjcResultsSyncTest(unittest.TestCase):
             self.assertEqual(nos, list(range(1, 13)))
             self.assertEqual(ghost, 0)
 
+    def test_sync_meeting_auto_fetch_when_export_empty(self):
+        """export 空時應自動 POST /api/results/fetch，再 re-export 入庫。"""
+        from unittest.mock import patch
+
+        import jjjc_results_sync as sync
+
+        empty = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-10-28",
+            "venue_code": "ST",
+            "race_count": 0,
+            "runner_count": 0,
+            "races": [],
+        }
+        filled = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-10-28",
+            "venue_code": "ST",
+            "race_count": 1,
+            "runner_count": 1,
+            "races": [
+                {
+                    "race_id": "20261028ST01",
+                    "race_no": 1,
+                    "race_date": "2026-10-28",
+                    "venue_code": "ST",
+                    "runners": [
+                        {
+                            "horse_no": 1,
+                            "horse_name": "測試駒",
+                            "finish_position": 1,
+                            "finish_order_num": 1,
+                        }
+                    ],
+                }
+            ],
+        }
+        fetch_calls = {"n": 0}
+        export_calls = {"n": 0}
+
+        def _fake_export(**kwargs):
+            export_calls["n"] += 1
+            return empty if export_calls["n"] == 1 else filled
+
+        def _fake_fetch(race_date, venue, **kwargs):
+            fetch_calls["n"] += 1
+            return {
+                "ok": True,
+                "race_count": 1,
+                "runner_count": 1,
+                "race_date": race_date,
+                "venue_code": venue,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+            import etl_pipeline
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            with patch.object(sync, "fetch_export", side_effect=_fake_export), patch.object(
+                sync, "trigger_results_fetch", side_effect=_fake_fetch
+            ):
+                out = sync.sync_meeting("2026-10-28", "ST")
+
+            self.assertTrue(out.get("ok"), out)
+            self.assertTrue(out.get("auto_fetched"), out)
+            self.assertEqual(fetch_calls["n"], 1)
+            self.assertGreaterEqual(export_calls["n"], 2)
+            self.assertGreaterEqual(int(out.get("runner_upserted") or 0), 1)
+
+    def test_sync_meeting_still_empty_after_fetch_is_waiting(self):
+        from unittest.mock import patch
+
+        import jjjc_results_sync as sync
+
+        empty = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-11-01",
+            "venue_code": "HV",
+            "races": [],
+        }
+        with patch.object(sync, "fetch_export", return_value=empty), patch.object(
+            sync,
+            "trigger_results_fetch",
+            return_value={"ok": True, "race_count": 0, "runner_count": 0},
+        ):
+            out = sync.sync_meeting("2026-11-01", "HV")
+        self.assertTrue(out.get("ok"), out)
+        self.assertTrue(out.get("waiting"), out)
+        self.assertIn("無賽果", str(out.get("detail") or ""))
+
 
 if __name__ == "__main__":
     unittest.main()
