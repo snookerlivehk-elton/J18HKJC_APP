@@ -1487,20 +1487,13 @@ class MeetingPipeline:
             if action == "resync_results_sectionals":
                 from data_audit import resync_results_and_sectionals
 
+                # data_audit 內已含 sync_jjjc_results + R2 sectionals + 可選 raw 回填
                 out = resync_results_and_sectionals(
                     self,
                     racing_date,
                     course,
                     also_backfill=bool(kwargs.get("also_backfill", True)),
                 )
-                # 再試正式 R2 sectionals export（有就寫時間；無就 waiting）
-                try:
-                    from jjjc_sectionals_sync import sync_meeting as sync_sec
-
-                    sec = sync_sec(racing_date=racing_date, course=course)
-                    out["sectionals_export"] = sec
-                except Exception as e:
-                    out["sectionals_export"] = {"ok": False, "error": str(e)[:200]}
                 return out
 
             if action == "remediate_zh_names":

@@ -241,12 +241,13 @@ NLP／沿路走勢：賽後／遺留鏈（§11.4），不擋賽前 Form AI／正
 | 步驟 | 自動動作 | 成功 | 分支 |
 |------|----------|------|------|
 | R1 探賽果 | 輕探 export results | race_count>0、generated_at 新 | 空→waiting（尤其未到 +12h） |
-| R2 同步 | `sync_jjjc_results` | runners 有 finish_order_num | 空 export→waiting；HTTP 錯→failed |
+| R2 同步 | `sync_jjjc_results`（順路試 `sync_jjjc_sectionals`） | runners 有 finish_order_num | 空 export→waiting；HTTP 錯→failed；**空秒數唔代表正常** |
 | R2b 評述 | `sync_jjjc_text_reports` | text_reports 入庫 | 分場補齊→waiting 重探 |
 | R2c 整日 NLP | `run_nlp_meeting_chain` | 本賽日 `nlp_result`；可選 `apply_nlp` 因子 | 無待解析→ok；缺 API key→waiting；**不擋 R3** |
 | R3 結算 | `settle`（`settle_pending`） | batch `settled_at` | 無名次／未達 50%→waiting；無快照→跳過並記 detail |
 | R4 宣傳評估 | `evaluate_ad_promo_hits` | 可宣傳列表 | **無正式已結算快照 → 不跑／不廣告** |
 | R5 賽後文案 | 自動 `generate_post_race_copy`＋歸檔 | JSON＋可貼文 | 無命中或不滿足 R4 → 不觸發 |
+| R6 分段秒數晚補 | `SECTIONALS_TIMES` pass（`MEETING_TICK_AUTO_SECTIONALS_TIMES`） | `runner_sections.sectional_time` 覆蓋≥80% | 賽後未滿 5 日跳過；上游 empty→waiting 冷卻；可調 `SECTIONALS_MIN/MAX_AGE_DAYS`／`LIMIT` |
 
 ### 4.3 與 JJJC +12h 對齊
 
@@ -292,6 +293,8 @@ UI：`views/meeting_ops.py`（放行／略過／清除覆寫／各 stage 手動�
 - `MEETING_TICK_MODE=all|pre_race|post_race`
 - `MEETING_TICK_AUTO_FACTORS`／`AUTO_FORM_AI`／`AUTO_SNAPSHOT`（預設 true）
 - `MEETING_TICK_AUTO_SOCIAL_COPY`／`AUTO_PROMO_HITS`／`AUTO_POST_RACE_COPY`（預設 true；Phase D）
+- `MEETING_TICK_AUTO_SECTIONALS_TIMES`（預設 true；賽後≥5 日掃缺秒數並拉 R2）
+- `MEETING_TICK_SECTIONALS_MIN_AGE_DAYS`（預設 5）／`MAX_AGE_DAYS`（預設 120）／`LIMIT`（每輪最多 8）
 - `AD_SOCIAL_TONE`（賽前／賽後文案語氣；預設跟 `ad_llm_copy.DEFAULT_TONE`）
 - 正式快照**不會**在閘門未齊時自動出 provisional
 - 文案冪等：`ad_output/archive/{date}_{course}/{social|promo_hits|post_race}_latest.json` 以 `batch_id` 去重

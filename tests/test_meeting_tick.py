@@ -624,5 +624,134 @@ class HelpersTest(unittest.TestCase):
         )
 
 
+class SectionalsTimesPassTest(unittest.TestCase):
+    def test_run_sectionals_times_pass_syncs_and_records(self):
+        from unittest.mock import patch
+
+        import data_audit as da
+        from meeting_tick import MeetingTickRunner, TickGuards, SECTIONALS_TIMES_STAGE
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(force=True)
+        runner.get_tick_state = MagicMock(
+            return_value={
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": None,
+                "last_detail": None,
+            }
+        )
+        runner.record_tick_attempt = MagicMock()
+
+        candidates = [
+            {
+                "racing_date": "2026-09-16",
+                "course": "HV",
+                "age_days": 10,
+                "sectional_time_coverage": 0.0,
+            }
+        ]
+        sync_out = {
+            "ok": True,
+            "waiting": False,
+            "sectional_times_ok": True,
+            "inventory": {
+                "sectional_time_coverage": 1.0,
+                "sectional_times_ok": True,
+                "status": "ok",
+            },
+            "sectionals_export": {
+                "ok": True,
+                "waiting": False,
+                "status": "ready",
+                "runner_sections_upserted": 20,
+            },
+        }
+        with patch.object(
+            da, "list_meetings_missing_sectional_times", return_value=candidates
+        ), patch.object(
+            da, "sync_sectional_times_for_meeting", return_value=sync_out
+        ):
+            out = runner.run_sectionals_times_pass(
+                as_of=date(2026, 9, 26), dry_run=False, limit=5
+            )
+
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["n_processed"], 1)
+        self.assertEqual(out["n_ok"], 1)
+        runner.record_tick_attempt.assert_called_with(
+            "2026-09-16",
+            "HV",
+            SECTIONALS_TIMES_STAGE,
+            ok=True,
+            status="ok",
+            detail=ANY,
+        )
+
+    def test_run_sectionals_times_pass_waiting_not_fail(self):
+        from unittest.mock import patch
+
+        import data_audit as da
+        from meeting_tick import MeetingTickRunner, TickGuards, SECTIONALS_TIMES_STAGE
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(force=True)
+        runner.get_tick_state = MagicMock(
+            return_value={
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": "waiting",
+                "last_detail": None,
+            }
+        )
+        runner.record_tick_attempt = MagicMock()
+        candidates = [
+            {
+                "racing_date": "2026-10-01",
+                "course": "ST",
+                "age_days": 6,
+                "sectional_time_coverage": 0.0,
+            }
+        ]
+        sync_out = {
+            "ok": True,
+            "waiting": True,
+            "sectional_times_ok": False,
+            "inventory": {
+                "sectional_time_coverage": 0.0,
+                "sectional_times_ok": False,
+                "status": "partial",
+            },
+            "sectionals_export": {"ok": True, "waiting": True, "status": "empty"},
+        }
+        with patch.object(
+            da, "list_meetings_missing_sectional_times", return_value=candidates
+        ), patch.object(
+            da, "sync_sectional_times_for_meeting", return_value=sync_out
+        ):
+            out = runner.run_sectionals_times_pass(
+                as_of=date(2026, 10, 7), dry_run=False, limit=3
+            )
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["n_waiting"], 1)
+        self.assertEqual(out["n_failed"], 0)
+        runner.record_tick_attempt.assert_called_with(
+            "2026-10-01",
+            "ST",
+            SECTIONALS_TIMES_STAGE,
+            ok=True,
+            status="waiting",
+            detail=ANY,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

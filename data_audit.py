@@ -391,10 +391,15 @@ def resync_results_and_sectionals(
     also_backfill: bool = True,
 ) -> Dict[str, Any]:
     """
-    重跑賽果同步（會寫 runner_sections）+ 可選 raw_json 回填保險。
+    重跑賽果同步（會寫 runner_sections）+ R2 分段秒數 + 可選 raw_json 回填保險。
     pipe: MeetingPipeline 實例。
     """
     sync_out = pipe.run_action(racing_date, course, "sync_jjjc_results")
+    sec_out = None
+    try:
+        sec_out = pipe.run_action(racing_date, course, "sync_jjjc_sectionals")
+    except Exception as e:
+        sec_out = {"ok": False, "error": str(e)[:200]}
     bf_out = None
     if also_backfill and getattr(pipe, "engine", None) is not None:
         bf_out = backfill_meeting_sectionals(pipe.engine, racing_date, course)
@@ -402,9 +407,164 @@ def resync_results_and_sectionals(
     return {
         "ok": bool(sync_out.get("ok")),
         "sync": sync_out,
+        "sectionals_export": sec_out,
         "backfill": bf_out,
         "inventory": inv,
+        "sectional_times_ok": bool(inv.get("sectional_times_ok")),
     }
+
+
+def list_meetings_missing_sectional_times(
+    engine,
+    *,
+    as_of: Optional[Any] = None,
+    min_age_days: int = 5,
+    max_age_days: int = 120,
+    limit: int = 40,
+    min_time_coverage: float = 0.8,
+) -> List[Dict[str, Any]]:
+    """
+    已有名次但分段秒數未齊嘅歷史賽日。
+
+    官網分段通常賽後約第 5 日齊 → min_age_days 預設 5。
+    回傳按賽日新→舊；每項含 inventory 摘要。
+    """
+    from datetime import date, datetime, timedelta
+
+    if as_of is None:
+        today = date.today()
+    elif isinstance(as_of, datetime):
+        today = as_of.date()
+    elif isinstance(as_of, date):
+        today = as_of
+    else:
+        today = date.fromisoformat(str(as_of)[:10])
+
+    min_age = max(0, int(min_age_days))
+    max_age = max(min_age, int(max_age_days))
+    newest = today - timedelta(days=min_age)
+    oldest = today - timedelta(days=max_age)
+
+    q = text(
+        """
+        SELECT substr(race_id, 1, 8) AS d8,
+               UPPER(substr(race_id, 9, 2)) AS course,
+               COUNT(DISTINCT race_id) AS race_n,
+               SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS finish_n
+        FROM runners
+        WHERE finish_order_num IS NOT NULL
+          AND length(race_id) >= 10
+        GROUP BY 1, 2
+        ORDER BY 1 DESC
+        """
+    )
+    df = pd.read_sql(q, engine)
+    out: List[Dict[str, Any]] = []
+    if df is None or df.empty:
+        return out
+
+    for row in df.itertuples(index=False):
+        d8 = str(getattr(row, "d8") or "")
+        course = str(getattr(row, "course") or "").upper()
+        if len(d8) != 8 or course not in {"ST", "HV"}:
+            continue
+        try:
+            rd = date(int(d8[:4]), int(d8[4:6]), int(d8[6:8]))
+        except ValueError:
+            continue
+        if rd < oldest or rd > newest:
+            continue
+        racing_date = rd.isoformat()
+        inv = meeting_inventory(engine, racing_date, course)
+        if not inv.get("finish_ok"):
+            continue
+        if float(inv.get("sectional_time_coverage") or 0) >= float(min_time_coverage):
+            continue
+        out.append(
+            {
+                "racing_date": racing_date,
+                "course": course,
+                "age_days": (today - rd).days,
+                "finish_n": int(inv.get("finish_n") or 0),
+                "with_sectional_times": int(inv.get("with_sectional_times") or 0),
+                "sectional_time_coverage": float(
+                    inv.get("sectional_time_coverage") or 0
+                ),
+                "gaps": list(inv.get("gaps") or []),
+                "status": inv.get("status"),
+            }
+        )
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
+def sync_sectional_times_for_meeting(
+    pipe,
+    racing_date: str,
+    course: str,
+    *,
+    also_backfill: bool = True,
+    also_resync_results: bool = False,
+) -> Dict[str, Any]:
+    """
+    補齊單日分段秒數：優先 R2 jjjc.sectionals.v1，再 raw_json 回填。
+    可選重跑 results（較重；日常 late-backfill 唔使）。
+    """
+    d = str(racing_date)[:10]
+    c = str(course or "").upper()
+    out: Dict[str, Any] = {
+        "ok": True,
+        "racing_date": d,
+        "course": c,
+        "action": "sync_sectional_times",
+    }
+    if also_resync_results:
+        try:
+            out["sync"] = pipe.run_action(d, c, "sync_jjjc_results", skip_sectionals=True)
+        except Exception as e:
+            out["sync"] = {"ok": False, "error": str(e)[:200]}
+    try:
+        sec = pipe.run_action(d, c, "sync_jjjc_sectionals")
+        out["sectionals_export"] = sec
+        if sec.get("waiting"):
+            out["waiting"] = True
+        if sec.get("ok") is False:
+            out["ok"] = False
+            out["error"] = sec.get("error") or sec.get("detail")
+    except Exception as e:
+        out["ok"] = False
+        out["waiting"] = False
+        out["sectionals_export"] = {"ok": False, "error": str(e)[:200]}
+        out["error"] = str(e)[:200]
+
+    if also_backfill and getattr(pipe, "engine", None) is not None:
+        try:
+            out["backfill"] = backfill_meeting_sectionals(pipe.engine, d, c)
+        except Exception as e:
+            out["backfill"] = {"ok": False, "error": str(e)[:200]}
+
+    inv = meeting_inventory(pipe.engine, d, c)
+    out["inventory"] = {
+        k: inv.get(k)
+        for k in (
+            "finish_n",
+            "with_sections",
+            "with_sectional_times",
+            "sectional_time_coverage",
+            "sectional_times_ok",
+            "gaps",
+            "status",
+        )
+    }
+    out["sectional_times_ok"] = bool(inv.get("sectional_times_ok"))
+    if out.get("sectional_times_ok"):
+        out["waiting"] = False
+        out["ok"] = True
+    elif out.get("waiting") is None and not out.get("sectional_times_ok"):
+        # 上游可能仍 empty；標 waiting 方便 tick 冷卻重試
+        out["waiting"] = True
+    return out
 
 
 def race_field_size_warning(engine, race_id: str) -> Optional[str]:
