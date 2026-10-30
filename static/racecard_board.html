@@ -1347,7 +1347,7 @@
       display: flex;
       flex-direction: column;
     }
-    /* 縱向：board-wrap；橫向馬匹：board-x；連贏在 board-x 外，左右滑互不干擾 */
+    /* 縱向：board-wrap；橫向馬匹：board-x；連贏／走位圖在 board-x 外，左右滑互不干擾 */
     .board-wrap {
       flex: 1 1 auto;
       min-height: 0;
@@ -1435,11 +1435,13 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: none; }
     }
-    /* 水位頁：只蓋住馬匹列表（board-main 起），不遮場次／賽道信息 */
-    .board-shell.is-water-open #board {
+    /* 水位／速勢走位：只蓋住馬匹列表（board-main 起），不遮場次／賽道信息 */
+    .board-shell.is-water-open #board,
+    .board-shell.is-speed-map-open #board {
       overflow: hidden;
     }
-    .water-sheet {
+    .water-sheet,
+    .speed-map-sheet {
       position: absolute;
       left: 0;
       right: 0;
@@ -1453,7 +1455,8 @@
       animation: horseSheetIn .22s ease-out;
       overflow: hidden;
     }
-    .water-sheet[hidden] { display: none !important; }
+    .water-sheet[hidden],
+    .speed-map-sheet[hidden] { display: none !important; }
     #waterSheetZoom {
       flex: 1 1 auto;
       min-height: 0;
@@ -1481,19 +1484,9 @@
       letter-spacing: .06em;
       line-height: 1.15;
     }
-    .water-sheet-title .sub {
-      display: block;
-      margin-top: 3px;
-      font-size: 12px;
-      opacity: .9;
-      line-height: 1.25;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
     .water-sheet-close {
       position: absolute;
-      top: 8px;
+      top: 4px;
       right: 8px;
       width: 32px;
       height: 32px;
@@ -1883,6 +1876,22 @@
     .water-row.is-wh-cross-row > .water-lock {
       box-shadow: 2px 0 4px rgba(45, 62, 80, .06), inset 0 0 0 1px rgba(47, 86, 73, .4);
     }
+    /* 可開彈窗列：表頭居中靠下靜態橙色半圓角標 */
+    .hrow.head .cell.scroll-col.has-cell-peek {
+      position: relative;
+    }
+    .cell-peek {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      z-index: 3;
+      pointer-events: none;
+      width: 10px;
+      height: 5px;
+      margin-left: -5px;
+      border-radius: 10px 10px 0 0;
+      background: #e67e22;
+    }
     /* 點水位／流量數字打開詳情；表頭「水位」「流量」仍負責排序 */
     .hrow:not(.head) .cell.scroll-col[data-open="water"] {
       cursor: pointer;
@@ -1906,6 +1915,15 @@
     }
     .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
       background: rgba(61, 90, 128, .1);
+    }
+    /* 本場騎練合作勝出率最高：騎師／練馬師名紅底線 */
+    .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v:not(.stacked),
+    .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v.stacked > .nm {
+      text-decoration: underline;
+      text-decoration-color: #e53935;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 2px;
+      text-decoration-skip-ink: none;
     }
     .horse-sheet-bar {
       position: relative;
@@ -2722,10 +2740,30 @@
       letter-spacing: .02em;
     }
     .jt-collab-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
       font-size: 13px;
       font-weight: 600;
       line-height: 1.45;
       color: var(--muted);
+    }
+    .jt-sum-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .jt-sum-rates {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      white-space: nowrap;
+      line-height: 1.35;
+    }
+    .jt-sum-rate {
+      font-variant-numeric: tabular-nums;
     }
     .jt-collab-list {
       display: flex;
@@ -2782,6 +2820,7 @@
       overflow: hidden;
       height: auto;
       max-height: 100%;
+      /* 外框寬度沿用 .cal-sheet（min(342px, 100%)），不拉滿視窗 */
       margin-bottom: 0;
       padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
       box-sizing: border-box;
@@ -2852,7 +2891,28 @@
       gap: 4px 6px;
       margin-bottom: 5px;
     }
-    .tr-sec-head .tr-sec-title { margin: 0; flex: 1 1 auto; }
+    .tr-sec-head .tr-sec-title {
+      margin: 0;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    /* 名家榜：標題與本日／本賽季膠囊強制同行 */
+    .tr-sec.tr-board .tr-sec-head {
+      flex-wrap: nowrap;
+      gap: 4px;
+    }
+    .tr-sec.tr-board .tr-sec-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tr-sec.tr-board .tr-scope {
+      flex: 0 0 auto;
+      min-width: 118px;
+      width: 118px;
+    }
     /* 本日／本賽季：對齊筆記膠囊彈力滑塊 */
     .tr-scope {
       position: relative;
@@ -3109,8 +3169,8 @@
     }
     .tr-lb-sum {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
-      gap: 6px;
+      grid-template-columns: 26px minmax(0, 1fr) 40px auto;
+      gap: 5px;
       align-items: center;
       width: 100%;
       margin: 0;
@@ -3129,7 +3189,14 @@
       font-weight: 800;
       color: var(--nav);
     }
+    .tr-lb-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
     .tr-lb-name {
+      flex: 0 1 auto;
       min-width: 0;
       font-size: 12px;
       font-weight: 700;
@@ -3138,11 +3205,44 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* 本人上榜：金色 me 章＋列左側微強調，方便一眼定位 */
+    .tr-lb-me {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 16px;
+      padding: 0 5px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      line-height: 1;
+      text-transform: lowercase;
+      color: #3d2a06;
+      background: linear-gradient(180deg, #f0d078 0%, #d4a12e 100%);
+      border: 1px solid rgba(120, 78, 12, .4);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .45) inset, 0 1px 2px rgba(90, 60, 10, .18);
+    }
+    .tr-lb-row.is-me {
+      background: linear-gradient(90deg, rgba(212, 161, 46, .16) 0%, rgba(255, 255, 255, .88) 42%);
+      border-color: rgba(180, 130, 40, .32);
+      box-shadow: inset 3px 0 0 #d4a12e;
+    }
+    .tr-lb-plays {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--tr-muted);
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .tr-lb-prize {
       font-size: 12px;
       font-weight: 800;
       color: #9a5a10;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
     .tr-lb-detail {
       padding: 0 8px 6px;
@@ -3226,6 +3326,19 @@
     html[data-theme="dark"] .tr-lb-prize {
       color: #f0d78a;
     }
+    html[data-theme="dark"] .tr-lb-row.is-me {
+      background: linear-gradient(90deg, rgba(212, 161, 46, .22) 0%, #242b34 45%);
+      border-color: rgba(240, 215, 138, .28);
+      box-shadow: inset 3px 0 0 #d4a12e;
+    }
+    html[data-theme="dark"] .tr-lb-me {
+      color: #2a1e06;
+      background: linear-gradient(180deg, #e8c56a 0%, #c9962e 100%);
+      border-color: rgba(240, 215, 138, .45);
+    }
+    html[data-theme="dark"] .tr-lb-plays {
+      color: var(--tr-muted);
+    }
     html[data-theme="dark"] .tr-lb-d-prize { color: #9ec4ef; }
     html[data-theme="dark"] .tr-help-btn {
       background: #2a313c;
@@ -3263,12 +3376,49 @@
     }
     .famous-tips-sheet .cal-head {
       flex: 0 0 auto;
-      margin-bottom: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      gap: 8px;
     }
-    .famous-tips-sheet .cal-title {
+    .famous-tips-sheet .ft-head-text {
       flex: 1 1 auto;
       min-width: 0;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0 6px;
+      row-gap: 2px;
+    }
+    .famous-tips-sheet .cal-title {
+      flex: 0 0 auto;
+      min-width: 0;
       text-align: left;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      line-height: 1.25;
+      white-space: nowrap;
+      padding: 2px 0 0;
+      color: var(--text);
+    }
+    .famous-tips-sheet .ft-head-meta {
+      flex: 1 1 12em;
+      min-width: 0;
+      margin: 0;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0;
+      line-height: 1.25;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      color: #5b6575;
+      padding: 3px 0 0;
+    }
+    .famous-tips-sheet .cal-close {
+      flex: 0 0 auto;
+      margin-top: -2px;
     }
     .famous-tips-sheet-body {
       flex: 0 1 auto;
@@ -3334,6 +3484,7 @@
       align-items: center;
       gap: 6px;
       min-height: 28px;
+      min-width: 0;
       padding: 4px 8px;
       border-radius: 8px;
       background: #f5f8fc;
@@ -3350,10 +3501,16 @@
     }
     .ft-finish-nos {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 4px;
       align-items: center;
       min-width: 0;
+      flex: 1 1 auto;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
     }
     .ft-finish-empty {
       font-size: 11px;
@@ -3379,6 +3536,21 @@
       align-items: baseline;
       gap: 4px 8px;
       margin-bottom: 5px;
+    }
+    .ft-sec.ft-agg .ft-sec-head {
+      align-items: center;
+    }
+    .ft-sec.ft-agg .ft-sec-title {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .ft-sec.ft-agg .ft-sec-hint {
+      flex: 1 1 12em;
+      min-width: 0;
+    }
+    .ft-sec.ft-agg .ft-help-btn {
+      flex: 0 0 auto;
+      margin-left: auto;
     }
     .ft-sec-title {
       display: flex;
@@ -3412,13 +3584,37 @@
       gap: 4px;
       align-items: center;
     }
-    .ft-agg-meta {
-      margin-top: 4px;
+    .ft-help-btn {
+      margin: 0;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .8);
+      color: var(--ft-muted);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ft-help-btn[aria-expanded="true"] {
+      background: #eef2f6;
+      color: var(--text);
+    }
+    .ft-help {
+      margin: 4px 0 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .65);
+      border: 1px solid rgba(45, 62, 80, .08);
       font-size: 11px;
       font-weight: 600;
+      line-height: 1.4;
       color: var(--ft-muted);
-      line-height: 1.35;
     }
+    .ft-help[hidden] { display: none !important; }
+    .ft-help b { color: var(--text); font-weight: 700; }
     .ft-list {
       display: flex;
       flex-direction: column;
@@ -3452,6 +3648,34 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .ft-fav {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #9aa5b5;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ft-fav svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+    .ft-fav.is-on {
+      color: #e74c3c;
+    }
+    .ft-fav:focus-visible {
+      outline: 2px solid var(--orange);
+      outline-offset: 1px;
+    }
     .ft-rate {
       flex: 0 0 auto;
       font-size: 11px;
@@ -3477,6 +3701,25 @@
     }
     html[data-theme="dark"] .cal-sheet.famous-tips-sheet {
       --ft-muted: #c8d0dc;
+    }
+    html[data-theme="dark"] .famous-tips-sheet .ft-head-meta {
+      color: #c8d0dc;
+    }
+    html[data-theme="dark"] .ft-fav:not(.is-on) {
+      color: #7a8698;
+    }
+    html[data-theme="dark"] .ft-help {
+      background: rgba(36, 43, 52, .85);
+      border-color: rgba(210, 222, 236, .12);
+    }
+    html[data-theme="dark"] .ft-help-btn {
+      background: rgba(36, 43, 52, .9);
+      border-color: rgba(210, 222, 236, .18);
+      color: var(--ft-muted);
+    }
+    html[data-theme="dark"] .ft-help-btn[aria-expanded="true"] {
+      background: #2a323c;
+      color: var(--text);
     }
     html[data-theme="dark"] .ft-sticky {
       background: linear-gradient(180deg, #1e2430 70%, rgba(30, 36, 48, 0));
@@ -4073,6 +4316,40 @@
       --qin-cell: 24px;
       --qin-title-w: 24px;
     }
+    /* 排位頁底部走位圖：接在連贏下；圖放大可橫滑，豎向隨頁展開 */
+    .board-speed-map {
+      position: relative;
+      z-index: 2;
+      box-sizing: border-box;
+      width: 100%;
+      background: #eef1f5;
+      border-top: 8px solid #eef1f5;
+      padding: 0 0 12px;
+    }
+    .board-speed-map-head {
+      padding: 8px 10px 6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .board-speed-map-body {
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y;
+      background: #f3f5f8;
+      max-height: none;
+    }
+    .board-speed-map-body img {
+      display: block;
+      width: 180%;
+      max-width: none;
+      height: auto;
+      vertical-align: top;
+    }
     .qin-block {
       background: #fff;
       position: relative;
@@ -4621,34 +4898,64 @@
     }
     .cal-nav:active { background: #e2e8f0; }
     .cal-close:active { background: #f0f3f7; }
-    /* 速勢走位圖：與賽期彈窗同殼；圖可內滾 */
-    .speed-map-sheet .cal-head {
-      margin-bottom: 8px;
+    /* 速勢走位圖：水位同款全幅殼；圖放大後可左右滑 */
+    .speed-map-bar {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 44px 10px 12px;
+      background: linear-gradient(180deg, #3a5f8a 0%, #2c4a6e 100%);
+      color: #fff;
     }
-    .speed-map-sheet .cal-title {
-      flex: 1 1 auto;
+    .speed-map-title {
       min-width: 0;
-      text-align: left;
-      padding-left: 2px;
+      flex: 1 1 auto;
     }
-    .speed-map-meta {
-      margin: 0 0 8px;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1.35;
-      color: var(--muted);
-      letter-spacing: .02em;
+    .speed-map-title .nm {
+      display: block;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      line-height: 1.15;
     }
+    .speed-map-close {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(255,255,255,.14);
+      color: #fff;
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .speed-map-close:active { background: rgba(255,255,255,.28); }
     .speed-map-body {
+      flex: 1 1 auto;
+      min-height: 0;
       overflow: auto;
+      overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
-      max-height: min(62vh, 520px);
-      border-radius: 10px;
+      touch-action: pan-x pan-y;
+      padding: 0;
       background: #f3f5f8;
+      box-sizing: border-box;
     }
     .speed-map-body img {
       display: block;
-      width: 100%;
+      /* 放大：寬度超過可視區，左右滑查看 */
+      width: 180%;
+      max-width: none;
       height: auto;
       vertical-align: top;
     }
@@ -5125,14 +5432,18 @@
         0 0 0 1px rgba(0, 0, 0, .45),
         inset 0 1px 0 rgba(255, 255, 255, .14);
     }
-    html[data-theme="dark"] .speed-map-body {
-      background: #1e242c;
+    html[data-theme="dark"] .cell-peek {
+      background: #ffb14a;
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="speedMap"]:active {
       background: rgba(120, 160, 210, .12);
     }
     html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col[data-open="jtCollab"]:active {
       background: rgba(120, 160, 210, .12);
+    }
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v:not(.stacked),
+    html[data-theme="dark"] .hrow:not(.head) .cell.scroll-col.is-jt-best-win .v.stacked > .nm {
+      text-decoration-color: #ff5a5a;
     }
     html[data-theme="dark"] .jt-collab-row {
       background: #1e242c;
@@ -5614,7 +5925,8 @@
     html[data-theme="dark"] .finish-wm.is-4 { --wm-r: 240; --wm-g: 193; --wm-b: 74; }
 
     html[data-theme="dark"] .horse-sheet,
-    html[data-theme="dark"] .water-sheet {
+    html[data-theme="dark"] .water-sheet,
+    html[data-theme="dark"] .speed-map-sheet {
       background: #1e242d;
       /* 全幅面板：頂邊亮線＋外輪廓，與上方場次區分開 */
       box-shadow:
@@ -5627,8 +5939,12 @@
     html[data-theme="dark"] .water-sheet-bar {
       background: linear-gradient(180deg, #3d6b5c 0%, #2f5649 100%);
     }
+    html[data-theme="dark"] .speed-map-bar {
+      background: linear-gradient(180deg, #3a5f8a 0%, #2c4a6e 100%);
+    }
     html[data-theme="dark"] .water-sheet-body,
-    html[data-theme="dark"] .horse-sheet-body {
+    html[data-theme="dark"] .horse-sheet-body,
+    html[data-theme="dark"] .speed-map-body {
       background: #181d24;
     }
     html[data-theme="dark"] .water-hint {
@@ -5782,10 +6098,14 @@
     }
 
     html[data-theme="dark"] .qin-panel,
-    html[data-theme="dark"] .qin-legend {
+    html[data-theme="dark"] .qin-legend,
+    html[data-theme="dark"] .board-speed-map {
       background: #1a1f27;
       border-top-color: #1a1f27;
       color: #9aa3b2;
+    }
+    html[data-theme="dark"] .board-speed-map-body {
+      background: #181d24;
     }
     html[data-theme="dark"] .qin-block {
       background: #1e242d;
@@ -5978,17 +6298,6 @@
     </div>
   </div>
 
-  <div class="cal-overlay" id="speedMapOverlay" hidden aria-hidden="true">
-    <div class="cal-sheet speed-map-sheet" id="speedMapSheet" role="dialog" aria-modal="true" aria-labelledby="speedMapTitle">
-      <div class="cal-head">
-        <div class="cal-title" id="speedMapTitle">速勢走位圖</div>
-        <button type="button" class="cal-close" id="speedMapClose" aria-label="關閉">×</button>
-      </div>
-      <div class="speed-map-meta" id="speedMapMeta"></div>
-      <div class="speed-map-body" id="speedMapBody" aria-label="全場馬匹跑位圖"></div>
-    </div>
-  </div>
-
   <div class="cal-overlay" id="payoutDetailOverlay" hidden aria-hidden="true">
     <div class="cal-sheet payout-detail-sheet" id="payoutDetailSheet" role="dialog" aria-modal="true" aria-labelledby="payoutDetailTitle">
       <div class="payout-detail-head">
@@ -6032,7 +6341,10 @@
   <div class="cal-overlay" id="famousTipsOverlay" hidden aria-hidden="true">
     <div class="cal-sheet famous-tips-sheet" id="famousTipsSheet" role="dialog" aria-modal="true" aria-labelledby="famousTipsTitle">
       <div class="cal-head">
-        <div class="cal-title" id="famousTipsTitle">名家貼士</div>
+        <div class="ft-head-text">
+          <div class="cal-title" id="famousTipsTitle">名家貼士</div>
+          <div class="ft-head-meta" id="famousTipsMeta" aria-live="polite"></div>
+        </div>
         <button type="button" class="cal-close" id="famousTipsClose" aria-label="關閉">×</button>
       </div>
       <div class="famous-tips-sheet-body" id="famousTipsBody" aria-label="名家心水貼士"></div>
@@ -6160,13 +6472,21 @@
         <div class="water-sheet-bar">
           <div class="water-sheet-title">
             <span class="nm" id="waterSheetTitle">水位彈窗</span>
-            <span class="sub" id="waterSheetRace"></span>
           </div>
           <button type="button" class="water-sheet-close" id="waterSheetClose" aria-label="關閉水位">×</button>
         </div>
         <div class="water-hint">每格：<b>水位</b>（折扣）＋<b>流量</b>　上獨贏／中位置／下 WP　時段由近到遠　點格高亮後見水位升降</div>
         <div class="water-sheet-body" id="waterSheetBody"></div>
       </div>
+    </div>
+    <div class="speed-map-sheet" id="speedMapSheet" hidden aria-hidden="true" role="dialog" aria-modal="false" aria-labelledby="speedMapTitle">
+      <div class="speed-map-bar">
+        <div class="speed-map-title">
+          <span class="nm" id="speedMapTitle">速勢走位圖</span>
+        </div>
+        <button type="button" class="speed-map-close" id="speedMapClose" aria-label="關閉走位圖">×</button>
+      </div>
+      <div class="speed-map-body" id="speedMapBody" aria-label="全場馬匹跑位圖"></div>
     </div>
     <div class="horse-sheet" id="horseSheet" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="horseSheetName">
       <div class="horse-sheet-bar">
@@ -6239,6 +6559,11 @@
         if (c) out.push(c);
       });
       return out;
+    }
+    /* 內容格可開彈窗的字段：表頭加揭頁角提示 */
+    function scrollColHasPopupHint(key) {
+      return key === "water" || key === "flow" || key === "runStyle" ||
+        key === "jockey" || key === "trainer" || key === "synthReview";
     }
     function colLabelFlat(c) {
       return String((c && c.label) || "").replace(/\n/g, "");
@@ -6387,7 +6712,6 @@
       sheetBody: document.getElementById("horseSheetBody"),
       sheetClose: document.getElementById("horseSheetClose"),
       waterSheet: document.getElementById("waterSheet"),
-      waterSheetRace: document.getElementById("waterSheetRace"),
       waterSheetBody: document.getElementById("waterSheetBody"),
       waterSheetClose: document.getElementById("waterSheetClose"),
     };
@@ -6576,32 +6900,23 @@
     }
 
     /* 心水戰績：今日場次心水匯總＋統計／獎金／名家榜（演示） */
-    let tipRecordScope = "day"; /* day | season */
+    let tipRecordScope = "day"; /* day | season：個人戰績統計 */
+    let tipRecordLbScope = "day"; /* day | season：心水名家榜 */
     let tipRecordHelpOpen = false;
     let tipRecordLbOpenIds = {}; /* id -> true，支援多開對比 */
     const TIP_RECORD_STAKE = 10;
     const TIP_STAT_DEFS = [
-      { key: "win", name: "獨贏", range: "前2個號碼", help: "心水序號第1–2名中有冠軍即計中" },
-      { key: "qin", name: "連贏", range: "前3個號碼", help: "心水序號第1–3名同時包含冠、亞軍" },
-      { key: "top3", name: "前三", range: "前4個號碼", help: "心水序號第1–4名同時包含冠、亞、季軍" },
-      { key: "fourth", name: "第四名", range: "全部號碼", help: "心水全部號碼中含第四名" },
+      { key: "win", name: "獨贏", helpName: "獨贏显示W", range: "前2個號碼", help: "心水序號第1–2名内有冠軍" },
+      { key: "qin", name: "連贏", helpName: "連贏显示Q", range: "前3個號碼", help: "心水序號第1–3名内有亞軍" },
+      { key: "top3", name: "前三", helpName: "季軍显示P", range: "前4個號碼", help: "心水序號第1–4名内有季軍" },
+      { key: "fourth", name: "第四名", helpName: "殿軍显示四", range: "全部號碼", help: "心水全部號碼内有第四名" },
       { key: "tierce", name: "單T", range: "全部號碼", help: "心水全部號碼同時包含冠、亞、季軍" },
       { key: "qpl", name: "孖寶", range: "全部號碼", help: "心水全部號碼同時包含冠亞、冠季或亞季任一對" },
       { key: "quartet", name: "四連環", range: "全部號碼", help: "心水全部號碼同時包含前四名" }
     ];
-    /* stats[key] = [勝場, 參與場, 細項獎金] */
-    const TIP_LEADERBOARD_DEMO = [
-      { id: "u1", name: "谷草快手", prize: 18640, stats: { win: [18, 42, 5200], qin: [12, 40, 3800], top3: [16, 40, 3200], fourth: [9, 38, 1400], tierce: [7, 36, 2100], qpl: [14, 40, 2200], quartet: [4, 32, 740] } },
-      { id: "u2", name: "沙田夜鷹", prize: 15220, stats: { win: [15, 48, 4300], qin: [11, 46, 3100], top3: [14, 46, 2700], fourth: [8, 44, 1200], tierce: [6, 40, 1700], qpl: [12, 46, 1800], quartet: [3, 30, 420] } },
-      { id: "u3", name: "欄位獵人", prize: 12880, stats: { win: [14, 50, 3600], qin: [10, 48, 2600], top3: [13, 48, 2300], fourth: [7, 45, 980], tierce: [5, 38, 1400], qpl: [11, 48, 1600], quartet: [3, 28, 400] } },
-      { id: "u4", name: "初段節奏", prize: 10950, stats: { win: [12, 44, 3100], qin: [9, 42, 2200], top3: [11, 42, 1900], fourth: [6, 40, 820], tierce: [4, 34, 1200], qpl: [10, 42, 1400], quartet: [2, 26, 330] } },
-      { id: "u5", name: "直路勁抽", prize: 9740, stats: { win: [11, 46, 2800], qin: [8, 44, 1900], top3: [10, 44, 1700], fourth: [6, 42, 760], tierce: [4, 36, 1100], qpl: [9, 44, 1200], quartet: [2, 24, 280] } },
-      { id: "u6", name: "班次升級", prize: 8620, stats: { win: [10, 40, 2500], qin: [7, 38, 1700], top3: [9, 38, 1500], fourth: [5, 36, 680], tierce: [3, 30, 900], qpl: [8, 38, 1100], quartet: [2, 22, 240] } },
-      { id: "u7", name: "泥地專家", prize: 7910, stats: { win: [9, 42, 2300], qin: [7, 40, 1600], top3: [8, 40, 1400], fourth: [5, 38, 640], tierce: [3, 32, 820], qpl: [7, 40, 980], quartet: [1, 20, 170] } },
-      { id: "u8", name: "外檔奇兵", prize: 6840, stats: { win: [8, 38, 2000], qin: [6, 36, 1400], top3: [7, 36, 1200], fourth: [4, 34, 520], tierce: [2, 28, 700], qpl: [6, 36, 860], quartet: [1, 18, 160] } },
-      { id: "u9", name: "短途閃電", prize: 6020, stats: { win: [7, 36, 1800], qin: [5, 34, 1200], top3: [6, 34, 1050], fourth: [4, 32, 480], tierce: [2, 26, 620], qpl: [5, 34, 740], quartet: [1, 16, 130] } },
-      { id: "u10", name: "長途耐力", prize: 5410, stats: { win: [6, 34, 1600], qin: [5, 32, 1100], top3: [6, 32, 980], fourth: [3, 30, 400], tierce: [2, 24, 560], qpl: [5, 32, 660], quartet: [1, 14, 110] } }
-    ];
+    /* 名家榜本人列：演示暱稱；接帳號後替換 name */
+    const TIP_RECORD_SELF_ID = "self";
+    const TIP_RECORD_SELF_NAME = "心水玩家";
     function tipStatTriple(pair) {
       const wins = Number(pair && pair[0]) || 0;
       const plays = Number(pair && pair[1]) || 0;
@@ -6736,13 +7051,18 @@
       /* 演示：當前場次之前視為已派彩 */
       return Number(race.num) < Number(currentRace);
     }
-    function tipFinishKindByNo(race, no) {
+    function tipFinishKindByNo(race, no, tipIdx) {
+      /* tipIdx：心水序號（0-based）；W 僅前2、Q 僅前3、P 僅前4、四看全部 */
       if (!tipRaceSettled(race)) return "";
       const finish = payoutFinishNosForRace(race);
       const s = String(no);
-      if (finish[0] != null && String(finish[0]) === s) return "w";
-      if (finish[1] != null && String(finish[1]) === s) return "q";
-      if (finish[2] != null && String(finish[2]) === s) return "p";
+      const idx = tipIdx == null ? null : Number(tipIdx);
+      const inWin = idx == null || idx < 2;
+      const inQin = idx == null || idx < 3;
+      const inTop3 = idx == null || idx < 4;
+      if (inWin && finish[0] != null && String(finish[0]) === s) return "w";
+      if (inQin && finish[1] != null && String(finish[1]) === s) return "q";
+      if (inTop3 && finish[2] != null && String(finish[2]) === s) return "p";
       if (finish[3] != null && String(finish[3]) === s) return "4";
       return "";
     }
@@ -6773,9 +7093,10 @@
       picks.slice(0, 3).forEach(function (n) { set3[n] = 1; });
       const set4 = {};
       picks.slice(0, 4).forEach(function (n) { set4[n] = 1; });
+      /* 與規則說明一致：W＝前2有冠、Q＝前3有亞、P＝前4有季、四＝全部有第四 */
       const winHit = !!(f1 && set2[f1]);
-      const qinHit = !!(f1 && f2 && set3[f1] && set3[f2]);
-      const top3Hit = !!(f1 && f2 && f3 && set4[f1] && set4[f2] && set4[f3]);
+      const qinHit = !!(f2 && set3[f2]);
+      const top3Hit = !!(f3 && set4[f3]);
       const fourthHit = !!(f4 && setAll[f4]);
       const tierceHit = !!(f1 && f2 && f3 && setAll[f1] && setAll[f2] && setAll[f3]);
       const qplHit = !!(
@@ -6853,8 +7174,8 @@
       return '<div class="tr-day-list">' + races.map(function (race) {
         const picks = tipNoteList(race.num).slice(0, TIP_NOTE_MAX);
         const nos = picks.length
-          ? picks.map(function (no) {
-              const kind = tipFinishKindByNo(race, no);
+          ? picks.map(function (no, tipIdx) {
+              const kind = tipFinishKindByNo(race, no, tipIdx);
               const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
               return renderCapNoHtml(no, kind, title);
             }).join("")
@@ -6867,7 +7188,8 @@
     }
     function renderTipRecordHelpHtml() {
       return TIP_STAT_DEFS.map(function (d) {
-        return "<div><b>" + esc(d.name) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+        const title = d.helpName || d.name;
+        return "<div><b>" + esc(title) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
       }).join("") +
         "<div style=\"margin-top:4px\">投注基礎按每注 " + TIP_RECORD_STAKE + " 元估算累積獎金；準確率同時顯示勝場／參與場，避免單場中獎即 100%。</div>";
     }
@@ -6896,9 +7218,112 @@
       if (tipRecordLbOpenIds[key]) delete tipRecordLbOpenIds[key];
       else tipRecordLbOpenIds[key] = true;
     }
-    function renderTipRecordLeaderboardHtml() {
-      return '<div class="tr-lb-list">' + TIP_LEADERBOARD_DEMO.map(function (u, idx) {
+    function tipLbPlays(u) {
+      if (u && u.plays != null) return Math.max(0, Math.round(Number(u.plays) || 0));
+      let m = 0;
+      TIP_STAT_DEFS.forEach(function (d) {
+        const t = tipStatTriple(u && u.stats && u.stats[d.key]);
+        if (t.plays > m) m = t.plays;
+      });
+      return m;
+    }
+    /* 名家榜名單＝名家貼士（不含指數策略行）；細項獎金與個人戰績同口徑便於對比 */
+    function tipFamousLeaderboardBase() {
+      return FAMOUS_TIPSTERS_DEMO.filter(function (t) {
+        return t && !t.indexStrategy;
+      }).map(function (t, i) {
+        const plays = Math.max(1, Number(t.plays) || 0);
+        const wins = Math.min(plays, Math.max(0, Number(t.wins) || 0));
+        const seed = Number(t.seed) || (i + 1);
+        const stats = {};
+        let prize = 0;
+        TIP_STAT_DEFS.forEach(function (d, di) {
+          const p = Math.max(1, plays - (di % 3));
+          const w = Math.min(p, Math.max(0, Math.round(wins * (0.95 - di * 0.09) + (seed % 2))));
+          const pr = Math.round(w * (160 + di * 12) + p * 3 + seed * 40);
+          stats[d.key] = [w, p, pr];
+          prize += pr;
+        });
+        return { id: t.id, name: t.name, prize: prize, stats: stats, plays: plays, isSelf: false };
+      });
+    }
+    function tipSelfLeaderboardEntry(scope) {
+      const agg = tipAggregateStats(scope === "season" ? "season" : "day");
+      const stats = {};
+      let prize = 0;
+      let plays = 0;
+      TIP_STAT_DEFS.forEach(function (d) {
+        const s = agg[d.key] || { wins: 0, plays: 0, prize: 0 };
+        const pr = Math.round(Number(s.prize) || 0);
+        stats[d.key] = [Number(s.wins) || 0, Number(s.plays) || 0, pr];
+        prize += pr;
+        plays = Math.max(plays, Number(s.plays) || 0);
+      });
+      return {
+        id: TIP_RECORD_SELF_ID,
+        name: TIP_RECORD_SELF_NAME,
+        prize: prize,
+        stats: stats,
+        plays: plays,
+        isSelf: true
+      };
+    }
+    function tipLeaderboardForScope(scope) {
+      /* 名家貼士名單＋個人戰績同榜按獎金 Top 10；本日縮放名家演示量，個人用真實彙總 */
+      const sc = scope === "season" ? "season" : "day";
+      let list = tipFamousLeaderboardBase();
+      if (sc === "day") {
+        list = list.map(function (u, i) {
+          const factor = 0.08 + ((i * 11) % 7) * 0.015;
+          const stats = {};
+          let prize = 0;
+          TIP_STAT_DEFS.forEach(function (d) {
+            const s = (u.stats && u.stats[d.key]) || [0, 0, 0];
+            const plays = Math.max(1, Math.round((Number(s[1]) || 0) * 0.14));
+            const wins = Math.min(plays, Math.round((Number(s[0]) || 0) * factor * 1.5));
+            const pr = Math.round((Number(s[2]) || 0) * factor);
+            stats[d.key] = [wins, plays, pr];
+            prize += pr;
+          });
+          return {
+            id: u.id,
+            name: u.name,
+            prize: Math.max(80, prize),
+            stats: stats,
+            plays: tipLbPlays({ stats: stats }),
+            isSelf: false
+          };
+        });
+      }
+      list = list.concat([tipSelfLeaderboardEntry(sc)]);
+      list.sort(function (a, b) {
+        if (b.prize !== a.prize) return b.prize - a.prize;
+        if (!!a.isSelf !== !!b.isSelf) return a.isSelf ? -1 : 1;
+        return String(a.id).localeCompare(String(b.id));
+      });
+      return list.slice(0, 10);
+    }
+    function renderTipRecordLbScopeSwitch(scope) {
+      const sc = scope === "season" ? "season" : "day";
+      return (
+        '<div class="tr-scope" data-tr-scope-for="lb" data-scope="' + sc +
+          '" role="tablist" aria-label="名家榜時間範圍">' +
+          '<div class="tr-scope-slider" aria-hidden="true"></div>' +
+          '<button type="button" class="tr-scope-btn' + (sc === "day" ? " is-on" : "") +
+            '" data-tr-lb-scope="day" role="tab" aria-selected="' + (sc === "day" ? "true" : "false") + '">本日</button>' +
+          '<button type="button" class="tr-scope-btn' + (sc === "season" ? " is-on" : "") +
+            '" data-tr-lb-scope="season" role="tab" aria-selected="' + (sc === "season" ? "true" : "false") + '">本賽季</button>' +
+        "</div>"
+      );
+    }
+    function renderTipRecordLeaderboardHtml(scope) {
+      const list = tipLeaderboardForScope(scope === "season" ? "season" : "day");
+      return '<div class="tr-lb-list">' + list.map(function (u, idx) {
         const open = tipRecordLbIsOpen(u.id);
+        const plays = tipLbPlays(u);
+        const meTag = u.isSelf
+          ? '<span class="tr-lb-me" title="我的戰績" aria-label="我">me</span>'
+          : "";
         const detail = TIP_STAT_DEFS.map(function (d) {
           const t = tipStatTriple((u.stats && u.stats[d.key]) || [0, 0, 0]);
           return '<div class="tr-lb-detail-row">' +
@@ -6908,10 +7333,15 @@
             '<span class="tr-lb-d-prize">' + esc(tipFmtPrize(t.prize)) + "</span>" +
           "</div>";
         }).join("");
-        return '<div class="tr-lb-row' + (open ? " is-open" : "") + '" data-tr-user="' + esc(u.id) + '">' +
+        return '<div class="tr-lb-row' + (open ? " is-open" : "") + (u.isSelf ? " is-me" : "") +
+          '" data-tr-user="' + esc(u.id) + '">' +
           '<button type="button" class="tr-lb-sum" data-tr-user="' + esc(u.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' +
             '<span class="tr-lb-rank">' + (idx + 1) + "</span>" +
-            '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
+            '<span class="tr-lb-name-wrap">' +
+              '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
+              meTag +
+            "</span>" +
+            '<span class="tr-lb-plays">' + esc(plays + "場") + "</span>" +
             '<span class="tr-lb-prize">' + esc(tipFmtPrize(u.prize)) + "</span>" +
           "</button>" +
           '<div class="tr-lb-detail"' + (open ? "" : " hidden") + ">" + detail + "</div>" +
@@ -6927,17 +7357,18 @@
       }
       if (!body) return;
       const scope = tipRecordScope === "season" ? "season" : "day";
+      const lbScope = tipRecordLbScope === "season" ? "season" : "day";
       body.innerHTML =
         '<section class="tr-sec tr-day">' +
-          '<div class="tr-sec-title">今日心水</div>' +
+          '<div class="tr-sec-title">個人心水</div>' +
           renderTipRecordDayHtml() +
         "</section>" +
         '<section class="tr-sec tr-stats">' +
           '<div class="tr-sec-head">' +
-            '<div class="tr-sec-title">戰績統計</div>' +
+            '<div class="tr-sec-title">個人戰績統計</div>' +
             '<button type="button" class="tr-help-btn" data-tr-act="help" aria-expanded="' +
               (tipRecordHelpOpen ? "true" : "false") + '">規則</button>' +
-            '<div class="tr-scope" data-scope="' + scope + '" role="tablist" aria-label="統計時間範圍">' +
+            '<div class="tr-scope" data-tr-scope-for="stats" data-scope="' + scope + '" role="tablist" aria-label="統計時間範圍">' +
               '<div class="tr-scope-slider" aria-hidden="true"></div>' +
               '<button type="button" class="tr-scope-btn' + (scope === "day" ? " is-on" : "") +
                 '" data-tr-scope="day" role="tab" aria-selected="' + (scope === "day" ? "true" : "false") + '">本日</button>' +
@@ -6951,8 +7382,11 @@
           '<div id="tipRecordStatsPanel">' + renderTipRecordStatsHtml(scope) + "</div>" +
         "</section>" +
         '<section class="tr-sec tr-board">' +
-          '<div class="tr-sec-title">心水名家榜 · 獎金 Top 10</div>' +
-          renderTipRecordLeaderboardHtml() +
+          '<div class="tr-sec-head">' +
+            '<div class="tr-sec-title">心水名家榜 · 獎金 Top 10</div>' +
+            renderTipRecordLbScopeSwitch(lbScope) +
+          "</div>" +
+          '<div id="tipRecordLbPanel">' + renderTipRecordLeaderboardHtml(lbScope) + "</div>" +
         "</section>";
     }
     /* 彈層互斥：打開某一層前關閉其餘。賽期表僅在「原本已打開」時才套用選日（見 closeRaceDateCalendar）。 */
@@ -6962,7 +7396,7 @@
       if (ex !== "payoutDetailOverlay") closePayoutDetail();
       if (ex !== "colSortOverlay") closeColSortSheet();
       if (ex !== "synthReviewOverlay") closeSynthReviewSheet();
-      if (ex !== "speedMapOverlay") closeSpeedMapSheet();
+      if (ex !== "speedMapSheet") closeSpeedMapSheet();
       if (ex !== "jtCollabOverlay") closeJtCollabSheet();
       if (ex !== "tipRecordOverlay") closeTipRecordSheet();
       if (ex !== "famousTipsOverlay") closeFamousTipsSheet();
@@ -7025,7 +7459,7 @@
             const next = scopeBtn.getAttribute("data-tr-scope") === "season" ? "season" : "day";
             if (tipRecordScope === next) return;
             tipRecordScope = next;
-            const scopeEl = body.querySelector(".tr-scope");
+            const scopeEl = body.querySelector('.tr-scope[data-tr-scope-for="stats"]');
             if (scopeEl) scopeEl.setAttribute("data-scope", next);
             body.querySelectorAll("[data-tr-scope]").forEach(function (btn) {
               const on = btn.getAttribute("data-tr-scope") === next;
@@ -7037,16 +7471,32 @@
             requestAnimationFrame(syncTipRecordSheetHeight);
             return;
           }
+          const lbScopeBtn = ev.target && ev.target.closest ? ev.target.closest("[data-tr-lb-scope]") : null;
+          if (lbScopeBtn && body.contains(lbScopeBtn)) {
+            ev.preventDefault();
+            const next = lbScopeBtn.getAttribute("data-tr-lb-scope") === "season" ? "season" : "day";
+            if (tipRecordLbScope === next) return;
+            tipRecordLbScope = next;
+            const scopeEl = body.querySelector('.tr-scope[data-tr-scope-for="lb"]');
+            if (scopeEl) scopeEl.setAttribute("data-scope", next);
+            body.querySelectorAll("[data-tr-lb-scope]").forEach(function (btn) {
+              const on = btn.getAttribute("data-tr-lb-scope") === next;
+              btn.classList.toggle("is-on", on);
+              btn.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            const panel = document.getElementById("tipRecordLbPanel");
+            if (panel) panel.innerHTML = renderTipRecordLeaderboardHtml(next);
+            requestAnimationFrame(syncTipRecordSheetHeight);
+            return;
+          }
           const userBtn = ev.target && ev.target.closest ? ev.target.closest("button.tr-lb-sum[data-tr-user]") : null;
           if (userBtn && body.contains(userBtn)) {
             ev.preventDefault();
             const id = userBtn.getAttribute("data-tr-user");
             tipRecordLbToggle(id);
-            const board = body.querySelector(".tr-board");
-            if (board) {
-              const listHost = board.querySelector(".tr-lb-list");
-              if (listHost) listHost.outerHTML = renderTipRecordLeaderboardHtml();
-              else board.insertAdjacentHTML("beforeend", renderTipRecordLeaderboardHtml());
+            const panel = document.getElementById("tipRecordLbPanel");
+            if (panel) {
+              panel.innerHTML = renderTipRecordLeaderboardHtml(tipRecordLbScope);
             } else {
               fillTipRecordSheet();
             }
@@ -7073,10 +7523,14 @@
     let famousTipsRace = null;
     const FAMOUS_GROUP_DEFS = [
       { key: "live", name: "臨場", hint: "開跑前臨場提供", earlyBonus: 0 },
-      { key: "breakfast", name: "早餐", hint: "賽前一日或當日早上", earlyBonus: 20 },
-      { key: "stable", name: "馬房貼士", hint: "練馬師團隊提供", earlyBonus: 10 }
+      { key: "breakfast", name: "早餐", hint: "", earlyBonus: 20 },
+      { key: "stable", name: "馬房貼士", hint: "", earlyBonus: 10 }
     ];
     const FAMOUS_TIPSTERS_DEMO = [
+      /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家綜合心水；勝率演示數字與其他名家同格式 */
+      { id: "ix_composite", name: "綜合指數", group: "live", indexStrategy: "composite", count: 6, inAggregate: false, wins: 22, plays: 58 },
+      { id: "ix_water", name: "水位排名", group: "live", indexStrategy: "water", count: 6, inAggregate: false, wins: 17, plays: 58 },
+      { id: "ix_flow", name: "流量排名", group: "live", indexStrategy: "flow", count: 6, inAggregate: false, wins: 14, plays: 58 },
       { id: "fl1", name: "臨場神算", group: "live", wins: 28, plays: 62, seed: 1, count: 4 },
       { id: "fl2", name: "即場追擊", group: "live", wins: 21, plays: 58, seed: 2, count: 4 },
       { id: "fl3", name: "夜場快訊", group: "live", wins: 19, plays: 54, seed: 3, count: 6 },
@@ -7102,6 +7556,11 @@
     }
     function famousTipsForTipster(tipster, race) {
       if (!tipster || !race) return [];
+      /* 指數名家：號碼與綜合指數膠囊對應策略行一致 */
+      if (tipster.indexStrategy) {
+        const lim = Math.min(6, Math.max(1, Number(tipster.count) || 6));
+        return indexPicksForStrategy(tipster.indexStrategy, lim, race).map(String);
+      }
       const runners = (race.runners || []).filter(function (r) {
         return r && !r.scratched && numOrNull(r.win) != null;
       }).slice();
@@ -7139,6 +7598,7 @@
     function famousAggregateTips(race) {
       const tally = {};
       FAMOUS_TIPSTERS_DEMO.forEach(function (t) {
+        if (t && t.inAggregate === false) return;
         const tips = famousTipsForTipster(t, race);
         const earlyG = famousGroupEarlyBonus(t.group);
         tips.forEach(function (no, idx) {
@@ -7153,10 +7613,11 @@
         return Number(a.no) - Number(b.no);
       }).slice(0, 6).map(function (x) { return x.no; });
     }
+    /* 名家號圈結算：與心水戰績相同，tipRaceSettled 後按賽果標 W／Q／P／四 */
     function famousCapNosHtml(race, nos) {
       if (!nos || !nos.length) return '<span class="ft-finish-empty">暫無貼士</span>';
-      return nos.map(function (no) {
-        const kind = tipFinishKindByNo(race, no);
+      return nos.map(function (no, tipIdx) {
+        const kind = tipFinishKindByNo(race, no, tipIdx);
         const title = kind === "w" ? "冠軍 W" : kind === "q" ? "亞軍 Q" : kind === "p" ? "季軍 P" : kind === "4" ? "第四名" : "";
         return renderCapNoHtml(no, kind, title);
       }).join("");
@@ -7203,38 +7664,138 @@
           '<span class="ft-finish-empty">尚未派彩</span>' +
         "</div>";
       }
-      const finish = payoutFinishNosForRace(race).slice(0, 4);
-      const labs = ["W", "Q", "P", "4"];
-      const kinds = ["w", "q", "p", "4"];
+      /* 全場有跑馬按名次列出；前四標 W／Q／P／四，超出可橫滑 */
+      const finish = payoutFinishNosForRace(race);
       const nos = finish.map(function (no, i) {
         if (no == null || no === "") return "";
-        return renderCapNoHtml(no, kinds[i], labs[i] + " · 第" + (i + 1) + "名");
+        let kind = "";
+        let title = "第" + (i + 1) + "名";
+        if (i === 0) { kind = "w"; title = "冠軍 W · " + title; }
+        else if (i === 1) { kind = "q"; title = "亞軍 Q · " + title; }
+        else if (i === 2) { kind = "p"; title = "季軍 P · " + title; }
+        else if (i === 3) { kind = "4"; title = "第四名 · " + title; }
+        return renderCapNoHtml(no, kind, title);
       }).filter(Boolean).join("");
       return '<div class="ft-finish">' +
-        '<span class="ft-finish-lab">冠亞季殿</span>' +
+        '<span class="ft-finish-lab">賽果</span>' +
         '<div class="ft-finish-nos">' + (nos || '<span class="ft-finish-empty">暫無名次</span>') + "</div>" +
       "</div>";
+    }
+    let famousAggHelpOpen = false;
+    function renderFamousAggHelpHtml() {
+      /* 與戰績統計前四項口徑一致：W／Q／P／四 */
+      const defs = TIP_STAT_DEFS.filter(function (d) {
+        return d.key === "win" || d.key === "qin" || d.key === "top3" || d.key === "fourth";
+      });
+      return defs.map(function (d) {
+        const title = d.helpName || d.name;
+        return "<div><b>" + esc(title) + "</b>（" + esc(d.range) + "）：" + esc(d.help) + "</div>";
+      }).join("");
     }
     function renderFamousTipsAggHtml(race) {
       const agg = famousAggregateTips(race);
       return '<section class="ft-sec ft-agg">' +
         '<div class="ft-sec-head">' +
-          '<div class="ft-sec-title">綜合心水</div>' +
-          '<div class="ft-sec-hint">全名家加權 · 最多 6 個</div>' +
+          '<div class="ft-sec-title">名家綜合心水</div>' +
+          '<div class="ft-sec-hint">權重按順序左強右弱。</div>' +
+          '<button type="button" class="ft-help-btn" data-ft-act="help" aria-expanded="' +
+            (famousAggHelpOpen ? "true" : "false") + '" aria-controls="famousAggHelp">規則</button>' +
         "</div>" +
         '<div class="ft-agg-nos">' + famousCapNosHtml(race, agg) + "</div>" +
-        '<div class="ft-agg-meta">按「最多人看好」優先，同分再看提供時間早晚與心水順位。</div>' +
+        '<div class="ft-help" id="famousAggHelp"' + (famousAggHelpOpen ? "" : " hidden") + ">" +
+          renderFamousAggHelpHtml() +
+        "</div>" +
       "</section>";
     }
+    function famousTipsterWinRate(t) {
+      const plays = Number(t && t.plays) || 0;
+      const wins = Number(t && t.wins) || 0;
+      return plays > 0 ? (wins / plays) : -1;
+    }
+    /* 早餐／馬房名家收藏（紅心置頂）；臨場不加心 */
+    const FAMOUS_FAV_STORE = "j18-famous-tipster-favs-v1";
+    let famousTipsterFavIds = [];
+    function loadFamousTipsterFavs() {
+      let raw = null;
+      try { raw = localStorage.getItem(FAMOUS_FAV_STORE); } catch (e) {}
+      if (!raw) { famousTipsterFavIds = []; return; }
+      try {
+        const data = JSON.parse(raw);
+        famousTipsterFavIds = Array.isArray(data) ? data.map(String) : [];
+      } catch (e) {
+        famousTipsterFavIds = [];
+      }
+    }
+    function saveFamousTipsterFavs() {
+      try { localStorage.setItem(FAMOUS_FAV_STORE, JSON.stringify(famousTipsterFavIds)); } catch (e) {}
+    }
+    loadFamousTipsterFavs();
+    function isFamousTipsterFav(id) {
+      return famousTipsterFavIds.indexOf(String(id)) >= 0;
+    }
+    function toggleFamousTipsterFav(id) {
+      const s = String(id || "");
+      if (!s) return;
+      const i = famousTipsterFavIds.indexOf(s);
+      if (i >= 0) famousTipsterFavIds.splice(i, 1);
+      else famousTipsterFavIds.push(s);
+      saveFamousTipsterFavs();
+    }
+    function famousFavHeartSvg() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+      "</svg>";
+    }
+    function compareFamousTipsterByRate(a, b) {
+      const ra = famousTipsterWinRate(a);
+      const rb = famousTipsterWinRate(b);
+      if (rb !== ra) return rb - ra;
+      const wa = Number(a.wins) || 0;
+      const wb = Number(b.wins) || 0;
+      if (wb !== wa) return wb - wa;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-HK");
+    }
     function renderFamousTipsGroupHtml(groupDef, race) {
-      const list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
+      let list = FAMOUS_TIPSTERS_DEMO.filter(function (t) { return t.group === groupDef.key; });
+      /* 早餐／馬房：紅心置頂，其餘按勝率排序；序號永遠跟勝率排名，不因置頂改號；臨場不加號／心 */
+      const rankByRate = groupDef.key === "breakfast" || groupDef.key === "stable";
+      const rateRankById = {};
+      if (rankByRate) {
+        const byRate = list.slice().sort(compareFamousTipsterByRate);
+        byRate.forEach(function (t, i) {
+          rateRankById[String(t.id)] = i + 1;
+        });
+        const favs = [];
+        const rest = [];
+        list.forEach(function (t) {
+          if (isFamousTipsterFav(t.id)) favs.push(t);
+          else rest.push(t);
+        });
+        favs.sort(function (a, b) {
+          return famousTipsterFavIds.indexOf(String(a.id)) - famousTipsterFavIds.indexOf(String(b.id));
+        });
+        rest.sort(compareFamousTipsterByRate);
+        list = favs.concat(rest);
+      }
       const rows = list.length
         ? '<div class="ft-list">' + list.map(function (t) {
             const tips = famousTipsForTipster(t, race);
             const rate = tipFmtRate(t.wins, t.plays);
-            return '<div class="ft-row">' +
+            const rateRank = rateRankById[String(t.id)];
+            const nameLab = rankByRate ? (rateRank + "." + t.name) : t.name;
+            const favOn = rankByRate && isFamousTipsterFav(t.id);
+            const favBtn = rankByRate
+              ? ('<button type="button" class="ft-fav' + (favOn ? " is-on" : "") +
+                  '" data-ft-fav="' + esc(t.id) +
+                  '" aria-label="' + esc((favOn ? "取消收藏 " : "收藏 ") + t.name) +
+                  '" aria-pressed="' + (favOn ? "true" : "false") + '">' +
+                  famousFavHeartSvg() +
+                "</button>")
+              : "";
+            return '<div class="ft-row' + (favOn ? " is-fav" : "") + '">' +
               '<div class="ft-row-top">' +
-                '<span class="ft-name">' + esc(t.name) + "</span>" +
+                '<span class="ft-name">' + esc(nameLab) + "</span>" +
+                favBtn +
                 '<span class="ft-rate">' + esc(rate) +
                   '<span class="ft-rate-meta">（' + esc(t.wins + "/" + t.plays + "場") + "）</span>" +
                 "</span>" +
@@ -7243,10 +7804,11 @@
             "</div>";
           }).join("") + "</div>"
         : '<div class="ft-empty">此區暫無名家</div>';
+      const hint = String(groupDef.hint || "").trim();
       return '<section class="ft-sec ft-' + esc(groupDef.key) + '">' +
         '<div class="ft-sec-head">' +
           '<div class="ft-sec-title">' + esc(groupDef.name) + "</div>" +
-          '<div class="ft-sec-hint">' + esc(groupDef.hint) + "</div>" +
+          (hint ? ('<div class="ft-sec-hint">' + esc(hint) + "</div>") : "") +
         "</div>" +
         rows +
       "</section>";
@@ -7254,17 +7816,23 @@
     function fillFamousTipsSheet() {
       const body = document.getElementById("famousTipsBody");
       const title = document.getElementById("famousTipsTitle");
-      if (title) {
-        const day = tipMeetingDayLabel();
-        title.textContent = day ? ("名家貼士 · " + day) : "名家貼士";
+      const meta = document.getElementById("famousTipsMeta");
+      const race = famousTipsRaceObj();
+      if (title) title.textContent = "名家貼士";
+      if (meta) {
+        /* 與粗體標題同一行：場次元信息（同排位頁 raceMeta），非粗體；過長再換行 */
+        meta.textContent = formatRaceInfoLine(MEETING && MEETING.date, race, MEETING);
       }
       if (!body) return;
-      const race = famousTipsRaceObj();
+      /* 賽果欄：未派彩不吸頂；已派彩才與場次膠囊一起 sticky */
+      const settled = !!(race && tipRaceSettled(race));
+      const finishHtml = renderFamousTipsFinishHtml(race);
       body.innerHTML =
         '<div class="ft-sticky">' +
           renderFamousTipsRacePillsHtml() +
-          renderFamousTipsFinishHtml(race) +
+          (settled ? finishHtml : "") +
         "</div>" +
+        (settled ? "" : finishHtml) +
         renderFamousTipsAggHtml(race) +
         FAMOUS_GROUP_DEFS.map(function (g) { return renderFamousTipsGroupHtml(g, race); }).join("");
     }
@@ -7272,6 +7840,7 @@
       const overlay = document.getElementById("famousTipsOverlay");
       if (!overlay) return;
       closeAllBoardOverlays("famousTipsOverlay");
+      famousAggHelpOpen = false;
       famousTipsRace = Number(currentRace) || famousTipsRaceNum();
       fillFamousTipsSheet();
       syncFamousTipsOverlayTop();
@@ -7314,6 +7883,31 @@
       if (body && body.dataset.ftBound !== "1") {
         body.dataset.ftBound = "1";
         body.addEventListener("click", function (ev) {
+          const helpBtn = ev.target && ev.target.closest ? ev.target.closest('[data-ft-act="help"]') : null;
+          if (helpBtn && body.contains(helpBtn)) {
+            ev.preventDefault();
+            famousAggHelpOpen = !famousAggHelpOpen;
+            const help = document.getElementById("famousAggHelp");
+            if (help) {
+              if (famousAggHelpOpen) help.removeAttribute("hidden");
+              else help.setAttribute("hidden", "");
+            }
+            helpBtn.setAttribute("aria-expanded", famousAggHelpOpen ? "true" : "false");
+            requestAnimationFrame(function () {
+              syncFamousTipsSheetHeight();
+              requestAnimationFrame(syncFamousTipsSheetHeight);
+            });
+            return;
+          }
+          const favBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-fav]") : null;
+          if (favBtn && body.contains(favBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleFamousTipsterFav(favBtn.getAttribute("data-ft-fav"));
+            fillFamousTipsSheet();
+            requestAnimationFrame(syncFamousTipsSheetHeight);
+            return;
+          }
           const raceBtn = ev.target && ev.target.closest ? ev.target.closest("[data-ft-race]") : null;
           if (raceBtn && body.contains(raceBtn)) {
             ev.preventDefault();
@@ -7861,7 +8455,7 @@
       const name = (p && p.name) || String(raw == null ? "" : raw).trim();
       return name && name !== "—" ? name : "";
     }
-    function jtCollabDemoOf(r) {
+    function jtCollabCoreStats(r) {
       const jockey = splitPersonName(r && r.jockey);
       const trainer = splitPersonName(r && r.trainer);
       const no = Number(r && r.no) || 0;
@@ -7872,28 +8466,65 @@
       const seconds = (seed >> 1) % 3;
       const thirds = (seed >> 2) % 3;
       const places = wins + seconds + thirds;
-      const winPct = runs ? ((wins / runs) * 100).toFixed(1) : "0.0";
-      const placePct = runs ? ((places / runs) * 100).toFixed(1) : "0.0";
+      const winPctNum = runs ? Number(((wins / runs) * 100).toFixed(1)) : 0;
+      const placePctNum = runs ? Number(((places / runs) * 100).toFixed(1)) : 0;
+      return {
+        jockey: jockey,
+        trainer: trainer,
+        seed: seed,
+        runs: runs,
+        wins: wins,
+        seconds: seconds,
+        thirds: thirds,
+        winPctNum: winPctNum,
+        placePctNum: placePctNum,
+        winPct: winPctNum.toFixed(1),
+        placePct: placePctNum.toFixed(1)
+      };
+    }
+    /* 本場未劃走馬中，騎練合作勝出率最高者（並列全標） */
+    function jtBestCollabWinNos() {
+      const out = {};
+      const runners = currentRunners() || [];
+      let best = null;
+      const scored = [];
+      runners.forEach(function (r) {
+        if (!r || r.scratched) return;
+        const st = jtCollabCoreStats(r);
+        if (!st.jockey && !st.trainer) return;
+        scored.push({ no: String(r.no), n: st.winPctNum });
+        if (best == null || st.winPctNum > best) best = st.winPctNum;
+      });
+      if (best == null) return out;
+      scored.forEach(function (s) {
+        if (s.n === best) out[s.no] = true;
+      });
+      return out;
+    }
+    function jtCollabDemoOf(r) {
+      const st = jtCollabCoreStats(r);
       const courses = ["沙田", "跑馬地", "沙田", "跑馬地"];
       const dists = ["1200米", "1400米", "1650米", "1000米", "1800米"];
       const hist = [];
-      for (let i = 0; i < Math.min(runs, 6); i++) {
-        const finRoll = (seed + i * 9) % 11;
+      for (let i = 0; i < Math.min(st.runs, 6); i++) {
+        const finRoll = (st.seed + i * 9) % 11;
         const finish = finRoll === 0 ? 1 : finRoll === 1 ? 2 : finRoll === 2 ? 3 : (4 + (finRoll % 7));
         const mo = ((9 - (i % 6)) + 11) % 12 + 1;
-        const day = 3 + ((seed + i * 5) % 24);
+        const day = 3 + ((st.seed + i * 5) % 24);
         hist.push({
           date: "2026-" + String(mo).padStart(2, "0") + "-" + String(day).padStart(2, "0"),
-          course: courses[(seed + i) % courses.length],
-          dist: dists[(seed + i * 2) % dists.length],
+          course: courses[(st.seed + i) % courses.length],
+          dist: dists[(st.seed + i * 2) % dists.length],
           finish: finish
         });
       }
       return {
-        jockey: jockey,
-        trainer: trainer,
-        summary: "近季合作：" + runs + " 仗 · " + wins + "冠 " + seconds + "亞 " + thirds + "季 · 勝率 " +
-          winPct + "% · 位置率 " + placePct + "%",
+        jockey: st.jockey,
+        trainer: st.trainer,
+        main: "歷史出賽合作：" + st.runs + " 仗 · " + st.wins + "冠 " + st.seconds + "亞 " + st.thirds + "季",
+        winRate: "勝出率 " + st.winPct + "%",
+        placeRate: "位置率 " + st.placePct + "%",
+        winPctNum: st.winPctNum,
         races: hist
       };
     }
@@ -7929,7 +8560,13 @@
         : '<div class="jt-collab-empty">暫無歷史合作戰績</div>';
       body.innerHTML =
         '<div class="jt-collab-pair">' + esc(pair) + "</div>" +
-        '<div class="jt-collab-summary">' + esc(data.summary) + "</div>" +
+        '<div class="jt-collab-summary">' +
+          '<div class="jt-sum-main">' + esc(data.main) + "</div>" +
+          '<div class="jt-sum-rates">' +
+            '<div class="jt-sum-rate">' + esc(data.winRate) + "</div>" +
+            '<div class="jt-sum-rate">' + esc(data.placeRate) + "</div>" +
+          "</div>" +
+        "</div>" +
         listHtml;
     }
     function openJtCollabSheet(no) {
@@ -7987,59 +8624,105 @@
     }
     bindJtCollabSheet();
 
-    /* 速勢走位圖：點預計跑法列 → 賽期規格彈窗展示馬會 RaceMap */
+    /* 速勢走位圖：點預計跑法列 → 水位同款全幅殼展示馬會 RaceMap */
     const SPEEDMAP_CMS = "https://consvc.hkjc.com/-/media/Sites/JCRW/SpeedPro/current/sg_race_";
     const speedMapCache = Object.create(null);
     let speedMapReqToken = 0;
-    function syncSpeedMapOverlayTop() {
-      syncBoardOverlayTop("speedMapOverlay");
+    function isSpeedMapSheetOpen() {
+      const sheet = document.getElementById("speedMapSheet");
+      return !!(sheet && !sheet.hasAttribute("hidden"));
+    }
+    function syncSpeedMapSheetTop() {
+      /* 與水位彈窗同錨：insight／膠囊底邊＝列表頂（layout 座標，不受 zoom 干擾） */
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet || !el.boardShell) return;
+      if (el.board) el.board.scrollTop = 0;
+      const shellRect = el.boardShell.getBoundingClientRect();
+      const pin = document.getElementById("insightPin");
+      let topPx = 0;
+      if (pin) {
+        topPx = Math.round(pin.getBoundingClientRect().bottom - shellRect.top);
+      } else if (el.boardMain) {
+        let y = 0;
+        let n = el.boardMain;
+        while (n && n !== el.boardShell) {
+          y += n.offsetTop;
+          n = n.parentElement;
+        }
+        topPx = Math.round(y);
+      }
+      sheet.style.top = Math.max(0, topPx) + "px";
     }
     function closeSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
-      if (!overlay) return;
-      overlay.setAttribute("hidden", "");
-      overlay.setAttribute("aria-hidden", "true");
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet || sheet.hasAttribute("hidden")) return;
+      sheet.setAttribute("hidden", "");
+      sheet.setAttribute("aria-hidden", "true");
+      if (el.boardShell) el.boardShell.classList.remove("is-speed-map-open");
     }
-    function speedMapMetaText(info, raceNo) {
-      const bits = [];
-      bits.push("第" + raceNo + "場");
-      if (info && info.Racecourse) bits.push(String(info.Racecourse));
-      if (info && info.Distance) bits.push(String(info.Distance));
-      if (info && info.RaceName) bits.push(String(info.RaceName));
-      if (info && info.Date) bits.push(String(info.Date));
-      return bits.join(" · ");
+    function mountSpeedMapInto(body, raceNo, data, emptyMsg) {
+      if (!body) return;
+      if (!data || !data.map) {
+        body.innerHTML =
+          '<div class="speed-map-error">' + esc(emptyMsg || "此場暫無走位圖") + "</div>";
+        return;
+      }
+      body.innerHTML = "";
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
+      const img = document.createElement("img");
+      img.src = data.map;
+      img.alt = "第" + raceNo + "場速勢走位圖";
+      img.decoding = "async";
+      /* 載入後按可視寬再鎖一倍半以上，確保可左右滑 */
+      img.onload = function () {
+        const avail = Math.max(body.clientWidth || 0, 200);
+        const target = Math.round(avail * 1.8);
+        if (img.offsetWidth < target - 2) img.style.width = target + "px";
+      };
+      body.appendChild(img);
     }
     function renderSpeedMapLoading(raceNo) {
-      const meta = document.getElementById("speedMapMeta");
       const body = document.getElementById("speedMapBody");
-      if (meta) meta.textContent = "第" + raceNo + "場 · 載入走位圖…";
       if (body) body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
     }
     function renderSpeedMapError(raceNo, msg) {
-      const meta = document.getElementById("speedMapMeta");
       const body = document.getElementById("speedMapBody");
-      if (meta) meta.textContent = "第" + raceNo + "場";
       if (body) {
         body.innerHTML =
           '<div class="speed-map-error">' + esc(msg || "暫未能載入走位圖") + "</div>";
       }
     }
     function renderSpeedMapImage(raceNo, data) {
-      const meta = document.getElementById("speedMapMeta");
-      const body = document.getElementById("speedMapBody");
-      const info = (data && data.info) || {};
-      if (meta) meta.textContent = speedMapMetaText(info, raceNo);
+      mountSpeedMapInto(document.getElementById("speedMapBody"), raceNo, data, "此場暫無走位圖");
+    }
+    let boardSpeedMapReqToken = 0;
+    function renderBoardSpeedMapHtml() {
+      return (
+        '<section class="board-speed-map" id="boardSpeedMap" aria-label="速勢走位圖">' +
+          '<div class="board-speed-map-head">速勢走位圖</div>' +
+          '<div class="board-speed-map-body" id="boardSpeedMapBody">' +
+            '<div class="speed-map-loading">正在載入全場跑位圖…</div>' +
+          "</div>" +
+        "</section>"
+      );
+    }
+    function fillBoardSpeedMap() {
+      const body = document.getElementById("boardSpeedMapBody");
       if (!body) return;
-      if (!data || !data.map) {
-        renderSpeedMapError(raceNo, "此場暫無走位圖");
-        return;
-      }
-      body.innerHTML = "";
-      const img = document.createElement("img");
-      img.src = data.map;
-      img.alt = "第" + raceNo + "場速勢走位圖";
-      img.decoding = "async";
-      body.appendChild(img);
+      const raceNo = Number(currentRace) || 1;
+      const token = ++boardSpeedMapReqToken;
+      body.innerHTML = '<div class="speed-map-loading">正在載入全場跑位圖…</div>';
+      fetchSpeedMap(raceNo).then(function (data) {
+        if (token !== boardSpeedMapReqToken) return;
+        if (!document.getElementById("boardSpeedMapBody")) return;
+        mountSpeedMapInto(body, raceNo, data, "此場暫無走位圖");
+      }).catch(function () {
+        if (token !== boardSpeedMapReqToken) return;
+        if (!document.getElementById("boardSpeedMapBody")) return;
+        body.innerHTML =
+          '<div class="speed-map-error">暫未能載入走位圖，請稍後再試</div>';
+      });
     }
     function fetchSpeedMap(raceNo) {
       const key = String(raceNo);
@@ -8063,27 +8746,30 @@
       });
     }
     function openSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
-      if (!overlay) return;
-      closeAllBoardOverlays("speedMapOverlay");
+      const sheet = document.getElementById("speedMapSheet");
+      if (!sheet) return;
+      closeAllBoardOverlays("speedMapSheet");
       const raceNo = Number(currentRace) || 1;
       const token = ++speedMapReqToken;
       renderSpeedMapLoading(raceNo);
-      syncSpeedMapOverlayTop();
-      overlay.removeAttribute("hidden");
-      overlay.setAttribute("aria-hidden", "false");
-      requestAnimationFrame(function () { syncSpeedMapOverlayTop(); });
+      if (el.boardShell) el.boardShell.classList.add("is-speed-map-open");
+      sheet.removeAttribute("hidden");
+      sheet.setAttribute("aria-hidden", "false");
+      syncSpeedMapSheetTop();
+      requestAnimationFrame(function () {
+        syncSpeedMapSheetTop();
+        requestAnimationFrame(syncSpeedMapSheetTop);
+      });
       fetchSpeedMap(raceNo).then(function (data) {
         if (token !== speedMapReqToken) return;
         renderSpeedMapImage(raceNo, data);
-        syncSpeedMapOverlayTop();
+        syncSpeedMapSheetTop();
       }).catch(function () {
         if (token !== speedMapReqToken) return;
         renderSpeedMapError(raceNo, "暫未能載入走位圖，請稍後再試");
       });
     }
     function bindSpeedMapSheet() {
-      const overlay = document.getElementById("speedMapOverlay");
       const sheet = document.getElementById("speedMapSheet");
       const closeBtn = document.getElementById("speedMapClose");
       if (closeBtn) {
@@ -8092,20 +8778,9 @@
           closeSpeedMapSheet();
         });
       }
-      if (overlay) {
-        overlay.addEventListener("click", function (ev) {
-          if (ev.target === overlay) closeSpeedMapSheet();
-        });
-      }
       if (sheet) sheet.addEventListener("click", function (ev) { ev.stopPropagation(); });
-      document.addEventListener("keydown", function (ev) {
-        if (ev.key !== "Escape") return;
-        const ov = document.getElementById("speedMapOverlay");
-        if (ov && !ov.hasAttribute("hidden")) closeSpeedMapSheet();
-      });
       window.addEventListener("resize", function () {
-        const ov = document.getElementById("speedMapOverlay");
-        if (ov && !ov.hasAttribute("hidden")) syncSpeedMapOverlayTop();
+        if (isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       });
     }
     function bindSpeedMapOpens() {
@@ -9514,11 +10189,12 @@
       const n = Number(s);
       return Number.isFinite(n) ? n : null;
     }
-    /* 綜合指數推薦：暫以獨贏水位由低至高取前 6 匹（退出除外） */
-    function indexPicksForStrategy(strategyId, limit) {
+    /* 綜合指數推薦：暫以獨贏水位由低至高取前 6 匹（退出除外）；可指定 race（名家貼士用） */
+    function indexPicksForStrategy(strategyId, limit, raceOpt) {
       const n = limit == null ? 6 : limit;
       const id = strategyId || "composite";
-      const rows = currentRunners()
+      const race = raceOpt || currentMeet();
+      const rows = ((race && race.runners) || [])
         .filter(function (r) { return r && !r.scratched; })
         .slice();
       function cmpNum(getVal, dir) {
@@ -10531,9 +11207,7 @@
       });
     }
     function fillWaterSheet() {
-      if (!el.waterSheetBody || !el.waterSheetRace) return;
-      const meet = currentMeet();
-      el.waterSheetRace.textContent = meet.meta || ("第" + currentRace + "場");
+      if (!el.waterSheetBody) return;
       const hours = waterHourLabels(WATER_HOUR_COLS);
       const rows = currentRunners().slice().sort(function (a, b) {
         return (Number(a.no) || 0) - (Number(b.no) || 0);
@@ -11337,9 +12011,16 @@
             '"><span class="draw-lab"><span>檔</span><span>位</span></span>' +
             sortIco("draw") + "</button></div></div>";
       const scrollCols = activeScrollCols();
-      const scrollHeadCells = scrollCols.map((c) =>
-        '<div class="cell ' + c.cls + headOn(c.key) + '">' + headBtn(c.key, c.label) + "</div>"
-      ).join("");
+      const scrollHeadCells = scrollCols.map((c) => {
+        let peekCls = "";
+        let peekHtml = "";
+        if (scrollColHasPopupHint(c.key)) {
+          peekCls = " has-cell-peek";
+          peekHtml = '<span class="cell-peek" aria-hidden="true"></span>';
+        }
+        return '<div class="cell ' + c.cls + headOn(c.key) + peekCls + '">' +
+          headBtn(c.key, c.label) + peekHtml + "</div>";
+      }).join("");
       const head =
         '<div class="hrow head">' +
           lockHead +
@@ -11348,6 +12029,7 @@
           "</div>" +
         "</div>";
 
+      const jtBestWin = jtBestCollabWinNos();
       const body = rows.map((r, i) => {
         const alt = i % 2 ? " alt" : "";
         const scratch = r.scratched ? " scratched" : "";
@@ -11402,6 +12084,9 @@
           } else if (top4 && c.key === "jockey") {
             extraCls = " finish-wm-pair";
           }
+          if ((c.key === "jockey" || c.key === "trainer") && !r.scratched && jtBestWin[String(r.no)]) {
+            extraCls += " is-jt-best-win";
+          }
           return '<div class="cell ' + c.cls + colOn(c.key) + extraCls + '"' + openAttr + ">" +
             wmHtml + cellValue(c, r) + "</div>";
         }).join("");
@@ -11413,7 +12098,8 @@
           '<div class="board-head-pin" id="boardHead">' + head + "</div>" +
           '<div class="board-x" id="boardX">' + body + "</div>" +
         "</div>" +
-        renderQinPanelHtml();
+        renderQinPanelHtml() +
+        renderBoardSpeedMapHtml();
       el.boardX = document.getElementById("boardX");
       el.boardHeadX = document.getElementById("boardHeadX");
       headScrollBound = false;
@@ -11424,6 +12110,7 @@
       el.board.scrollTop = st;
 
       renderCapsuleBodies();
+      fillBoardSpeedMap();
 
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -11448,6 +12135,9 @@
       if (isWaterSheetOpen()) {
         syncWaterSheetTop();
         fillWaterSheet();
+      }
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) {
+        syncSpeedMapSheetTop();
       }
     }
 
@@ -11511,6 +12201,7 @@
     }
     window.addEventListener("resize", function () {
       if (isWaterSheetOpen()) syncWaterSheetTop();
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       if (typeof syncRaceMetaScroll === "function") syncRaceMetaScroll();
       if (typeof syncInsightStickyHeight === "function") syncInsightStickyHeight();
     });
@@ -11790,10 +12481,11 @@
       overlay.style.top = boardOverlayAnchorTop() + "px";
     }
     function syncOpenBoardOverlaysTop() {
-      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "speedMapOverlay", "jtCollabOverlay"].forEach(function (id) {
+      ["raceCalOverlay", "payoutDetailOverlay", "synthReviewOverlay", "colSortOverlay", "jtCollabOverlay"].forEach(function (id) {
         const ov = document.getElementById(id);
         if (ov && !ov.hasAttribute("hidden")) syncBoardOverlayTop(id);
       });
+      if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
       const tipOv = document.getElementById("tipRecordOverlay");
       if (tipOv && !tipOv.hasAttribute("hidden")) syncTipRecordLayout();
       const famOv = document.getElementById("famousTipsOverlay");
@@ -12281,6 +12973,7 @@
         /* 殼／fixed 彈層不 zoom；放大後按 insight 底邊重鎖（避開 boardMain zoom 量測偏差） */
         function resyncZoomAnchors() {
           if (isWaterSheetOpen()) syncWaterSheetTop();
+          if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) syncSpeedMapSheetTop();
           syncOpenBoardOverlaysTop();
         }
         resyncZoomAnchors();
@@ -12421,8 +13114,7 @@
             closeSynthReviewSheet();
             return;
           }
-          const speedOv = document.getElementById("speedMapOverlay");
-          if (speedOv && !speedOv.hasAttribute("hidden")) {
+          if (typeof isSpeedMapSheetOpen === "function" && isSpeedMapSheetOpen()) {
             closeSpeedMapSheet();
             return;
           }
