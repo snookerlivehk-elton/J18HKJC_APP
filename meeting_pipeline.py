@@ -72,7 +72,7 @@ STAGE_HELP: Dict[str, str] = {
     "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
     "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok。Web 只入隊；Cron tick 喺容器內 inline 跑（唔再 Web Popen）。卡住會 reconcile＋only_missing 續跑。覆蓋 ≥80% 後自動接快照／海報／文案。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；建完自動產 AI 社交文案並推送 Ad API。",
-    "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
+    "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）。export 空會自動 POST /api/results/fetch 再重試；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",
     "SETTLED": "快照 × 名次結算命中率；與當日評述無關。RESULTS 齊備後由 tick／同步自動 settle，結算後立刻跑 promo_hits→post_race。",
 }
 
@@ -1487,20 +1487,13 @@ class MeetingPipeline:
             if action == "resync_results_sectionals":
                 from data_audit import resync_results_and_sectionals
 
+                # data_audit 內已含 sync_jjjc_results + R2 sectionals + 可選 raw 回填
                 out = resync_results_and_sectionals(
                     self,
                     racing_date,
                     course,
                     also_backfill=bool(kwargs.get("also_backfill", True)),
                 )
-                # 再試正式 R2 sectionals export（有就寫時間；無就 waiting）
-                try:
-                    from jjjc_sectionals_sync import sync_meeting as sync_sec
-
-                    sec = sync_sec(racing_date=racing_date, course=course)
-                    out["sectionals_export"] = sec
-                except Exception as e:
-                    out["sectionals_export"] = {"ok": False, "error": str(e)[:200]}
                 return out
 
             if action == "remediate_zh_names":

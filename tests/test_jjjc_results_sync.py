@@ -437,6 +437,183 @@ class JjjcResultsSyncTest(unittest.TestCase):
             self.assertEqual(nos, list(range(1, 13)))
             self.assertEqual(ghost, 0)
 
+    def test_sync_meeting_auto_fetch_when_export_empty(self):
+        """export 空時應自動 POST /api/results/fetch，再 re-export 入庫。"""
+        from unittest.mock import patch
+
+        import jjjc_results_sync as sync
+
+        empty = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-10-28",
+            "venue_code": "ST",
+            "race_count": 0,
+            "runner_count": 0,
+            "races": [],
+        }
+        filled = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-10-28",
+            "venue_code": "ST",
+            "race_count": 1,
+            "runner_count": 1,
+            "races": [
+                {
+                    "race_id": "20261028ST01",
+                    "race_no": 1,
+                    "race_date": "2026-10-28",
+                    "venue_code": "ST",
+                    "runners": [
+                        {
+                            "horse_no": 1,
+                            "horse_name": "測試駒",
+                            "finish_position": 1,
+                            "finish_order_num": 1,
+                        }
+                    ],
+                }
+            ],
+        }
+        fetch_calls = {"n": 0}
+        export_calls = {"n": 0}
+
+        def _fake_export(**kwargs):
+            export_calls["n"] += 1
+            return empty if export_calls["n"] == 1 else filled
+
+        def _fake_fetch(race_date, venue, **kwargs):
+            fetch_calls["n"] += 1
+            return {
+                "ok": True,
+                "race_count": 1,
+                "runner_count": 1,
+                "race_date": race_date,
+                "venue_code": venue,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "test.db")
+            os.environ["USE_SQLITE"] = "true"
+            import etl_pipeline
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            with patch.object(sync, "fetch_export", side_effect=_fake_export), patch.object(
+                sync, "trigger_results_fetch", side_effect=_fake_fetch
+            ):
+                out = sync.sync_meeting("2026-10-28", "ST")
+
+            self.assertTrue(out.get("ok"), out)
+            self.assertTrue(out.get("auto_fetched"), out)
+            self.assertEqual(fetch_calls["n"], 1)
+            self.assertGreaterEqual(export_calls["n"], 2)
+            self.assertGreaterEqual(int(out.get("runner_upserted") or 0), 1)
+
+    def test_sync_meeting_still_empty_after_fetch_is_waiting(self):
+        from unittest.mock import patch
+
+        import jjjc_results_sync as sync
+
+        empty = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-11-01",
+            "venue_code": "HV",
+            "races": [],
+        }
+        with patch.object(sync, "fetch_export", return_value=empty), patch.object(
+            sync,
+            "trigger_results_fetch",
+            return_value={"ok": True, "race_count": 0, "runner_count": 0},
+        ):
+            out = sync.sync_meeting("2026-11-01", "HV")
+        self.assertTrue(out.get("ok"), out)
+        self.assertTrue(out.get("waiting"), out)
+        self.assertIn("無賽果", str(out.get("detail") or ""))
+
+    def test_results_resync_preserves_sectional_times(self):
+        """整場換血刪 runner_sections 後，仍應把先前 R2 秒數按馬號寫返。"""
+        root = Path(__file__).resolve().parents[1]
+        fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"
+        self.assertTrue(fixture.is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "preserve_sec.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+            import jjjc_results_sync as sync
+            import sectionals_store as ss
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+            ss.USE_SQLITE = True
+            ss.SQLITE_DB_PATH = db_path
+
+            payload = json.loads(fixture.read_text(encoding="utf-8"))
+            out1 = sync.upsert_payload(payload)
+            self.assertTrue(out1["ok"], out1)
+
+            from sqlalchemy import create_engine, text
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            with eng.begin() as conn:
+                # 模擬 R2 已寫入秒數
+                conn.execute(
+                    text(
+                        """
+                        UPDATE runner_sections
+                        SET sectional_time = printf('1%d.00', stage_no)
+                        WHERE runner_id LIKE '20260906ST%'
+                        """
+                    )
+                )
+                before = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND sectional_time IS NOT NULL
+                          AND TRIM(sectional_time) != ''
+                        """
+                    )
+                ).scalar()
+            self.assertGreater(int(before or 0), 0)
+
+            out2 = sync.upsert_payload(payload)
+            self.assertTrue(out2["ok"], out2)
+            with eng.connect() as conn:
+                after = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND sectional_time IS NOT NULL
+                          AND TRIM(sectional_time) != ''
+                        """
+                    )
+                ).scalar()
+                sample = conn.execute(
+                    text(
+                        """
+                        SELECT sectional_time FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND stage_no = 1
+                          AND sectional_time IS NOT NULL
+                        LIMIT 1
+                        """
+                    )
+                ).scalar()
+            eng.dispose()
+            self.assertEqual(int(after or 0), int(before or 0))
+            self.assertTrue(str(sample or "").startswith("1"))
+
 
 if __name__ == "__main__":
     unittest.main()

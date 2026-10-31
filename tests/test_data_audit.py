@@ -95,6 +95,87 @@ class DataAuditTest(unittest.TestCase):
         self.assertGreaterEqual(out["inventory"]["with_sections"], 14)
         eng.dispose()
 
+    def test_list_meetings_missing_sectional_times_respects_age(self):
+        from datetime import date
+
+        from data_audit import list_meetings_missing_sectional_times
+        from sqlalchemy import text
+
+        eng, _ = self._load_fixture_db()
+        # results fixture 多數只有走位；清秒數確保 time_cov 不足
+        with eng.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE runner_sections SET sectional_time = NULL "
+                    "WHERE runner_id LIKE '20260906ST%'"
+                )
+            )
+        missing = list_meetings_missing_sectional_times(
+            eng,
+            as_of=date(2026, 9, 12),  # age=6 ≥ min_age 5
+            min_age_days=5,
+            max_age_days=30,
+            limit=10,
+        )
+        self.assertTrue(
+            any(
+                m["racing_date"] == "2026-09-06" and m["course"] == "ST"
+                for m in missing
+            ),
+            missing,
+        )
+        too_soon = list_meetings_missing_sectional_times(
+            eng,
+            as_of=date(2026, 9, 8),  # age=2 < 5
+            min_age_days=5,
+            max_age_days=30,
+            limit=10,
+        )
+        self.assertFalse(
+            any(m["racing_date"] == "2026-09-06" for m in too_soon),
+            too_soon,
+        )
+        eng.dispose()
+
+    def test_sync_sectional_times_for_meeting_calls_sectionals(self):
+        from unittest.mock import MagicMock, patch
+
+        from data_audit import sync_sectional_times_for_meeting
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        pipe.run_action = MagicMock(
+            return_value={
+                "ok": True,
+                "waiting": False,
+                "runner_sections_upserted": 10,
+            }
+        )
+        with patch(
+            "data_audit.meeting_inventory",
+            return_value={
+                "finish_n": 10,
+                "with_sections": 10,
+                "with_sectional_times": 10,
+                "sectional_time_coverage": 1.0,
+                "sectional_times_ok": True,
+                "gaps": [],
+                "status": "ok",
+            },
+        ), patch(
+            "data_audit.backfill_meeting_sectionals",
+            return_value={"ok": True, "runners_written": 0},
+        ):
+            out = sync_sectional_times_for_meeting(
+                pipe, "2026-09-06", "ST", also_backfill=True
+            )
+        pipe.run_action.assert_called_with(
+            "2026-09-06", "ST", "sync_jjjc_sectionals"
+        )
+        self.assertTrue(out["sectional_times_ok"])
+        self.assertTrue(out["ok"])
+        self.assertFalse(out.get("waiting"))
+
 
 if __name__ == "__main__":
     unittest.main()

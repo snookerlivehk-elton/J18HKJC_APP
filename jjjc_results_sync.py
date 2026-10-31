@@ -21,7 +21,7 @@ import argparse
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 from sqlalchemy import create_engine, text
@@ -331,6 +331,69 @@ def fetch_export(
     return payload
 
 
+def _results_fetch_timeout() -> float:
+    try:
+        return float(os.getenv("JJJC_RESULTS_FETCH_TIMEOUT", "120") or 120)
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def trigger_results_fetch(
+    race_date: str,
+    venue: str,
+    *,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    上游主動抓官方賽果：POST {base}/api/results/fetch?date=&venue=
+
+    export 空時必須先打呢步，否則 sync 永遠「無賽果」。
+    """
+    base = _api_base(base_url)
+    if not base:
+        return {"ok": False, "error": "未設定 JJJC_API_BASE"}
+    v = str(venue or "").strip().upper()
+    if v not in {"ST", "HV"}:
+        return {"ok": False, "error": f"venue 必須係 ST|HV，收到：{venue!r}"}
+    params = {"date": _normalize_date(race_date), "venue": v}
+    url = f"{base}/api/results/fetch"
+    to = float(timeout if timeout is not None else _results_fetch_timeout())
+    try:
+        with httpx.Client(timeout=to, follow_redirects=True) as client:
+            r = client.post(url, params=params)
+        body: Dict[str, Any]
+        try:
+            parsed = r.json()
+            body = parsed if isinstance(parsed, dict) else {"raw": parsed}
+        except Exception:
+            body = {"raw_text": (r.text or "")[:300]}
+        if r.status_code >= 400:
+            return {
+                "ok": False,
+                "status_code": r.status_code,
+                "error": f"HTTP {r.status_code}",
+                "url": url,
+                "response": body,
+            }
+        race_count = _safe_int(body.get("race_count"))
+        runner_count = _safe_int(body.get("runner_count"))
+        ok = bool(body.get("ok", True))
+        return {
+            "ok": ok,
+            "status_code": r.status_code,
+            "url": url,
+            "race_date": body.get("race_date") or params["date"],
+            "venue_code": body.get("venue_code") or v,
+            "race_count": race_count,
+            "runner_count": runner_count,
+            "race_ids": body.get("race_ids"),
+            "response": body,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300], "url": url}
+
+
 def load_payload_file(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
@@ -492,6 +555,125 @@ def _prune_orphan_meeting_races(
         "skipped_protected_race_ids": skipped_protected,
         "allow_prune_finished": allow_prune_finished,
     }
+
+
+def _snapshot_sectional_times_for_race(conn, race_id: str) -> List[Dict[str, Any]]:
+    """
+    賽果「整場換血」會刪 runner_sections；先按馬號／馬碼＋段號留低已有秒數，
+    之後寫回，避免重跑賽果把 R2 分段時間清走。
+    """
+    rid = str(race_id or "").strip()
+    if not rid:
+        return []
+    try:
+        rows = conn.execute(
+            text(
+                """
+                SELECT r.horse_no,
+                       UPPER(COALESCE(r.brand_num, '')) AS brand_num,
+                       rs.stage_no,
+                       rs.sectional_time,
+                       rs.split_1,
+                       rs.split_2
+                FROM runner_sections rs
+                JOIN runners r ON r.runner_id = rs.runner_id
+                WHERE r.race_id = :rid
+                  AND rs.sectional_time IS NOT NULL
+                  AND TRIM(CAST(rs.sectional_time AS TEXT)) != ''
+                """
+            ),
+            {"rid": rid},
+        ).mappings().all()
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        hn = _safe_int(row.get("horse_no"))
+        stage_no = _safe_int(row.get("stage_no"))
+        tm = str(row.get("sectional_time") or "").strip()
+        if hn is None or stage_no is None or not tm:
+            continue
+        out.append(
+            {
+                "horse_no": int(hn),
+                "brand_num": str(row.get("brand_num") or "").strip().upper() or None,
+                "stage_no": int(stage_no),
+                "sectional_time": tm[:20],
+                "split_1": row.get("split_1"),
+                "split_2": row.get("split_2"),
+            }
+        )
+    return out
+
+
+def _restore_sectional_times_for_race(
+    conn, race_id: str, snapshot: Sequence[Dict[str, Any]]
+) -> int:
+    """把 snapshot 嘅秒數寫回而家嘅 runner_sections（只補空，唔覆蓋已有時間）。"""
+    rid = str(race_id or "").strip()
+    if not rid or not snapshot:
+        return 0
+    restored = 0
+    for item in snapshot:
+        hn = _safe_int(item.get("horse_no"))
+        stage_no = _safe_int(item.get("stage_no"))
+        tm = str(item.get("sectional_time") or "").strip()
+        if hn is None or stage_no is None or not tm:
+            continue
+        brand = str(item.get("brand_num") or "").strip().upper() or None
+        params: Dict[str, Any] = {
+            "rid": rid,
+            "hn": int(hn),
+            "stage": int(stage_no),
+            "tm": tm[:20],
+            "s1": item.get("split_1"),
+            "s2": item.get("split_2"),
+        }
+        # 優先馬碼對齊，再退回馬號
+        if brand:
+            params["brand"] = brand
+            sql = """
+                UPDATE runner_sections AS rs
+                SET sectional_time = COALESCE(
+                      NULLIF(TRIM(CAST(rs.sectional_time AS TEXT)), ''),
+                      :tm
+                    ),
+                    split_1 = COALESCE(rs.split_1, :s1),
+                    split_2 = COALESCE(rs.split_2, :s2)
+                FROM runners r
+                WHERE rs.runner_id = r.runner_id
+                  AND r.race_id = :rid
+                  AND UPPER(COALESCE(r.brand_num, '')) = :brand
+                  AND rs.stage_no = :stage
+                  AND (
+                    rs.sectional_time IS NULL
+                    OR TRIM(CAST(rs.sectional_time AS TEXT)) = ''
+                  )
+                """
+        else:
+            sql = """
+                UPDATE runner_sections AS rs
+                SET sectional_time = COALESCE(
+                      NULLIF(TRIM(CAST(rs.sectional_time AS TEXT)), ''),
+                      :tm
+                    ),
+                    split_1 = COALESCE(rs.split_1, :s1),
+                    split_2 = COALESCE(rs.split_2, :s2)
+                FROM runners r
+                WHERE rs.runner_id = r.runner_id
+                  AND r.race_id = :rid
+                  AND r.horse_no = :hn
+                  AND rs.stage_no = :stage
+                  AND (
+                    rs.sectional_time IS NULL
+                    OR TRIM(CAST(rs.sectional_time AS TEXT)) = ''
+                  )
+                """
+        try:
+            restored += int(conn.execute(text(sql), params).rowcount or 0)
+        except Exception:
+            continue
+    return restored
 
 
 def _delete_runners_for_race(
@@ -733,6 +915,12 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     else {"by_brand": {}, "by_no": {}}
                 )
 
+                # 換血前先保留已有分段秒數（R2 後補嘅時間），否則 DELETE runner_sections 會清光
+                sectional_snapshot = (
+                    _snapshot_sectional_times_for_race(conn, race_id)
+                    if pending_runners
+                    else []
+                )
                 if pending_runners:
                     # 整場換血：刪本場全部舊 runners（含場額幽靈），再按 export 插入
                     pruned_ghost_runners += _delete_runners_for_race(conn, race_id)
@@ -846,6 +1034,11 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 race_section_n += upsert_race_sectionals(
                     conn, race_id, stages_from_race_times(race_times)
                 )
+                # 換血後把先前 R2 秒數補返（results 多數只有走位）
+                if sectional_snapshot:
+                    section_n += _restore_sectional_times_for_race(
+                        conn, race_id, sectional_snapshot
+                    )
 
                 for div in race.get("dividends") or []:
                     amount = _safe_float(div.get("amount"))
@@ -923,8 +1116,15 @@ def sync_meeting(
     race_no: Optional[int] = None,
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
+    *,
+    auto_fetch: bool = True,
 ) -> Dict[str, Any]:
-    """拉取（或讀檔）後 upsert；供 CLI 與 meeting_pipeline 呼叫。"""
+    """拉取（或讀檔）後 upsert；供 CLI 與 meeting_pipeline／meeting_tick 呼叫。
+
+    export 空時（預設）會先 POST /api/results/fetch 再重試 export，
+    避免 tick 永遠卡在「無賽果」而上游其實只差一槍 fetch。
+    """
+    upstream_fetch: Optional[Dict[str, Any]] = None
     if from_file:
         payload = load_payload_file(from_file)
     else:
@@ -934,16 +1134,63 @@ def sync_meeting(
             race_no=race_no,
             base_url=base_url,
         )
-    # 若 API 尚無資料，允許空 races
-    if not payload.get("races") and not from_file:
+        # export 空 → 主動 fetch → 再 export（完整自動鏈）
+        if auto_fetch and not list(payload.get("races") or []):
+            upstream_fetch = trigger_results_fetch(
+                racing_date, course, base_url=base_url
+            )
+            # fetch 成功或即使部分成功都再讀一次；官方未上架則仍空
+            try:
+                payload = fetch_export(
+                    race_date=racing_date,
+                    venue=course,
+                    race_no=race_no,
+                    base_url=base_url,
+                )
+            except Exception as e:
+                return {
+                    "ok": False,
+                    "waiting": False,
+                    "error": f"results fetch 後 re-export 失敗：{e}",
+                    "upstream_fetch": upstream_fetch,
+                    "racing_date": _normalize_date(racing_date),
+                    "course": str(course or "").upper(),
+                }
+
+    races = list(payload.get("races") or [])
+    if not races and not from_file:
+        # 官方未上架／未來賽日：waiting（唔當硬失敗，tick 可按冷卻重試）
+        detail = "export 無賽果"
+        if upstream_fetch is not None:
+            if upstream_fetch.get("ok"):
+                detail = (
+                    "export 無賽果（已自動 results fetch；"
+                    f"fetch race_count={upstream_fetch.get('race_count') or 0}；"
+                    "官方可能尚未上架）"
+                )
+            else:
+                detail = (
+                    "export 無賽果（自動 results fetch 失敗："
+                    f"{upstream_fetch.get('error') or upstream_fetch.get('status_code')}）"
+                )
         return {
-            "ok": False,
-            "error": "export 無賽果（api_jjjc 可能尚未 fetch）。請先對該日跑 results fetch。",
+            "ok": True,
+            "waiting": True,
+            "error": None,
+            "detail": detail,
             "payload_keys": list(payload.keys()),
+            "upstream_fetch": upstream_fetch,
+            "racing_date": _normalize_date(racing_date),
+            "course": str(course or "").upper(),
+            "race_count": 0,
+            "runner_upserted": 0,
         }
     out = upsert_payload(payload)
     out["racing_date"] = _normalize_date(racing_date)
     out["course"] = course.upper()
+    if upstream_fetch is not None:
+        out["upstream_fetch"] = upstream_fetch
+        out["auto_fetched"] = True
     return out
 
 

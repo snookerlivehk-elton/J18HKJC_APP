@@ -1,19 +1,19 @@
 name: Meeting Tick (pre + post race)
 
-# 阿里雲／Railway 雙邊並行：
+# 預設以「阿里雲本機 systemd j18-meeting-tick.timer」為主（容器內連 j18-postgres，唔使 GHA secret）。
+# 本 workflow 係可選雙軌／異地備援：
 #   Secrets（Railway job）:
 #     RAILWAY_DATABASE_URL = Postgres *Public* URL（*.proxy.rlwy.net），唔好用 postgres.railway.internal
 #     （或沿用 DATABASE_URL 作 fallback）
 #     可選：RAILWAY_DATABASE_URL_SYNC、JJJC_API_BASE、JJJC_RESULTS_API_BASE
 #     可選廣告推送：AD_API_BASE_URL、AD_API_KEY、AD_API_PUBLIC_BASE、OPENAI_API_KEY、OPENAI_BASE_URL、OPENAI_MODEL
-#   Secrets（Aliyun job）: ALIYUN_DATABASE_URL（可選 SYNC）
-#   未設定該邊 DB secret → 該 job 失敗（exit 1；避免假綠燈）
+#   Secrets（Aliyun job）: ALIYUN_DATABASE_URL（可選 SYNC）——僅當要由 GitHub 遠端連阿里雲庫時先要
+#   未設定該邊 DB secret → soft-skip（exit 0 + warning），唔再當 FATAL 紅燈
 #   Vars: ENABLE_MEETING_TICK_RAILWAY / ENABLE_MEETING_TICK_ALIYUN = false 可關閉
 #   預設 mode=all；可用 workflow_dispatch mode 覆寫
 #
-# 為何 GHA 必須用 Public URL：
+# 為何 GHA 若要連 Railway 必須用 Public URL：
 #   GitHub-hosted runner 喺 Railway 外面，連唔到 *.railway.internal。
-#   用 internal URL 會令 tick 永遠失敗 → 無快照／無 ingest → Ad API empty store。
 
 on:
   schedule:
@@ -75,15 +75,14 @@ jobs:
           export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "::error::FATAL: set RAILWAY_DATABASE_URL (Public proxy URL) or DATABASE_URL secret"
-            echo "::error::Do NOT use postgres.railway.internal — GitHub runners cannot resolve it."
-            exit 1
+            echo "::warning::RAILWAY_DATABASE_URL not set — skip Railway tick (Aliyun local timer is primary)"
+            exit 0
           fi
           # Guard: refuse obvious internal-only hosts on GHA
           case "${DATABASE_URL}" in
             *railway.internal*)
-              echo "::error::FATAL: DATABASE_URL uses railway.internal; set the Public TCP proxy URL instead"
-              exit 1
+              echo "::warning::DATABASE_URL uses railway.internal (unreachable from GHA) — skip Railway tick"
+              exit 0
               ;;
           esac
           if [ -z "${AD_API_BASE_URL:-}" ] || [ -z "${AD_API_KEY:-}" ]; then
@@ -130,8 +129,8 @@ jobs:
         run: |
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-$DATABASE_URL}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "::error::FATAL: set ALIYUN_DATABASE_URL secret (refusing silent skip)"
-            exit 1
+            echo "::warning::ALIYUN_DATABASE_URL not set — skip GHA→Aliyun tick (use server j18-meeting-tick.timer instead)"
+            exit 0
           fi
           EXTRA=""
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then

@@ -26,12 +26,14 @@
   4) settle_pending
   5) promo_hits → post_race_copy（SETTLED 後；可開關）
   6) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
+  7) SECTIONALS_TIMES late-backfill（賽後≥5日；R2 jjjc.sectionals.v1 通常此時齊）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
   - 依 readiness 重試；禁止無限狂爬（cooldown + max fails）
   - 人工略過／放行（manual_override）不覆蓋、不強跑
   - 同輪可樂觀排下游，但 execute 必須以 refresh 後真實 status 再開閘
+  - 分段秒數唔好以為賽當日就齊；缺秒數要喺 min_age 後重試直至覆蓋達標
 
 用法：
   python meeting_tick.py --mode all --dry-run --json
@@ -148,6 +150,25 @@ AUTO_NLP_MEETING_FACTORS = (
     "yes",
 )
 NLP_MEETING_LIMIT = int(os.getenv("MEETING_TICK_NLP_MEETING_LIMIT", "200") or 200)
+
+# 賽後晚到分段秒數：官網／R2 通常約第 5 日齊 → 超出 lookback 仍掃
+AUTO_SECTIONALS_TIMES = (
+    os.getenv("MEETING_TICK_AUTO_SECTIONALS_TIMES", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+DEFAULT_SECTIONALS_MIN_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_SECTIONALS_MIN_AGE_DAYS", "5") or 5
+)
+DEFAULT_SECTIONALS_MAX_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_SECTIONALS_MAX_AGE_DAYS", "120") or 120
+)
+DEFAULT_SECTIONALS_LIMIT = int(
+    os.getenv("MEETING_TICK_SECTIONALS_LIMIT", "8") or 8
+)
+SECTIONALS_TIMES_STAGE = "SECTIONALS_TIMES"
 
 POST_RACE_MODE = "post_race"
 PRE_RACE_MODE = "pre_race"
@@ -1636,6 +1657,7 @@ class MeetingTickRunner:
             else:
                 result = self.pipe.run_action(d, c, "sync_jjjc_results")
                 ok = bool(result.get("ok"))
+                waiting = bool(result.get("waiting"))
                 detail = str(
                     result.get("error")
                     or result.get("msg")
@@ -1643,12 +1665,23 @@ class MeetingTickRunner:
                     or ""
                 )
                 err = str(result.get("error") or "")
-                if ok:
+                # 以歷史庫 readiness 為準：sync 後再 check，避免空 export 誤標 ok
+                ready_after = self.pipe.refresh_readiness(d, c)
+                results_ready = str(
+                    (ready_after.get("RESULTS") or {}).get("status") or ""
+                )
+                if results_ready == STATUS_OK:
                     status = STATUS_OK
                     count_as_success = True
-                elif "尚未" in err or "無賽果" in err or "empty" in err.lower():
+                elif waiting or "尚未" in err or "無賽果" in detail or "empty" in (
+                    err or detail
+                ).lower():
                     status = STATUS_WAITING
-                    count_as_success = True  # 官方未上架：唔累加 fail_count
+                    count_as_success = True  # 官方未上架／已 auto-fetch 仍空：唔累加 fail
+                elif ok:
+                    # sync 自稱 ok 但 check 仍未齊（部分場）→ waiting
+                    status = STATUS_WAITING
+                    count_as_success = True
                 else:
                     status = STATUS_FAILED
                     count_as_success = False
@@ -1658,16 +1691,30 @@ class MeetingTickRunner:
                     "RESULTS",
                     ok=count_as_success,
                     status=status,
-                    detail=detail or err,
+                    detail=detail or err or str((ready_after.get("RESULTS") or {}).get("detail") or ""),
                 )
-                action_rec["ok"] = ok
+                action_rec["ok"] = ok and not waiting and results_ready == STATUS_OK
+                action_rec["waiting"] = status == STATUS_WAITING
                 action_rec["result"] = {
                     k: result.get(k)
-                    for k in ("ok", "error", "n_races", "n_runners", "msg", "runner_sections_upserted")
+                    for k in (
+                        "ok",
+                        "waiting",
+                        "error",
+                        "detail",
+                        "n_races",
+                        "n_runners",
+                        "msg",
+                        "runner_sections_upserted",
+                        "auto_fetched",
+                        "upstream_fetch",
+                        "race_count",
+                        "runner_upserted",
+                    )
                     if k in result
                 } or result
                 # 刷新 readiness
-                out["readiness_after_sync"] = self.pipe.refresh_readiness(d, c)
+                out["readiness_after_sync"] = ready_after
                 # R2 分段：試 jjjc sectionals export（暫無則 waiting，唔 fail）
                 try:
                     sec = self.pipe.run_action(d, c, "sync_jjjc_sectionals")
@@ -2195,6 +2242,16 @@ class MeetingTickRunner:
                 (report.get("backlog") or {}).get("n_processed") or 0
             )
 
+        # 分段秒數晚到：賽後≥min_age（預設 5 日）掃歷史缺口並拉 R2
+        if AUTO_SECTIONALS_TIMES:
+            report["sectionals_times"] = self.run_sectionals_times_pass(
+                as_of=today,
+                dry_run=dry_run,
+            )
+            report["n_actions"] += int(
+                (report.get("sectionals_times") or {}).get("n_processed") or 0
+            )
+
         # needs_human／failed → 營運介入報告（notify_admins 入口；預設可 stub）
         if not dry_run:
             report["incidents"] = self.scan_ops_incidents(report)
@@ -2310,6 +2367,181 @@ class MeetingTickRunner:
             )
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def run_sectionals_times_pass(
+        self,
+        *,
+        as_of: Optional[date] = None,
+        dry_run: bool = False,
+        min_age_days: int = DEFAULT_SECTIONALS_MIN_AGE_DAYS,
+        max_age_days: int = DEFAULT_SECTIONALS_MAX_AGE_DAYS,
+        limit: int = DEFAULT_SECTIONALS_LIMIT,
+    ) -> Dict[str, Any]:
+        """
+        歷史賽日分段秒數晚到回填。
+
+        官網／R2 jjjc.sectionals.v1 多數賽後約第 5 日齊；lookback 內若曾
+        sync 得 empty，唔會自動再試 → 本 pass 用 min_age 掃缺口。
+        """
+        today = as_of or date.today()
+        out: Dict[str, Any] = {
+            "ok": True,
+            "as_of": today.isoformat(),
+            "min_age_days": int(min_age_days),
+            "max_age_days": int(max_age_days),
+            "limit": int(limit),
+            "n_candidates": 0,
+            "n_processed": 0,
+            "n_ok": 0,
+            "n_waiting": 0,
+            "n_failed": 0,
+            "n_skipped": 0,
+            "meetings": [],
+        }
+        try:
+            from data_audit import (
+                list_meetings_missing_sectional_times,
+                sync_sectional_times_for_meeting,
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        try:
+            candidates = list_meetings_missing_sectional_times(
+                self.pipe.engine,
+                as_of=today,
+                min_age_days=min_age_days,
+                max_age_days=max_age_days,
+                limit=max(1, int(limit) * 3),  # 多取少少畀 cooldown 過濾
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        out["n_candidates"] = len(candidates)
+        processed = 0
+        for item in candidates:
+            if processed >= max(1, int(limit)):
+                break
+            d = str(item.get("racing_date") or "")[:10]
+            c = str(item.get("course") or "").upper()
+            if not d or c not in {"ST", "HV"}:
+                continue
+            # 以上次 tick 狀態決定 cooldown（waiting／failed）
+            prev = self.get_tick_state(d, c, SECTIONALS_TIMES_STAGE)
+            prev_status = str(prev.get("last_status") or STATUS_WAITING)
+            allowed, reason = self._attempt_allowed(
+                d, c, SECTIONALS_TIMES_STAGE, prev_status
+            )
+            if not allowed:
+                out["n_skipped"] += 1
+                out["meetings"].append(
+                    {
+                        "racing_date": d,
+                        "course": c,
+                        "skipped": True,
+                        "reason": reason,
+                        "age_days": item.get("age_days"),
+                        "sectional_time_coverage": item.get(
+                            "sectional_time_coverage"
+                        ),
+                    }
+                )
+                continue
+
+            rec: Dict[str, Any] = {
+                "racing_date": d,
+                "course": c,
+                "age_days": item.get("age_days"),
+                "sectional_time_coverage_before": item.get(
+                    "sectional_time_coverage"
+                ),
+            }
+            if dry_run:
+                rec["ok"] = True
+                rec["dry_run"] = True
+                out["meetings"].append(rec)
+                processed += 1
+                out["n_processed"] = processed
+                continue
+
+            try:
+                result = sync_sectional_times_for_meeting(
+                    self.pipe,
+                    d,
+                    c,
+                    also_backfill=True,
+                    also_resync_results=False,
+                )
+            except Exception as e:
+                result = {"ok": False, "error": str(e)[:200]}
+
+            times_ok = bool(result.get("sectional_times_ok"))
+            waiting = bool(result.get("waiting")) and not times_ok
+            hard_fail = (result.get("ok") is False) and not waiting and not times_ok
+            if times_ok:
+                status = STATUS_OK
+                count_ok = True
+                out["n_ok"] += 1
+            elif waiting:
+                status = STATUS_WAITING
+                count_ok = True  # 上游未齊唔累加 fail
+                out["n_waiting"] += 1
+            else:
+                status = STATUS_FAILED
+                count_ok = False
+                out["n_failed"] += 1
+                out["ok"] = False
+
+            detail = str(
+                result.get("error")
+                or ((result.get("inventory") or {}).get("status"))
+                or ((result.get("sectionals_export") or {}).get("detail"))
+                or ""
+            )[:500]
+            self.record_tick_attempt(
+                d,
+                c,
+                SECTIONALS_TIMES_STAGE,
+                ok=count_ok,
+                status=status,
+                detail=detail
+                or f"cov={(result.get('inventory') or {}).get('sectional_time_coverage')}",
+            )
+            rec.update(
+                {
+                    "ok": bool(times_ok or (result.get("ok") and not hard_fail)),
+                    "waiting": waiting,
+                    "status": status,
+                    "sectional_times_ok": times_ok,
+                    "inventory": result.get("inventory"),
+                    "sectionals_export": {
+                        k: (result.get("sectionals_export") or {}).get(k)
+                        for k in (
+                            "ok",
+                            "waiting",
+                            "status",
+                            "detail",
+                            "runner_sections_upserted",
+                            "race_sectionals_upserted",
+                            "runners_with_sections",
+                        )
+                        if (result.get("sectionals_export") or {}).get(k)
+                        is not None
+                    }
+                    if result.get("sectionals_export")
+                    else None,
+                    "error": result.get("error"),
+                }
+            )
+            out["meetings"].append(rec)
+            processed += 1
+            out["n_processed"] = processed
+
+        return out
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
