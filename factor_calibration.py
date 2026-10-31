@@ -24,7 +24,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 import pandas as pd
@@ -601,19 +601,221 @@ class FactorCalibration:
         )
 
     # ---------- 賽後結算 ----------
+    def _list_batches_for_settle(
+        self,
+        *,
+        racing_date: Optional[str] = None,
+        course: Optional[str] = None,
+        only_unsettled: bool = True,
+    ) -> pd.DataFrame:
+        clauses = []
+        params: Dict[str, Any] = {}
+        if only_unsettled:
+            clauses.append("settled_at IS NULL")
+        if racing_date:
+            clauses.append("racing_date = :d")
+            params["d"] = str(racing_date)[:10]
+        if course:
+            clauses.append("course = :c")
+            params["c"] = str(course).upper()
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        return pd.read_sql(
+            text(
+                "SELECT batch_id, racing_date, course, settled_at "
+                f"FROM prediction_snapshot_batches{where} ORDER BY racing_date, batch_id"
+            ),
+            self.engine,
+            params=params,
+        )
+
+    def _apply_runner_results_to_batch(
+        self,
+        batch_id: str,
+        *,
+        update_existing: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        用 runners 名次回填單一 batch 嘅 prediction_snapshots。
+
+        update_existing=False：只填 finish_order_num IS NULL（首次結算）。
+        update_existing=True：已有名次若同 runners 唔一致亦覆寫（賽果更正）。
+        """
+        if update_existing:
+            snaps = pd.read_sql(
+                text(
+                    "SELECT id, race_id, horse_no, horse_name, finish_order_num, "
+                    "settle_win_odds FROM prediction_snapshots WHERE batch_id = :b"
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+        else:
+            snaps = pd.read_sql(
+                text(
+                    "SELECT id, race_id, horse_no, horse_name, finish_order_num, "
+                    "settle_win_odds FROM prediction_snapshots "
+                    "WHERE batch_id = :b AND finish_order_num IS NULL"
+                ),
+                self.engine,
+                params={"b": batch_id},
+            )
+        if snaps.empty:
+            return {
+                "batch_id": batch_id,
+                "updated_rows": 0,
+                "matched_by_no": 0,
+                "matched_by_name": 0,
+                "unmatched": 0,
+                "snap_rows": 0,
+                "waiting_results": False,
+                "all_filled_already": not update_existing,
+            }
+
+        race_ids = snaps["race_id"].unique().tolist()
+        results = self._fetch_results_for_races(race_ids)
+        if results.empty:
+            return {
+                "batch_id": batch_id,
+                "updated_rows": 0,
+                "matched_by_no": 0,
+                "matched_by_name": 0,
+                "unmatched": int(len(snaps)),
+                "snap_rows": int(len(snaps)),
+                "waiting_results": True,
+                "all_filled_already": False,
+            }
+
+        from bucket_utils import normalize_person_name
+
+        results = results.copy()
+        results["horse_no"] = pd.to_numeric(results["horse_no"], errors="coerce")
+        results["horse_key"] = results["horse_name"].apply(normalize_person_name)
+        results["horse_key_l"] = results["horse_key"].str.lower()
+        if "settle_win_odds" not in results.columns:
+            results["settle_win_odds"] = None
+
+        snaps = snaps.copy()
+        snaps["horse_no"] = pd.to_numeric(snaps["horse_no"], errors="coerce")
+        snaps["horse_key"] = snaps["horse_name"].apply(normalize_person_name)
+        snaps["horse_key_l"] = snaps["horse_key"].str.lower()
+
+        # 現有值對照：只寫有變更嘅列（merge 前先留底，避免同名欄被覆蓋）
+        existing = {
+            int(r["id"]): (
+                None if pd.isna(r.get("finish_order_num")) else int(r["finish_order_num"]),
+                None
+                if pd.isna(r.get("settle_win_odds"))
+                else float(r["settle_win_odds"]),
+            )
+            for _, r in snaps.iterrows()
+        }
+        # merge 只用身份欄，結果名次一律嚟自 runners
+        snaps_keys = snaps.drop(
+            columns=["finish_order_num", "settle_win_odds"], errors="ignore"
+        )
+
+        finish_by_id: dict = {}
+        odds_by_id: dict = {}
+        matched_by_no = matched_by_name = 0
+        result_cols = ["race_id", "horse_no", "finish_order_num", "settle_win_odds"]
+
+        by_no = snaps_keys.merge(
+            results[result_cols].dropna(subset=["horse_no"]),
+            on=["race_id", "horse_no"],
+            how="left",
+        )
+        for _, row in by_no.iterrows():
+            if pd.isna(row.get("finish_order_num")):
+                continue
+            sid = int(row["id"])
+            finish_by_id[sid] = int(row["finish_order_num"])
+            if pd.notna(row.get("settle_win_odds")):
+                odds_by_id[sid] = float(row["settle_win_odds"])
+            matched_by_no += 1
+
+        still = snaps_keys[~snaps_keys["id"].astype(int).isin(finish_by_id)].copy()
+        if not still.empty:
+            by_name = still.merge(
+                results[
+                    ["race_id", "horse_key_l", "finish_order_num", "settle_win_odds"]
+                ].dropna(subset=["horse_key_l"]),
+                on=["race_id", "horse_key_l"],
+                how="left",
+            )
+            for _, row in by_name.iterrows():
+                if pd.isna(row.get("finish_order_num")):
+                    continue
+                rid = int(row["id"])
+                if rid in finish_by_id:
+                    continue
+                finish_by_id[rid] = int(row["finish_order_num"])
+                if pd.notna(row.get("settle_win_odds")):
+                    odds_by_id[rid] = float(row["settle_win_odds"])
+                matched_by_name += 1
+
+        updated = 0
+        with self.engine.begin() as conn:
+            for sid, fin in finish_by_id.items():
+                odds = odds_by_id.get(sid)
+                old_fin, old_odds = existing.get(int(sid), (None, None))
+                fin_changed = old_fin != int(fin)
+                odds_changed = odds is not None and (
+                    old_odds is None
+                    or abs(float(old_odds) - float(odds)) >= 1e-9
+                )
+                if not fin_changed and not odds_changed:
+                    continue
+                if odds is None:
+                    conn.execute(
+                        text(
+                            "UPDATE prediction_snapshots SET finish_order_num = :f "
+                            "WHERE id = :id"
+                        ),
+                        {"f": int(fin), "id": int(sid)},
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "UPDATE prediction_snapshots "
+                            "SET finish_order_num = :f, settle_win_odds = :o "
+                            "WHERE id = :id"
+                        ),
+                        {"f": int(fin), "o": float(odds), "id": int(sid)},
+                    )
+                updated += 1
+
+        return {
+            "batch_id": batch_id,
+            "updated_rows": int(updated),
+            "matched_by_no": int(matched_by_no),
+            "matched_by_name": int(matched_by_name),
+            "unmatched": int(len(snaps) - len(finish_by_id)),
+            "snap_rows": int(len(snaps)),
+            "waiting_results": False,
+            "all_filled_already": False,
+        }
+
+    def _batch_meets_settle_threshold(self, batch_id: str) -> bool:
+        left = pd.read_sql(
+            text(
+                "SELECT race_id, COUNT(*) AS n, "
+                "SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS filled "
+                "FROM prediction_snapshots WHERE batch_id = :b GROUP BY race_id"
+            ),
+            self.engine,
+            params={"b": batch_id},
+        )
+        if left.empty or not (left["filled"] > 0).all():
+            return False
+        return bool((left["filled"] / left["n"] >= 0.5).all())
+
     def settle_pending(self) -> dict:
         """
         對未結算 batch：若 historical runners 已有該 race_id 名次，則回填 finish_order_num。
         匹配優先 race_id+horse_no（避免中英馬名不一致），再 fallback 正規化馬名。
         當 batch 內每場 ≥50% 馬有名次時，標記 settled_at。
         """
-        batches = pd.read_sql(
-            text(
-                "SELECT batch_id, racing_date, course FROM prediction_snapshot_batches "
-                "WHERE settled_at IS NULL ORDER BY racing_date"
-            ),
-            self.engine,
-        )
+        batches = self._list_batches_for_settle(only_unsettled=True)
         if batches.empty:
             return {
                 "ok": True,
@@ -628,132 +830,23 @@ class FactorCalibration:
         match_stats = []
         for _, b in batches.iterrows():
             batch_id = b["batch_id"]
-            snaps = pd.read_sql(
-                text(
-                    "SELECT id, race_id, horse_no, horse_name FROM prediction_snapshots "
-                    "WHERE batch_id = :b AND finish_order_num IS NULL"
-                ),
-                self.engine,
-                params={"b": batch_id},
+            applied = self._apply_runner_results_to_batch(
+                batch_id, update_existing=False
             )
-            if snaps.empty:
-                # 已全部填完名次
+            if applied.get("all_filled_already"):
                 self._mark_settled(batch_id)
                 settled.append(batch_id)
                 continue
-
-            race_ids = snaps["race_id"].unique().tolist()
-            results = self._fetch_results_for_races(race_ids)
-            if results.empty:
+            if applied.get("waiting_results"):
                 waiting_results.append(batch_id)
+                match_stats.append(applied)
                 continue
 
-            from bucket_utils import normalize_person_name
-
-            results = results.copy()
-            results["horse_no"] = pd.to_numeric(results["horse_no"], errors="coerce")
-            results["horse_key"] = results["horse_name"].apply(normalize_person_name)
-            # 英文名大小寫不敏感
-            results["horse_key_l"] = results["horse_key"].str.lower()
-
-            snaps = snaps.copy()
-            snaps["horse_no"] = pd.to_numeric(snaps["horse_no"], errors="coerce")
-            snaps["horse_key"] = snaps["horse_name"].apply(normalize_person_name)
-            snaps["horse_key_l"] = snaps["horse_key"].str.lower()
-
-            finish_by_id: dict = {}
-            odds_by_id: dict = {}
-            matched_by_no = matched_by_name = 0
-
-            result_cols = ["race_id", "horse_no", "finish_order_num", "settle_win_odds"]
-            if "settle_win_odds" not in results.columns:
-                results["settle_win_odds"] = None
-
-            # 1) race_id + horse_no（主路徑：中英馬名不一致時仍可配）
-            by_no = snaps.merge(
-                results[result_cols].dropna(subset=["horse_no"]),
-                on=["race_id", "horse_no"],
-                how="left",
-                suffixes=("", "_r"),
-            )
-            for _, row in by_no.iterrows():
-                if pd.isna(row.get("finish_order_num")):
-                    continue
-                sid = int(row["id"])
-                finish_by_id[sid] = int(row["finish_order_num"])
-                if pd.notna(row.get("settle_win_odds")):
-                    odds_by_id[sid] = float(row["settle_win_odds"])
-                matched_by_no += 1
-
-            # 2) fallback：race_id + 正規化馬名（大小寫不敏感）
-            still = snaps[~snaps["id"].astype(int).isin(finish_by_id)].copy()
-            if not still.empty:
-                by_name = still.merge(
-                    results[
-                        ["race_id", "horse_key_l", "finish_order_num", "settle_win_odds"]
-                    ].dropna(subset=["horse_key_l"]),
-                    on=["race_id", "horse_key_l"],
-                    how="left",
-                    suffixes=("", "_r"),
-                )
-                for _, row in by_name.iterrows():
-                    if pd.isna(row.get("finish_order_num")):
-                        continue
-                    rid = int(row["id"])
-                    if rid in finish_by_id:
-                        continue
-                    finish_by_id[rid] = int(row["finish_order_num"])
-                    if pd.notna(row.get("settle_win_odds")):
-                        odds_by_id[rid] = float(row["settle_win_odds"])
-                    matched_by_name += 1
-
-            with self.engine.begin() as conn:
-                for sid, fin in finish_by_id.items():
-                    odds = odds_by_id.get(sid)
-                    if odds is None:
-                        conn.execute(
-                            text(
-                                "UPDATE prediction_snapshots SET finish_order_num = :f "
-                                "WHERE id = :id"
-                            ),
-                            {"f": int(fin), "id": int(sid)},
-                        )
-                    else:
-                        conn.execute(
-                            text(
-                                "UPDATE prediction_snapshots "
-                                "SET finish_order_num = :f, settle_win_odds = :o "
-                                "WHERE id = :id"
-                            ),
-                            {"f": int(fin), "o": float(odds), "id": int(sid)},
-                        )
-                    updated += 1
-
-            unmatched = int(len(snaps) - len(finish_by_id))
-            match_stats.append(
-                {
-                    "batch_id": batch_id,
-                    "snap_rows": int(len(snaps)),
-                    "matched_by_no": int(matched_by_no),
-                    "matched_by_name": int(matched_by_name),
-                    "unmatched": unmatched,
-                }
-            )
-
-            # 檢查是否整批可結算
-            left = pd.read_sql(
-                text(
-                    "SELECT race_id, COUNT(*) AS n, "
-                    "SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS filled "
-                    "FROM prediction_snapshots WHERE batch_id = :b GROUP BY race_id"
-                ),
-                self.engine,
-                params={"b": batch_id},
-            )
-            if not left.empty and (left["filled"] > 0).all():
-                if (left["filled"] / left["n"] >= 0.5).all():
-                    self._mark_settled(batch_id)
-                    settled.append(batch_id)
+            updated += int(applied.get("updated_rows") or 0)
+            match_stats.append(applied)
+            if self._batch_meets_settle_threshold(batch_id):
+                self._mark_settled(batch_id)
+                settled.append(batch_id)
 
         msg = f"更新 {updated} 列；新結算 {len(settled)} batch"
         if waiting_results:
@@ -762,8 +855,8 @@ class FactorCalibration:
             sample = match_stats[0]
             msg += (
                 f"；配對失敗（例 `{sample['batch_id']}`："
-                f"no={sample['matched_by_no']} name={sample['matched_by_name']} "
-                f"未配={sample['unmatched']}）。"
+                f"no={sample.get('matched_by_no')} name={sample.get('matched_by_name')} "
+                f"未配={sample.get('unmatched')}）。"
                 "若賽果為英文名、快照為中文名，請更新後重試（已改優先馬號配對）。"
             )
 
@@ -773,6 +866,79 @@ class FactorCalibration:
             "updated_rows": updated,
             "waiting_results": waiting_results,
             "match_stats": match_stats,
+            "message": msg,
+        }
+
+    def resettle_meeting(self, racing_date: str, course: str) -> dict:
+        """
+        賽果更正後重套名次：含已 settled batch。
+
+        - 覆寫同 runners 不一致嘅 finish_order_num／settle_win_odds
+        - 未結算且達標 → 標記 settled
+        - 已結算且有變更 → 重寫 hit_rate_day_snapshots
+        """
+        d = str(racing_date or "")[:10]
+        c = str(course or "").upper()
+        batches = self._list_batches_for_settle(
+            racing_date=d, course=c, only_unsettled=False
+        )
+        if batches.empty:
+            return {
+                "ok": True,
+                "racing_date": d,
+                "course": c,
+                "settled_batches": [],
+                "refreshed_hit_batches": [],
+                "updated_rows": 0,
+                "message": "該日無快照 batch",
+                "changed": False,
+            }
+
+        updated = 0
+        newly_settled: List[str] = []
+        refreshed_hits: List[str] = []
+        waiting_results: List[str] = []
+        match_stats: List[Dict[str, Any]] = []
+
+        for _, b in batches.iterrows():
+            batch_id = str(b["batch_id"])
+            was_settled = pd.notna(b.get("settled_at"))
+            applied = self._apply_runner_results_to_batch(
+                batch_id, update_existing=True
+            )
+            match_stats.append(applied)
+            if applied.get("waiting_results"):
+                waiting_results.append(batch_id)
+                continue
+            n_upd = int(applied.get("updated_rows") or 0)
+            updated += n_upd
+            if not was_settled and self._batch_meets_settle_threshold(batch_id):
+                self._mark_settled(batch_id)
+                newly_settled.append(batch_id)
+            elif was_settled and n_upd > 0:
+                try:
+                    self.snapshot_hit_rates_for_batch(batch_id)
+                    refreshed_hits.append(batch_id)
+                except Exception as e:
+                    print(f"hit_rate refresh failed for {batch_id}: {e}")
+
+        changed = bool(updated or newly_settled or refreshed_hits)
+        msg = (
+            f"重套 {d} {c}：更新 {updated} 列；新結算 {len(newly_settled)}；"
+            f"重算命中 {len(refreshed_hits)}"
+        )
+        if waiting_results:
+            msg += f"；尚待賽果 {len(waiting_results)} batch"
+        return {
+            "ok": True,
+            "racing_date": d,
+            "course": c,
+            "settled_batches": newly_settled,
+            "refreshed_hit_batches": refreshed_hits,
+            "updated_rows": updated,
+            "waiting_results": waiting_results,
+            "match_stats": match_stats,
+            "changed": changed,
             "message": msg,
         }
 

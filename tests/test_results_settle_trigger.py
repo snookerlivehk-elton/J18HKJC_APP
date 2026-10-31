@@ -191,10 +191,18 @@ class AutoSettleAfterResultsTest(unittest.TestCase):
             "updated_rows": 10,
             "message": "done",
         }
+        pipe._maybe_recompute_factors_after_sectionals = MagicMock(return_value=None)
         with patch("jjjc_results_sync.sync_meeting", return_value=sync_out), patch(
             "factor_calibration.FactorCalibration"
         ) as Cal:
             Cal.return_value.settle_pending.return_value = settle_out
+            Cal.return_value.resettle_meeting.return_value = {
+                "ok": True,
+                "changed": False,
+                "updated_rows": 0,
+                "settled_batches": [],
+                "refreshed_hit_batches": [],
+            }
             out = mp.MeetingPipeline.run_action(
                 pipe, "2026-09-13", "ST", "sync_jjjc_results"
             )
@@ -205,6 +213,7 @@ class AutoSettleAfterResultsTest(unittest.TestCase):
         self.assertIn("auto_post_race_ads", out.get("auto_settle") or {})
         self.assertIn("auto_post_race_ads", out)
         Cal.return_value.settle_pending.assert_called_once()
+        Cal.return_value.resettle_meeting.assert_called()
         pipe._maybe_run_post_race_ads_after_settle.assert_called()
 
     def test_sync_results_skips_settle_when_results_incomplete(self):
@@ -215,6 +224,7 @@ class AutoSettleAfterResultsTest(unittest.TestCase):
         pipe.check_results = MagicMock(return_value=(mp.STATUS_WAITING, "partial"))
         pipe.check_snapshot = MagicMock(return_value=(mp.STATUS_OK, "snap"))
         pipe.check_settled = MagicMock(return_value=(mp.STATUS_PENDING, "pending"))
+        pipe._maybe_recompute_factors_after_sectionals = MagicMock(return_value=None)
 
         with patch(
             "jjjc_results_sync.sync_meeting",
@@ -225,6 +235,74 @@ class AutoSettleAfterResultsTest(unittest.TestCase):
             )
         self.assertNotIn("auto_settle", out)
         Cal.return_value.settle_pending.assert_not_called()
+        Cal.return_value.resettle_meeting.assert_not_called()
+
+    def test_sync_results_resettles_when_already_settled(self):
+        """已結算後再同步賽果：應 resettle 並在有變更時刷新命中／賽後廣告。"""
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        pipe.check_results = MagicMock(return_value=(mp.STATUS_OK, "ok"))
+        pipe.check_snapshot = MagicMock(return_value=(mp.STATUS_OK, "snap"))
+        pipe.check_settled = MagicMock(return_value=(mp.STATUS_OK, "settled"))
+        pipe._maybe_recompute_factors_after_sectionals = MagicMock(return_value=None)
+        pipe._maybe_run_post_race_ads_after_settle = MagicMock(
+            return_value={"ok": True, "actions": [{"action": "promo_hits", "ok": True}]}
+        )
+
+        re_out = {
+            "ok": True,
+            "changed": True,
+            "updated_rows": 3,
+            "settled_batches": [],
+            "refreshed_hit_batches": ["20260913ST_t"],
+            "message": "updated",
+        }
+        with patch(
+            "jjjc_results_sync.sync_meeting",
+            return_value={"ok": True, "runner_upserted": 12, "race_count": 2},
+        ), patch("factor_calibration.FactorCalibration") as Cal:
+            Cal.return_value.resettle_meeting.return_value = re_out
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-13", "ST", "sync_jjjc_results"
+            )
+        self.assertTrue(out.get("ok"))
+        auto = out.get("auto_settle") or {}
+        self.assertEqual(auto.get("updated_rows"), 3)
+        self.assertEqual(auto.get("refreshed_hit_batches"), ["20260913ST_t"])
+        Cal.return_value.settle_pending.assert_not_called()
+        Cal.return_value.resettle_meeting.assert_called_once_with("2026-09-13", "ST")
+        pipe._maybe_run_post_race_ads_after_settle.assert_called()
+
+    def test_sync_results_skips_ads_when_resettle_unchanged(self):
+        import meeting_pipeline as mp
+
+        pipe = mp.MeetingPipeline.__new__(mp.MeetingPipeline)
+        pipe.refresh_readiness = MagicMock()
+        pipe.check_results = MagicMock(return_value=(mp.STATUS_OK, "ok"))
+        pipe.check_snapshot = MagicMock(return_value=(mp.STATUS_OK, "snap"))
+        pipe.check_settled = MagicMock(return_value=(mp.STATUS_OK, "settled"))
+        pipe._maybe_recompute_factors_after_sectionals = MagicMock(return_value=None)
+        pipe._maybe_run_post_race_ads_after_settle = MagicMock()
+
+        with patch(
+            "jjjc_results_sync.sync_meeting",
+            return_value={"ok": True, "runner_upserted": 1, "race_count": 1},
+        ), patch("factor_calibration.FactorCalibration") as Cal:
+            Cal.return_value.resettle_meeting.return_value = {
+                "ok": True,
+                "changed": False,
+                "updated_rows": 0,
+                "settled_batches": [],
+                "refreshed_hit_batches": [],
+            }
+            out = mp.MeetingPipeline.run_action(
+                pipe, "2026-09-13", "ST", "sync_jjjc_results"
+            )
+        auto = out.get("auto_settle") or {}
+        self.assertTrue(auto.get("skipped"))
+        pipe._maybe_run_post_race_ads_after_settle.assert_not_called()
 
     def test_settle_action_triggers_post_race_ads_when_already_settled(self):
         """已 SETTLED 再按結算，仍應補跑 promo／文案（今日漏產救援）。"""
@@ -250,8 +328,16 @@ class AutoSettleAfterResultsTest(unittest.TestCase):
         }
         with patch("factor_calibration.FactorCalibration") as Cal:
             Cal.return_value.settle_pending.return_value = settle_out
+            Cal.return_value.resettle_meeting.return_value = {
+                "ok": True,
+                "changed": False,
+                "updated_rows": 0,
+                "settled_batches": [],
+                "refreshed_hit_batches": [],
+            }
             out = mp.MeetingPipeline.run_action(pipe, "2026-09-16", "HV", "settle")
         self.assertEqual(out.get("auto_post_race_ads"), ads)
+        Cal.return_value.resettle_meeting.assert_called_once_with("2026-09-16", "HV")
         pipe._maybe_run_post_race_ads_after_settle.assert_called_once()
 
     def test_maybe_run_ads_skips_when_not_settled(self):
