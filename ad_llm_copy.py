@@ -724,11 +724,29 @@ def _correct_hashtags_in_text(body: str, copy_data: Optional[Dict[str, Any]]) ->
     return text
 
 
+def _race_no_sort_key(item: Dict[str, Any]) -> tuple:
+    """場次號升序；缺號排後。"""
+    raw = (item or {}).get("race_no")
+    try:
+        return (0, int(raw))
+    except (TypeError, ValueError):
+        return (1, str(raw or ""))
+
+
+def sort_featured_by_race_no(
+    featured: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """精選按場次號排列（貼文閱讀順序：第7→第8→第9）。"""
+    rows = [dict(x) for x in list(featured or []) if isinstance(x, dict)]
+    rows.sort(key=_race_no_sort_key)
+    return rows
+
+
 def default_focus_title(featured: Optional[List[Dict[str, Any]]] = None) -> str:
-    """按三場 angle 組成「三場焦點數據觀察：…」標題。"""
+    """按三場 angle 組成「三場焦點數據觀察：…」標題（先按場次排序）。"""
     angles: List[str] = []
     seen = set()
-    for item in list(featured or []):
+    for item in sort_featured_by_race_no(featured):
         angle = str(
             (item or {}).get("angle")
             or ((item or {}).get("pick_reason") or {}).get("angle")
@@ -779,7 +797,8 @@ def format_social_post_text(
     lines.append(post_greeting_text())
     lines.append("")
 
-    featured = list((social_data or {}).get("featured") or [])
+    # 貼文一律按場次號升序，唔跟模型分數揀選順序
+    featured = sort_featured_by_race_no((social_data or {}).get("featured") or [])
     title = str((social_data or {}).get("title") or "").strip()
     # 舊標題「三場數據焦點」統一成發佈模板用詞
     rewrite_focus = (not title) or title.startswith("三場數據焦點")
@@ -1215,8 +1234,9 @@ class AdSocialCopywriter:
             if daypart == "聽日":
                 title = title.replace("今日", "聽日")
                 subtitle = subtitle.replace("今日", "聽日")
+        featured_sorted = sort_featured_by_race_no(clean_rows[:3])
         if not title or title.startswith("三場數據焦點"):
-            title = default_focus_title(clean_rows[:3])
+            title = default_focus_title(featured_sorted)
         if not subtitle:
             subtitle = DEFAULT_FOCUS_SUBTITLE
 
@@ -1224,7 +1244,7 @@ class AdSocialCopywriter:
         result = {
             "title": title,
             "subtitle": subtitle,
-            "featured": clean_rows[:3],
+            "featured": featured_sorted,
             "hashtags": _publish_hashtags_for_copy(copy_data, extra=None),
             "footer": footer,
             "footer_lines": list(POST_FOOTER_LINES),

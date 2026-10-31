@@ -450,7 +450,8 @@ def test_format_rewrites_old_focus_title_and_hv_day_theme():
             }
         },
     )
-    assert "三場焦點數據觀察：步速、走位與恢復" in text
+    # 場次升序後角度串為 步速(第7)、恢復(第8)、走位(第9)
+    assert "三場焦點數據觀察：步速、恢復與走位" in text
     assert "綜合模型與公開近績" in text
     assert "即刻打開手機瀏覽器" in text
     assert "應被新 CTA 取代" not in text
@@ -458,6 +459,8 @@ def test_format_rewrites_old_focus_title_and_hv_day_theme():
     assert "18:45" not in text
     assert "13:00" in text
     assert "跑馬地" in text
+    # 貼文按場次號：第7→第8→第9（唔跟模型分數揀序）
+    assert text.index("第7場") < text.index("第8場") < text.index("第9場")
 
 
 def test_normalize_strips_system_subtitle_for_day():
