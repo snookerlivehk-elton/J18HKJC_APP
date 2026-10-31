@@ -146,10 +146,10 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "不提供投注、賠率、注碼、跟注或任何賭博服務。你會根據全賽日「綜合分析名單」與官方賽績指引近績文字，\n"
     "挑選 3 場最值得分享的研究場次，每場只揀 1 匹馬作重點數據評述。\n"
     "\n"
-    "固定貼文結構取向（系統會另加文末合規聲明，你唔好重複寫免責全文）：\n"
-    "A) 開頭｜模型／公開數據定位（方法、升級、資料整合）\n"
-    "B) 本體｜本場研究觀察（統計傾向／模型推演；禁止叫人下注）\n"
-    "C) 呼籲｜引導免費登入／查看模型紀錄與系統更新（研究向 CTA）\n"
+    "固定貼文結構取向（系統會另加日期頭／開場白／CTA／免責／hashtag，你唔好重複寫免責全文）：\n"
+    "A) 標題｜優先「三場焦點數據觀察：…」串起三個角度（步速／走位／路程／恢復）\n"
+    "B) 副題｜一句說明綜合模型與公開近績嘅賽前研究抽樣\n"
+    "C) 本體｜三場研究觀察（統計傾向／模型推演；禁止叫人下注）\n"
     "\n"
     "你必須遵守：\n"
     "1) 精選馬必須來自各場 candidates（以綜合分析名單為主）；不可另選名單外的馬。\n"
@@ -161,7 +161,8 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "   建議句式：「近績：…，賽前可對照其步速／走位會否延續。」\n"
     "2c) 三場 featured 必須用唔同觀察角度：步速／走位／恢復／路程；每場 JSON 加 "
     '"angle"（四選一），收尾句要對應該角度，禁止三場抄同一收尾。\n'
-    "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻。\n"
+    "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻；"
+    "優先格式：「三場焦點數據觀察：步速、走位與路程適應」（按實際 angle 改寫）。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
     "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
     "6) 唔好輸出大量 hashtag（系統會附加固定發佈標籤）；JSON hashtags 可留空或少寫。\n"
@@ -169,8 +170,8 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "\n"
     "嚴格輸出 JSON（不要 markdown 代碼塊）：\n"
     "{\n"
-    '  "title": "吸引但忠於事實的研究向標題",\n'
-    '  "subtitle": "可選，1 句補充（方法／模型觀察）",\n'
+    '  "title": "三場焦點數據觀察：步速、走位與路程適應",\n'
+    '  "subtitle": "綜合模型與公開近績，抽出三組值得追蹤的賽前研究場次。",\n'
     '  "featured": [\n'
     "    {\n"
     '      "race_no": 1,\n'
@@ -534,15 +535,7 @@ def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
     from datetime import datetime, timedelta, timezone
 
     meeting = (copy_data or {}).get("meeting") or {}
-    session_raw = str(meeting.get("session") or meeting.get("theme") or "")
-    session = session_raw.lower()
-    course = str(meeting.get("course") or "").upper()
-    is_night = (
-        "夜" in session_raw
-        or session == "night"
-        or (course == "HV" and "日" not in session_raw)
-    )
-    if is_night:
+    if _meeting_is_night(meeting):
         return "今晚"
     race_date = str(meeting.get("racing_date") or meeting.get("date") or "")[:10]
     if race_date:
@@ -560,9 +553,16 @@ def _meeting_blob(
     copy_data: Optional[Dict[str, Any]] = None,
     social_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """合併 meeting；social 空白欄位唔好覆蓋 copy／package 已有值。"""
     meeting: Dict[str, Any] = {}
     meeting.update(dict((copy_data or {}).get("meeting") or {}))
-    meeting.update(dict((social_data or {}).get("meeting") or {}))
+    for key, value in dict((social_data or {}).get("meeting") or {}).items():
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        meeting[key] = value
+    # social 常只帶 course／racing_date；保留 copy 的 session／start_time／theme
     return meeting
 
 
@@ -610,11 +610,12 @@ def _date_zh_from_meeting(meeting: Dict[str, Any]) -> str:
 
 def _clock_hhmm_from_meeting(meeting: Dict[str, Any], *, is_night: bool) -> str:
     """開跑時間顯示成 HH:MM（例 18:45）。"""
+    # 優先 package 的 start_time（約下午1時）；post_time 常係舊推斷值
     candidates = [
-        meeting.get("post_time"),
         meeting.get("start_time"),
         meeting.get("first_post_time"),
         meeting.get("race_time"),
+        meeting.get("post_time"),
     ]
     for raw in candidates:
         s = str(raw or "").strip()
@@ -644,13 +645,25 @@ def _clock_hhmm_from_meeting(meeting: Dict[str, Any], *, is_night: bool) -> str:
 
 
 def _meeting_is_night(meeting: Dict[str, Any]) -> bool:
-    session = str(meeting.get("session") or meeting.get("theme") or "")
+    session = str(
+        meeting.get("session") or meeting.get("theme") or meeting.get("day_night") or ""
+    ).strip()
     course = str(meeting.get("course") or meeting.get("venue_code") or "").upper()
-    return (
+    low = session.lower()
+    if (
         "夜" in session
-        or session.lower() == "night"
-        or (course == "HV" and "日" not in session)
-    )
+        or low in {"night", "eve", "evening"}
+        or "night" in low
+    ):
+        return True
+    if (
+        "日" in session
+        or low in {"day", "daytime", "afternoon"}
+        or "day" in low
+    ):
+        return False
+    # 跑馬地缺 session 時多數夜賽；沙田缺省當日賽
+    return course == "HV"
 
 
 def format_meeting_header_line(
@@ -711,6 +724,32 @@ def _correct_hashtags_in_text(body: str, copy_data: Optional[Dict[str, Any]]) ->
     return text
 
 
+def default_focus_title(featured: Optional[List[Dict[str, Any]]] = None) -> str:
+    """按三場 angle 組成「三場焦點數據觀察：…」標題。"""
+    angles: List[str] = []
+    seen = set()
+    for item in list(featured or []):
+        angle = str(
+            (item or {}).get("angle")
+            or ((item or {}).get("pick_reason") or {}).get("angle")
+            or ""
+        ).strip()
+        if not angle or angle in seen:
+            continue
+        seen.add(angle)
+        angles.append(angle)
+    if len(angles) >= 3:
+        return f"三場焦點數據觀察：{angles[0]}、{angles[1]}與{angles[2]}"
+    if len(angles) == 2:
+        return f"三場焦點數據觀察：{angles[0]}與{angles[1]}"
+    if len(angles) == 1:
+        return f"三場焦點數據觀察：{angles[0]}"
+    return "三場焦點數據觀察：步速、走位與路程適應"
+
+
+DEFAULT_FOCUS_SUBTITLE = "綜合模型與公開近績，抽出三組值得追蹤的賽前研究場次。"
+
+
 def format_social_post_text(
     social_data: Dict[str, Any], *, copy_data: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -726,7 +765,9 @@ def format_social_post_text(
     """
     merged_copy = dict(copy_data or {})
     if "meeting" not in merged_copy:
-        merged_copy["meeting"] = (social_data or {}).get("meeting") or {}
+        merged_copy["meeting"] = {}
+    # 用 _meeting_blob 合併，避免 social 空白欄位沖掉 session／start_time
+    merged_copy["meeting"] = _meeting_blob(merged_copy, social_data)
     daypart = _meeting_daypart_from_copy(merged_copy)
     lines: List[str] = []
 
@@ -738,24 +779,34 @@ def format_social_post_text(
     lines.append(post_greeting_text())
     lines.append("")
 
+    featured = list((social_data or {}).get("featured") or [])
     title = str((social_data or {}).get("title") or "").strip()
-    if title:
-        if daypart in {"今日", "聽日"}:
-            title = title.replace("今晚", daypart).replace("今夜", daypart)
-            if daypart == "聽日":
-                title = title.replace("今日", "聽日")
-        lines.append(title)
-    subtitle = str((social_data or {}).get("subtitle") or "").strip()
-    if subtitle and not _is_system_subtitle(subtitle):
-        if daypart in {"今日", "聽日"}:
-            subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
-            if daypart == "聽日":
-                subtitle = subtitle.replace("今日", "聽日")
-        lines.append(subtitle)
-    if title or (subtitle and not _is_system_subtitle(str((social_data or {}).get("subtitle") or ""))):
-        lines.append("")
+    # 舊標題「三場數據焦點」統一成發佈模板用詞
+    rewrite_focus = (not title) or title.startswith("三場數據焦點")
+    if rewrite_focus:
+        title = default_focus_title(featured)
+    if daypart in {"今日", "聽日"}:
+        title = title.replace("今晚", daypart).replace("今夜", daypart)
+        if daypart == "聽日":
+            title = title.replace("今日", "聽日")
+    lines.append(title)
 
-    for item in list((social_data or {}).get("featured") or []):
+    subtitle = str((social_data or {}).get("subtitle") or "").strip()
+    if (
+        rewrite_focus
+        or (not subtitle)
+        or _is_system_subtitle(subtitle)
+        or subtitle.startswith("綜合分析名單")
+    ):
+        subtitle = DEFAULT_FOCUS_SUBTITLE
+    if daypart in {"今日", "聽日"}:
+        subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
+        if daypart == "聽日":
+            subtitle = subtitle.replace("今日", "聽日")
+    lines.append(subtitle)
+    lines.append("")
+
+    for item in featured:
         race_no = item.get("race_no") or "?"
         horse_no = item.get("horse_no") or "?"
         horse_name = item.get("horse_name") or ""
@@ -765,13 +816,11 @@ def format_social_post_text(
             lines.append(str(comment))
         lines.append("")
 
-    footer = str((social_data or {}).get("footer") or "").strip() or post_footer_text()
-    lines.append(footer)
+    # 發佈模板固定 CTA／免責；忽略舊 social 長 footer，方便一次複製
+    lines.append(post_footer_text())
     lines.append("")
 
-    hashtags = _publish_hashtags_for_copy(
-        merged_copy, extra=list((social_data or {}).get("hashtags") or [])
-    )
+    hashtags = _publish_hashtags_for_copy(merged_copy, extra=None)
     if hashtags:
         lines.append(" ".join(str(t) for t in hashtags))
 
@@ -1154,17 +1203,6 @@ class AdSocialCopywriter:
             pr["label"] = _format_pick_reason_label(pr)
             row["pick_reason"] = pr
 
-        hashtags = raw.get("hashtags") if isinstance(raw.get("hashtags"), list) else []
-        clean_tags: List[str] = []
-        for tag in hashtags:
-            s = str(tag or "").strip()
-            if not s:
-                continue
-            if not s.startswith("#"):
-                s = "#" + s.lstrip("#")
-            if s not in clean_tags:
-                clean_tags.append(s)
-
         tone_key = normalize_tone(tone)
         daypart = _meeting_daypart_from_copy(copy_data)
         title = str(raw.get("title") or "").strip()
@@ -1177,18 +1215,17 @@ class AdSocialCopywriter:
             if daypart == "聽日":
                 title = title.replace("今日", "聽日")
                 subtitle = subtitle.replace("今日", "聽日")
-        if not title:
-            meeting = (copy_data or {}).get("meeting") or {}
-            course = meeting.get("course") or ""
-            racing_date = str(meeting.get("racing_date") or "")[:10]
-            title = f"{racing_date} {course} {daypart}邊場數據最值得一齊睇？".strip()
+        if not title or title.startswith("三場數據焦點"):
+            title = default_focus_title(clean_rows[:3])
+        if not subtitle:
+            subtitle = DEFAULT_FOCUS_SUBTITLE
 
         footer = post_footer_text()
         result = {
             "title": title,
             "subtitle": subtitle,
             "featured": clean_rows[:3],
-            "hashtags": _publish_hashtags_for_copy(copy_data, extra=clean_tags),
+            "hashtags": _publish_hashtags_for_copy(copy_data, extra=None),
             "footer": footer,
             "footer_lines": list(POST_FOOTER_LINES),
             "post_text": "",
@@ -1198,14 +1235,9 @@ class AdSocialCopywriter:
             "source": source,
             "featured_fused_top_n": featured_fused_top_n(),
             "raw": raw,
+            "meeting": _meeting_blob(copy_data, None),
         }
         result["post_text"] = format_social_post_text(result, copy_data=copy_data)
-        result["hashtags"] = _publish_hashtags_for_copy(
-            copy_data, extra=list(result.get("hashtags") or [])
-        )
-        result["post_text"] = _correct_hashtags_in_text(
-            str(result.get("post_text") or ""), copy_data
-        )
         return result
 
     def _chat_json(self, messages: List[Dict[str, str]], *, temperature: float) -> Dict[str, Any]:

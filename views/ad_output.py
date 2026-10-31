@@ -1,6 +1,7 @@
 """廣告輸出 — 賽前海報／文案、賽後歸檔、重產（精簡工作流）。"""
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -326,17 +327,43 @@ def _render_social_copy(
                 if angle and (not label or f"角度:{angle}" not in label):
                     st.caption(f"觀察角度：{angle}")
 
-    hashtags = list(social_data.get("hashtags") or [])
-    if hashtags:
-        st.code(" ".join(hashtags), language=None)
+    # 一律按最新發佈模板重排，方便一次複製；唔依賴舊 post_text／footer
+    copy_data = load_copy_json(out_root) or {}
+    if not (copy_data.get("meeting") or {}):
+        copy_data = {"meeting": (social_data.get("meeting") or {})}
+    # 若 batch copy 缺 session／開跑時間，嘗試讀 packages 內 meeting
+    meeting = dict(copy_data.get("meeting") or {})
+    if not meeting.get("session") or not meeting.get("start_time"):
+        try:
+            from ad_package import packages_dir, LATEST_ID_NAME
 
-    post_text = str(social_data.get("post_text") or "").strip()
-    if not post_text:
-        post_text = format_social_post_text(social_data)
+            root = out_root if (out_root / "packages").is_dir() else out_root.parent
+            latest = root / "packages" / LATEST_ID_NAME
+            pkg_id = latest.read_text(encoding="utf-8").strip() if latest.is_file() else ""
+            pkg_path = root / "packages" / f"{pkg_id}.json" if pkg_id else None
+            if pkg_path and pkg_path.is_file():
+                pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+                pkg_meeting = dict((pkg or {}).get("meeting") or {})
+                for k, v in pkg_meeting.items():
+                    if v and not meeting.get(k):
+                        meeting[k] = v
+                copy_data = {**copy_data, "meeting": meeting}
+        except Exception:
+            pass
+    post_text = format_social_post_text(social_data, copy_data=copy_data)
+    # hashtag 行已含在 post_text 尾段；另顯示方便單獨複製
+    try:
+        from ad_llm_copy import PUBLISH_HASHTAGS
+
+        st.code(" ".join(PUBLISH_HASHTAGS), language=None)
+    except Exception:
+        hashtags = list(social_data.get("hashtags") or [])
+        if hashtags:
+            st.code(" ".join(hashtags), language=None)
     st.text_area(
-        "Facebook / IG 貼文",
+        "Facebook / IG 貼文（一次複製發佈）",
         value=post_text,
-        height=240,
+        height=320,
         key=_k("post_preview"),
     )
     p = social_copy_path(out_root)
