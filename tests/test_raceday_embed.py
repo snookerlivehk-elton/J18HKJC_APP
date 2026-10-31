@@ -1244,13 +1244,15 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("log-ver", text)
         self.assertIn("log-at", text)
         self.assertIn("0.2.412", text)
-        self.assertIn("0.2.413", text)
         self.assertIn("0.2.400–0.2.411", text)
-        self.assertIn("精簡合併", text)
+        self.assertIn("只記功能修改的終態結果", text)
+        self.assertIn("不另開序號", text)
+        self.assertIn("居中靠下靜態橙色半圓提示", text)
         self.assertIn("racecard.html", text)
         self.assertIn("香港時間", text)
-        self.assertNotIn('no: 12,', text)
-        self.assertNotIn('no: 13,', text)
+        self.assertNotIn("0.2.413", text)
+        self.assertNotIn("中間試過", text)
+        self.assertNotIn('no: 3,', text)
 
 
 if __name__ == "__main__":
