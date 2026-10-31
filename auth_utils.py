@@ -2,10 +2,19 @@
 登入關卡與白名單（email／通行碼 × admin｜user）。
 
 Streamlit session 屬「擋君子」；正式密鑰放 DB／環境變數，勿寫死程式碼。
+
+瀏覽器持久登入：
+  登入成功後寫入 localStorage／cookie 簽名 token（預設 30 日），
+  手機鎖屏導致 WebSocket／session 重建時可自動還原，唔使成日重登。
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -34,6 +43,82 @@ TOKEN_PASSWORD = "password"
 SESSION_ROLE = "auth_role"
 SESSION_IDENTITY = "auth_identity"
 SESSION_VIA = "auth_via"  # whitelist | bootstrap
+SESSION_TOKEN = "auth_token"
+
+AUTH_BROWSER_KEY = "j18_auth_v1"
+AUTH_QUERY_PARAM = "j18_auth"
+
+
+def _session_ttl_days() -> int:
+    try:
+        return max(1, int(os.getenv("AUTH_SESSION_DAYS", "30") or 30))
+    except (TypeError, ValueError):
+        return 30
+
+
+def _session_secret() -> str:
+    return (
+        (os.getenv("AUTH_SESSION_SECRET") or "").strip()
+        or (os.getenv("AUTH_BOOTSTRAP_ADMIN") or "").strip()
+        or "j18-auth-dev-secret"
+    )
+
+
+def mint_auth_token(
+    role: str,
+    identity: str,
+    via: str,
+    *,
+    ttl_days: Optional[int] = None,
+    now: Optional[float] = None,
+) -> str:
+    """簽發瀏覽器持久 token（role|identity|via|exp|sig）。"""
+    days = int(ttl_days if ttl_days is not None else _session_ttl_days())
+    exp = int((now if now is not None else time.time()) + days * 86400)
+    payload = f"{role}|{identity}|{via}|{exp}"
+    sig = hmac.new(
+        _session_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    raw = f"{payload}|{sig}"
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
+
+
+def verify_auth_token(
+    token: str,
+    *,
+    now: Optional[float] = None,
+) -> Optional[Tuple[str, str, str, int]]:
+    """驗證 token → (role, identity, via, exp) 或 None。"""
+    raw = (token or "").strip()
+    if not raw:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8")
+    except Exception:
+        return None
+    parts = decoded.split("|")
+    if len(parts) != 5:
+        return None
+    role, identity, via, exp_s, sig = parts
+    if role not in (ROLE_ADMIN, ROLE_USER):
+        return None
+    try:
+        exp = int(exp_s)
+    except ValueError:
+        return None
+    payload = f"{role}|{identity}|{via}|{exp}"
+    expect = hmac.new(
+        _session_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    if not hmac.compare_digest(expect, sig):
+        return None
+    if float(now if now is not None else time.time()) >= exp:
+        return None
+    return role, identity, via, exp
 
 
 class AuthStore:
@@ -243,25 +328,187 @@ def is_admin() -> bool:
     return current_role() == ROLE_ADMIN
 
 
+def _set_session(role: str, identity: str, via: str, token: Optional[str] = None) -> str:
+    import streamlit as st
+
+    tok = token or mint_auth_token(role, identity, via)
+    st.session_state[SESSION_ROLE] = role
+    st.session_state[SESSION_IDENTITY] = identity
+    st.session_state[SESSION_VIA] = via
+    st.session_state[SESSION_TOKEN] = tok
+    return tok
+
+
 def logout():
     import streamlit as st
-    for k in (SESSION_ROLE, SESSION_IDENTITY, SESSION_VIA):
+
+    for k in (SESSION_ROLE, SESSION_IDENTITY, SESSION_VIA, SESSION_TOKEN):
         st.session_state.pop(k, None)
+    inject_auth_browser_store(clear=True)
 
 
 def try_login(raw: str) -> Tuple[bool, str]:
-    import streamlit as st
     store = AuthStore()
     hit = store.match(raw)
     if not hit:
         return False, "不在白名單或通行碼錯誤"
     role, identity, via = hit
-    st.session_state[SESSION_ROLE] = role
-    st.session_state[SESSION_IDENTITY] = identity
-    st.session_state[SESSION_VIA] = via
+    tok = _set_session(role, identity, via)
+    inject_auth_browser_store(tok)
     if via == "bootstrap":
         return True, "已用開機通行碼進入（請立刻到「白名單」新增正式 admin）"
-    return True, f"已登入（{role}）"
+    days = _session_ttl_days()
+    return True, f"已登入（{role}；裝置上保持約 {days} 日）"
+
+
+def apply_auth_token(token: str) -> bool:
+    """還原簽名 token 到 session（過期／簽名錯 → False）。"""
+    parsed = verify_auth_token(token)
+    if not parsed:
+        return False
+    role, identity, via, _exp = parsed
+    _set_session(role, identity, via, token=token)
+    return True
+
+
+def inject_auth_browser_store(
+    token: Optional[str] = None, *, clear: bool = False
+) -> None:
+    """把登入 token 寫入／清掉 parent 頁 localStorage + cookie。"""
+    import streamlit.components.v1 as components
+
+    ttl_sec = int(_session_ttl_days() * 86400)
+    payload = {
+        "clear": bool(clear),
+        "token": None if clear else (token or ""),
+        "key": AUTH_BROWSER_KEY,
+        "maxAge": ttl_sec,
+    }
+    components.html(
+        f"""
+<script>
+(function () {{
+  const cfg = {json.dumps(payload, ensure_ascii=False)};
+  const KEY = cfg.key;
+  function lsSet(v) {{
+    try {{ window.parent.localStorage.setItem(KEY, v); }} catch (e) {{
+      try {{ localStorage.setItem(KEY, v); }} catch (e2) {{}}
+    }}
+  }}
+  function lsDel() {{
+    try {{ window.parent.localStorage.removeItem(KEY); }} catch (e) {{
+      try {{ localStorage.removeItem(KEY); }} catch (e2) {{}}
+    }}
+  }}
+  function cookieSet(v, maxAge) {{
+    const part = KEY + '=' + encodeURIComponent(v) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+    try {{ window.parent.document.cookie = part; }} catch (e) {{
+      try {{ document.cookie = part; }} catch (e2) {{}}
+    }}
+  }}
+  function cookieDel() {{
+    const part = KEY + '=; path=/; max-age=0; SameSite=Lax';
+    try {{ window.parent.document.cookie = part; }} catch (e) {{
+      try {{ document.cookie = part; }} catch (e2) {{}}
+    }}
+  }}
+  if (cfg.clear || !cfg.token) {{
+    lsDel();
+    cookieDel();
+    return;
+  }}
+  lsSet(cfg.token);
+  cookieSet(cfg.token, cfg.maxAge || 2592000);
+}})();
+</script>
+        """,
+        height=0,
+    )
+
+
+def try_restore_auth_from_browser() -> None:
+    """
+    鎖屏／重整後 Streamlit session 可能重建：
+    1) URL ?j18_auth=… → 驗簽寫入 session
+    2) 否則用 JS 讀 localStorage／cookie，有 token 就導回帶參數 URL
+    """
+    import streamlit as st
+    import streamlit.components.v1 as components
+
+    if is_logged_in():
+        # 滑動續期：刷新瀏覽器存放
+        tok = st.session_state.get(SESSION_TOKEN)
+        if not tok:
+            role = st.session_state.get(SESSION_ROLE)
+            identity = st.session_state.get(SESSION_IDENTITY) or ""
+            via = st.session_state.get(SESSION_VIA) or "whitelist"
+            if role in (ROLE_ADMIN, ROLE_USER):
+                tok = _set_session(str(role), str(identity), str(via))
+        if tok:
+            inject_auth_browser_store(str(tok))
+        return
+
+    qtok = ""
+    try:
+        qtok = str(st.query_params.get(AUTH_QUERY_PARAM) or "").strip()
+    except Exception:
+        qtok = ""
+
+    if qtok:
+        if apply_auth_token(qtok):
+            try:
+                del st.query_params[AUTH_QUERY_PARAM]
+            except Exception:
+                try:
+                    st.query_params.pop(AUTH_QUERY_PARAM)
+                except Exception:
+                    pass
+            inject_auth_browser_store(qtok)
+            return
+        inject_auth_browser_store(clear=True)
+        try:
+            del st.query_params[AUTH_QUERY_PARAM]
+        except Exception:
+            pass
+        return
+
+    # 只探測一次，避免每輪重渲染都打 JS
+    if st.session_state.get("_j18_auth_probe_done"):
+        return
+    st.session_state["_j18_auth_probe_done"] = True
+    components.html(
+        f"""
+<script>
+(function () {{
+  const KEY = {json.dumps(AUTH_BROWSER_KEY)};
+  const PARAM = {json.dumps(AUTH_QUERY_PARAM)};
+  function readTok() {{
+    let tok = null;
+    try {{ tok = window.parent.localStorage.getItem(KEY); }} catch (e) {{
+      try {{ tok = localStorage.getItem(KEY); }} catch (e2) {{}}
+    }}
+    if (tok) return tok;
+    try {{
+      const m = window.parent.document.cookie.match(
+        new RegExp('(?:^|; )' + KEY.replace(/[$()*+./?[\\\\]^{{}}|]/g, '\\\\$&') + '=([^;]*)')
+      );
+      if (m) return decodeURIComponent(m[1]);
+    }} catch (e) {{}}
+    return null;
+  }}
+  const tok = readTok();
+  if (!tok) return;
+  try {{
+    const url = new URL(window.parent.location.href);
+    if (url.searchParams.get(PARAM)) return;
+    url.searchParams.set(PARAM, tok);
+    window.parent.location.replace(url.toString());
+  }} catch (e) {{}}
+}})();
+</script>
+        """,
+        height=0,
+    )
 
 
 def render_login_page():
@@ -272,13 +519,15 @@ def render_login_page():
 
     inject_login_css()
     ver = get_version_display()
+    days = _session_ttl_days()
     st.markdown(
         f"""
         <div class="auth-wrap">
           <div class="auth-card">
             <h1>J18AI Plus+</h1>
             <p class="auth-ver">{ver}</p>
-            <p class="auth-sub">請輸入白名單內的 Email 或通行碼</p>
+            <p class="auth-sub">請輸入白名單內的 Email 或通行碼<br/>
+            <span style="opacity:.8;font-size:.82rem">登入後本機約保持 {days} 日（鎖屏回來唔使即刻重登）</span></p>
           </div>
         </div>
         """,

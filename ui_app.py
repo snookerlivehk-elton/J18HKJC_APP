@@ -21,6 +21,7 @@ from auth_utils import (
     current_role,
     render_login_page,
     render_account_bar,
+    try_restore_auth_from_browser,
 )
 from ui_theme import inject_admin_css, inject_home_screen_icons, render_main_nav
 
@@ -140,6 +141,9 @@ inject_home_screen_icons()
 if _LOGO.is_file():
     st.logo(str(_LOGO), size="large")
 
+# 手機鎖屏／重整後還原瀏覽器持久登入
+try_restore_auth_from_browser()
+
 if not is_logged_in():
     render_login_page()
     st.stop()
@@ -187,12 +191,17 @@ if role == ROLE_ADMIN:
         "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
     }
     nav = st.navigation(sections, position="hidden")
-    render_main_nav(sections)
 else:
     user_sections = {
         "瀏覽": [raceday, hit_stats],
     }
+    sections = user_sections
     nav = st.navigation([raceday, hit_stats], position="hidden")
-    render_main_nav(user_sections)
+
+try:
+    _nav_title = nav.title
+except Exception:
+    _nav_title = None
+render_main_nav(sections, current_title=_nav_title)
 
 nav.run()
