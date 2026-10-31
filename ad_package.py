@@ -87,21 +87,38 @@ def _social_dict_to_ai_payload(social: Dict[str, Any]) -> Optional[Dict[str, Any
     except Exception:
         format_social_post_text = None  # type: ignore
     featured = list(social.get("featured") or [])
-    post_text = str(social.get("post_text") or "").strip()
-    if not post_text and format_social_post_text:
+    meeting = dict(social.get("meeting") or {})
+    post_text = ""
+    if format_social_post_text:
         try:
-            post_text = format_social_post_text(social).strip()
+            # 發佈／ingest 一律走最新一次複製模板
+            post_text = format_social_post_text(
+                social, copy_data={"meeting": meeting}
+            ).strip()
         except Exception:
-            post_text = ""
+            post_text = str(social.get("post_text") or "").strip()
+    else:
+        post_text = str(social.get("post_text") or "").strip()
     if not featured and not post_text:
         return None
-    meeting = dict(social.get("meeting") or {})
+    try:
+        from ad_llm_copy import PUBLISH_HASHTAGS, default_focus_title, DEFAULT_FOCUS_SUBTITLE
+    except Exception:
+        PUBLISH_HASHTAGS = list(social.get("hashtags") or [])  # type: ignore
+        default_focus_title = None  # type: ignore
+        DEFAULT_FOCUS_SUBTITLE = ""  # type: ignore
+    title = str(social.get("title") or "").strip()
+    subtitle = str(social.get("subtitle") or "").strip()
+    if default_focus_title and ((not title) or title.startswith("三場數據焦點")):
+        title = default_focus_title(featured)
+    if (not subtitle) or subtitle.startswith("綜合分析名單"):
+        subtitle = str(DEFAULT_FOCUS_SUBTITLE or subtitle)
     return {
-        "title": str(social.get("title") or "").strip(),
-        "subtitle": str(social.get("subtitle") or "").strip(),
+        "title": title,
+        "subtitle": subtitle,
         "featured": featured,
         "post_text": post_text,
-        "hashtags": list(social.get("hashtags") or []),
+        "hashtags": list(PUBLISH_HASHTAGS),
         "source": social.get("source"),
         "tone": social.get("tone") or meeting.get("tone"),
         "generated_at": meeting.get("generated_at") or social.get("generated_at"),

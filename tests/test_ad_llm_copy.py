@@ -100,7 +100,7 @@ def test_build_system_prompt_uses_hk_and_tone():
     assert "綜合分析名單" in prompt or "綜合分析" in prompt
     assert "投注" in prompt  # 禁用作引導／出現喺禁用說明
     assert "研究" in prompt or "統計" in prompt
-    assert "#賽事數據" in prompt or "#模型分析" in prompt
+    assert "hashtag" in prompt.lower() or "標籤" in prompt
     assert str(COMMENT_MAX_CHARS) in prompt
     assert "近績" in prompt and "本場" in prompt  # 賽前時間線規則
     assert "{{" not in prompt
@@ -137,6 +137,7 @@ def test_parse_llm_json_from_fence():
 def test_post_footer_contains_required_lines():
     footer = post_footer_text()
     assert "j18.hk" in footer.lower()
+    assert "即刻打開手機瀏覽器" in footer
     assert "不構成投注建議" in footer
     assert ("未滿18" in footer) or ("未滿18歲" in footer) or ("18歲" in footer)
     assert "資料研究" in footer or "研究" in footer
@@ -296,11 +297,10 @@ def test_normalize_remaps_outside_fused_top_n_and_adds_pick_reason(monkeypatch):
     assert len(set(angles)) == 3
     endings = [r["comment"] for r in data["featured"]]
     assert len(set(endings)) == 3
-    assert "#夜馬" in data["hashtags"]
-    assert "#日馬" not in data["hashtags"]
-    assert "#跑馬地" in data["hashtags"]
-    assert "#沙田" not in data["hashtags"]
-    assert "#日馬" not in data["post_text"]
+    assert "#香港賽馬" in data["hashtags"]
+    assert "#HorseRacingTips" in data["hashtags"]
+    assert "J18.hk賽前預測" in data["post_text"]
+    assert "即刻打開手機瀏覽器" in data["post_text"]
 
 
 def test_normalize_frames_live_sounding_comments():
@@ -385,6 +385,7 @@ def test_format_social_day_meeting_no_tonight_or_system():
             "racing_date": "2026-09-13",
             "course": "ST",
             "session": "日",
+            "start_time": "約下午1時",
         }
     }
     social = {
@@ -395,23 +396,71 @@ def test_format_social_day_meeting_no_tonight_or_system():
                 "race_no": 1,
                 "horse_no": 7,
                 "horse_name": "增旺",
+                "angle": "步速",
                 "comment": "能量：18% 1W1W 直路望空",
             }
         ],
         "hashtags": ["#賽馬", "#J18HK", "#extra1", "#extra2"],
-        "footer": post_footer_text(),
+        "footer": "舊版長 footer 應被忽略",
     }
     text = format_social_post_text(social, copy_data=copy_data)
     assert "今晚" not in text
-    assert ("聽日" in text) or ("今日" in text)
+    assert ("聽日" in text) or ("今日" in text) or ("邊場" in text)
     assert "LLM 暫時未能" not in text
     assert "自動補齊" not in text
     assert "能量" not in text
     assert "1W1W" not in text
-    assert "#沙田" in text
-    assert "#日馬" in text
-    assert text.count("#") <= 12  # ≤6 tags roughly
+    assert "2026年9月13日" in text
+    assert "沙田" in text
+    assert "13:00" in text
+    assert "J18.hk賽前預測" in text
+    assert "即刻打開手機瀏覽器登入 j18.hk" in text
+    assert "舊版長 footer" not in text
+    assert "#香港賽馬" in text
+    assert "#HorseRacingTips" in text
+    assert "#J18HK" not in text  # 發佈用固定 hashtag，唔帶舊標
+    # hashtags 在免責之後
+    assert text.rfind("未滿18") < text.rfind("#香港賽馬")
     assert "j18.hk" in text.lower() or "J18.hk" in text
+
+
+def test_format_rewrites_old_focus_title_and_hv_day_theme():
+    from ad_llm_copy import format_social_post_text
+
+    text = format_social_post_text(
+        {
+            "title": "三場數據焦點：步速、走位與恢復痕跡對照",
+            "subtitle": "綜合分析名單頭位揀選，集中睇近績走勢同模型傾向。",
+            "featured": [
+                {"race_no": 7, "horse_no": 2, "horse_name": "維港智能", "angle": "步速", "comment": "近績極快步速領放。"},
+                {"race_no": 9, "horse_no": 1, "horse_name": "一定超", "angle": "走位", "comment": "近績受困未能望空。"},
+                {"race_no": 8, "horse_no": 8, "horse_name": "福進", "angle": "恢復", "comment": "近績負頂磅仍掄元。"},
+            ],
+            "footer": "應被新 CTA 取代",
+            "hashtags": ["#J18", "#夜馬"],
+        },
+        copy_data={
+            "meeting": {
+                "racing_date": "2026-11-01",
+                "course": "HV",
+                "theme": "day",
+                "session": "日",
+                "start_time": "約下午1時",
+                "weekday": "星期日",
+            }
+        },
+    )
+    # 場次升序後角度串為 步速(第7)、恢復(第8)、走位(第9)
+    assert "三場焦點數據觀察：步速、恢復與走位" in text
+    assert "綜合模型與公開近績" in text
+    assert "即刻打開手機瀏覽器" in text
+    assert "應被新 CTA 取代" not in text
+    assert "#夜馬" not in text
+    assert "18:45" not in text
+    assert "13:00" in text
+    assert "跑馬地" in text
+    # 貼文按場次號：第7→第8→第9（唔跟模型分數揀序）
+    assert text.index("第7場") < text.index("第8場") < text.index("第9場")
 
 
 def test_normalize_strips_system_subtitle_for_day():
@@ -455,8 +504,11 @@ def test_normalize_strips_system_subtitle_for_day():
     )
     assert "今晚" not in data["title"]
     assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"])
-    assert data["subtitle"] == ""
+    assert "綜合模型與公開近績" in data["subtitle"]
     assert "能量" not in data["featured"][0]["comment"]
-    assert any(h in data["hashtags"] for h in ["#J18", "#賽事數據", "#模型分析"]) or "#賽事數據" in data["hashtags"]
-    assert len(data["hashtags"]) <= 6
+    assert "#香港賽馬" in data["hashtags"]
+    assert "#賽馬貼士" in data["hashtags"]
+    assert len(data["hashtags"]) >= 10
     assert "LLM 暫時未能" not in data["post_text"]
+    assert "2026年9月13日" in data["post_text"]
+    assert "即刻打開手機瀏覽器" in data["post_text"]
