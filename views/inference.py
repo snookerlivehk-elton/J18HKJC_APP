@@ -58,19 +58,35 @@ def highlight_top3(s):
     return [""] * len(s)
 
 
+def _round_display_df(df: pd.DataFrame) -> pd.DataFrame:
+    """顯示用：浮點列四捨五入到 1 位小數（排名／馬號等整數除外）。"""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    for col in out.columns:
+        if col in _INT_DISPLAY_COLS:
+            continue
+        if pd.api.types.is_numeric_dtype(out[col]):
+            out[col] = pd.to_numeric(out[col], errors="coerce").round(1)
+    return out
+
+
 def _style_pred_table(df: pd.DataFrame):
     """表格數值統一顯示 1 位小數（排名／馬號等整數除外）。"""
     if df is None or df.empty:
         return df
-    fmt = {}
-    for col in df.columns:
-        if col in _INT_DISPLAY_COLS:
-            continue
-        if pd.api.types.is_numeric_dtype(df[col]):
-            fmt[col] = "{:.1f}"
-    sty = df.style.apply(highlight_top3, axis=1)
+    rounded = _round_display_df(df)
+    fmt = {
+        col: "{:.1f}"
+        for col in rounded.columns
+        if col not in _INT_DISPLAY_COLS and pd.api.types.is_numeric_dtype(rounded[col])
+    }
+    sty = rounded.style.apply(highlight_top3, axis=1)
     if fmt:
-        sty = sty.format(fmt)
+        try:
+            sty = sty.format(fmt)
+        except Exception:
+            pass
     return sty
 
 
