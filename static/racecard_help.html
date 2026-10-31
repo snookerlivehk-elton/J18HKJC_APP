@@ -97,24 +97,11 @@
       background: var(--card);
       box-shadow: inset 3px 0 0 var(--nav);
     }
-    .sec-title {
-      margin: 0 0 6px;
-      font-size: 15px;
-      font-weight: 800;
-      letter-spacing: .03em;
-    }
-    .sec-lead {
-      margin: 0;
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 1.5;
-      color: var(--muted);
-    }
     .log-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      margin-top: 12px;
+      margin-top: 0;
     }
     .log-item {
       padding: 10px 10px 9px;
@@ -172,18 +159,13 @@
     <div class="top-title">使用說明</div>
   </header>
   <main class="wrap">
-    <section class="sec" aria-labelledby="changelogTitle">
-      <h1 class="sec-title" id="changelogTitle">功能更新日誌文檔</h1>
-      <p class="sec-lead">
-        自此頁建立起，每次<strong>功能結果</strong>更新會在此追加一筆（序號、版本、時間、修改內容），方便技術同事跟進。
-        只記終態，不記中途嘗試；日誌合併／重排本身不算功能改動，不另開序號。
-      </p>
+    <section class="sec" aria-label="功能更新日誌">
       <div class="log-list" id="changelogList" aria-live="polite"></div>
     </section>
   </main>
   <script>
     /*
-      日誌規矩：
+      日誌規矩（頁面不展示說明文案）：
       1) 只記功能修改的終態結果，不記中途嘗試／反覆改版過程；
       2) 合併精簡、重排序號本身不算功能改動，不另開序號；
       3) 序號升序存儲，畫面由新到舊顯示。
@@ -191,15 +173,6 @@
     const FEATURE_CHANGELOG = [
       {
         no: 1,
-        version: "0.2.400–0.2.411",
-        at: "2026-10-29～10-31",
-        body:
-          "心水名家榜：名單取自名家貼士；摘要顯示參與場數；個人戰績可上榜並標 me。" +
-          "\n騎練合作：文案為勝出率、歷史出賽合作；位置率在勝出率下方左對齊；本場最高勝出率時騎練名加紅底線。" +
-          "\n可開彈窗列表頭：居中靠下靜態橙色半圓提示。"
-      },
-      {
-        no: 2,
         version: "0.2.412",
         at: "2026-11-01 00:40",
         body: "新增菜單「使用說明」獨立頁，內含功能更新日誌文檔（序號／版本／時間／修改內容）。"
