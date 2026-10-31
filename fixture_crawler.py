@@ -17,7 +17,10 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from selectolax.parser import HTMLParser
+try:
+    from selectolax.lexbor import LexborHTMLParser as HTMLParser
+except ImportError:  # pragma: no cover - older selectolax
+    from selectolax.parser import HTMLParser
 
 try:
     from dotenv import load_dotenv

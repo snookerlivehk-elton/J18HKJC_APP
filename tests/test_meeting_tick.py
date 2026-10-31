@@ -321,6 +321,57 @@ class PlanPreRaceTest(unittest.TestCase):
         self.assertTrue(all(a.get("dry_run") for a in out["actions"]))
         self.assertTrue(any(a.get("action") == "social_copy" for a in out["actions"]))
 
+    def test_racecard_crawl_fallback_when_jjjc_empty(self):
+        """jjjc sync 失敗／仍無排位時，應回退 crawl_racecard。"""
+        from meeting_tick import PreRaceActionPlan, MeetingTickRunner, TickGuards, STATUS_OK
+
+        pipe = MagicMock()
+        ready_pending = {"RACECARD": {"status": "pending", "detail": "尚無排位賽事"}}
+        ready_ok = {
+            "RACECARD": {"status": "ok", "detail": "10 場、共 118 匹"},
+            "SPEEDGUIDE": {"status": "ok"},
+            "FORMGUIDE": {"status": "ok"},
+        }
+        refresh_n = {"n": 0}
+
+        def _refresh(*_a, **_k):
+            refresh_n["n"] += 1
+            return ready_pending if refresh_n["n"] == 1 else ready_ok
+
+        pipe.refresh_readiness = MagicMock(side_effect=_refresh)
+        pipe.run_action = MagicMock(
+            side_effect=[
+                {"ok": False, "waiting": True, "error": "export 無排位（自動 racecard fetch 失敗：WHITELIST_ERROR）"},
+                {"ok": True, "stdout": "crawl ok"},
+                {"ok": True},  # speedguide
+                {"ok": True},  # formguide
+            ]
+        )
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(force=True)
+        runner._factors_ran = False
+        runner.record_tick_attempt = MagicMock()
+        runner._record_pull_attempt = MagicMock()
+        plan = PreRaceActionPlan(
+            racing_date="2026-11-01",
+            course="HV",
+            sync_racecard=True,
+            pull_speedguide=True,
+            pull_formguide=True,
+            run_factors=False,
+            start_form_ai=False,
+            snapshot=False,
+            social_copy=False,
+            readiness={"RACECARD": {"status": "pending"}},
+        )
+        out = runner.execute_pre_race_meeting(plan, dry_run=False)
+        actions = [a.get("action") for a in out["actions"]]
+        self.assertIn("sync_jjjc_racecard", actions)
+        self.assertIn("crawl_racecard", actions)
+        self.assertTrue(out.get("racecard_crawl_fallback"))
+        self.assertEqual(pipe.run_action.call_args_list[1].args[2], "crawl_racecard")
+
 
 class PlanPostRaceTest(unittest.TestCase):
     def _runner(self, **guard_kw):
