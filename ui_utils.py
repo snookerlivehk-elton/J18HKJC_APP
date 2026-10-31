@@ -1,6 +1,10 @@
 """
 各因子頁共用的 UI 工具：排位選擇、Bucket 顯示、排位列 × 因子匹配表。
 """
+from __future__ import annotations
+
+from typing import Optional, Tuple
+
 import streamlit as st
 import pandas as pd
 from inference_engine import InferenceEngine
@@ -20,12 +24,44 @@ from bucket_utils import (
 )
 
 
+def latest_upcoming_meeting_defaults(
+    races_df: Optional[pd.DataFrame] = None,
+) -> Tuple[str, str, str]:
+    """
+    回傳 (YYYY-MM-DD, COURSE, YYYY/MM/DD)。
+    無排位時 fallback 今日／ST。
+    """
+    from datetime import date as _date
+
+    if races_df is None:
+        races_df = InferenceEngine().get_upcoming_races()
+    if races_df is None or races_df.empty:
+        today = _date.today().strftime("%Y-%m-%d")
+        return today, "ST", today.replace("-", "/")
+
+    df = races_df.copy()
+    df["_d"] = pd.to_datetime(df["racing_date"], errors="coerce")
+    df = df.dropna(subset=["_d"]).sort_values(["_d", "race_num"], ascending=[False, True])
+    if df.empty:
+        today = _date.today().strftime("%Y-%m-%d")
+        return today, "ST", today.replace("-", "/")
+    row = df.iloc[0]
+    iso = row["_d"].strftime("%Y-%m-%d")
+    course = str(row.get("course") or "ST").upper()
+    return iso, course, iso.replace("-", "/")
+
+
 @st.cache_data(ttl=60)
 def get_upcoming_races_list():
     engine = InferenceEngine()
     races_df = engine.get_upcoming_races()
     if races_df.empty:
         return []
+
+    # 最新賽日排前，避免下拉預設停在最舊一場（如 9/6）
+    races_df = races_df.copy()
+    races_df["_d"] = pd.to_datetime(races_df["racing_date"], errors="coerce")
+    races_df = races_df.sort_values(["_d", "race_num"], ascending=[False, True])
 
     options = [("None", "--- 純查詢歷史 Bucket（不對應排位） ---")]
     for _, row in races_df.iterrows():
@@ -59,7 +95,7 @@ def get_upcoming_races_list():
 @st.cache_data(ttl=60)
 def get_upcoming_meeting_days_list():
     """
-    整個賽日選項。
+    整個賽日選項（最新在前）。
     回傳 [(meeting_key, label, race_ids), ...]
     meeting_key = YYYY-MM-DD|ST 或 YYYY-MM-DD|HV
     """
@@ -79,6 +115,7 @@ def get_upcoming_meeting_days_list():
         key = f"{date}|{course}"
         label = f"{date} {course}｜共 {n_races} 場（第 {int(g['race_num'].min())}–{int(g['race_num'].max())} 場）"
         options.append((key, label, race_ids))
+    options.reverse()  # 最新賽日排前
     return options
 
 

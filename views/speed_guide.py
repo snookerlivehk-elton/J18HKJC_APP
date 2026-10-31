@@ -15,6 +15,7 @@ st.caption(
 
 engine = InferenceEngine()
 races = engine.get_upcoming_races()
+_default_iso, _default_course, _default_slash = ui_utils.latest_upcoming_meeting_defaults(races)
 
 with st.expander("⚙️ 推論權重（寫入 ModelConfig）", expanded=True):
     st.caption("游標停在標籤旁 ⓘ 可看功能與調節後變化；調完表格「SG貢獻／評分排名」會即時重算。")
@@ -41,9 +42,17 @@ with st.expander("抓取 / 更新 Speed Guide", expanded=False):
     )
     c1, c2, c3 = st.columns(3)
     with c1:
-        sg_date = st.text_input("核對日期 YYYY/MM/DD", value="2026/09/06", key="sg_page_date")
+        sg_date = st.text_input(
+            "核對日期 YYYY/MM/DD", value=_default_slash, key="sg_page_date"
+        )
     with c2:
-        sg_course = st.selectbox("核對場地", ["ST", "HV"], key="sg_page_course")
+        _course_opts = ["ST", "HV"]
+        sg_course = st.selectbox(
+            "核對場地",
+            _course_opts,
+            index=_course_opts.index(_default_course) if _default_course in _course_opts else 0,
+            key="sg_page_course",
+        )
     with c3:
         st.write("")
         st.write("")
