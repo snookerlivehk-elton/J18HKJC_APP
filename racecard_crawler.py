@@ -1,6 +1,9 @@
 import asyncio
 import httpx
-from selectolax.parser import HTMLParser
+try:
+    from selectolax.lexbor import LexborHTMLParser as HTMLParser
+except ImportError:  # pragma: no cover - older selectolax
+    from selectolax.parser import HTMLParser
 import argparse
 import sqlite3
 import re
