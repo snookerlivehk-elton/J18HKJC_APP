@@ -27,6 +27,8 @@
   5) promo_hits → post_race_copy（SETTLED 後；可開關）
   6) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
   7) SECTIONALS_TIMES late-backfill（賽後≥5日；R2 jjjc.sectionals.v1 通常此時齊）
+     → 秒數達標後自動重算 factor_scores（MEETING_AUTO_FACTORS_AFTER_SECTIONALS）
+  8) 賽果同步後：未結算 → settle；已結算 → resettle（名次更正＋命中快照刷新）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -34,6 +36,7 @@
   - 人工略過／放行（manual_override）不覆蓋、不強跑
   - 同輪可樂觀排下游，但 execute 必須以 refresh 後真實 status 再開閘
   - 分段秒數唔好以為賽當日就齊；缺秒數要喺 min_age 後重試直至覆蓋達標
+  - 上游補齊／更正會觸發對應下游重算（因子／resettle），唔止「填空」
 
 用法：
   python meeting_tick.py --mode all --dry-run --json
@@ -2511,6 +2514,16 @@ class MeetingTickRunner:
                 detail=detail
                 or f"cov={(result.get('inventory') or {}).get('sectional_time_coverage')}",
             )
+            # 秒數達標 → 重算依賴分段嘅因子（PACE／SPEED 等）
+            if times_ok and not dry_run:
+                try:
+                    fac = self.pipe._maybe_recompute_factors_after_sectionals(d, c)
+                    if fac is not None:
+                        rec["auto_factors"] = fac
+                        result = dict(result)
+                        result["auto_factors"] = fac
+                except Exception as e:
+                    rec["auto_factors"] = {"ok": False, "error": str(e)[:200]}
             rec.update(
                 {
                     "ok": bool(times_ok or (result.get("ok") and not hard_fail)),

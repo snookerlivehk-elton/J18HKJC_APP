@@ -1454,7 +1454,13 @@ class MeetingPipeline:
                             "error": str(e)[:200],
                         }
                 self.refresh_readiness(racing_date, course)
-                # RESULTS 齊備且有快照時立刻 settle（唔使等下一輪 tick）
+                # 若本輪已把分段秒數補齊 → 重算因子
+                fac = self._maybe_recompute_factors_after_sectionals(
+                    racing_date, course
+                )
+                if fac is not None:
+                    out["auto_factors"] = fac
+                # RESULTS 齊備且有快照時立刻 settle／resettle（唔使等下一輪 tick）
                 auto = self._maybe_auto_settle_after_results(racing_date, course)
                 if auto is not None:
                     out["auto_settle"] = auto
@@ -1469,7 +1475,13 @@ class MeetingPipeline:
 
                 out = backfill_meeting_sectionals(self.engine, racing_date, course)
                 self.refresh_readiness(racing_date, course)
-                return {"ok": True, **out}
+                result = {"ok": True, **out}
+                fac = self._maybe_recompute_factors_after_sectionals(
+                    racing_date, course
+                )
+                if fac is not None:
+                    result["auto_factors"] = fac
+                return result
 
             if action == "sync_jjjc_sectionals":
                 from jjjc_sectionals_sync import sync_meeting as sync_sec
@@ -1482,6 +1494,11 @@ class MeetingPipeline:
                     base_url=kwargs.get("base_url"),
                 )
                 self.refresh_readiness(racing_date, course)
+                fac = self._maybe_recompute_factors_after_sectionals(
+                    racing_date, course
+                )
+                if fac is not None:
+                    out["auto_factors"] = fac
                 return out
 
             if action == "resync_results_sectionals":
@@ -1494,6 +1511,11 @@ class MeetingPipeline:
                     course,
                     also_backfill=bool(kwargs.get("also_backfill", True)),
                 )
+                fac = self._maybe_recompute_factors_after_sectionals(
+                    racing_date, course
+                )
+                if fac is not None:
+                    out["auto_factors"] = fac
                 return out
 
             if action == "remediate_zh_names":
@@ -1942,7 +1964,25 @@ class MeetingPipeline:
 
             if action == "settle":
                 from factor_calibration import FactorCalibration
-                out = FactorCalibration().settle_pending()
+
+                cal = FactorCalibration()
+                out = cal.settle_pending()
+                # 指定賽日：再 resettle 一次，吸收賽果更正
+                try:
+                    re = cal.resettle_meeting(racing_date, course)
+                    out["resettle"] = re
+                    if re.get("changed"):
+                        out["updated_rows"] = int(out.get("updated_rows") or 0) + int(
+                            re.get("updated_rows") or 0
+                        )
+                        out["settled_batches"] = list(
+                            dict.fromkeys(
+                                list(out.get("settled_batches") or [])
+                                + list(re.get("settled_batches") or [])
+                            )
+                        )
+                except Exception as e:
+                    out["resettle"] = {"ok": False, "error": str(e)[:200]}
                 self.refresh_readiness(racing_date, course)
                 # 結算後立刻產賽後命中／文案（補 tick 缺口；已結算再按亦會補跑）
                 ads = self._maybe_run_post_race_ads_after_settle(
@@ -1960,13 +2000,50 @@ class MeetingPipeline:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def _maybe_recompute_factors_after_sectionals(
+        self, racing_date: str, course: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        分段秒數達標後自動重算基礎因子（PACE／SPEED 等依賴 runner_sections）。
+        由 MEETING_AUTO_FACTORS_AFTER_SECTIONALS 控制（預設開）。
+        """
+        if not self._env_flag("MEETING_AUTO_FACTORS_AFTER_SECTIONALS", "true"):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "MEETING_AUTO_FACTORS_AFTER_SECTIONALS disabled",
+            }
+        try:
+            from data_audit import meeting_inventory
+
+            inv = meeting_inventory(self.engine, racing_date, course)
+            if not inv.get("sectional_times_ok"):
+                return None
+            from factor_calculator import FactorCalculator
+
+            result = FactorCalculator().run_all_factors(persist=True, apply_nlp=False)
+            if result is None or result[0] is None:
+                return {"ok": False, "error": "無歷史數據或計算失敗"}
+            self.refresh_readiness(racing_date, course)
+            return {
+                "ok": True,
+                "racing_date": str(racing_date)[:10],
+                "course": str(course or "").upper(),
+                "reason": "sectional_times_ok",
+                "coverage": inv.get("sectional_time_coverage"),
+                "msg": "分段秒數齊 → 已重算 factor_scores",
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:200], "skipped": True}
+
     def _maybe_auto_settle_after_results(
         self, racing_date: str, course: str
     ) -> Optional[Dict[str, Any]]:
         """
-        賽果同步後：SNAPSHOT ok、RESULTS ok、SETTLED 未 ok → 立刻 settle_pending。
-        避免 RESULTS 已綠但仍要等 hourly tick 才結算。
-        結算成功後立刻跑 promo_hits → post_race（唔依賴下一輪 tick）。
+        賽果同步後：
+          - SNAPSHOT ok、RESULTS ok、SETTLED 未 ok → settle_pending
+          - 已 SETTLED → resettle_meeting（吸收名次／賠率更正並刷新命中快照）
+        結算／更正後立刻跑 promo_hits → post_race（唔依賴下一輪 tick）。
         """
         try:
             results_st, _ = self.check_results(racing_date, course)
@@ -1975,12 +2052,40 @@ class MeetingPipeline:
             snap_st, _ = self.check_snapshot(racing_date, course)
             if snap_st != STATUS_OK:
                 return None
-            settled_st, _ = self.check_settled(racing_date, course)
-            if settled_st == STATUS_OK:
-                return None
+            if not self._env_flag("MEETING_AUTO_RESETTLE_ON_RESULTS", "true"):
+                # 仍保留首次 settle 行為
+                settled_st, _ = self.check_settled(racing_date, course)
+                if settled_st == STATUS_OK:
+                    return {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "MEETING_AUTO_RESETTLE_ON_RESULTS disabled",
+                    }
             from factor_calibration import FactorCalibration
 
-            out = FactorCalibration().settle_pending()
+            cal = FactorCalibration()
+            settled_st, _ = self.check_settled(racing_date, course)
+            if settled_st != STATUS_OK:
+                out = cal.settle_pending()
+                # 首次 settle 後再對該日 resettle，確保賠率等齊
+                try:
+                    re = cal.resettle_meeting(racing_date, course)
+                    if isinstance(out, dict):
+                        out = dict(out)
+                        out["resettle"] = re
+                except Exception as e:
+                    if isinstance(out, dict):
+                        out = dict(out)
+                        out["resettle"] = {"ok": False, "error": str(e)[:200]}
+            else:
+                out = cal.resettle_meeting(racing_date, course)
+                if isinstance(out, dict) and not out.get("changed"):
+                    return {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "already settled; finishes unchanged",
+                        "resettle": out,
+                    }
             if isinstance(out, dict):
                 ads = self._maybe_run_post_race_ads_after_settle(
                     racing_date, course, out
