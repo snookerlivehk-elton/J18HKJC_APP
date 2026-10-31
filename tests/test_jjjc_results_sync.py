@@ -534,6 +534,86 @@ class JjjcResultsSyncTest(unittest.TestCase):
         self.assertTrue(out.get("waiting"), out)
         self.assertIn("無賽果", str(out.get("detail") or ""))
 
+    def test_results_resync_preserves_sectional_times(self):
+        """整場換血刪 runner_sections 後，仍應把先前 R2 秒數按馬號寫返。"""
+        root = Path(__file__).resolve().parents[1]
+        fixture = root / "fixtures" / "jjjc_results_ST_20260906_R1.json"
+        self.assertTrue(fixture.is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "preserve_sec.db")
+            os.environ["USE_SQLITE"] = "true"
+
+            import etl_pipeline
+            import jjjc_results_sync as sync
+            import sectionals_store as ss
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+            ss.USE_SQLITE = True
+            ss.SQLITE_DB_PATH = db_path
+
+            payload = json.loads(fixture.read_text(encoding="utf-8"))
+            out1 = sync.upsert_payload(payload)
+            self.assertTrue(out1["ok"], out1)
+
+            from sqlalchemy import create_engine, text
+
+            eng = create_engine(f"sqlite:///{db_path}")
+            with eng.begin() as conn:
+                # 模擬 R2 已寫入秒數
+                conn.execute(
+                    text(
+                        """
+                        UPDATE runner_sections
+                        SET sectional_time = printf('1%d.00', stage_no)
+                        WHERE runner_id LIKE '20260906ST%'
+                        """
+                    )
+                )
+                before = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND sectional_time IS NOT NULL
+                          AND TRIM(sectional_time) != ''
+                        """
+                    )
+                ).scalar()
+            self.assertGreater(int(before or 0), 0)
+
+            out2 = sync.upsert_payload(payload)
+            self.assertTrue(out2["ok"], out2)
+            with eng.connect() as conn:
+                after = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND sectional_time IS NOT NULL
+                          AND TRIM(sectional_time) != ''
+                        """
+                    )
+                ).scalar()
+                sample = conn.execute(
+                    text(
+                        """
+                        SELECT sectional_time FROM runner_sections
+                        WHERE runner_id LIKE '20260906ST%'
+                          AND stage_no = 1
+                          AND sectional_time IS NOT NULL
+                        LIMIT 1
+                        """
+                    )
+                ).scalar()
+            eng.dispose()
+            self.assertEqual(int(after or 0), int(before or 0))
+            self.assertTrue(str(sample or "").startswith("1"))
+
 
 if __name__ == "__main__":
     unittest.main()

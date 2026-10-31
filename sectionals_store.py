@@ -330,9 +330,13 @@ def upsert_runner_sections(conn, runner_id: str, stages: Sequence[StageRow]) -> 
                 ON CONFLICT (runner_id, stage_no) DO UPDATE SET
                   position_raw = EXCLUDED.position_raw,
                   distance_behind_raw = COALESCE(EXCLUDED.distance_behind_raw, runner_sections.distance_behind_raw),
-                  sectional_time = COALESCE(EXCLUDED.sectional_time, runner_sections.sectional_time),
-                  split_1 = COALESCE(EXCLUDED.split_1, runner_sections.split_1),
-                  split_2 = COALESCE(EXCLUDED.split_2, runner_sections.split_2),
+                  -- 空字串唔當有效時間，避免走位回填蓋過 R2 秒數
+                  sectional_time = COALESCE(
+                    NULLIF(TRIM(EXCLUDED.sectional_time), ''),
+                    runner_sections.sectional_time
+                  ),
+                  split_1 = COALESCE(NULLIF(TRIM(EXCLUDED.split_1), ''), runner_sections.split_1),
+                  split_2 = COALESCE(NULLIF(TRIM(EXCLUDED.split_2), ''), runner_sections.split_2),
                   raw_json = EXCLUDED.raw_json
                 """
             ),
@@ -370,9 +374,12 @@ def upsert_race_sectionals(conn, race_id: str, stages: Sequence[StageRow]) -> in
                   :race_id, :stage_no, :sectional_time, :split_1, :split_2, :raw_json
                 )
                 ON CONFLICT (race_id, stage_no) DO UPDATE SET
-                  sectional_time = COALESCE(EXCLUDED.sectional_time, race_sectionals.sectional_time),
-                  split_1 = COALESCE(EXCLUDED.split_1, race_sectionals.split_1),
-                  split_2 = COALESCE(EXCLUDED.split_2, race_sectionals.split_2),
+                  sectional_time = COALESCE(
+                    NULLIF(TRIM(EXCLUDED.sectional_time), ''),
+                    race_sectionals.sectional_time
+                  ),
+                  split_1 = COALESCE(NULLIF(TRIM(EXCLUDED.split_1), ''), race_sectionals.split_1),
+                  split_2 = COALESCE(NULLIF(TRIM(EXCLUDED.split_2), ''), race_sectionals.split_2),
                   raw_json = EXCLUDED.raw_json
                 """
             ),
@@ -408,9 +415,12 @@ async def upsert_runner_sections_asyncpg(conn, runner_id: str, stages: Sequence[
             ON CONFLICT (runner_id, stage_no) DO UPDATE SET
               position_raw = EXCLUDED.position_raw,
               distance_behind_raw = COALESCE(EXCLUDED.distance_behind_raw, runner_sections.distance_behind_raw),
-              sectional_time = COALESCE(EXCLUDED.sectional_time, runner_sections.sectional_time),
-              split_1 = COALESCE(EXCLUDED.split_1, runner_sections.split_1),
-              split_2 = COALESCE(EXCLUDED.split_2, runner_sections.split_2),
+              sectional_time = COALESCE(
+                NULLIF(TRIM(EXCLUDED.sectional_time), ''),
+                runner_sections.sectional_time
+              ),
+              split_1 = COALESCE(NULLIF(TRIM(EXCLUDED.split_1), ''), runner_sections.split_1),
+              split_2 = COALESCE(NULLIF(TRIM(EXCLUDED.split_2), ''), runner_sections.split_2),
               raw_json = EXCLUDED.raw_json
             """,
             runner_id,
