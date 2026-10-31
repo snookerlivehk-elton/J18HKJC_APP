@@ -103,6 +103,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("LIST_ZOOM_MAX", r.text)
         self.assertIn('data-nav="raceDate"', r.text)
         self.assertIn('data-nav="colSort"', r.text)
+        self.assertIn('data-nav="help"', r.text)
+        self.assertIn("使用說明", r.text)
+        self.assertIn('window.location.href = "help.html"', r.text)
         self.assertIn("馬匹數據排序", r.text)
         self.assertIn('id="colSortOverlay"', r.text)
         self.assertIn('id="colSortSheet"', r.text)
@@ -1227,6 +1230,22 @@ class RacedayEmbedApiTest(unittest.TestCase):
         import json
 
         json.dumps(out)  # must not raise
+
+    def test_racecard_help_changelog_page(self):
+        from pathlib import Path
+
+        help_path = Path(__file__).resolve().parents[1] / "static" / "racecard_help.html"
+        self.assertTrue(help_path.is_file())
+        text = help_path.read_text(encoding="utf-8")
+        self.assertIn("使用說明", text)
+        self.assertIn("功能更新日誌文檔", text)
+        self.assertIn("FEATURE_CHANGELOG", text)
+        self.assertIn("log-no", text)
+        self.assertIn("log-ver", text)
+        self.assertIn("log-at", text)
+        self.assertIn("0.2.412", text)
+        self.assertIn("racecard.html", text)
+        self.assertIn("香港時間", text)
 
 
 if __name__ == "__main__":

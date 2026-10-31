@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("j18-racecard-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>使用說明 · J18</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --nav: #3d5a80;
+      --nav-2: #334b6b;
+      --page: #eef1f5;
+      --card: #fff;
+      --text: #2c3340;
+      --muted: #6b7585;
+      --line: #e4e7ec;
+      --orange: #e67e22;
+      --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    html[data-theme="dark"] {
+      --nav: #6a86a8;
+      --nav-2: #2a3d58;
+      --page: #151a21;
+      --card: #1e242c;
+      --text: #e8eef6;
+      --muted: #a8b3c2;
+      --line: rgba(210, 222, 236, .18);
+      --orange: #ffb14a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 52px;
+      padding: 8px 12px;
+      padding-top: max(8px, env(safe-area-inset-top, 0px));
+      background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(30, 42, 58, .18);
+    }
+    html[data-theme="dark"] .top {
+      background: linear-gradient(180deg, #3d5574 0%, #24344a 100%);
+    }
+    .back {
+      flex: 0 0 auto;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .14);
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .back:active { background: rgba(255, 255, 255, .26); }
+    .top-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 14px 12px max(24px, env(safe-area-inset-bottom, 0px));
+    }
+    .sec {
+      margin: 0 0 14px;
+      padding: 12px 12px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      box-shadow: inset 3px 0 0 var(--nav);
+    }
+    .sec-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+    .sec-lead {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .log-item {
+      padding: 10px 10px 9px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(61, 90, 128, .04);
+    }
+    html[data-theme="dark"] .log-item {
+      background: rgba(255, 255, 255, .03);
+    }
+    .log-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 10px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .log-no {
+      color: var(--nav);
+      font-variant-numeric: tabular-nums;
+    }
+    .log-ver {
+      color: var(--orange);
+      font-variant-numeric: tabular-nums;
+    }
+    .log-at {
+      color: var(--muted);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .log-body {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.5;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+    .empty {
+      margin-top: 12px;
+      padding: 18px 10px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <button type="button" class="back" id="helpBack" aria-label="返回排位">‹</button>
+    <div class="top-title">使用說明</div>
+  </header>
+  <main class="wrap">
+    <section class="sec" aria-labelledby="changelogTitle">
+      <h1 class="sec-title" id="changelogTitle">功能更新日誌文檔</h1>
+      <p class="sec-lead">
+        自此頁建立起，每次產品更新會在此追加一筆紀錄（序號、版本、時間、修改內容），方便技術同事跟進。
+        若多筆細微改動需要精簡，可按序號區間合併整理。
+      </p>
+      <div class="log-list" id="changelogList" aria-live="polite"></div>
+    </section>
+  </main>
+  <script>
+    /* 序號升序存儲；畫面由新到舊顯示。合併精簡時改此陣列並重排 no。 */
+    const FEATURE_CHANGELOG = [
+      {
+        no: 1,
+        version: "0.2.400",
+        at: "2026-10-29 19:15",
+        body: "心水名家榜：名單改取名家貼士；摘要行加參與場數；個人戰績同榜評比，上榜顯示 me 標。"
+      },
+      {
+        no: 2,
+        version: "0.2.401",
+        at: "2026-10-29 19:20",
+        body: "騎練合作彈窗：摘要「勝率」改為「勝出率」。"
+      },
+      {
+        no: 3,
+        version: "0.2.402",
+        at: "2026-10-29 19:24",
+        body: "騎練合作彈窗：摘要「近季合作」改為「歷史出賽合作」。"
+      },
+      {
+        no: 4,
+        version: "0.2.403",
+        at: "2026-10-29 19:30",
+        body: "騎練合作彈窗：位置率移至勝出率下方左對齊，去掉前導「·」。"
+      },
+      {
+        no: 5,
+        version: "0.2.404",
+        at: "2026-10-29 19:40",
+        body: "本場騎練合作勝出率最高（可並列）時，馬匹列表騎師／練馬師名加紅色下劃線。"
+      },
+      {
+        no: 6,
+        version: "0.2.405",
+        at: "2026-10-29 20:10",
+        body: "可開彈窗列增加發現提示（初版揭頁角，後續改版見後續序號）。"
+      },
+      {
+        no: 7,
+        version: "0.2.406",
+        at: "2026-10-29 20:16",
+        body: "彈窗提示移到表頭字段行，位置改左下角。"
+      },
+      {
+        no: 8,
+        version: "0.2.407",
+        at: "2026-10-29 20:30",
+        body: "揭頁角摺向改為左下往右上掀起。"
+      },
+      {
+        no: 9,
+        version: "0.2.408",
+        at: "2026-10-29 20:40",
+        body: "彈窗提示改為表頭「詳」角標試版。"
+      },
+      {
+        no: 10,
+        version: "0.2.409",
+        at: "2026-10-29 20:50",
+        body: "彈窗提示改為高反差橙色翻起箭頭。"
+      },
+      {
+        no: 11,
+        version: "0.2.410",
+        at: "2026-10-29 20:55",
+        body: "彈窗提示改為左下靜態橙色三角角標，去掉動效。"
+      },
+      {
+        no: 12,
+        version: "0.2.411",
+        at: "2026-10-31 00:56",
+        body: "彈窗提示改為表頭居中靠下靜態橙色半圓。"
+      },
+      {
+        no: 13,
+        version: "0.2.412",
+        at: "2026-11-01 00:40",
+        body: "新增菜單「使用說明」獨立頁，內含功能更新日誌文檔（序號／版本／時間／修改內容），供後續持續追加與按序號區間精簡合併。"
+      }
+    ];
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderChangelog() {
+      const root = document.getElementById("changelogList");
+      if (!root) return;
+      const rows = FEATURE_CHANGELOG.slice().sort(function (a, b) {
+        return (Number(b.no) || 0) - (Number(a.no) || 0);
+      });
+      if (!rows.length) {
+        root.innerHTML = '<div class="empty">暫無更新紀錄</div>';
+        return;
+      }
+      root.innerHTML = rows.map(function (it) {
+        return '<article class="log-item" data-log-no="' + esc(it.no) + '">' +
+          '<div class="log-meta">' +
+            '<span class="log-no">#' + esc(it.no) + "</span>" +
+            '<span class="log-ver">v' + esc(it.version) + "</span>" +
+            '<span class="log-at">' + esc(it.at) + "（香港時間）</span>" +
+          "</div>" +
+          '<p class="log-body">' + esc(it.body) + "</p>" +
+        "</article>";
+      }).join("");
+    }
+
+    function goBack() {
+      try {
+        if (window.history.length > 1 && document.referrer) {
+          window.history.back();
+          return;
+        }
+      } catch (e) {}
+      window.location.href = "racecard.html";
+    }
+
+    document.getElementById("helpBack").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      goBack();
+    });
+    renderChangelog();
+  </script>
+</body>
+</html>

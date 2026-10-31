@@ -13032,6 +13032,9 @@
           openTipRecordSheet();
         } else if (act === "colSort") {
           openColSortSheet();
+        } else if (act === "help") {
+          /* 獨立使用說明頁（含功能更新日誌文檔） */
+          window.location.href = "help.html";
         } else if (act === "service") {
           const anno = document.querySelector(".anno");
           if (anno && typeof anno.scrollIntoView === "function") {
