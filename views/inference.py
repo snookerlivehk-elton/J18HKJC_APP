@@ -108,8 +108,22 @@ with st.expander("融合權重（ModelConfig）", expanded=True):
         help=ph.SOFTMAX_T,
     )
 
+# upcoming_races 會累積多個舊賽日；預設跟「賽日速覽」一樣落在最新一日，唔好停在最舊（如 9/6）
+races_df = races_df.copy()
+races_df["_date"] = races_df["racing_date"].astype(str).str[:10]
+dates = sorted(races_df["_date"].unique().tolist())
+date_sel = st.selectbox(
+    "賽日",
+    dates,
+    index=len(dates) - 1,
+    help="資料庫內所有已抓排位賽日；預設最新一日。",
+)
+day = races_df[races_df["_date"] == date_sel].sort_values("race_num")
+course = str(day.iloc[0]["course"]) if not day.empty else ""
+st.caption(f"{date_sel}　{course}　共 {len(day)} 場（庫內共 {len(dates)} 個賽日）")
+
 race_options = []
-for _, row in races_df.iterrows():
+for _, row in day.iterrows():
     label = (
         f"第 {row['race_num']} 場｜{row['racing_date']} {row['course']} "
         f"{row['track']} {row['distance_m']}米（{format_class_display(row['class'])}）"
