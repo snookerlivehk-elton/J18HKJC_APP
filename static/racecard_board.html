@@ -1976,6 +1976,7 @@
       opacity: .88;
       line-height: 1.25;
     }
+    .horse-sheet-title .sub:empty { display: none; }
     .horse-sheet-close {
       position: absolute;
       top: 8px;
@@ -10962,11 +10963,6 @@
       });
     }
 
-    function sheetItem(label, value, wide) {
-      const empty = value == null || value === "" || value === "—";
-      return '<div class="item' + (wide ? " wide" : "") + '"><span class="k">' + esc(label) +
-        '</span><span class="v' + (empty ? " muted" : "") + '">' + esc(empty ? "—" : value) + "</span></div>";
-    }
     function closeHorseSheet() {
       if (!el.sheet || el.sheet.hasAttribute("hidden")) return;
       el.sheet.setAttribute("hidden", "");
@@ -11293,11 +11289,10 @@
       closeAllBoardOverlays("horseSheet");
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
-      const meet = currentMeet();
-      const j = splitNameAllow(r.jockey);
       el.sheetNo.textContent = String(r.no);
       el.sheetName.textContent = r.name || "";
-      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
+      /* 詳情正文待重設計：暫只保留彩衣／馬號／馬名 */
+      if (el.sheetRace) el.sheetRace.textContent = "";
       if (r.silk) {
         el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
         el.sheetSilk.className = "horse-sheet-silk";
@@ -11305,36 +11300,7 @@
         el.sheetSilk.style.backgroundImage = "";
         el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
       }
-      el.sheetBody.innerHTML =
-        '<div class="horse-sheet-odds">' +
-          '<div class="box"><span class="k">檔位</span><span class="v">' + esc(fmt(r.draw)) + "</span></div>" +
-          '<div class="box"><span class="k">獨贏</span><span class="v">' + esc(r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win")) + "</span></div>" +
-          '<div class="box"><span class="k">位置</span><span class="v">' + esc(r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place")) + "</span></div>" +
-        "</div>" +
-        '<div class="horse-sheet-grid">' +
-          sheetItem("近績", r.form6) +
-          sheetItem("往績", r.recent) +
-          sheetItem("騎師", j.delta ? (j.name + "（" + j.delta + "）") : (j.name || r.jockey)) +
-          sheetItem("練馬師", r.trainer) +
-          sheetItem("年齡", r.age) +
-          sheetItem("評分", (function () {
-            const d = fmtDelta(r.rtgDelta);
-            return d ? (fmt(r.rating) + "（" + d + "）") : r.rating;
-          })()) +
-          sheetItem("負磅", (function () {
-            const d = hwDeltaOf(r);
-            return d ? (fmt(r.hw) + "（" + d + "）") : r.hw;
-          })()) +
-          sheetItem("排位體重", r.bodyWt) +
-          sheetItem("配備", r.gear) +
-          sheetItem("出道至今", fmtCareer(r.career)) +
-          sheetItem("跑道", r.rail) +
-          sheetItem("父系", r.sire) +
-          sheetItem("母系", r.dam) +
-          sheetItem("外祖父", r.damsire, true) +
-          sheetItem("馬主", r.owner, true) +
-          sheetItem("獎金", r.prize) +
-        "</div>";
+      if (el.sheetBody) el.sheetBody.innerHTML = "";
       el.sheet.removeAttribute("hidden");
       el.sheet.setAttribute("aria-hidden", "false");
       if (el.sheetClose) el.sheetClose.focus();
