@@ -44,6 +44,10 @@ SESSION_ROLE = "auth_role"
 SESSION_IDENTITY = "auth_identity"
 SESSION_VIA = "auth_via"  # whitelist | bootstrap
 SESSION_TOKEN = "auth_token"
+# 本分頁已主動登出：阻擋 localStorage／?j18_auth= 自動還原（避免閃爍重登）
+SESSION_LOGOUT_GUARD = "_j18_auth_logged_out"
+SESSION_STORE_SYNCED = "_j18_auth_store_synced"
+SESSION_PROBE_DONE = "_j18_auth_probe_done"
 
 AUTH_BROWSER_KEY = "j18_auth_v1"
 AUTH_QUERY_PARAM = "j18_auth"
@@ -328,6 +332,21 @@ def is_admin() -> bool:
     return current_role() == ROLE_ADMIN
 
 
+def _strip_auth_query_param() -> None:
+    import streamlit as st
+
+    try:
+        if AUTH_QUERY_PARAM in st.query_params:
+            del st.query_params[AUTH_QUERY_PARAM]
+            return
+    except Exception:
+        pass
+    try:
+        st.query_params.pop(AUTH_QUERY_PARAM, None)
+    except Exception:
+        pass
+
+
 def _set_session(role: str, identity: str, via: str, token: Optional[str] = None) -> str:
     import streamlit as st
 
@@ -336,14 +355,27 @@ def _set_session(role: str, identity: str, via: str, token: Optional[str] = None
     st.session_state[SESSION_IDENTITY] = identity
     st.session_state[SESSION_VIA] = via
     st.session_state[SESSION_TOKEN] = tok
+    # 主動登入／還原成功 → 解除登出防護
+    st.session_state.pop(SESSION_LOGOUT_GUARD, None)
     return tok
 
 
 def logout():
+    """
+    清 session + 瀏覽器 token。
+
+    重要：必須設 SESSION_LOGOUT_GUARD。否則 st.rerun() 常在
+    localStorage 清除 JS 執行前就重跑，try_restore 又把舊 token
+    用 ?j18_auth= 導回來 → 登出失敗＋頁面閃爍。
+    """
     import streamlit as st
 
     for k in (SESSION_ROLE, SESSION_IDENTITY, SESSION_VIA, SESSION_TOKEN):
         st.session_state.pop(k, None)
+    st.session_state[SESSION_LOGOUT_GUARD] = True
+    st.session_state.pop(SESSION_PROBE_DONE, None)
+    st.session_state.pop(SESSION_STORE_SYNCED, None)
+    _strip_auth_query_param()
     inject_auth_browser_store(clear=True)
 
 
@@ -355,6 +387,9 @@ def try_login(raw: str) -> Tuple[bool, str]:
     role, identity, via = hit
     tok = _set_session(role, identity, via)
     inject_auth_browser_store(tok)
+    import streamlit as st
+
+    st.session_state[SESSION_STORE_SYNCED] = True
     if via == "bootstrap":
         return True, "已用開機通行碼進入（請立刻到「白名單」新增正式 admin）"
     days = _session_ttl_days()
@@ -382,7 +417,10 @@ def inject_auth_browser_store(
         "clear": bool(clear),
         "token": None if clear else (token or ""),
         "key": AUTH_BROWSER_KEY,
+        "param": AUTH_QUERY_PARAM,
         "maxAge": ttl_sec,
+        # 每次 clear 換 nonce，避免 Streamlit 略過相同 components.html
+        "nonce": f"c{int(time.time() * 1000)}" if clear else "w",
     }
     components.html(
         f"""
@@ -390,6 +428,7 @@ def inject_auth_browser_store(
 (function () {{
   const cfg = {json.dumps(payload, ensure_ascii=False)};
   const KEY = cfg.key;
+  const PARAM = cfg.param;
   function lsSet(v) {{
     try {{ window.parent.localStorage.setItem(KEY, v); }} catch (e) {{
       try {{ localStorage.setItem(KEY, v); }} catch (e2) {{}}
@@ -412,9 +451,18 @@ def inject_auth_browser_store(
       try {{ document.cookie = part; }} catch (e2) {{}}
     }}
   }}
+  function stripAuthParam() {{
+    try {{
+      const url = new URL(window.parent.location.href);
+      if (!url.searchParams.has(PARAM)) return;
+      url.searchParams.delete(PARAM);
+      window.parent.history.replaceState({{}}, '', url.toString());
+    }} catch (e) {{}}
+  }}
   if (cfg.clear || !cfg.token) {{
     lsDel();
     cookieDel();
+    stripAuthParam();
     return;
   }}
   lsSet(cfg.token);
@@ -431,12 +479,19 @@ def try_restore_auth_from_browser() -> None:
     鎖屏／重整後 Streamlit session 可能重建：
     1) URL ?j18_auth=… → 驗簽寫入 session
     2) 否則用 JS 讀 localStorage／cookie，有 token 就導回帶參數 URL
+
+    若本分頁剛按過登出（SESSION_LOGOUT_GUARD），禁止自動還原，
+    並繼續清瀏覽器存放，避免 clear／rerun 競態造成閃爍重登。
     """
     import streamlit as st
-    import streamlit.components.v1 as components
+
+    if st.session_state.get(SESSION_LOGOUT_GUARD):
+        inject_auth_browser_store(clear=True)
+        _strip_auth_query_param()
+        return
 
     if is_logged_in():
-        # 滑動續期：刷新瀏覽器存放
+        # 已登入：只在尚未同步時寫入瀏覽器，避免每輪 iframe 造成閃爍
         tok = st.session_state.get(SESSION_TOKEN)
         if not tok:
             role = st.session_state.get(SESSION_ROLE)
@@ -444,8 +499,10 @@ def try_restore_auth_from_browser() -> None:
             via = st.session_state.get(SESSION_VIA) or "whitelist"
             if role in (ROLE_ADMIN, ROLE_USER):
                 tok = _set_session(str(role), str(identity), str(via))
-        if tok:
+                st.session_state.pop(SESSION_STORE_SYNCED, None)
+        if tok and not st.session_state.get(SESSION_STORE_SYNCED):
             inject_auth_browser_store(str(tok))
+            st.session_state[SESSION_STORE_SYNCED] = True
         return
 
     qtok = ""
@@ -456,26 +513,20 @@ def try_restore_auth_from_browser() -> None:
 
     if qtok:
         if apply_auth_token(qtok):
-            try:
-                del st.query_params[AUTH_QUERY_PARAM]
-            except Exception:
-                try:
-                    st.query_params.pop(AUTH_QUERY_PARAM)
-                except Exception:
-                    pass
+            _strip_auth_query_param()
             inject_auth_browser_store(qtok)
+            st.session_state[SESSION_STORE_SYNCED] = True
             return
         inject_auth_browser_store(clear=True)
-        try:
-            del st.query_params[AUTH_QUERY_PARAM]
-        except Exception:
-            pass
+        _strip_auth_query_param()
         return
 
     # 只探測一次，避免每輪重渲染都打 JS
-    if st.session_state.get("_j18_auth_probe_done"):
+    if st.session_state.get(SESSION_PROBE_DONE):
         return
-    st.session_state["_j18_auth_probe_done"] = True
+    st.session_state[SESSION_PROBE_DONE] = True
+    import streamlit.components.v1 as components
+
     components.html(
         f"""
 <script>
