@@ -49,6 +49,11 @@ STATUS_FAILED = "failed"
 STATUS_WAITING = "waiting"  # 官方尚未上架（如 SG）
 STATUS_SKIPPED = "skipped_manual"
 
+# 作戰室賽日選擇器：歷史賽日視為「齊備」需達標的階段（NLP 為可選）
+OPS_SELECTOR_COMPLETE_STAGES: Tuple[str, ...] = ("RESULTS", "SETTLED")
+OPS_SELECTOR_DONE_STATUSES = frozenset({STATUS_OK, STATUS_SKIPPED})
+OPS_SELECTOR_EXTRA_EARLIER = 2
+
 # 一鍵完成階段 → 主路徑 run_action（作戰室／Ops Center）
 STAGE_PRIMARY_ACTION: Dict[str, str] = {
     "FIXTURE": "crawl_fixtures",
@@ -99,6 +104,108 @@ def _racecard_looks_corrupt(runners_df: pd.DataFrame):
     if trainer_numeric >= max(n // 2, 1):
         return True, f"練馬師多數為數字（{trainer_numeric}/{n}）"
     return False, ""
+
+
+def _fixture_date_course(row: Any) -> Optional[Tuple[str, str, date]]:
+    try:
+        d = str(row.get("racing_date") or "")[:10]
+        c = str(row.get("course") or "").upper()
+    except Exception:
+        return None
+    if not d or not c:
+        return None
+    try:
+        return d, c, date.fromisoformat(d)
+    except Exception:
+        return None
+
+
+def select_ops_fixture_frame(
+    fixtures_df: pd.DataFrame,
+    *,
+    incomplete_keys: set[Tuple[str, str]],
+    today: date,
+    extra_earlier: int = 2,
+) -> pd.DataFrame:
+    """
+    從整季 fixtures 組作戰室預設選擇清單（ASC）：
+    - 資料未齊備的歷史賽日（即使更早也保留）
+    - 最近 ``extra_earlier`` 個歷史賽日（方便對照；含已齊備）
+    - 若未齊備集合的最早日更晚，再往前補足到共 extra_earlier 個更早賽日
+    - 全部當日／未來賽日
+    """
+    if fixtures_df is None or fixtures_df.empty:
+        return pd.DataFrame()
+
+    past_pos: List[Tuple[date, str, str, int]] = []
+    upcoming_pos: List[int] = []
+    for pos in range(len(fixtures_df)):
+        row = fixtures_df.iloc[pos]
+        parsed = _fixture_date_course(row)
+        if not parsed:
+            continue
+        d, c, dd = parsed
+        if dd >= today:
+            upcoming_pos.append(pos)
+        else:
+            past_pos.append((dd, d, c, pos))
+
+    past_pos.sort(key=lambda x: (x[0], x[2], x[3]))
+    include_pos: List[int] = []
+    seen_pos: set[int] = set()
+
+    def _add(pos: int) -> None:
+        if pos not in seen_pos:
+            include_pos.append(pos)
+            seen_pos.add(pos)
+
+    incomplete_past = [
+        (dd, d, c, pos)
+        for dd, d, c, pos in past_pos
+        if (d, c) in incomplete_keys
+    ]
+    for _dd, _d, _c, pos in incomplete_past:
+        _add(pos)
+
+    n_extra = max(0, int(extra_earlier))
+    # 1) 永遠保留最近 n_extra 個歷史賽日
+    for _dd, _d, _c, pos in past_pos[-n_extra:]:
+        _add(pos)
+
+    # 2) 相對「未齊備歷史」最早日，再往前補 n_extra 個更早賽日
+    if n_extra and incomplete_past:
+        earliest = incomplete_past[0][0]
+        earlier_candidates = [item for item in past_pos if item[0] < earliest]
+        for _dd, _d, _c, pos in earlier_candidates[-n_extra:]:
+            _add(pos)
+
+    for pos in upcoming_pos:
+        _add(pos)
+
+    if not include_pos:
+        return fixtures_df.iloc[0:0].copy()
+
+    include_pos = sorted(
+        include_pos,
+        key=lambda p: (
+            str(fixtures_df.iloc[p].get("racing_date") or "")[:10],
+            str(fixtures_df.iloc[p].get("course") or "").upper(),
+        ),
+    )
+    return fixtures_df.iloc[include_pos].reset_index(drop=True)
+
+
+def default_ops_selector_index(
+    fixtures_df: pd.DataFrame, *, today: date
+) -> int:
+    """預設選中最早的當日／未來賽日；若無則 0。"""
+    if fixtures_df is None or fixtures_df.empty:
+        return 0
+    for pos in range(len(fixtures_df)):
+        parsed = _fixture_date_course(fixtures_df.iloc[pos])
+        if parsed and parsed[2] >= today:
+            return pos
+    return 0
 
 
 class MeetingPipeline:
@@ -246,6 +353,105 @@ class MeetingPipeline:
             return pd.read_sql(text(q), self.engine)
         except Exception:
             return pd.DataFrame()
+
+    def list_incomplete_past_fixture_keys(
+        self, *, as_of: Optional[date] = None
+    ) -> set[Tuple[str, str]]:
+        """
+        過去賽日中資料未齊備者（RESULTS／SETTLED 未 ok／略過，或尚無管線列）。
+        供作戰室賽日選擇器預設顯示。
+        """
+        today = as_of or date.today()
+        today_s = today.isoformat()
+        fx = self.list_fixtures(upcoming_only=False)
+        if fx is None or fx.empty:
+            return set()
+
+        past_keys: List[Tuple[str, str]] = []
+        for _, r in fx.iterrows():
+            d = str(r.get("racing_date") or "")[:10]
+            c = str(r.get("course") or "").upper()
+            if not d or not c:
+                continue
+            try:
+                if date.fromisoformat(d) >= today:
+                    continue
+            except Exception:
+                continue
+            past_keys.append((d, c))
+        if not past_keys:
+            return set()
+
+        try:
+            rows = pd.read_sql(
+                text(
+                    """
+                    SELECT racing_date, course, stage, status
+                    FROM meeting_pipeline
+                    WHERE CAST(racing_date AS TEXT) < :today
+                      AND stage IN ('RESULTS', 'SETTLED')
+                    """
+                ),
+                self.engine,
+                params={"today": today_s},
+            )
+        except Exception:
+            rows = pd.DataFrame()
+
+        by_key: Dict[Tuple[str, str], Dict[str, str]] = {}
+        if rows is not None and not rows.empty:
+            for _, r in rows.iterrows():
+                d = str(r.get("racing_date") or "")[:10]
+                c = str(r.get("course") or "").upper()
+                stage = str(r.get("stage") or "")
+                st = str(r.get("status") or "")
+                if not d or not c or not stage:
+                    continue
+                by_key.setdefault((d, c), {})[stage] = st
+
+        incomplete: set[Tuple[str, str]] = set()
+        done = OPS_SELECTOR_DONE_STATUSES
+        for key in past_keys:
+            stages = by_key.get(key) or {}
+            for need in OPS_SELECTOR_COMPLETE_STAGES:
+                if stages.get(need) not in done:
+                    incomplete.add(key)
+                    break
+        return incomplete
+
+    def list_fixtures_for_ops_selector(
+        self,
+        *,
+        include_full_season: bool = False,
+        extra_earlier: int = OPS_SELECTOR_EXTRA_EARLIER,
+        as_of: Optional[date] = None,
+    ) -> Tuple[pd.DataFrame, int]:
+        """
+        作戰室「選擇賽日」清單。
+
+        預設（非整季）：
+          - 全部未來／當日賽日
+          - 資料未齊備的歷史賽日（RESULTS／SETTLED）
+          - 最近／再往前共 ``extra_earlier`` 個更早賽日（方便對照檢查）
+        預設選中：下一個（最早的）未來／當日賽日；若無則 0。
+        """
+        today = as_of or date.today()
+        fx_all = self.list_fixtures(upcoming_only=False)
+        if fx_all is None or fx_all.empty:
+            return pd.DataFrame(), 0
+        if include_full_season:
+            default_idx = default_ops_selector_index(fx_all, today=today)
+            return fx_all.copy(), default_idx
+
+        incomplete = self.list_incomplete_past_fixture_keys(as_of=today)
+        selected = select_ops_fixture_frame(
+            fx_all,
+            incomplete_keys=incomplete,
+            today=today,
+            extra_earlier=max(0, int(extra_earlier)),
+        )
+        default_idx = default_ops_selector_index(selected, today=today)
+        return selected, default_idx
 
     def get_stages(self, racing_date: str, course: str) -> pd.DataFrame:
         return pd.read_sql(

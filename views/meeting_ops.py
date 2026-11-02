@@ -78,9 +78,16 @@ with c_fx1:
         else:
             st.error(out.get("error") or out)
 with c_fx2:
-    show_all = st.checkbox("顯示整季（含已過賽日）", value=False)
+    show_all = st.checkbox(
+        "顯示整季（含已過賽日）",
+        value=False,
+        help="關閉時仍會列出：未齊備歷史賽日、再往前 2 個更早賽日、以及全部未來賽日。",
+    )
 
-fx = pipe.list_fixtures(upcoming_only=not show_all)
+fx, default_idx = pipe.list_fixtures_for_ops_selector(
+    include_full_season=show_all,
+    extra_earlier=2,
+)
 if fx.empty:
     st.warning("尚無 fixtures。請先抓取賽期表。")
     st.stop()
@@ -99,7 +106,8 @@ fx["_label"] = (
     + "）"
 )
 labels = fx["_label"].tolist()
-pick = st.selectbox("選擇賽日", labels, index=0)
+default_idx = max(0, min(int(default_idx), len(labels) - 1))
+pick = st.selectbox("選擇賽日", labels, index=default_idx)
 row = fx[fx["_label"] == pick].iloc[0]
 racing_date = str(row["racing_date"])[:10]
 course = str(row["course"])
