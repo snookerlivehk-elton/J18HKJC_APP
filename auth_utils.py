@@ -51,6 +51,8 @@ SESSION_PROBE_DONE = "_j18_auth_probe_done"
 
 AUTH_BROWSER_KEY = "j18_auth_v1"
 AUTH_QUERY_PARAM = "j18_auth"
+# sessionStorage：整頁 reload 後仍記住「剛登出」，避免 probe 又自動登回
+AUTH_LOGOUT_FLAG_KEY = "j18_auth_logged_out_v1"
 
 
 def _session_ttl_days() -> int:
@@ -418,6 +420,7 @@ def inject_auth_browser_store(
         "token": None if clear else (token or ""),
         "key": AUTH_BROWSER_KEY,
         "param": AUTH_QUERY_PARAM,
+        "logoutFlag": AUTH_LOGOUT_FLAG_KEY,
         "maxAge": ttl_sec,
         # 每次 clear 換 nonce，避免 Streamlit 略過相同 components.html
         "nonce": f"c{int(time.time() * 1000)}" if clear else "w",
@@ -429,6 +432,17 @@ def inject_auth_browser_store(
   const cfg = {json.dumps(payload, ensure_ascii=False)};
   const KEY = cfg.key;
   const PARAM = cfg.param;
+  const FLAG = cfg.logoutFlag;
+  function ssSet(k, v) {{
+    try {{ window.parent.sessionStorage.setItem(k, v); }} catch (e) {{
+      try {{ sessionStorage.setItem(k, v); }} catch (e2) {{}}
+    }}
+  }}
+  function ssDel(k) {{
+    try {{ window.parent.sessionStorage.removeItem(k); }} catch (e) {{
+      try {{ sessionStorage.removeItem(k); }} catch (e2) {{}}
+    }}
+  }}
   function lsSet(v) {{
     try {{ window.parent.localStorage.setItem(KEY, v); }} catch (e) {{
       try {{ localStorage.setItem(KEY, v); }} catch (e2) {{}}
@@ -463,8 +477,10 @@ def inject_auth_browser_store(
     lsDel();
     cookieDel();
     stripAuthParam();
+    if (FLAG) ssSet(FLAG, '1');
     return;
   }}
+  if (FLAG) ssDel(FLAG);
   lsSet(cfg.token);
   cookieSet(cfg.token, cfg.maxAge || 2592000);
 }})();
@@ -533,6 +549,29 @@ def try_restore_auth_from_browser() -> None:
 (function () {{
   const KEY = {json.dumps(AUTH_BROWSER_KEY)};
   const PARAM = {json.dumps(AUTH_QUERY_PARAM)};
+  const FLAG = {json.dumps(AUTH_LOGOUT_FLAG_KEY)};
+  function ssGet(k) {{
+    try {{ return window.parent.sessionStorage.getItem(k); }} catch (e) {{
+      try {{ return sessionStorage.getItem(k); }} catch (e2) {{ return null; }}
+    }}
+  }}
+  function lsDel() {{
+    try {{ window.parent.localStorage.removeItem(KEY); }} catch (e) {{
+      try {{ localStorage.removeItem(KEY); }} catch (e2) {{}}
+    }}
+  }}
+  function cookieDel() {{
+    const part = KEY + '=; path=/; max-age=0; SameSite=Lax';
+    try {{ window.parent.document.cookie = part; }} catch (e) {{
+      try {{ document.cookie = part; }} catch (e2) {{}}
+    }}
+  }}
+  // 剛登出（含整頁 reload）：唔好自動導回帶 token 的 URL
+  if (FLAG && ssGet(FLAG) === '1') {{
+    lsDel();
+    cookieDel();
+    return;
+  }}
   function readTok() {{
     let tok = null;
     try {{ tok = window.parent.localStorage.getItem(KEY); }} catch (e) {{
