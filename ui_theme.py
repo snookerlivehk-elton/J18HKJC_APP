@@ -234,14 +234,22 @@ def inject_mobile_ux():
     }, true);
   }
 
-  // ---- Pull to refresh ----
+  // ---- Pull to refresh（刻意提高門檻，避免普通滑動誤觸整頁 reload）----
   if (win.__j18PullRefresh) return;
   win.__j18PullRefresh = true;
 
   let startY = 0;
+  let startX = 0;
+  let startT = 0;
+  let maxDy = 0;
   let pulling = false;
   let armed = false;
-  const THRESH = 72;
+  // 原 THRESH=72 太易誤觸；Streamlit 主內容多在內部容器滾動，
+  // 若只讀 window.scrollY 常誤判「已在頂部」。
+  const THRESH = 140;
+  const EDGE_Y = 56;      // 觸摸必須由視窗頂部附近開始
+  const MIN_MS = 180;     // 停留時間，排除快速輕掃
+  const MAX_HORIZONTAL = 48; // 橫滑／斜滑唔算刷新
 
   function ensureHint() {
     let el = doc.getElementById('j18-ptr-hint');
@@ -264,28 +272,81 @@ def inject_mobile_ux():
 
   function scrollTop() {
     const se = doc.scrollingElement || doc.documentElement;
-    return Math.max(
+    let top = Math.max(
       win.scrollY || 0,
       se ? se.scrollTop : 0,
       (doc.body && doc.body.scrollTop) || 0
     );
+    // Streamlit 主滾動常在這些容器
+    const sels = [
+      '[data-testid="stAppViewContainer"]',
+      '[data-testid="stMain"]',
+      'section.main',
+      '.main .block-container',
+      '[data-testid="stAppViewBlockContainer"]'
+    ];
+    for (let i = 0; i < sels.length; i++) {
+      const el = doc.querySelector(sels[i]);
+      if (!el) continue;
+      top = Math.max(top, el.scrollTop || 0);
+      // 向上找可滾動祖先
+      let p = el;
+      while (p && p !== doc.body) {
+        try {
+          const st = window.getComputedStyle(p);
+          const oy = st && st.overflowY;
+          if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && p.scrollTop) {
+            top = Math.max(top, p.scrollTop);
+          }
+        } catch (err) {}
+        p = p.parentElement;
+      }
+    }
+    return top;
+  }
+
+  function resetHint() {
+    const hint = ensureHint();
+    hint.style.height = '0px';
   }
 
   function onStart(e) {
     if (!e.touches || e.touches.length !== 1) return;
-    if (scrollTop() > 2) { armed = false; return; }
-    startY = e.touches[0].clientY;
+    const t = e.touches[0];
+    // 必須在頁面頂部 + 觸點靠近螢幕頂緣，先減少誤觸
+    if (scrollTop() > 4 || t.clientY > EDGE_Y) {
+      armed = false;
+      return;
+    }
+    startY = t.clientY;
+    startX = t.clientX;
+    startT = Date.now();
+    maxDy = 0;
     pulling = false;
     armed = true;
   }
 
   function onMove(e) {
     if (!armed || !e.touches || e.touches.length !== 1) return;
-    if (scrollTop() > 2) { armed = false; ensureHint().style.height = '0px'; return; }
-    const dy = e.touches[0].clientY - startY;
-    if (dy < 8) return;
+    if (scrollTop() > 4) {
+      armed = false;
+      pulling = false;
+      resetHint();
+      return;
+    }
+    const t = e.touches[0];
+    const dy = t.clientY - startY;
+    const dx = Math.abs(t.clientX - startX);
+    if (dx > MAX_HORIZONTAL && dx > Math.abs(dy) * 0.7) {
+      armed = false;
+      pulling = false;
+      resetHint();
+      return;
+    }
+    if (dy < 12) return;
     pulling = true;
-    const h = Math.min(96, Math.floor(dy * 0.45));
+    maxDy = Math.max(maxDy, dy);
+    const h = Math.min(110, Math.floor(dy * 0.4));
     const hint = ensureHint();
     hint.style.height = h + 'px';
     hint.textContent = dy > THRESH ? '放開刷新' : '下拉刷新';
@@ -296,19 +357,35 @@ def inject_mobile_ux():
     const hint = ensureHint();
     const dy = (e.changedTouches && e.changedTouches[0])
       ? (e.changedTouches[0].clientY - startY) : 0;
+    const held = Date.now() - startT;
+    const shouldReload =
+      pulling &&
+      maxDy > THRESH &&
+      dy > THRESH * 0.85 &&
+      held >= MIN_MS &&
+      scrollTop() <= 4;
     armed = false;
     pulling = false;
+    maxDy = 0;
     hint.style.height = '0px';
-    if (dy > THRESH && scrollTop() <= 2) {
+    if (shouldReload) {
       hint.textContent = '刷新中…';
       hint.style.height = '36px';
       setTimeout(function () { win.location.reload(); }, 80);
     }
   }
 
+  function onCancel() {
+    armed = false;
+    pulling = false;
+    maxDy = 0;
+    resetHint();
+  }
+
   doc.addEventListener('touchstart', onStart, { passive: true });
   doc.addEventListener('touchmove', onMove, { passive: true });
   doc.addEventListener('touchend', onEnd, { passive: true });
+  doc.addEventListener('touchcancel', onCancel, { passive: true });
 })();
 </script>
         """,
