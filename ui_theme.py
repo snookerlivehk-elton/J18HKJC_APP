@@ -1,6 +1,8 @@
 """全站輕量主題：登入／管理／用戶（賽日）。"""
 from __future__ import annotations
 
+from typing import Optional
+
 
 def inject_home_screen_icons():
     """
@@ -184,6 +186,213 @@ html, body, [class*="css"] { font-family: "Noto Sans TC", "Segoe UI", sans-serif
     )
 
 
+def inject_mobile_ux():
+    """
+    手機 UX：
+    1) 頂部下拉刷新（pull-to-refresh）
+    2) 點功能選單內連結後自動收起 expander
+    """
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+<script>
+(function () {
+  const doc = window.parent.document;
+  const win = window.parent;
+
+  // ---- 功能選單：點 page link 後收起 expander（details）----
+  if (!win.__j18NavAutoClose) {
+    win.__j18NavAutoClose = true;
+    doc.addEventListener('click', function (ev) {
+      const t = ev.target;
+      if (!t || !t.closest) return;
+      const link = t.closest(
+        '[data-testid="stPageLink-NavLink"], a[data-testid="stPageLink-Anchor"], ' +
+        '[data-testid="stExpander"] a, details a'
+      );
+      if (!link) return;
+      const details = link.closest('details');
+      if (details && details.open) {
+        // 稍延遲讓 navigation 先註冊點擊
+        setTimeout(function () { details.open = false; }, 30);
+      }
+      // Streamlit expander 有時唔係 native details
+      const exp = link.closest('[data-testid="stExpander"]');
+      if (exp) {
+        const summary = exp.querySelector('summary, [data-testid="stExpanderToggleIcon"], button');
+        const isOpen = exp.getAttribute('aria-expanded') === 'true' ||
+          !!(exp.querySelector('details[open]'));
+        if (isOpen) {
+          setTimeout(function () {
+            const d = exp.querySelector('details');
+            if (d && d.open) d.open = false;
+            else if (summary) summary.click();
+          }, 40);
+        }
+      }
+    }, true);
+  }
+
+  // ---- Pull to refresh（刻意提高門檻，避免普通滑動誤觸整頁 reload）----
+  if (win.__j18PullRefresh) return;
+  win.__j18PullRefresh = true;
+
+  let startY = 0;
+  let startX = 0;
+  let startT = 0;
+  let maxDy = 0;
+  let pulling = false;
+  let armed = false;
+  // 原 THRESH=72 太易誤觸；Streamlit 主內容多在內部容器滾動，
+  // 若只讀 window.scrollY 常誤判「已在頂部」。
+  const THRESH = 140;
+  const EDGE_Y = 56;      // 觸摸必須由視窗頂部附近開始
+  const MIN_MS = 180;     // 停留時間，排除快速輕掃
+  const MAX_HORIZONTAL = 48; // 橫滑／斜滑唔算刷新
+
+  function ensureHint() {
+    let el = doc.getElementById('j18-ptr-hint');
+    if (!el) {
+      el = doc.createElement('div');
+      el.id = 'j18-ptr-hint';
+      el.textContent = '下拉刷新';
+      el.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:999999',
+        'height:0', 'overflow:hidden', 'display:flex', 'align-items:flex-end',
+        'justify-content:center', 'padding-bottom:8px',
+        'font:600 13px/1 "Noto Sans TC",sans-serif',
+        'color:#0b6e4f', 'background:rgba(11,110,79,0.08)',
+        'transition:height .15s ease', 'pointer-events:none'
+      ].join(';');
+      doc.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function scrollTop() {
+    const se = doc.scrollingElement || doc.documentElement;
+    let top = Math.max(
+      win.scrollY || 0,
+      se ? se.scrollTop : 0,
+      (doc.body && doc.body.scrollTop) || 0
+    );
+    // Streamlit 主滾動常在這些容器
+    const sels = [
+      '[data-testid="stAppViewContainer"]',
+      '[data-testid="stMain"]',
+      'section.main',
+      '.main .block-container',
+      '[data-testid="stAppViewBlockContainer"]'
+    ];
+    for (let i = 0; i < sels.length; i++) {
+      const el = doc.querySelector(sels[i]);
+      if (!el) continue;
+      top = Math.max(top, el.scrollTop || 0);
+      // 向上找可滾動祖先
+      let p = el;
+      while (p && p !== doc.body) {
+        try {
+          const st = window.getComputedStyle(p);
+          const oy = st && st.overflowY;
+          if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && p.scrollTop) {
+            top = Math.max(top, p.scrollTop);
+          }
+        } catch (err) {}
+        p = p.parentElement;
+      }
+    }
+    return top;
+  }
+
+  function resetHint() {
+    const hint = ensureHint();
+    hint.style.height = '0px';
+  }
+
+  function onStart(e) {
+    if (!e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    // 必須在頁面頂部 + 觸點靠近螢幕頂緣，先減少誤觸
+    if (scrollTop() > 4 || t.clientY > EDGE_Y) {
+      armed = false;
+      return;
+    }
+    startY = t.clientY;
+    startX = t.clientX;
+    startT = Date.now();
+    maxDy = 0;
+    pulling = false;
+    armed = true;
+  }
+
+  function onMove(e) {
+    if (!armed || !e.touches || e.touches.length !== 1) return;
+    if (scrollTop() > 4) {
+      armed = false;
+      pulling = false;
+      resetHint();
+      return;
+    }
+    const t = e.touches[0];
+    const dy = t.clientY - startY;
+    const dx = Math.abs(t.clientX - startX);
+    if (dx > MAX_HORIZONTAL && dx > Math.abs(dy) * 0.7) {
+      armed = false;
+      pulling = false;
+      resetHint();
+      return;
+    }
+    if (dy < 12) return;
+    pulling = true;
+    maxDy = Math.max(maxDy, dy);
+    const h = Math.min(110, Math.floor(dy * 0.4));
+    const hint = ensureHint();
+    hint.style.height = h + 'px';
+    hint.textContent = dy > THRESH ? '放開刷新' : '下拉刷新';
+  }
+
+  function onEnd(e) {
+    if (!armed) return;
+    const hint = ensureHint();
+    const dy = (e.changedTouches && e.changedTouches[0])
+      ? (e.changedTouches[0].clientY - startY) : 0;
+    const held = Date.now() - startT;
+    const shouldReload =
+      pulling &&
+      maxDy > THRESH &&
+      dy > THRESH * 0.85 &&
+      held >= MIN_MS &&
+      scrollTop() <= 4;
+    armed = false;
+    pulling = false;
+    maxDy = 0;
+    hint.style.height = '0px';
+    if (shouldReload) {
+      hint.textContent = '刷新中…';
+      hint.style.height = '36px';
+      setTimeout(function () { win.location.reload(); }, 80);
+    }
+  }
+
+  function onCancel() {
+    armed = false;
+    pulling = false;
+    maxDy = 0;
+    resetHint();
+  }
+
+  doc.addEventListener('touchstart', onStart, { passive: true });
+  doc.addEventListener('touchmove', onMove, { passive: true });
+  doc.addEventListener('touchend', onEnd, { passive: true });
+  doc.addEventListener('touchcancel', onCancel, { passive: true });
+})();
+</script>
+        """,
+        height=0,
+    )
+
+
 def inject_admin_css():
     import streamlit as st
     st.markdown(
@@ -312,6 +521,7 @@ html[data-theme="light"] [data-testid="stSidebarUserContent"] {
         unsafe_allow_html=True,
     )
     inject_sidebar_solid_bg()
+    inject_mobile_ux()
 
 
 def inject_raceday_embed_css():
@@ -555,16 +765,25 @@ html[data-theme="light"] [data-testid="stSidebar"] > div {
         unsafe_allow_html=True,
     )
     inject_sidebar_solid_bg()
+    inject_mobile_ux()
 
 
-def render_main_nav(sections: dict):
+def render_main_nav(sections: dict, current_title: Optional[str] = None):
     """
     主內容區選頁（搭配 st.navigation(position='hidden')）。
     不走左側透明抽屜，手機直屏可正常點選。
+
+    current_title：目前頁標題；用作 expander key，切頁後選單預設收起。
     """
     import streamlit as st
 
-    with st.expander("📑 功能選單（點此切換頁面）", expanded=False):
+    title = (current_title or "").strip() or "home"
+    # 每頁獨立 key → 切頁後唔繼承上一頁「已展開」狀態
+    with st.expander(
+        "📑 功能選單（點此切換頁面）",
+        expanded=False,
+        key=f"j18_main_nav__{title}",
+    ):
         for section, pages in sections.items():
             st.caption(section)
             cols = st.columns(2)
