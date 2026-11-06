@@ -58,23 +58,39 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         ).scalar()
         race_n = int(race_n or 0)
 
-        # 評述：有 finish 的 runner 為母體
+        # 評述：有 finish 的 runner 為母體。
+        # entity_id 同時認 runner_id 與同步回退鍵 race_id_horse_no
+        #（與 data_backlog.measure_comment_coverage 對齊；否則作戰室會假報「評述不足」）。
         comment = conn.execute(
             text(
                 """
                 SELECT
-                  SUM(CASE WHEN tr_run.id IS NOT NULL THEN 1 ELSE 0 END) AS running_n,
-                  SUM(CASE WHEN tr_inc.id IS NOT NULL THEN 1 ELSE 0 END) AS incident_n,
-                  COUNT(*) AS finish_n
+                  COUNT(
+                    DISTINCT CASE WHEN EXISTS (
+                      SELECT 1 FROM text_reports tr
+                      WHERE tr.entity_type = 'runner'
+                        AND tr.report_type IN ('running_comment', 'corunning')
+                        AND LENGTH(TRIM(COALESCE(tr.report_text, ''))) > 0
+                        AND (
+                          tr.entity_id = ru.runner_id
+                          OR tr.entity_id = (ru.race_id || '_' || CAST(ru.horse_no AS TEXT))
+                        )
+                    ) THEN ru.race_id || ':' || CAST(ru.horse_no AS TEXT) END
+                  ) AS running_n,
+                  COUNT(
+                    DISTINCT CASE WHEN EXISTS (
+                      SELECT 1 FROM text_reports tr
+                      WHERE tr.entity_type = 'runner'
+                        AND tr.report_type IN ('incident_report', 'racereport')
+                        AND LENGTH(TRIM(COALESCE(tr.report_text, ''))) > 0
+                        AND (
+                          tr.entity_id = ru.runner_id
+                          OR tr.entity_id = (ru.race_id || '_' || CAST(ru.horse_no AS TEXT))
+                        )
+                    ) THEN ru.race_id || ':' || CAST(ru.horse_no AS TEXT) END
+                  ) AS incident_n,
+                  COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS finish_n
                 FROM runners ru
-                LEFT JOIN text_reports tr_run
-                  ON tr_run.entity_id = ru.runner_id
-                 AND tr_run.entity_type = 'runner'
-                 AND tr_run.report_type IN ('running_comment', 'corunning')
-                LEFT JOIN text_reports tr_inc
-                  ON tr_inc.entity_id = ru.runner_id
-                 AND tr_inc.entity_type = 'runner'
-                 AND tr_inc.report_type IN ('incident_report', 'racereport')
                 WHERE ru.race_id LIKE :p || '%'
                   AND ru.finish_order_num IS NOT NULL
                 """

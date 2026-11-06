@@ -56,7 +56,7 @@
 |--------|--------|----------|--------------|
 | `/api/export/speedguide?date=&venue=`（可選 `raceNo`） | `jjjc.speedguide.v1` | `jjjc_speedguide_sync.py` | `sync_jjjc_speedguide`；`crawl_speedguide`＝JJJC→CMS 備援 |
 | `/api/export/formguide?date=&venue=` | `jjjc.formguide.v1` | `jjjc_formguide_sync.py` | `sync_jjjc_formguide`；`crawl_formguide`＝JJJC→CMS 備援 |
-| `/api/export/text-reports?date=&venue=`（可選 `raceNo`／`report_type`） | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py` | `sync_jjjc_text_reports`（賽後 tick 會順路打） |
+| `/api/export/text-reports?date=&venue=`（可選 `raceNo`／`report_type`） | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py` | `sync_jjjc_text_reports`（賽後 tick 會順路打；export 空／缺沿途時自動 `POST /api/text-reports/fetch` 再拉） |
 
 欄位對照：
 - `races[].runners[].energy` → `upcoming_speedguide.speed_energy`
