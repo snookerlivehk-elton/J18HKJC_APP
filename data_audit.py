@@ -58,23 +58,39 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         ).scalar()
         race_n = int(race_n or 0)
 
-        # 評述：有 finish 的 runner 為母體
+        # 評述：有 finish 的 runner 為母體。
+        # entity_id 同時認 runner_id 與同步回退鍵 race_id_horse_no
+        #（與 data_backlog.measure_comment_coverage 對齊；否則作戰室會假報「評述不足」）。
         comment = conn.execute(
             text(
                 """
                 SELECT
-                  SUM(CASE WHEN tr_run.id IS NOT NULL THEN 1 ELSE 0 END) AS running_n,
-                  SUM(CASE WHEN tr_inc.id IS NOT NULL THEN 1 ELSE 0 END) AS incident_n,
-                  COUNT(*) AS finish_n
+                  COUNT(
+                    DISTINCT CASE WHEN EXISTS (
+                      SELECT 1 FROM text_reports tr
+                      WHERE tr.entity_type = 'runner'
+                        AND tr.report_type IN ('running_comment', 'corunning')
+                        AND LENGTH(TRIM(COALESCE(tr.report_text, ''))) > 0
+                        AND (
+                          tr.entity_id = ru.runner_id
+                          OR tr.entity_id = (ru.race_id || '_' || CAST(ru.horse_no AS TEXT))
+                        )
+                    ) THEN ru.race_id || ':' || CAST(ru.horse_no AS TEXT) END
+                  ) AS running_n,
+                  COUNT(
+                    DISTINCT CASE WHEN EXISTS (
+                      SELECT 1 FROM text_reports tr
+                      WHERE tr.entity_type = 'runner'
+                        AND tr.report_type IN ('incident_report', 'racereport')
+                        AND LENGTH(TRIM(COALESCE(tr.report_text, ''))) > 0
+                        AND (
+                          tr.entity_id = ru.runner_id
+                          OR tr.entity_id = (ru.race_id || '_' || CAST(ru.horse_no AS TEXT))
+                        )
+                    ) THEN ru.race_id || ':' || CAST(ru.horse_no AS TEXT) END
+                  ) AS incident_n,
+                  COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS finish_n
                 FROM runners ru
-                LEFT JOIN text_reports tr_run
-                  ON tr_run.entity_id = ru.runner_id
-                 AND tr_run.entity_type = 'runner'
-                 AND tr_run.report_type IN ('running_comment', 'corunning')
-                LEFT JOIN text_reports tr_inc
-                  ON tr_inc.entity_id = ru.runner_id
-                 AND tr_inc.entity_type = 'runner'
-                 AND tr_inc.report_type IN ('incident_report', 'racereport')
                 WHERE ru.race_id LIKE :p || '%'
                   AND ru.finish_order_num IS NOT NULL
                 """
@@ -127,6 +143,18 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
     with_times = int(cov.get("with_sectional_times") or 0)
 
     finish_ok = finish_n > 0 and race_n > 0
+    # 半空賽果：已完賽日但只入咗少場（常見 export 先有 1 場、未 fetch）
+    # 注意：唔改 finish_ok（分段 late-backfill／結算仍要「有名次」母體）
+    thin_results = False
+    try:
+        from datetime import date as _date
+
+        rd = _date.fromisoformat(str(racing_date)[:10])
+        if rd < _date.today() and race_n > 0 and race_n < 5:
+            thin_results = True
+    except Exception:
+        if race_n > 0 and race_n < 5 and finish_n > 0:
+            thin_results = True
     # 分段：有名次嘅馬 ≥80% 有走位先當齊（同 backlog 門檻風格）
     sec_cov = (with_sec / finish_n) if finish_n else 0.0
     time_cov = (with_times / finish_n) if finish_n else 0.0
@@ -144,6 +172,8 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         )
     if not finish_ok:
         gaps.append("無名次（需重同步 RESULTS）")
+    elif thin_results:
+        gaps.append(f"賽果場次不足 {race_n}（需重同步 RESULTS）")
     elif not sectionals_ok:
         gaps.append(f"分段走位不足 {with_sec}/{finish_n}（{sec_cov:.0%}）")
     elif not times_ok:
@@ -172,6 +202,7 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
         "incident_n": incident_n,
         "incident_coverage": round(inc_cov, 3),
         "finish_ok": finish_ok,
+        "thin_results": thin_results,
         "sectionals_ok": sectionals_ok,
         "sectional_times_ok": times_ok,
         "running_comment_ok": run_cov >= 0.8 if finish_n else False,
@@ -496,6 +527,190 @@ def list_meetings_missing_sectional_times(
         )
         if len(out) >= max(1, int(limit)):
             break
+    return out
+
+
+def list_meetings_needing_results_resync(
+    engine,
+    *,
+    as_of: Optional[Any] = None,
+    min_age_days: int = 0,
+    max_age_days: int = 21,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    無名次／半空賽果（場次 <5）嘅已完賽日。
+
+    來源：fixtures ∪ runners 聚合；超出 lookback 仍可由 tick RESULTS_REPAIR 掃。
+    """
+    from datetime import date, datetime, timedelta
+
+    if as_of is None:
+        today = date.today()
+    elif isinstance(as_of, datetime):
+        today = as_of.date()
+    elif isinstance(as_of, date):
+        today = as_of
+    else:
+        today = date.fromisoformat(str(as_of)[:10])
+
+    min_age = max(0, int(min_age_days))
+    max_age = max(min_age, int(max_age_days))
+    newest = today - timedelta(days=min_age)
+    oldest = today - timedelta(days=max_age)
+
+    candidates: Dict[Tuple[str, str], None] = {}
+
+    # fixtures 視窗
+    try:
+        fx = pd.read_sql(
+            text(
+                """
+                SELECT DISTINCT racing_date, course FROM fixtures
+                WHERE CAST(racing_date AS TEXT) >= :a
+                  AND CAST(racing_date AS TEXT) <= :b
+                """
+            ),
+            engine,
+            params={"a": oldest.isoformat(), "b": newest.isoformat()},
+        )
+        for row in fx.itertuples(index=False):
+            d = str(getattr(row, "racing_date") or "")[:10]
+            c = str(getattr(row, "course") or "").upper()
+            if d and c in {"ST", "HV"}:
+                candidates[(d, c)] = None
+    except Exception:
+        pass
+
+    # runners 有資料但可能無名次／半空
+    try:
+        df = pd.read_sql(
+            text(
+                """
+                SELECT substr(race_id, 1, 8) AS d8,
+                       UPPER(substr(race_id, 9, 2)) AS course,
+                       COUNT(DISTINCT race_id) AS race_n,
+                       SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS finish_n
+                FROM runners
+                WHERE length(race_id) >= 10
+                GROUP BY 1, 2
+                """
+            ),
+            engine,
+        )
+        for row in df.itertuples(index=False):
+            d8 = str(getattr(row, "d8") or "")
+            course = str(getattr(row, "course") or "").upper()
+            if len(d8) != 8 or course not in {"ST", "HV"}:
+                continue
+            try:
+                rd = date(int(d8[:4]), int(d8[4:6]), int(d8[6:8]))
+            except ValueError:
+                continue
+            if rd < oldest or rd > newest:
+                continue
+            candidates[(rd.isoformat(), course)] = None
+    except Exception:
+        pass
+
+    out: List[Dict[str, Any]] = []
+    for racing_date, course in sorted(candidates.keys(), reverse=True):
+        try:
+            rd = date.fromisoformat(racing_date)
+        except ValueError:
+            continue
+        if rd < oldest or rd > newest:
+            continue
+        inv = meeting_inventory(engine, racing_date, course)
+        if inv.get("finish_ok") and not inv.get("thin_results"):
+            continue
+        # 未來賽日唔修
+        if rd > today:
+            continue
+        gaps = list(inv.get("gaps") or [])
+        needs = any("需重同步 RESULTS" in str(g) for g in gaps) or not inv.get(
+            "finish_ok"
+        )
+        if not needs:
+            continue
+        out.append(
+            {
+                "racing_date": racing_date,
+                "course": course,
+                "age_days": (today - rd).days,
+                "race_n": int(inv.get("race_n") or 0),
+                "finish_n": int(inv.get("finish_n") or 0),
+                "thin_results": bool(inv.get("thin_results")),
+                "gaps": gaps,
+                "status": inv.get("status"),
+            }
+        )
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
+def repair_results_for_meeting(
+    pipe,
+    racing_date: str,
+    course: str,
+    *,
+    also_text_reports: bool = True,
+    also_sectionals: bool = True,
+) -> Dict[str, Any]:
+    """
+    補齊單日名次：auto-fetch 半空 export → upsert；可選 text-reports／R2 分段。
+    """
+    d = str(racing_date)[:10]
+    c = str(course or "").upper()
+    out: Dict[str, Any] = {
+        "ok": True,
+        "racing_date": d,
+        "course": c,
+        "action": "repair_results",
+    }
+    try:
+        sync_out = pipe.run_action(
+            d, c, "sync_jjjc_results", skip_sectionals=not also_sectionals
+        )
+        out["sync"] = sync_out
+        if sync_out.get("ok") is False:
+            out["ok"] = False
+            out["error"] = sync_out.get("error") or sync_out.get("detail")
+        if sync_out.get("waiting"):
+            out["waiting"] = True
+    except Exception as e:
+        out["ok"] = False
+        out["sync"] = {"ok": False, "error": str(e)[:200]}
+        out["error"] = str(e)[:200]
+
+    if also_text_reports:
+        try:
+            out["text_reports"] = pipe.run_action(d, c, "sync_jjjc_text_reports")
+        except Exception as e:
+            out["text_reports"] = {"ok": False, "error": str(e)[:200]}
+
+    inv = meeting_inventory(pipe.engine, d, c)
+    out["inventory"] = {
+        k: inv.get(k)
+        for k in (
+            "race_n",
+            "finish_n",
+            "finish_ok",
+            "thin_results",
+            "running_comment_n",
+            "incident_n",
+            "with_sectional_times",
+            "gaps",
+            "status",
+        )
+    }
+    out["finish_ok"] = bool(inv.get("finish_ok")) and not bool(inv.get("thin_results"))
+    if out.get("finish_ok"):
+        out["waiting"] = False
+        out["ok"] = True
+    elif out.get("waiting") is None and not out.get("finish_ok"):
+        out["waiting"] = True
     return out
 
 

@@ -753,5 +753,80 @@ class SectionalsTimesPassTest(unittest.TestCase):
         )
 
 
+class ResultsRepairPassTest(unittest.TestCase):
+    def test_run_results_repair_pass_syncs_and_records(self):
+        from unittest.mock import patch
+
+        import data_audit as da
+        from meeting_tick import MeetingTickRunner, TickGuards, RESULTS_REPAIR_STAGE
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        pipe.refresh_readiness = MagicMock(return_value={})
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(force=True)
+        runner.get_tick_state = MagicMock(
+            return_value={
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": None,
+                "last_detail": None,
+            }
+        )
+        runner.record_tick_attempt = MagicMock()
+
+        candidates = [
+            {
+                "racing_date": "2026-11-04",
+                "course": "HV",
+                "age_days": 2,
+                "finish_n": 0,
+                "race_n": 0,
+            }
+        ]
+        repair_out = {
+            "ok": True,
+            "waiting": False,
+            "finish_ok": True,
+            "inventory": {
+                "finish_n": 108,
+                "race_n": 9,
+                "finish_ok": True,
+                "thin_results": False,
+                "status": "partial",
+            },
+            "sync": {
+                "ok": True,
+                "auto_fetched": True,
+                "race_count": 9,
+                "runner_upserted": 108,
+            },
+        }
+        with patch.object(
+            da, "list_meetings_needing_results_resync", return_value=candidates
+        ), patch.object(
+            da, "repair_results_for_meeting", return_value=repair_out
+        ):
+            out = runner.run_results_repair_pass(
+                as_of=date(2026, 11, 6), dry_run=False, limit=5
+            )
+
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["n_processed"], 1)
+        self.assertEqual(out["n_ok"], 1)
+        # RESULTS_REPAIR + RESULTS 兩個 stage
+        self.assertGreaterEqual(runner.record_tick_attempt.call_count, 2)
+        runner.record_tick_attempt.assert_any_call(
+            "2026-11-04",
+            "HV",
+            RESULTS_REPAIR_STAGE,
+            ok=True,
+            status="ok",
+            detail=ANY,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

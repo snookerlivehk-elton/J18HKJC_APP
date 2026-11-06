@@ -137,6 +137,42 @@ class DataAuditTest(unittest.TestCase):
         )
         eng.dispose()
 
+    def test_list_meetings_needing_results_resync_finds_no_finish(self):
+        from datetime import date
+
+        from data_audit import list_meetings_needing_results_resync, meeting_inventory
+        from sqlalchemy import text
+
+        eng, _ = self._load_fixture_db()
+        with eng.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE runners SET finish_order_num = NULL, finish_order_raw = NULL "
+                    "WHERE race_id LIKE '20260906ST%'"
+                )
+            )
+        inv = meeting_inventory(eng, "2026-09-06", "ST")
+        self.assertFalse(inv.get("finish_ok"))
+        self.assertTrue(
+            any("無名次" in str(g) for g in (inv.get("gaps") or [])),
+            inv.get("gaps"),
+        )
+        need = list_meetings_needing_results_resync(
+            eng,
+            as_of=date(2026, 9, 10),
+            min_age_days=0,
+            max_age_days=14,
+            limit=10,
+        )
+        self.assertTrue(
+            any(
+                m["racing_date"] == "2026-09-06" and m["course"] == "ST"
+                for m in need
+            ),
+            need,
+        )
+        eng.dispose()
+
     def test_sync_sectional_times_for_meeting_calls_sectionals(self):
         from unittest.mock import MagicMock, patch
 

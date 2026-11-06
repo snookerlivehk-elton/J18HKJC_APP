@@ -11,6 +11,10 @@ report_type：running_comment | incident_report
   entity_type=runner；entity_id 優先對歷史 runners.runner_id（race_id+horse_no），
     其次 upcoming_runners，最後 {race_id}_{horse_no}
 
+上游補救（對齊 results）：
+  export 空／只有 incident 無沿途時，先 POST /api/text-reports/fetch
+  再 re-export。否則作戰室會長駐「沿途評述不足」，其實上游只差一槍 fetch。
+
 CLI：
   python jjjc_text_reports_sync.py --date 2026-09-06 --course ST
   python jjjc_text_reports_sync.py --from-file fixtures/jjjc_text_reports_ST_20260906_R1.json
@@ -19,14 +23,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE, resolve_database_url
 from jjjc_export_common import (
+    api_base,
     classify_payload_status,
     content_meta,
     effective_text,
@@ -34,6 +41,7 @@ from jjjc_export_common import (
     is_placeholder,
     load_payload_file,
     normalize_date,
+    normalize_venue,
     safe_int,
 )
 
@@ -95,6 +103,103 @@ def fetch_export(
         base_url=base_url,
         timeout=timeout,
     )
+
+
+def _text_reports_fetch_timeout() -> float:
+    try:
+        return float(os.getenv("JJJC_TEXT_REPORTS_FETCH_TIMEOUT", "120") or 120)
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def trigger_text_reports_fetch(
+    race_date: str,
+    venue: str,
+    *,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    上游主動抓評述：POST {base}/api/text-reports/fetch?date=&venue=
+
+    一次可補齊 corunning（沿途）+ incident（競賽報告）。
+    export 空／缺沿途時必須先打呢步，否則 sync 永遠「評述不足」。
+    """
+    base = api_base(base_url)
+    if not base:
+        return {"ok": False, "error": "未設定 JJJC_API_BASE"}
+    v = normalize_venue(venue) or str(venue or "").strip().upper()
+    if v not in {"ST", "HV"}:
+        return {"ok": False, "error": f"venue 必須係 ST|HV，收到：{venue!r}"}
+    params = {"date": normalize_date(race_date), "venue": v}
+    url = f"{base}/api/text-reports/fetch"
+    to = float(timeout if timeout is not None else _text_reports_fetch_timeout())
+    try:
+        with httpx.Client(timeout=to, follow_redirects=True) as client:
+            r = client.post(url, params=params)
+        try:
+            parsed = r.json()
+            body = parsed if isinstance(parsed, dict) else {"raw": parsed}
+        except Exception:
+            body = {"raw_text": (r.text or "")[:300]}
+        if r.status_code >= 400:
+            return {
+                "ok": False,
+                "status_code": r.status_code,
+                "error": f"HTTP {r.status_code}",
+                "url": url,
+                "response": body,
+            }
+        return {
+            "ok": bool(body.get("ok", True)),
+            "status_code": r.status_code,
+            "url": url,
+            "race_date": body.get("race_date") or params["date"],
+            "venue_code": body.get("venue_code") or v,
+            "report_count": safe_int(body.get("report_count")),
+            "runner_count": safe_int(body.get("runner_count")),
+            "corunning_races": safe_int(body.get("corunning_races")),
+            "incident_races": safe_int(body.get("incident_races")),
+            "status": body.get("status"),
+            "response": body,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300], "url": url}
+
+
+def _payload_report_types(payload: Dict[str, Any]) -> set[str]:
+    out: set[str] = set()
+    for rep in payload.get("reports") or []:
+        if not isinstance(rep, dict):
+            continue
+        rtype = normalize_report_type(rep.get("report_type"))
+        if rtype:
+            out.add(rtype)
+    return out
+
+
+def _needs_upstream_fetch(
+    payload: Dict[str, Any], want: Optional[str]
+) -> bool:
+    """
+    export 空、或缺指定 kind、或全日 sync 仍無沿途評述 → 需要 POST fetch。
+
+    實測（2026-10-28 ST）：fetch 前 export 只有 incident_report；
+    POST /api/text-reports/fetch 後 running_comment 才齊。
+    """
+    reports = list(payload.get("reports") or [])
+    status = str(payload.get("status") or "").strip().lower()
+    if not reports:
+        return True
+    if status in {"empty", "unpublished", "waiting"}:
+        return True
+    present = _payload_report_types(payload)
+    if want and want not in present:
+        return True
+    # 全日同步：有賽果評述鏈時缺沿途＝典型「只差一槍 fetch」
+    if want is None and "running_comment" not in present:
+        return True
+    return False
 
 
 def _ensure_table() -> None:
@@ -433,10 +538,15 @@ def sync_meeting(
     report_type: Optional[str] = None,
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
+    *,
+    auto_fetch: bool = True,
 ) -> Dict[str, Any]:
     """
     同步文字報告。report_type 接受 J18 名或 JJJC 別名（racereport／corunning）。
     若上游尚未開放 /api/export/text-reports，回 waiting（不累加硬失敗語意由 tick 處理）。
+
+    export 空／缺沿途時（預設）會先 POST /api/text-reports/fetch 再重試 export，
+    避免 tick／作戰室永遠卡在「沿途評述不足」而上游其實只差一槍 fetch。
     """
     want = normalize_report_type(report_type) if report_type else None
     # 先打正規名，再試 JJJC 內部代號（若 filter 被拒則退回不帶 filter）
@@ -451,6 +561,9 @@ def sync_meeting(
         query_types = [None]
 
     last: Dict[str, Any] = {}
+    upstream_fetch: Optional[Dict[str, Any]] = None
+    fetched_once = False
+
     for qt in query_types:
         try:
             if from_file:
@@ -463,6 +576,35 @@ def sync_meeting(
                     report_type=qt,
                     base_url=base_url,
                 )
+                # export 空／缺沿途 → 主動 fetch → 再 export（完整自動鏈）
+                if (
+                    auto_fetch
+                    and not fetched_once
+                    and _needs_upstream_fetch(payload, want)
+                ):
+                    upstream_fetch = trigger_text_reports_fetch(
+                        racing_date, course, base_url=base_url
+                    )
+                    fetched_once = True
+                    try:
+                        payload = fetch_export(
+                            race_date=racing_date,
+                            venue=course,
+                            race_no=race_no,
+                            report_type=qt,
+                            base_url=base_url,
+                        )
+                    except Exception as e:
+                        return {
+                            "ok": False,
+                            "waiting": False,
+                            "phase": "failed",
+                            "error": f"text-reports fetch 後 re-export 失敗：{e}",
+                            "upstream_fetch": upstream_fetch,
+                            "racing_date": normalize_date(racing_date),
+                            "course": str(course).upper(),
+                            "report_type_filter": qt or want,
+                        }
         except Exception as e:
             err = str(e)
             route_missing = (
@@ -480,6 +622,9 @@ def sync_meeting(
                 "course": str(course).upper(),
                 "report_type_filter": qt or want,
             }
+            if upstream_fetch is not None:
+                last["upstream_fetch"] = upstream_fetch
+                last["auto_fetched"] = True
             # 整條路由不存在：無需再試別名
             if route_missing and "No route" in err:
                 return last
@@ -495,6 +640,9 @@ def sync_meeting(
                 "racing_date": normalize_date(racing_date),
                 "course": str(course).upper(),
             }
+            if upstream_fetch is not None:
+                last["upstream_fetch"] = upstream_fetch
+                last["auto_fetched"] = True
             if from_file:
                 return last
             continue
@@ -504,6 +652,16 @@ def sync_meeting(
         out["course"] = str(course).upper()
         if qt or want:
             out["report_type_filter"] = qt or want
+        if upstream_fetch is not None:
+            out["upstream_fetch"] = upstream_fetch
+            out["auto_fetched"] = True
+            if out.get("waiting") and upstream_fetch.get("ok"):
+                out["detail"] = (
+                    (out.get("detail") or "export 無評述")
+                    + "（已自動 text-reports fetch；"
+                    f"corunning_races={upstream_fetch.get('corunning_races') or 0}／"
+                    f"incident_races={upstream_fetch.get('incident_races') or 0}）"
+                )
         # 有寫入或 from_file 一次即回
         if from_file or int(out.get("runner_upserted") or 0) > 0 or not out.get("waiting"):
             # 若指定 kind 但本輪 0 寫入且仍 waiting，可試下一別名
@@ -526,6 +684,8 @@ def sync_meeting(
         "error": "text-reports export 無可用資料或路由不存在",
         "racing_date": normalize_date(racing_date),
         "course": str(course).upper(),
+        "upstream_fetch": upstream_fetch,
+        "auto_fetched": bool(upstream_fetch is not None),
     }
 
 

@@ -31,8 +31,8 @@ curl "$JJJC_API_BASE/api/export/catalog"
 | 賽績指引 | `/api/export/formguide` | `jjjc.formguide.v1` | `jjjc_formguide_sync.py` |
 | 官方賽果 R1 | `/api/export/results` | `jjjc.results.v1` | `jjjc_results_sync.py` → `finish_order_num` |
 | 分段時間 R2 | `/api/export/sectionals`（別名 `/api/sectionals`、`/api/export/sectional`） | `jjjc.sectionals.v1` | `jjjc_sectionals_sync.py` → `runner_sections`／`race_sectionals` |
-| 競賽報告 R3 | `/api/export/text-reports?report_type=incident_report` | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py` |
-| 沿途走勢 R4 | `/api/export/text-reports?report_type=running_comment` | 同上 | 同上（query 別名 `corunning`→payload `running_comment`） |
+| 競賽報告 R3 | `/api/export/text-reports?report_type=incident_report` | `jjjc.text_reports.v1` | `jjjc_text_reports_sync.py`（空／缺 kind 時先 `POST /api/text-reports/fetch`） |
+| 沿途走勢 R4 | `/api/export/text-reports?report_type=running_comment` | 同上 | 同上（query 別名 `corunning`→payload `running_comment`；fetch 一次可同時補 R3+R4） |
 
 可選：`&raceNo=1`
 
@@ -82,6 +82,7 @@ python jjjc_sectionals_sync.py --date 2026-09-09 --course HV
 
 1. 只跑咗 RESULTS（`running_position` → 走位），**未同步 R2** `GET /api/export/sectionals`
 2. 舊 UI 誤寫「空秒數屬正常」——其實上游已有 `sectional_time` 時必須拉 R2
+3. 上游 export `status=empty`（例如 2026-10-25／10-28）：目前 **未見** `POST /api/sectionals/fetch`；tick 嘅 `SECTIONALS_TIMES` late-backfill 只會重試 GET，上游未入庫就會一直 waiting
 
 ```bash
 # 只補秒數（賽果已齊時）
@@ -90,6 +91,17 @@ python jjjc_sectionals_sync.py --date 2026-09-06 --course ST
 ```
 
 未設 `JJJC_API_BASE` 時會預設 `https://apicc.up.railway.app`。
+
+## 沿途評述不足（export 只有 incident）
+
+症狀：作戰室 ③b「沿途評述不足」；④ 遺留清單／手動 sync 亦補唔到 corunning。
+
+原因：`GET /api/export/text-reports` 可能只返 `incident_report`，**沿途要先** `POST /api/text-reports/fetch` 上游先會寫入。`jjjc_text_reports_sync.sync_meeting`（tick／遺留／作戰室）預設會自動 fetch 再 re-export。
+
+```bash
+curl -sS -X POST "$JJJC_API_BASE/api/text-reports/fetch?date=2026-10-28&venue=ST"
+python jjjc_text_reports_sync.py --date 2026-10-28 --course ST
+```
 
 ## 修復英文馬名／騎練名（統計污染）
 
