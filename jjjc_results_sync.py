@@ -1110,6 +1110,32 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _export_looks_partial_results(
+    payload: Dict[str, Any], racing_date: str
+) -> bool:
+    """
+    export 有場但明顯唔齊（常見：先入 1 場，其餘未 fetch）。
+
+    實測 2026-11-04 HV／2026-11-01 HV：fetch 前 export 只有 1 場，
+    POST /api/results/fetch 後先齊 9～10 場。舊邏輯只在 races=[] 先 fetch，
+    半空殼會令作戰室長掛「無名次」。
+    """
+    races = list(payload.get("races") or [])
+    if not races:
+        return True
+    # 完整賽日通常 ≥8 場；少於 5 場當半空（試賽／單場 debug 仍可 --no-auto-fetch）
+    if len(races) < 5:
+        try:
+            from datetime import date as _date
+
+            rd = _date.fromisoformat(_normalize_date(racing_date))
+            if rd <= _date.today():
+                return True
+        except Exception:
+            return True
+    return False
+
+
 def sync_meeting(
     racing_date: str,
     course: str,
@@ -1121,8 +1147,8 @@ def sync_meeting(
 ) -> Dict[str, Any]:
     """拉取（或讀檔）後 upsert；供 CLI 與 meeting_pipeline／meeting_tick 呼叫。
 
-    export 空時（預設）會先 POST /api/results/fetch 再重試 export，
-    避免 tick 永遠卡在「無賽果」而上游其實只差一槍 fetch。
+    export 空或半空（預設）會先 POST /api/results/fetch 再重試 export，
+    避免 tick／作戰室卡在「無名次」而上游其實只差一槍 fetch。
     """
     upstream_fetch: Optional[Dict[str, Any]] = None
     if from_file:
@@ -1134,8 +1160,8 @@ def sync_meeting(
             race_no=race_no,
             base_url=base_url,
         )
-        # export 空 → 主動 fetch → 再 export（完整自動鏈）
-        if auto_fetch and not list(payload.get("races") or []):
+        # export 空／半空 → 主動 fetch → 再 export（完整自動鏈）
+        if auto_fetch and _export_looks_partial_results(payload, racing_date):
             upstream_fetch = trigger_results_fetch(
                 racing_date, course, base_url=base_url
             )
@@ -1201,6 +1227,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--raceNo", type=int, default=None)
     p.add_argument("--from-file", dest="from_file", help="本機 jjjc.results.v1 JSON")
     p.add_argument("--base-url", dest="base_url", default=None)
+    p.add_argument(
+        "--no-auto-fetch",
+        action="store_true",
+        help="唔自動 POST /api/results/fetch（即使 export 空／半空）",
+    )
     args = p.parse_args(argv)
 
     if not args.from_file and (not args.date or not args.course):
@@ -1212,6 +1243,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         race_no=args.raceNo,
         from_file=args.from_file,
         base_url=args.base_url,
+        auto_fetch=not bool(args.no_auto_fetch),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok") else 1
