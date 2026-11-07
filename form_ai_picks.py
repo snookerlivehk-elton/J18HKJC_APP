@@ -268,6 +268,16 @@ def build_fused_picks(
 
     ai_pack = build_ai_picks(base, n_runners=n)
     ai_ok = bool(ai_pack.get("available"))
+    n_with_ai = sum(1 for r in base if r.get("ai_combo") is not None)
+    ai_coverage = float(n_with_ai) / float(max(1, len(base)))
+    min_cov = float(getattr(ModelConfig, "FUSE_AI_MIN_COVERAGE", 0.50))
+    min_ai_horses = int(getattr(ModelConfig, "FUSE_AI_MIN_HORSES", 3))
+    # 稀疏 AI（例如只評了 1/12）會令該馬 AI 份額≈100%，綜合軌被嚴重扭曲
+    sparse_ai = ai_ok and (
+        ai_coverage + 1e-12 < min_cov or n_with_ai < max(1, min_ai_horses)
+    )
+    if sparse_ai:
+        ai_ok = False
     ai_share_by = {
         int(r["horse_no"]): float(r["ai_share"])
         for r in (ai_pack.get("ranked") or [])
@@ -276,7 +286,13 @@ def build_fused_picks(
 
     if not ai_ok:
         fused = list(m_shares)
-        empty_msg = ai_pack.get("message") or "AI 不可用，綜合退回純模型"
+        if sparse_ai:
+            empty_msg = (
+                f"AI 覆蓋不足 {n_with_ai}/{len(base)} "
+                f"（需≥{min_ai_horses} 且≥{min_cov:.0%}），綜合退回純模型"
+            )
+        else:
+            empty_msg = ai_pack.get("message") or "AI 不可用，綜合退回純模型"
         fallback = True
         a_eff = 1.0
     else:

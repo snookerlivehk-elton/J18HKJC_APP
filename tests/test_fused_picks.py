@@ -39,6 +39,32 @@ class BuildFusedPicksTest(unittest.TestCase):
         # fused ≈ model order
         self.assertEqual(int(pack["place"][0]["horse_no"]), 1)
 
+    def test_fallback_when_ai_coverage_sparse(self):
+        """只評 1 匹 AI 時不可把綜合壓成雙號海報。"""
+        rows = [
+            {"horse_no": 2, "horse_name": "超和平", "model_win_prob": 0.166, "ai_score": 0.6, "confidence": 0.65},
+            {"horse_no": 4, "horse_name": "勇者為皇", "model_win_prob": 0.162},
+            {"horse_no": 1, "horse_name": "神鵰", "model_win_prob": 0.096},
+            {"horse_no": 8, "horse_name": "競駿戰神", "model_win_prob": 0.095},
+            {"horse_no": 3, "horse_name": "其他", "model_win_prob": 0.08},
+            {"horse_no": 5, "horse_name": "其他2", "model_win_prob": 0.07},
+            {"horse_no": 6, "horse_name": "其他3", "model_win_prob": 0.06},
+            {"horse_no": 7, "horse_name": "其他4", "model_win_prob": 0.05},
+            {"horse_no": 9, "horse_name": "其他5", "model_win_prob": 0.05},
+            {"horse_no": 10, "horse_name": "其他6", "model_win_prob": 0.04},
+            {"horse_no": 11, "horse_name": "其他7", "model_win_prob": 0.03},
+            {"horse_no": 12, "horse_name": "其他8", "model_win_prob": 0.022},
+        ]
+        pack = build_fused_picks(rows, alpha=0.6)
+        self.assertTrue(pack["available"])
+        self.assertTrue(pack["fallback_model_only"])
+        self.assertGreaterEqual(pack["pick_n"], 3)
+        place_nos = [int(x["horse_no"]) for x in pack["place"]]
+        self.assertIn(2, place_nos)
+        self.assertIn(4, place_nos)
+        # 不可只剩 2 個號
+        self.assertNotEqual(pack["pick_n"], 2)
+
     def test_attach_fused_share_and_hit_signal(self):
         rows = [
             {
