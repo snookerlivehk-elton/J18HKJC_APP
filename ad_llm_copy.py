@@ -21,8 +21,9 @@ else:
 
 SOCIAL_COPY_FILE = "social_copy.json"
 
-# 精選評述字數上限（繁體字元）
-COMMENT_MAX_CHARS = 60
+# 精選評述字數上限（繁體字元）；需容納「近績事實 + 模型／綜合觀察」兩句
+COMMENT_MAX_CHARS = 90
+FORM_TEXT_PAYLOAD_MAX = 360
 
 # 精選馬只准綜合（fused）頭 N 名，減少「tip 第3但文案當焦點」落差
 def featured_fused_top_n() -> int:
@@ -33,17 +34,24 @@ def featured_fused_top_n() -> int:
     return max(1, min(int(n), 4))
 
 
-# 三場精選必須用唔同觀察角度（P2-7）
+# 三場精選必須用唔同觀察角度（只作標籤／標題；唔再硬塞同一罐頭收尾）
 OBSERVATION_ANGLES: List[Tuple[str, str, str]] = [
-    ("pace", "步速", "賽前可對照出閘步速會否延續"),
-    ("position", "走位", "賽前可對照走位路線會否重現"),
-    ("recovery", "恢復", "賽前可對照恢復節奏會否改善"),
-    ("distance", "路程", "賽前可對照路程適性會否發揮"),
+    ("pace", "步速", "步速"),
+    ("position", "走位", "走位"),
+    ("recovery", "恢復", "恢復"),
+    ("distance", "路程", "路程"),
 ]
-_ANGLE_BY_LABEL = {label: (key, label, tail) for key, label, tail in OBSERVATION_ANGLES}
-_ANGLE_TAIL_RE = re.compile(
-    r"(，)?(賽前可對照[^。]{0,24}|值得留意其是否能夠挑戰領放馬|值得留意其走勢是否會有改變。?)$"
+_ANGLE_BY_LABEL = {label: (key, label, hint) for key, label, hint in OBSERVATION_ANGLES}
+# 清走舊版／模型抄寫嘅罐頭收尾（可重複出現）
+_CANNED_TAIL_RE = re.compile(
+    r"(?:[，,；;。.!！]|\s)*(?:"
+    r"賽前可對照[^。\n]{0,40}"
+    r"|值得留意其是否能夠挑戰領放馬"
+    r"|值得留意其走勢是否會有改變。?"
+    r")$"
 )
+# 兼容舊測試／呼叫名
+_ANGLE_TAIL_RE = _CANNED_TAIL_RE
 
 # UI / API 用的語氣預設鍵值（預設高互動型；選項順序以預設為先）
 TONE_HIGH_INTERACTION = "high_interaction"
@@ -84,7 +92,7 @@ TONE_PRESETS: Dict[str, Dict[str, str]] = {
 
 # 社交貼文固定骨架（方便一次複製發佈；唔依賴 LLM）
 POST_GREETING = (
-    "J18.hk賽前預測，各馬匹近賽最近資訊，供各位作參考，祝各馬迷馬運亨通！！"
+    "J18.hk 賽前數據研究：綜合模型推演與公開近績，整理三場值得追蹤的觀察，供各位參考。"
 )
 POST_CTA = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事數據。"
 POST_DISCLAIMER = (
@@ -143,7 +151,7 @@ HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅公開數據研�
 
 DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "你是香港公開賽事數據研究平台的社交媒體文案編輯（J18）。產品只做統計分析、模型推演與歷史紀錄展示，\n"
-    "不提供投注、賠率、注碼、跟注或任何賭博服務。你會根據全賽日「綜合分析名單」與官方賽績指引近績文字，\n"
+    "不提供投注、賠率、注碼、跟注或任何賭博服務。你會根據全賽日「綜合分析名單」、模型／AI 份額與官方近績文字，\n"
     "挑選 3 場最值得分享的研究場次，每場只揀 1 匹馬作重點數據評述。\n"
     "\n"
     "固定貼文結構取向（系統會另加日期頭／開場白／CTA／免責／hashtag，你唔好重複寫免責全文）：\n"
@@ -154,17 +162,20 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     "你必須遵守：\n"
     "1) 精選馬必須來自各場 candidates（以綜合分析名單為主）；不可另選名單外的馬。\n"
     "1b) candidates 已限綜合頭名（fused top-N）；只能從中揀，唔好跳去名單更後嘅馬。\n"
-    "2) comment 只能引用該馬的官方近績文字（form_text）事實，不可虛構，亦不要用勝率％湊字數；\n"
-    "   只可寫成研究觀察／統計傾向，不可寫成投注指令。\n"
-    "2b) 這是「賽前」研究貼文：近績跑法（出閘／直路／領放／走位）必須標明係「近績／上仗／過往」，\n"
-    "   禁止用「本場」指今晚未跑場次；禁止整段寫到似賽事進行中或已經完賽。\n"
-    "   建議句式：「近績：…，賽前可對照其步速／走位會否延續。」\n"
+    "2) comment 必須基於 payload 事實寫「高質量短評」，結構建議兩句：\n"
+    "   (a) 近績／上仗具體跑法（只可改寫 form_text，不可虛構）；\n"
+    "   (b) 一句模型／綜合觀察，可引用 share_pct、fused_rank、dual_track、distance、tag；\n"
+    "   不可只是複述馬名，亦不要堆砌勝率％口號；不可寫成投注指令。\n"
+    "2b) 這是「賽前」研究貼文：近績跑法必須標明「近績／上仗／過往」；\n"
+    "   禁止用「本場」指未跑場次；禁止寫到似已開跑或完賽。\n"
     "2c) 三場 featured 必須用唔同觀察角度：步速／走位／恢復／路程；每場 JSON 加 "
-    '"angle"（四選一），收尾句要對應該角度，禁止三場抄同一收尾。\n'
+    '"angle"（四選一）。收尾要自然對應該角度，三場句式唔好雷同；\n'
+    "   禁止使用罐頭句「賽前可對照…會否延續／重現／改善／發揮」。\n"
+    "2d) basis 必須點出具體數據理據（例如綜合第1、雙軌、份額、路程），禁止空泛「綜合頭位，模型與AI支持」。\n"
     "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻；"
     "優先格式：「三場焦點數據觀察：步速、走位與路程適應」（按實際 angle 改寫）。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
-    "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（sources 含 model+ai）、或近績有明確痕跡／走勢重點的場次。\n"
+    "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（dual_track）、近績有明確可寫痕跡、或路程／班次有對照價值的場次。\n"
     "6) 唔好輸出大量 hashtag（系統會附加固定發佈標籤）；JSON hashtags 可留空或少寫。\n"
     "7) " + HK_WRITING_RULES + "\n"
     "\n"
@@ -178,9 +189,9 @@ DEFAULT_SOCIAL_SYSTEM_PROMPT = (
     '      "race_id": "20260909HV01",\n'
     '      "horse_no": 3,\n'
     '      "horse_name": "馬名",\n'
-    f'      "comment": "{COMMENT_MAX_CHARS}字內研究評述（忠於近績）",\n'
+    f'      "comment": "{COMMENT_MAX_CHARS}字內：近績事實 + 模型／綜合觀察",\n'
     '      "angle": "步速",\n'
-    '      "basis": "簡短說明為何揀這場作研究分享"\n'
+    '      "basis": "例如：綜合第1｜雙軌｜份額18.9｜1400米近績連勝痕跡"\n'
     "    }\n"
     "  ],\n"
     '  "hashtags": []\n'
@@ -327,15 +338,27 @@ def _needs_prerace_form_frame(text: str) -> bool:
     return any(m in s for m in _RACE_RUNNING_MARKERS)
 
 
+def _strip_canned_endings(text: str) -> str:
+    """重複清走「賽前可對照…」等罐頭收尾，避免 LLM＋後處理疊句。"""
+    s = str(text or "").strip()
+    for _ in range(6):
+        nxt, n = _CANNED_TAIL_RE.subn("", s)
+        if n == 0:
+            break
+        s = nxt.rstrip("，,；;。.!！ ")
+    return s
+
+
 def _frame_as_prerace_form_comment(text: str) -> str:
     """把易被誤讀成「本場賽況」的近績句，改成明確賽前／近績語氣。"""
-    s = str(text or "").strip()
+    s = _strip_canned_endings(text)
     if not s:
         return s
-    # 弱化重複罐頭收尾（高互動模型常抄同一句）
+    # 弱化重複罐頭收尾（唔再改寫成另一句罐頭）
     if s.endswith(_GENERIC_CHALLENGE_TAIL):
         s = s[: -len(_GENERIC_CHALLENGE_TAIL)].rstrip("，,；; ")
-        s = f"{s}，賽前可對照步速走位會否延續" if s else "近績步速走位，賽前可對照會否延續"
+        if not s:
+            s = "近績步速走位值得跟進"
     if not _needs_prerace_form_frame(s):
         return s
     if s.startswith("本場"):
@@ -360,22 +383,29 @@ def _detect_observation_angle(text: str, preferred: Optional[str] = None) -> str
     return preferred or "步速"
 
 
+def _truncate_comment(text: str, *, limit: int = COMMENT_MAX_CHARS) -> str:
+    """超長時優先喺標點切斷，避免「走」「恢復節奏值得」呢類半截句。"""
+    s = str(text or "").strip()
+    if len(s) <= limit:
+        return s
+    cut = s[:limit]
+    # 由後向前找句讀斷點
+    for i in range(len(cut) - 1, max(12, len(cut) // 2), -1):
+        if cut[i] in "。！？；;，,":
+            return cut[:i].rstrip("，,；; ")
+    return cut.rstrip("，,；;。.!！ ")
+
+
 def _apply_angle_ending(comment: str, angle_label: str) -> str:
-    """確保 comment 收尾對應指定觀察角度，並截斷字數。"""
-    s = str(comment or "").strip()
-    meta = _ANGLE_BY_LABEL.get(angle_label) or OBSERVATION_ANGLES[0]
-    tail = meta[2]
-    s = _ANGLE_TAIL_RE.sub("", s).rstrip("，,；;。.!！ ")
-    # 預留尾句空間
-    budget = max(8, COMMENT_MAX_CHARS - len(tail) - 1)
-    if len(s) > budget:
-        s = s[:budget].rstrip("，,；;。.!！ ")
-    out = f"{s}，{tail}" if s else tail
-    return out[:COMMENT_MAX_CHARS]
+    """清走罐頭收尾並截斷字數；不再硬塞相同「賽前可對照」尾句。"""
+    s = _strip_canned_endings(comment)
+    # angle_label 只作元數據；保留參數以兼容舊呼叫
+    _ = angle_label
+    return _truncate_comment(s, limit=COMMENT_MAX_CHARS)
 
 
 def _assign_distinct_angles(rows: List[Dict[str, Any]]) -> None:
-    """就地為 featured 分配互唔重複嘅觀察角度，並改寫收尾。"""
+    """就地為 featured 分配互唔重複嘅觀察角度，並清走罐頭收尾。"""
     used: set[str] = set()
     for i, row in enumerate(rows):
         preferred = str(row.get("angle") or "").strip()
@@ -383,7 +413,7 @@ def _assign_distinct_angles(rows: List[Dict[str, Any]]) -> None:
             preferred = _detect_observation_angle(str(row.get("comment") or ""), None)
         if preferred in used:
             preferred = ""
-            for _key, label, _tail in OBSERVATION_ANGLES:
+            for _key, label, _hint in OBSERVATION_ANGLES:
                 if label not in used:
                     preferred = label
                     break
@@ -513,6 +543,66 @@ def _build_pick_reason(
     return reason
 
 
+def _compress_form_snippet(form_text: str, *, max_chars: int = 70) -> str:
+    """從官方近績抽出一句可讀摘要，去掉馬名行／技術碼。"""
+    raw = str(form_text or "").strip()
+    if not raw:
+        return ""
+    # 取第一段有內容的近績（通常是最近一仗）
+    parts = [p.strip() for p in re.split(r"[\n；;]+", raw) if p.strip()]
+    body = ""
+    for p in parts:
+        if p.startswith("馬名"):
+            continue
+        body = p
+        break
+    if not body:
+        body = parts[0] if parts else raw
+    body = re.sub(r"^\[[^\]]+\]\s*", "", body)
+    body = re.sub(r"能量\s*\d+%?", "", body)
+    body = re.sub(r"\([^)]*\dW[^)]*\)", "", body)
+    body = re.sub(r"[ \t]{2,}", " ", body).strip(" ，,;；")
+    if len(body) > max_chars:
+        body = body[:max_chars].rstrip("，,；;。.!！ ")
+    return body
+
+
+def _analysis_basis_line(
+    *,
+    pool_source: str,
+    dual: bool,
+    fused_rank: Optional[int] = None,
+    share_pct: Any = None,
+    distance: Any = None,
+    tag: str = "",
+    auto: bool = False,
+) -> str:
+    bits: List[str] = []
+    if auto:
+        bits.append("自動補齊")
+    if pool_source == "fused":
+        if fused_rank:
+            bits.append(f"綜合第{fused_rank}")
+        else:
+            bits.append("綜合名單")
+    else:
+        bits.append(f"{pool_source}名單")
+    if dual:
+        bits.append("雙軌")
+    try:
+        share = float(share_pct)
+        if share > 0:
+            bits.append(f"份額{share:.1f}")
+    except Exception:
+        pass
+    if distance:
+        bits.append(f"{distance}米")
+    tag_s = str(tag or "").strip()
+    if tag_s and tag_s not in {"推介", "觀察"}:
+        bits.append(tag_s)
+    return "｜".join(bits) if bits else "數據研究抽樣"
+
+
 def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
     """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚，並標明近績時間線。"""
     body = str(text or "").strip().replace("\n", " ")
@@ -528,7 +618,7 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
     if not body or len(body) < 4:
         return f"{daypart}數據走勢值得留意，有得傾"
     body = _frame_as_prerace_form_comment(body)
-    return body[:COMMENT_MAX_CHARS]
+    return _truncate_comment(_strip_canned_endings(body), limit=COMMENT_MAX_CHARS)
 
 
 def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
@@ -917,10 +1007,22 @@ class AdSocialCopywriter:
 
             # 主池：綜合；無綜合時退回模型 → AI（與海報對齊）；一律只取頭 N
             primary, pool_source = _primary_picks_for_race(race)
-            fused_rank_map = {}
+            fused_rank_map: Dict[int, int] = {}
             for idx, p in enumerate(fused_picks):
                 try:
                     fused_rank_map[int(p.get("horse_no"))] = idx + 1
+                except Exception:
+                    continue
+            model_rank_map: Dict[int, int] = {}
+            for idx, p in enumerate(model_picks):
+                try:
+                    model_rank_map[int(p.get("horse_no"))] = idx + 1
+                except Exception:
+                    continue
+            ai_rank_map: Dict[int, int] = {}
+            for idx, p in enumerate(ai_picks):
+                try:
+                    ai_rank_map[int(p.get("horse_no"))] = idx + 1
                 except Exception:
                     continue
 
@@ -941,8 +1043,8 @@ class AdSocialCopywriter:
                     if horse_no in ai_hnos:
                         sources.append("ai")
                 form_text = form_map.get(race_id, {}).get(horse_no, "")
-                if len(form_text) > 220:
-                    form_text = form_text[:220] + "…"
+                if len(form_text) > FORM_TEXT_PAYLOAD_MAX:
+                    form_text = form_text[:FORM_TEXT_PAYLOAD_MAX] + "…"
                 candidates.append(
                     {
                         "pool": pool_source,
@@ -953,6 +1055,8 @@ class AdSocialCopywriter:
                             and horse_no in ai_hnos
                         ),
                         "fused_rank": fused_rank_map.get(horse_no),
+                        "model_rank": model_rank_map.get(horse_no),
+                        "ai_rank": ai_rank_map.get(horse_no),
                         "pool_rank": pool_rank,
                         "horse_no": horse_no,
                         "horse_name": str(p.get("horse_name") or "").strip(),
@@ -985,12 +1089,13 @@ class AdSocialCopywriter:
                 "one_horse_per_race": True,
                 "candidates_from_fused_primary": True,
                 "featured_fused_top_n": top_n,
-                "comment_source": "form_text_only",
+                "comment_source": "form_text_plus_analysis_meta",
                 "comment_max_chars": COMMENT_MAX_CHARS,
                 "must_be_factual": True,
                 "prerace_copy": True,
                 "form_comments_must_mark_past_runs": True,
                 "forbid_benchang_for_tonight": True,
+                "forbid_canned_saiqian_duizhao_endings": True,
                 "vary_featured_endings": True,
                 "distinct_observation_angles": ["步速", "走位", "恢復", "路程"],
                 "writing_locale": "hong_kong_social",
@@ -1081,22 +1186,42 @@ class AdSocialCopywriter:
 
             form = str(best.get("form_text") or "").strip()
             daypart = _meeting_daypart_from_copy(copy_data)
-            if form:
-                comment = _humanize_comment(form, daypart=daypart)
+            dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
+                int(best["horse_no"]), set()
+            )
+            meta = (pick_index.get(race_id) or {}).get(int(best["horse_no"]))
+            share = best.get("share_pct")
+            dist = race.get("distance")
+            snippet = _compress_form_snippet(form, max_chars=58)
+            if snippet:
+                model_bit = ""
+                try:
+                    share_f = float(share or 0)
+                except Exception:
+                    share_f = 0.0
+                if dual and share_f > 0:
+                    model_bit = f"綜合／雙軌份額約{share_f:.1f}"
+                elif share_f > 0:
+                    model_bit = f"綜合份額約{share_f:.1f}"
+                elif dual:
+                    model_bit = "模型與AI雙軌同列"
+                comment = _humanize_comment(
+                    f"近績：{snippet}" + (f"；{model_bit}" if model_bit else ""),
+                    daypart=daypart,
+                )
             else:
                 tag = str(best.get("tag") or "推介").strip() or "推介"
                 comment = f"{tag}走勢值得留意，有得傾"[:COMMENT_MAX_CHARS]
 
-            dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
-                int(best["horse_no"]), set()
+            basis = _analysis_basis_line(
+                pool_source=pool_source,
+                dual=dual,
+                fused_rank=(meta or {}).get("fused_rank"),
+                share_pct=share,
+                distance=dist,
+                tag=str(best.get("tag") or ""),
+                auto=True,
             )
-            basis = "自動補齊：綜合推介"
-            if pool_source != "fused":
-                basis = f"自動補齊：{pool_source}（無綜合名單）"
-            elif dual:
-                basis = "自動補齊：綜合推介（雙軌共識）"
-
-            meta = (pick_index.get(race_id) or {}).get(int(best["horse_no"]))
             reason = _build_pick_reason(meta=meta, selected_by="fallback", angle="")
             race_rows.append(
                 {
@@ -1189,13 +1314,35 @@ class AdSocialCopywriter:
                 continue
             seen_races.add(race_id)
             angle_hint = str(item.get("angle") or "").strip()
+            basis = str(item.get("basis") or "").strip()
+            # 空泛／罐頭 basis 改寫成可核對的數據句
+            vague = (
+                not basis
+                or "綜合頭位" in basis
+                or basis in {"模型與AI支持", "綜合推介", "雙邊支持"}
+                or ("模型與AI" in basis and "份額" not in basis and "第" not in basis)
+            )
+            if vague and meta:
+                dist = None
+                for race in list((copy_data or {}).get("races") or []):
+                    if str(race.get("race_id") or "") == race_id:
+                        dist = race.get("distance")
+                        break
+                basis = _analysis_basis_line(
+                    pool_source=str(meta.get("pool") or "fused"),
+                    dual=bool(meta.get("dual_track")),
+                    fused_rank=meta.get("fused_rank"),
+                    share_pct=meta.get("share_pct"),
+                    distance=dist,
+                    tag=str(meta.get("tag") or ""),
+                )
             row = {
                 "race_no": item.get("race_no"),
                 "race_id": race_id,
                 "horse_no": horse_no,
                 "horse_name": horse_name,
-                "comment": comment[:COMMENT_MAX_CHARS],
-                "basis": str(item.get("basis") or "").strip(),
+                "comment": _truncate_comment(comment, limit=COMMENT_MAX_CHARS),
+                "basis": basis,
                 "angle": angle_hint if angle_hint in _ANGLE_BY_LABEL else "",
                 "pick_reason": _build_pick_reason(
                     meta=meta, selected_by=selected_by, angle=angle_hint

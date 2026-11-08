@@ -107,7 +107,12 @@ def test_build_system_prompt_uses_hk_and_tone():
 
 
 def test_frame_prerace_comment_marks_past_form():
-    from ad_llm_copy import _frame_as_prerace_form_comment, _humanize_comment
+    from ad_llm_copy import (
+        _apply_angle_ending,
+        _assign_distinct_angles,
+        _frame_as_prerace_form_comment,
+        _humanize_comment,
+    )
 
     raw = "本場銀亮濠俠以中等步速出閘，走二疊第二位，直路上進展不大，值得留意其走勢是否會有改變。"
     framed = _frame_as_prerace_form_comment(raw)
@@ -122,10 +127,24 @@ def test_frame_prerace_comment_marks_past_form():
     out = _humanize_comment(canned, daypart="今晚")
     assert out.startswith("近績")
     assert "值得留意其是否能夠挑戰領放馬" not in out
+    assert "賽前可對照" not in out
     assert len(out) <= COMMENT_MAX_CHARS
 
     already = "近績：直路望空後追回，走勢續進。"
     assert _frame_as_prerace_form_comment(already) == already
+
+    # LLM 已寫建議收尾 + 角度罐頭 → 只應剩一句近績，唔好疊兩句「賽前可對照」
+    doubled = (
+        "近績：直路早段反應良佳，惟末段未能再加速。"
+        "賽前可對照其走位會否延續，賽前可對照走位路線會否重現"
+    )
+    cleaned = _apply_angle_ending(doubled, "走位")
+    assert cleaned.count("賽前可對照") == 0
+    assert "末段未能再加速" in cleaned
+    rows = [{"comment": doubled, "angle": "走位"}]
+    _assign_distinct_angles(rows)
+    assert rows[0]["comment"].count("賽前可對照") == 0
+    assert rows[0]["angle"] == "走位"
 
 
 def test_parse_llm_json_from_fence():
@@ -151,11 +170,14 @@ def test_build_llm_payload_uses_fused_primary_pool():
     assert '"pick_pool": "fused"' in payload
     assert '"candidates_from_fused_primary": true' in payload
     assert f'"comment_max_chars": {COMMENT_MAX_CHARS}' in payload
-    assert '"comment_source": "form_text_only"' in payload
+    assert '"comment_source": "form_text_plus_analysis_meta"' in payload
+    assert '"forbid_canned_saiqian_duizhao_endings": true' in payload
     assert '"prerace_copy": true' in payload
     assert '"form_comments_must_mark_past_runs": true' in payload
     assert '"featured_fused_top_n": 2' in payload
     assert '"distinct_observation_angles"' in payload
+    assert '"model_rank"' in payload
+    assert '"ai_rank"' in payload
     # top-N=2：R1 fused 只有頭兩匹進入 candidates（唔含第三）
     assert payload.count('"horse_no": 1') >= 1
     assert '"custom_prompt": "偏高互動"' in payload
@@ -168,7 +190,7 @@ def test_build_llm_payload_uses_fused_primary_pool():
 
 def test_normalize_result_appends_footer_and_post_text():
     writer = DummyWriter()
-    long_comment = "這是一段用來測試評述字數上限的近績改寫，" + ("走勢持續推進。" * 6)
+    long_comment = "這是一段用來測試評述字數上限的近績改寫，" + ("走勢持續推進並保持穩定。" * 8)
     data = writer._normalize_result(
         {
             "title": "今晚邊場最有睇頭？",
@@ -299,7 +321,7 @@ def test_normalize_remaps_outside_fused_top_n_and_adds_pick_reason(monkeypatch):
     assert len(set(endings)) == 3
     assert "#香港賽馬" in data["hashtags"]
     assert "#HorseRacingTips" in data["hashtags"]
-    assert "J18.hk賽前預測" in data["post_text"]
+    assert "J18.hk" in data["post_text"] and "賽前數據研究" in data["post_text"]
     assert "即刻打開手機瀏覽器" in data["post_text"]
 
 
@@ -413,7 +435,7 @@ def test_format_social_day_meeting_no_tonight_or_system():
     assert "2026年9月13日" in text
     assert "沙田" in text
     assert "13:00" in text
-    assert "J18.hk賽前預測" in text
+    assert "J18.hk" in text and "賽前數據研究" in text
     assert "即刻打開手機瀏覽器登入 j18.hk" in text
     assert "舊版長 footer" not in text
     assert "#香港賽馬" in text
