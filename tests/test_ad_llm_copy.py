@@ -97,13 +97,29 @@ def test_build_system_prompt_uses_hk_and_tone():
     assert "香港" in prompt
     assert "國語" in prompt
     assert "高互動型" in prompt
-    assert "綜合分析名單" in prompt or "綜合分析" in prompt
+    assert "練馬師" in prompt
     assert "投注" in prompt  # 禁用作引導／出現喺禁用說明
-    assert "研究" in prompt or "統計" in prompt
+    assert "形勢" in prompt or "近績" in prompt
     assert "hashtag" in prompt.lower() or "標籤" in prompt
     assert str(COMMENT_MAX_CHARS) in prompt
     assert "近績" in prompt and "本場" in prompt  # 賽前時間線規則
+    assert "禁止公開講" in prompt or "黑箱" in prompt or "雙軌" in prompt
     assert "{{" not in prompt
+
+
+def test_strip_public_jargon_hides_model_blackbox():
+    from ad_llm_copy import _humanize_comment, _strip_public_jargon
+
+    raw = "近績領放掄元；模型綜合第1，雙軌支持，份額18.9。"
+    cleaned = _strip_public_jargon(raw)
+    assert "模型" not in cleaned
+    assert "雙軌" not in cleaned
+    assert "份額" not in cleaned
+    assert "領放掄元" in cleaned
+    hum = _humanize_comment(raw, daypart="今日")
+    assert "模型" not in hum
+    assert "雙軌" not in hum
+    assert "份額" not in hum
 
 
 def test_frame_prerace_comment_marks_past_form():
@@ -172,6 +188,7 @@ def test_build_llm_payload_uses_fused_primary_pool():
     assert f'"comment_max_chars": {COMMENT_MAX_CHARS}' in payload
     assert '"comment_source": "form_text_plus_analysis_meta"' in payload
     assert '"forbid_canned_saiqian_duizhao_endings": true' in payload
+    assert '"public_voice": "senior_trainer"' in payload
     assert '"prerace_copy": true' in payload
     assert '"form_comments_must_mark_past_runs": true' in payload
     assert '"featured_fused_top_n": 2' in payload
@@ -182,7 +199,8 @@ def test_build_llm_payload_uses_fused_primary_pool():
     assert payload.count('"horse_no": 1') >= 1
     assert '"custom_prompt": "偏高互動"' in payload
     assert '"tone": "high_interaction"' in payload
-    assert '"writing_locale": "hong_kong_social"' in payload
+    assert '"writing_locale": "hong_kong_trainer_social"' in payload
+    assert "forbid_public_jargon" in payload
     assert "直路望空後追回" in payload
     assert "沿欄省位" in payload
     assert payload.count("金光飛馳") == 1
@@ -321,7 +339,10 @@ def test_normalize_remaps_outside_fused_top_n_and_adds_pick_reason(monkeypatch):
     assert len(set(endings)) == 3
     assert "#香港賽馬" in data["hashtags"]
     assert "#HorseRacingTips" in data["hashtags"]
-    assert "J18.hk" in data["post_text"] and "賽前數據研究" in data["post_text"]
+    assert "J18.hk" in data["post_text"] and "賽前形勢筆記" in data["post_text"]
+    assert "模型" not in data["post_text"]
+    assert "雙軌" not in data["post_text"]
+    assert "份額" not in data["post_text"]
     assert "即刻打開手機瀏覽器" in data["post_text"]
 
 
@@ -387,7 +408,11 @@ def test_fallback_prefers_fused_pool():
     assert len(rows) == 3
     assert rows[0]["race_id"] == "R1"
     assert rows[0]["horse_no"] == 1
-    assert "綜合" in rows[0]["basis"]
+    assert ("路程" in rows[0]["basis"]) or ("近績" in rows[0]["basis"]) or ("走勢" in rows[0]["basis"])
+    assert "模型" not in rows[0]["basis"]
+    assert "雙軌" not in rows[0]["basis"]
+    assert "份額" not in rows[0]["basis"]
+    assert "模型" not in rows[0]["comment"]
     assert len(rows[0]["comment"]) <= COMMENT_MAX_CHARS
     assert {r["race_id"] for r in rows} <= {"R1", "R2", "R3"}
 
@@ -435,7 +460,10 @@ def test_format_social_day_meeting_no_tonight_or_system():
     assert "2026年9月13日" in text
     assert "沙田" in text
     assert "13:00" in text
-    assert "J18.hk" in text and "賽前數據研究" in text
+    assert "J18.hk" in text and "賽前形勢筆記" in text
+    assert "模型" not in text
+    assert "雙軌" not in text
+    assert "份額" not in text
     assert "即刻打開手機瀏覽器登入 j18.hk" in text
     assert "舊版長 footer" not in text
     assert "#香港賽馬" in text
@@ -473,8 +501,9 @@ def test_format_rewrites_old_focus_title_and_hv_day_theme():
         },
     )
     # 場次升序後角度串為 步速(第7)、恢復(第8)、走位(第9)
-    assert "三場焦點數據觀察：步速、恢復與走位" in text
-    assert "綜合模型與公開近績" in text
+    assert "三場形勢觀察：步速、恢復與走位" in text
+    assert "跟足近績跑法" in text
+    assert "模型" not in text
     assert "即刻打開手機瀏覽器" in text
     assert "應被新 CTA 取代" not in text
     assert "#夜馬" not in text
@@ -525,8 +554,9 @@ def test_normalize_strips_system_subtitle_for_day():
         source="fallback:timeout",
     )
     assert "今晚" not in data["title"]
-    assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"])
-    assert "綜合模型與公開近績" in data["subtitle"]
+    assert ("聽日" in data["title"]) or ("今日" in data["title"]) or ("邊場" in data["title"]) or ("形勢觀察" in data["title"])
+    assert "跟足近績跑法" in data["subtitle"]
+    assert "模型" not in data["subtitle"]
     assert "能量" not in data["featured"][0]["comment"]
     assert "#香港賽馬" in data["hashtags"]
     assert "#賽馬貼士" in data["hashtags"]
@@ -534,3 +564,6 @@ def test_normalize_strips_system_subtitle_for_day():
     assert "LLM 暫時未能" not in data["post_text"]
     assert "2026年9月13日" in data["post_text"]
     assert "即刻打開手機瀏覽器" in data["post_text"]
+    assert "模型" not in data["post_text"]
+    assert "雙軌" not in data["post_text"]
+    assert "份額" not in data["post_text"]

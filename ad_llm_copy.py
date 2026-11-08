@@ -21,7 +21,7 @@ else:
 
 SOCIAL_COPY_FILE = "social_copy.json"
 
-# 精選評述字數上限（繁體字元）；需容納「近績事實 + 模型／綜合觀察」兩句
+# 精選評述字數上限（繁體字元）；需容納「近績事實 + 形勢論點」兩句
 COMMENT_MAX_CHARS = 90
 FORM_TEXT_PAYLOAD_MAX = 360
 
@@ -62,37 +62,40 @@ DEFAULT_TONE = TONE_HIGH_INTERACTION
 TONE_PRESETS: Dict[str, Dict[str, str]] = {
     TONE_HIGH_INTERACTION: {
         "label": "高互動型",
-        "hint": "像香港人日常 FB／IG 數據研究貼文：易讚、易留言；用提問討論模型觀察。（預設）",
+        "hint": "像資深練馬師同馬迷傾偈：易讚、易留言；用提問討論形勢。（預設）",
         "style_block": """語氣：高互動型（預設）
-- 寫成香港人日常 FB／IG／Threads「數據研究」貼文，易讚、易留言、易分享。
-- 標題最好帶提問、叫人留言討論模型觀察（例如「今晚邊場數據差異最值得一齊睇？」）。
-- comment 短而有鉤，可留半句俾人回覆，但仍要忠於近績／公開數據事實。
+- 寫成資深練馬師喺 FB／IG 同馬迷傾賽前形勢，易讚、易留言、易分享。
+- 標題最好帶提問（例如「今晚邊場步速同走位最值得一齊睇？」）。
+- comment 短而有鉤，論點要講得出近績／步速／走位／路程，可留半句俾人回覆。
 - 適量用香港口語助詞（啦／喎／囉／呀），唔好整篇口語到難讀。
-- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。""",
+- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。
+- 禁止公開講「模型／AI／雙軌／份額」等黑箱字眼。""",
     },
     TONE_PROFESSIONAL: {
         "label": "專業型",
-        "hint": "冷靜、事實導向，像公開數據研究筆記；少用感嘆，重點講走勢同模型理據。",
+        "hint": "冷靜、事實導向，像資深練馬師賽前筆記；少用感嘆，重點講走勢論據。",
         "style_block": """語氣：專業型
-- 口吻冷靜、乾淨，像香港賽事數據研究短評，唔好煽情。
+- 口吻冷靜、乾淨，像資深練馬師寫賽前形勢短評，唔好煽情。
 - 標題可用疑問或焦點句，但保持克制。
-- comment 以走勢／近績／模型觀察為主，少用感嘆號同口語助詞。
-- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。""",
+- comment 以近績跑法、步速、走位、路程適性為論據，少用感嘆號同口語助詞。
+- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。
+- 禁止公開講「模型／AI／雙軌／份額」等黑箱字眼。""",
     },
     TONE_PASSIONATE: {
         "label": "熱情型",
-        "hint": "有氣勢、帶期待感，像賽前模型更新短片旁白（研究向）。",
+        "hint": "有氣勢、帶期待感，像練馬師賽前講評旁白（研究向）。",
         "style_block": """語氣：熱情型
-- 有氣勢、帶期待，像賽前模型／數據更新短片旁白，但唔好誇大成「必中」或投注保證。
-- 標題可以有節奏感同感染力，仍要鎖定「研究觀察」。
+- 有氣勢、帶期待，像資深練馬師賽前講評，但唔好誇大成「必中」或投注保證。
+- 標題可以有節奏感同感染力，仍要鎖定「形勢觀察」。
 - comment 可稍為有力，但仍要忠於近績／公開數據事實。
-- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。""",
+- 禁止投注誘導：唔好寫心水、貼士、跟注、回報、必中。
+- 禁止公開講「模型／AI／雙軌／份額」等黑箱字眼。""",
     },
 }
 
 # 社交貼文固定骨架（方便一次複製發佈；唔依賴 LLM）
 POST_GREETING = (
-    "J18.hk 賽前數據研究：綜合模型推演與公開近績，整理三場值得追蹤的觀察，供各位參考。"
+    "J18.hk 賽前形勢筆記：跟足公開近績同走勢對照，整理三場值得細睇嘅觀察，供各位參考。"
 )
 POST_CTA = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事數據。"
 POST_DISCLAIMER = (
@@ -132,66 +135,71 @@ def post_greeting_text() -> str:
     return POST_GREETING
 
 
-HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅公開數據研究貼文，唔好似國語翻譯腔，亦唔好似賭波／貼士廣告：
-1) 用香港繁體書面語／港式社交文；產品定位係「公開賽事資料的統計與模型研究」，不是投注服務。
+HK_WRITING_RULES = """文筆必須像「香港資深練馬師」寫畀馬迷睇嘅賽前形勢筆記，唔好似國語翻譯腔，亦唔好似賭波／貼士廣告：
+1) 用香港繁體書面語／港式社交文；對外定位係「跟足公開近績同走勢嘅形勢分析」，不是投注服務。
 2) 禁止國語翻譯腔同內地用語，例如：很不错、值得关注、本场赛事、实力强劲、不容小觑、
    表现亮眼、稳操胜券、各位粉丝、今天推荐、比较看好、值得一看、选手、赛况、干货。
-3) 改用港式說法，例如：今晚、有睇頭、值得留意、形勢／走勢、望空、沿欄、模型觀察、
-   統計傾向、唔錯、有得傾、邊場、點睇、留意下。
+3) 改用港式練馬師說法，例如：今晚、有睇頭、值得留意、形勢／走勢、望空、沿欄、步速、
+   走位、路程適性、末段恢復、唔錯、有得傾、邊場、點睇、留意下。
 4) 標題、subtitle、comment、basis 全部用繁體；可自然夾少少英文 hashtag，但正文唔好夾雜簡體。
 5) 唔好寫到好似機械翻譯：避免「進行分析」「進行關注」「進行分享」呢類書面官腔。
 6) 唔好自行加入免責／宣傳結尾；系統會在文末自動附加固定聲明。
 7) 禁用／高風險語意（出現即改寫）：貼士、心水、推介注項、必中、穩贏、穩賺、回報率承諾、
    跟注、跟車、注碼、投注建議、買邊、賭、賠率比較、派彩、獎金、翻本、保證、內幕、
-   「照住買」「跟住落」。模型輸出只可寫成「研究觀察／統計傾向／模型推演結果」。
-8) 優先用語：公開數據、統計分析、特徵整合、模型推演、歷史回測、模型紀錄、系統更新、
-   研究參考、數據追蹤、方法說明、場次分析範例。
-9) 正文唔好發明 hashtag；系統會在貼文最尾附加固定發佈標籤。"""
+   「照住買」「跟住落」。只可寫成「形勢觀察／走勢對照／賽前筆記」。
+8) 對外禁止黑箱用語：模型、AI、演算法、雙軌、綜合第N、份額、勝率％、系統推演、機器學習。
+   揀馬可以靠內部 ranking 欄位，但寫出嚟必須翻譯成可核對嘅賽事論據（近績、步速、走位、路程）。
+9) 優先用語：近績、上仗、步速、領放、走位、望空、沿欄、路程適性、末段、恢復、形勢、對照。
+10) 正文唔好發明 hashtag；系統會在貼文最尾附加固定發佈標籤。"""
 
 
 DEFAULT_SOCIAL_SYSTEM_PROMPT = (
-    "你是香港公開賽事數據研究平台的社交媒體文案編輯（J18）。產品只做統計分析、模型推演與歷史紀錄展示，\n"
-    "不提供投注、賠率、注碼、跟注或任何賭博服務。你會根據全賽日「綜合分析名單」、模型／AI 份額與官方近績文字，\n"
-    "挑選 3 場最值得分享的研究場次，每場只揀 1 匹馬作重點數據評述。\n"
+    "你是一位香港資深練馬師，替 J18.hk 寫賽前形勢筆記畀馬迷睇。\n"
+    "你內部會參考 candidates 的 ranking／共識欄位嚟揀場揀馬，但對外文案絕不可寫出「模型／AI／雙軌／份額」等字眼；\n"
+    "馬迷要見到嘅係清晰、可核對嘅分析論點（近績跑法、步速、走位、路程適性、末段恢復）。\n"
+    "不提供投注、賠率、注碼、跟注或任何賭博服務。\n"
     "\n"
     "固定貼文結構取向（系統會另加日期頭／開場白／CTA／免責／hashtag，你唔好重複寫免責全文）：\n"
-    "A) 標題｜優先「三場焦點數據觀察：…」串起三個角度（步速／走位／路程／恢復）\n"
-    "B) 副題｜一句說明綜合模型與公開近績嘅賽前研究抽樣\n"
-    "C) 本體｜三場研究觀察（統計傾向／模型推演；禁止叫人下注）\n"
+    "A) 標題｜優先「三場形勢觀察：…」串起三個角度（步速／走位／路程／恢復）\n"
+    "B) 副題｜一句說明跟足近績同走勢對照嘅賽前抽樣\n"
+    "C) 本體｜三場形勢短評（有論據；禁止叫人下注）\n"
     "\n"
     "你必須遵守：\n"
-    "1) 精選馬必須來自各場 candidates（以綜合分析名單為主）；不可另選名單外的馬。\n"
-    "1b) candidates 已限綜合頭名（fused top-N）；只能從中揀，唔好跳去名單更後嘅馬。\n"
-    "2) comment 必須基於 payload 事實寫「高質量短評」，結構建議兩句：\n"
+    "1) 精選馬必須來自各場 candidates；不可另選名單外的馬。\n"
+    "1b) candidates 已限頭名（fused top-N）；只能從中揀。\n"
+    "2) comment 必須係「練馬師論點短評」，結構建議兩句：\n"
     "   (a) 近績／上仗具體跑法（只可改寫 form_text，不可虛構）；\n"
-    "   (b) 一句模型／綜合觀察，可引用 share_pct、fused_rank、dual_track、distance、tag；\n"
-    "   不可只是複述馬名，亦不要堆砌勝率％口號；不可寫成投注指令。\n"
-    "2b) 這是「賽前」研究貼文：近績跑法必須標明「近績／上仗／過往」；\n"
+    "   (b) 一句今日形勢判斷：點解值得跟——用步速／走位／路程／恢復講清楚；\n"
+    "   內部可用 dual_track、share_pct、fused_rank 幫助你判斷「共識強唔強」，但寫出嚟要翻譯成論據，\n"
+    "   例如「近績兩仗同程領放穩定」「末段恢復有落差，路程對照值得跟」；\n"
+    "   禁止寫：模型、AI、雙軌、綜合第N、份額X、勝率％。\n"
+    "2b) 這是「賽前」筆記：近績跑法必須標明「近績／上仗／過往」；\n"
     "   禁止用「本場」指未跑場次；禁止寫到似已開跑或完賽。\n"
     "2c) 三場 featured 必須用唔同觀察角度：步速／走位／恢復／路程；每場 JSON 加 "
     '"angle"（四選一）。收尾要自然對應該角度，三場句式唔好雷同；\n'
-    "   禁止使用罐頭句「賽前可對照…會否延續／重現／改善／發揮」。\n"
-    "2d) basis 必須點出具體數據理據（例如綜合第1、雙軌、份額、路程），禁止空泛「綜合頭位，模型與AI支持」。\n"
-    "3) 標題要吸引，但不可偏離事實原意，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻；"
-    "優先格式：「三場焦點數據觀察：步速、走位與路程適應」（按實際 angle 改寫）。\n"
+    "   禁止罐頭句「賽前可對照…會否延續／重現／改善／發揮」。\n"
+    "2d) basis 用練馬師語言寫核對點（例如「1400米近績兩連勝均領放｜步速控制清楚」），\n"
+    "   禁止「綜合頭位／雙軌／份額／模型與AI支持」呢類內部術語。\n"
+    "3) 標題要吸引，但不可偏離事實，不可誇大成「穩膽」「必中」，亦不可出現貼士／心水口吻；"
+    "優先格式：「三場形勢觀察：步速、走位與路程適應」（按實際 angle 改寫）。\n"
     f"4) 每匹馬的 comment 必須是繁體中文，{COMMENT_MAX_CHARS} 字內。\n"
-    "5) 優先挑選：綜合頭位、同時獲模型與 AI 支持（dual_track）、近績有明確可寫痕跡、或路程／班次有對照價值的場次。\n"
+    "5) 優先挑選：近績痕跡清晰、多方數據共識較強（內部 dual_track／高 share）、或路程／班次有對照價值。\n"
     "6) 唔好輸出大量 hashtag（系統會附加固定發佈標籤）；JSON hashtags 可留空或少寫。\n"
     "7) " + HK_WRITING_RULES + "\n"
     "\n"
     "嚴格輸出 JSON（不要 markdown 代碼塊）：\n"
     "{\n"
-    '  "title": "三場焦點數據觀察：步速、走位與路程適應",\n'
-    '  "subtitle": "綜合模型與公開近績，抽出三組值得追蹤的賽前研究場次。",\n'
+    '  "title": "三場形勢觀察：步速、走位與路程適應",\n'
+    '  "subtitle": "跟足近績跑法、步速同路程適性，抽出三組值得跟進嘅賽前觀察。",\n'
     '  "featured": [\n'
     "    {\n"
     '      "race_no": 1,\n'
     '      "race_id": "20260909HV01",\n'
     '      "horse_no": 3,\n'
     '      "horse_name": "馬名",\n'
-    f'      "comment": "{COMMENT_MAX_CHARS}字內：近績事實 + 模型／綜合觀察",\n'
+    f'      "comment": "{COMMENT_MAX_CHARS}字內：近績事實 + 形勢論點（唔好提模型）",\n'
     '      "angle": "步速",\n'
-    '      "basis": "例如：綜合第1｜雙軌｜份額18.9｜1400米近績連勝痕跡"\n'
+    '      "basis": "例如：1400米近績兩連勝均領放｜步速控制清楚"\n'
     "    }\n"
     "  ],\n"
     '  "hashtags": []\n'
@@ -575,32 +583,65 @@ def _analysis_basis_line(
     share_pct: Any = None,
     distance: Any = None,
     tag: str = "",
+    form_hint: str = "",
     auto: bool = False,
 ) -> str:
+    """對外 basis：練馬師可核對論點；唔暴露模型／雙軌／份額。"""
     bits: List[str] = []
-    if auto:
-        bits.append("自動補齊")
-    if pool_source == "fused":
-        if fused_rank:
-            bits.append(f"綜合第{fused_rank}")
-        else:
-            bits.append("綜合名單")
-    else:
-        bits.append(f"{pool_source}名單")
-    if dual:
-        bits.append("雙軌")
-    try:
-        share = float(share_pct)
-        if share > 0:
-            bits.append(f"份額{share:.1f}")
-    except Exception:
-        pass
+    hint = _strip_public_jargon(_compress_form_snippet(form_hint, max_chars=28))
+    if hint:
+        bits.append(hint)
     if distance:
-        bits.append(f"{distance}米")
+        bits.append(f"{distance}米路程對照")
+    if dual:
+        bits.append("多方數據走勢一致")
+    elif fused_rank == 1 or (pool_source == "fused" and fused_rank):
+        bits.append("近績同走勢對照突出")
     tag_s = str(tag or "").strip()
-    if tag_s and tag_s not in {"推介", "觀察"}:
+    if tag_s and tag_s not in {"推介", "觀察", "爭勝"}:
         bits.append(tag_s)
-    return "｜".join(bits) if bits else "數據研究抽樣"
+    if auto and not bits:
+        bits.append("近績走勢補齊")
+    # share_pct／pool 只作內部判斷，唔寫入對外 basis
+    _ = share_pct
+    return "｜".join(bits) if bits else "近績走勢對照"
+
+
+# 公開貼文禁用黑箱用語（揀馬仍可用內部欄位）
+_PUBLIC_JARGON_RE = re.compile(
+    r"(?:"
+    r"模型(?:綜合|推演|觀察|分析|支持)?"
+    r"|AI"
+    r"|雙軌(?:共識|支持)?"
+    r"|綜合第\s*\d+"
+    r"|綜合／雙軌"
+    r"|綜合份額(?:約)?"
+    r"|份額\s*(?:約)?\s*\d+(?:\.\d+)?"
+    r"|勝率\s*\d+(?:\.\d+)?%?"
+    r"|演算法"
+    r"|機器學習"
+    r"|fused"
+    r"|dual[_\s-]?track"
+    r"|share[_\s-]?pct"
+    r")",
+    flags=re.IGNORECASE,
+)
+
+
+def _strip_public_jargon(text: str) -> str:
+    """清走公開文案入面嘅模型／雙軌／份額等黑箱字眼。"""
+    s = str(text or "").strip()
+    if not s:
+        return s
+    s = _PUBLIC_JARGON_RE.sub("", s)
+    s = re.sub(r"[；;]{2,}", "；", s)
+    s = re.sub(r"[，,]{2,}", "，", s)
+    s = re.sub(r"（\s*）|\(\s*\)", "", s)
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    s = re.sub(r"\s*[，,；;]\s*$", "", s)
+    s = re.sub(r"^[，,；;]\s*", "", s)
+    s = re.sub(r"([，,；;])\s*([，,；;])+", r"\1", s)
+    return s.strip(" ，,;；")
 
 
 def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
@@ -616,9 +657,12 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
         if daypart == "聽日":
             body = body.replace("今日", "聽日")
     if not body or len(body) < 4:
-        return f"{daypart}數據走勢值得留意，有得傾"
+        return f"{daypart}近績走勢值得留意，有得傾"
     body = _frame_as_prerace_form_comment(body)
-    return _truncate_comment(_strip_canned_endings(body), limit=COMMENT_MAX_CHARS)
+    body = _strip_public_jargon(_strip_canned_endings(body))
+    if not body or len(body) < 4:
+        return f"{daypart}近績走勢值得留意，有得傾"
+    return _truncate_comment(body, limit=COMMENT_MAX_CHARS)
 
 
 def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
@@ -847,15 +891,15 @@ def default_focus_title(featured: Optional[List[Dict[str, Any]]] = None) -> str:
         seen.add(angle)
         angles.append(angle)
     if len(angles) >= 3:
-        return f"三場焦點數據觀察：{angles[0]}、{angles[1]}與{angles[2]}"
+        return f"三場形勢觀察：{angles[0]}、{angles[1]}與{angles[2]}"
     if len(angles) == 2:
-        return f"三場焦點數據觀察：{angles[0]}與{angles[1]}"
+        return f"三場形勢觀察：{angles[0]}與{angles[1]}"
     if len(angles) == 1:
-        return f"三場焦點數據觀察：{angles[0]}"
-    return "三場焦點數據觀察：步速、走位與路程適應"
+        return f"三場形勢觀察：{angles[0]}"
+    return "三場形勢觀察：步速、走位與路程適應"
 
 
-DEFAULT_FOCUS_SUBTITLE = "綜合模型與公開近績，抽出三組值得追蹤的賽前研究場次。"
+DEFAULT_FOCUS_SUBTITLE = "跟足近績跑法、步速同路程適性，抽出三組值得跟進嘅賽前觀察。"
 
 
 def format_social_post_text(
@@ -890,8 +934,13 @@ def format_social_post_text(
     # 貼文一律按場次號升序，唔跟模型分數揀選順序
     featured = sort_featured_by_race_no((social_data or {}).get("featured") or [])
     title = str((social_data or {}).get("title") or "").strip()
-    # 舊標題「三場數據焦點」統一成發佈模板用詞
-    rewrite_focus = (not title) or title.startswith("三場數據焦點")
+    # 舊標題統一成練馬師口吻「三場形勢觀察」
+    rewrite_focus = (
+        (not title)
+        or title.startswith("三場數據焦點")
+        or title.startswith("三場焦點數據觀察")
+        or ("模型" in title)
+    )
     if rewrite_focus:
         title = default_focus_title(featured)
     if daypart in {"今日", "聽日"}:
@@ -906,8 +955,12 @@ def format_social_post_text(
         or (not subtitle)
         or _is_system_subtitle(subtitle)
         or subtitle.startswith("綜合分析名單")
+        or subtitle.startswith("綜合模型")
+        or ("模型" in subtitle)
     ):
         subtitle = DEFAULT_FOCUS_SUBTITLE
+    else:
+        subtitle = _strip_public_jargon(subtitle) or DEFAULT_FOCUS_SUBTITLE
     if daypart in {"今日", "聽日"}:
         subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
         if daypart == "聽日":
@@ -1093,12 +1146,21 @@ class AdSocialCopywriter:
                 "comment_max_chars": COMMENT_MAX_CHARS,
                 "must_be_factual": True,
                 "prerace_copy": True,
+                "public_voice": "senior_trainer",
                 "form_comments_must_mark_past_runs": True,
                 "forbid_benchang_for_tonight": True,
                 "forbid_canned_saiqian_duizhao_endings": True,
+                "forbid_public_jargon": [
+                    "模型",
+                    "AI",
+                    "雙軌",
+                    "綜合第",
+                    "份額",
+                    "勝率",
+                ],
                 "vary_featured_endings": True,
                 "distinct_observation_angles": ["步速", "走位", "恢復", "路程"],
-                "writing_locale": "hong_kong_social",
+                "writing_locale": "hong_kong_trainer_social",
                 "avoid_mandarin_translation_tone": True,
                 "do_not_include_footer": True,
             },
@@ -1199,14 +1261,16 @@ class AdSocialCopywriter:
                     share_f = float(share or 0)
                 except Exception:
                     share_f = 0.0
-                if dual and share_f > 0:
-                    model_bit = f"綜合／雙軌份額約{share_f:.1f}"
-                elif share_f > 0:
-                    model_bit = f"綜合份額約{share_f:.1f}"
-                elif dual:
-                    model_bit = "模型與AI雙軌同列"
+                if dual:
+                    angle_bit = "多方數據走勢一致，形勢值得跟"
+                elif share_f >= 18:
+                    angle_bit = "近績同走勢對照突出"
+                elif dist:
+                    angle_bit = f"{dist}米路程對照值得留意"
+                else:
+                    angle_bit = "近績走勢值得跟進"
                 comment = _humanize_comment(
-                    f"近績：{snippet}" + (f"；{model_bit}" if model_bit else ""),
+                    f"近績：{snippet}；{angle_bit}",
                     daypart=daypart,
                 )
             else:
@@ -1220,6 +1284,7 @@ class AdSocialCopywriter:
                 share_pct=share,
                 distance=dist,
                 tag=str(best.get("tag") or ""),
+                form_hint=form,
                 auto=True,
             )
             reason = _build_pick_reason(meta=meta, selected_by="fallback", angle="")
@@ -1314,13 +1379,16 @@ class AdSocialCopywriter:
                 continue
             seen_races.add(race_id)
             angle_hint = str(item.get("angle") or "").strip()
-            basis = str(item.get("basis") or "").strip()
-            # 空泛／罐頭 basis 改寫成可核對的數據句
+            basis = _strip_public_jargon(str(item.get("basis") or "").strip())
+            # 空泛／黑箱 basis 改寫成練馬師可核對論點
             vague = (
                 not basis
                 or "綜合頭位" in basis
+                or "雙軌" in basis
+                or "份額" in basis
+                or "模型" in basis
+                or "AI" in basis.upper()
                 or basis in {"模型與AI支持", "綜合推介", "雙邊支持"}
-                or ("模型與AI" in basis and "份額" not in basis and "第" not in basis)
             )
             if vague and meta:
                 dist = None
@@ -1328,6 +1396,8 @@ class AdSocialCopywriter:
                     if str(race.get("race_id") or "") == race_id:
                         dist = race.get("distance")
                         break
+                if race_id not in form_maps:
+                    form_maps[race_id] = self.load_formguide_map([race_id]).get(race_id, {})
                 basis = _analysis_basis_line(
                     pool_source=str(meta.get("pool") or "fused"),
                     dual=bool(meta.get("dual_track")),
@@ -1335,6 +1405,7 @@ class AdSocialCopywriter:
                     share_pct=meta.get("share_pct"),
                     distance=dist,
                     tag=str(meta.get("tag") or ""),
+                    form_hint=str(form_maps[race_id].get(horse_no) or ""),
                 )
             row = {
                 "race_no": item.get("race_no"),
@@ -1371,8 +1442,8 @@ class AdSocialCopywriter:
 
         tone_key = normalize_tone(tone)
         daypart = _meeting_daypart_from_copy(copy_data)
-        title = str(raw.get("title") or "").strip()
-        subtitle = str(raw.get("subtitle") or "").strip()
+        title = _strip_public_jargon(str(raw.get("title") or "").strip())
+        subtitle = _strip_public_jargon(str(raw.get("subtitle") or "").strip())
         if _is_system_subtitle(subtitle):
             subtitle = ""
         if daypart in {"今日", "聽日"}:
@@ -1382,9 +1453,19 @@ class AdSocialCopywriter:
                 title = title.replace("今日", "聽日")
                 subtitle = subtitle.replace("今日", "聽日")
         featured_sorted = sort_featured_by_race_no(clean_rows[:3])
-        if not title or title.startswith("三場數據焦點"):
+        if (
+            not title
+            or title.startswith("三場數據焦點")
+            or title.startswith("三場焦點數據觀察")
+            or "模型" in title
+        ):
             title = default_focus_title(featured_sorted)
-        if not subtitle:
+        if (
+            not subtitle
+            or subtitle.startswith("綜合模型")
+            or "模型" in subtitle
+            or "雙軌" in subtitle
+        ):
             subtitle = DEFAULT_FOCUS_SUBTITLE
 
         footer = post_footer_text()
