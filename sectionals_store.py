@@ -514,6 +514,7 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
     RESULTS「已拿到」只看 finish_order；此函式另報分段是否可算步速。
     """
     prefix = str(race_id_prefix or "").strip()
+    like_prefix = f"{prefix}%"
     with engine.connect() as conn:
         # SQLite 無 FILTER；兩邊都用 CASE 以求相容
         runners = conn.execute(
@@ -522,10 +523,10 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
                 SELECT COUNT(*) AS n,
                        SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS with_finish
                 FROM runners
-                WHERE race_id LIKE :p || '%'
+                WHERE race_id LIKE :p
                 """
             ),
-            {"p": prefix},
+            {"p": like_prefix},
         ).mappings().first()
         sec = conn.execute(
             text(
@@ -539,10 +540,10 @@ def coverage_for_prefix(engine, race_id_prefix: str) -> Dict[str, Any]:
                   COUNT(*) AS section_rows
                 FROM runner_sections rs
                 JOIN runners ru ON ru.runner_id = rs.runner_id
-                WHERE ru.race_id LIKE :p || '%'
+                WHERE ru.race_id LIKE :p
                 """
             ),
-            {"p": prefix},
+            {"p": like_prefix},
         ).mappings().first()
     n = int((runners or {}).get("n") or 0)
     with_finish = int((runners or {}).get("with_finish") or 0)
