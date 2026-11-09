@@ -36,12 +36,12 @@ HK_TZ = timezone(timedelta(hours=8))
 PACKAGES_SUBDIR = "packages"
 LATEST_ID_NAME = "_latest_id.txt"
 DEFAULT_HASHTAGS = ["#J18", "#賽事數據", "#模型分析"]
-DEFAULT_CTA = "想睇模型紀錄同系統更新？免費登入 J18.hk"
+DEFAULT_CTA = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事資訊。"
 DEFAULT_SITE = "https://J18.hk"
 DEFAULT_FB_PAGE = "https://www.facebook.com/j18hk"
-DEFAULT_DISCLAIMER = "⚠️ 內容只供資料研究及參考，不構成投注建議；不保證任何結果。過往表現不代表未來表現。未滿18歲切勿參與賭博。"
+DEFAULT_DISCLAIMER = "⚠️ 內容只供資料研究及參考，不構成投注建議；未滿18歲切勿參與賭博。"
 PACKAGE_HASHTAG_LIMIT = 6
-# 多餘／重複 hashtag（已有 #賽事數據 #模型分析 時唔再加）
+# 多餘／重複 hashtag（精簡 API hashtags 用；發佈全文固定列見 ad_llm_copy.SOCIAL_PUBLISH_HASHTAGS）
 _HASHTAG_NOISE = {
     "#賽馬",
     "#賽馬貼士",
@@ -87,21 +87,30 @@ def _social_dict_to_ai_payload(social: Dict[str, Any]) -> Optional[Dict[str, Any
     except Exception:
         format_social_post_text = None  # type: ignore
     featured = list(social.get("featured") or [])
+    meeting = dict(social.get("meeting") or {})
     post_text = str(social.get("post_text") or "").strip()
-    if not post_text and format_social_post_text:
+    # 有精選／標題時一律按范文重排，確保頭尾固定格式
+    if format_social_post_text and (featured or social.get("title") or post_text):
         try:
-            post_text = format_social_post_text(social).strip()
+            rebuilt = format_social_post_text(social).strip()
+            if rebuilt:
+                post_text = rebuilt
         except Exception:
-            post_text = ""
+            pass
     if not featured and not post_text:
         return None
-    meeting = dict(social.get("meeting") or {})
+    try:
+        from ad_llm_copy import SOCIAL_PUBLISH_HASHTAGS
+
+        publish_tags = list(SOCIAL_PUBLISH_HASHTAGS.split())
+    except Exception:
+        publish_tags = list(social.get("hashtags") or [])
     return {
         "title": str(social.get("title") or "").strip(),
         "subtitle": str(social.get("subtitle") or "").strip(),
         "featured": featured,
         "post_text": post_text,
-        "hashtags": list(social.get("hashtags") or []),
+        "hashtags": publish_tags or list(social.get("hashtags") or []),
         "source": social.get("source"),
         "tone": social.get("tone") or meeting.get("tone"),
         "generated_at": meeting.get("generated_at") or social.get("generated_at"),
@@ -555,45 +564,43 @@ def _build_facebook_copy(
     hashtags: Sequence[str],
     fused_copy: str = "",
 ) -> str:
-    start = str(meeting.get("start_time") or "").strip()
-    start_line = f"開跑時間：{start}" if start else ""
-    lines = [
-        (
-            f"【J18 賽事數據分析】{meeting.get('date', '')} {meeting.get('weekday', '')} "
+    """Fallback 模板：對齊 ad_llm_copy Facebook／IG 范文頭尾。"""
+    try:
+        from ad_llm_copy import (
+            SOCIAL_BRAND_INTRO,
+            SOCIAL_PUBLISH_HASHTAGS,
+            format_social_meeting_header,
+        )
+
+        header = format_social_meeting_header(meeting)
+        brand = SOCIAL_BRAND_INTRO
+        tag_line = SOCIAL_PUBLISH_HASHTAGS
+    except Exception:
+        header = (
+            f"{meeting.get('date', '')} {meeting.get('weekday', '')} "
             f"{meeting.get('venue', '')}{meeting.get('session', '')}賽"
-        ),
-    ]
-    if start_line:
-        lines.append(start_line)
-    lines.extend(
-        [
-            "",
-            intro,
-            "",
-            "今場邊個模型觀察最值得討論？留言一齊傾下👇",
-            "",
-        ]
-    )
+        ).strip()
+        brand = "J18.hk賽前預測，各馬匹近賽最近資訊，供各位作參考，祝各馬迷馬運亨通！！"
+        tag_line = " ".join(_cap_hashtags(hashtags)) or " ".join(DEFAULT_HASHTAGS)
+
+    lines = [header, "", brand, "", str(intro or "").strip() or "三場焦點數據觀察", ""]
     for t in tips:
         horses = t.get("horses") or []
         body = (
             "、".join(f"{h['no']} {h['name']}" for h in horses) if horses else "暫無分析名單"
         )
-        lines.append(f"第{t.get('race')}場：{body}")
+        lines.append(f"第{t.get('race')}場｜{body}")
+        lines.append("")
     lines.extend(
         [
+            cta or DEFAULT_CTA,
             "",
-            cta,
             DEFAULT_DISCLAIMER,
-            "賽前如有變動，請以 J18.hk 最新版本為準。",
             "",
-            " ".join(_cap_hashtags(hashtags)),
+            tag_line,
         ]
     )
-    fc = str(fused_copy or "").strip()
-    if fc and len(fc) < 800:
-        lines.extend(["", "——", fc])
-    return "\n".join(lines)
+    return "\n".join(lines).strip() + "\n"
 
 
 def _build_short_copy(
@@ -619,20 +626,33 @@ def _ensure_facebook_publish_ready(
         return body
     lower = body.lower()
     extras: List[str] = []
-    date = str(meeting.get("date") or "")
+    date = str(meeting.get("date") or meeting.get("racing_date") or "")
     venue = str(meeting.get("venue") or "")
-    if date and date not in body:
-        extras.append(
-            f"{date} {meeting.get('weekday', '')} {venue}{meeting.get('session', '')}賽"
-            f"{(' · ' + meeting['start_time']) if meeting.get('start_time') else ''}".rstrip()
-        )
-    if "j18.hk" not in lower and "j18.hk" not in body:
-        extras.append(cta)
-    if ("不構成投注建議" not in body) and ("未滿18歲" not in body) and ("未滿18歲" not in body):
+    has_zh_date = ("年" in body and "月" in body and "日" in body)
+    has_iso_date = bool(date) and (date in body or date.replace("-", "/") in body)
+    if date and not has_zh_date and not has_iso_date:
+        try:
+            from ad_llm_copy import format_social_meeting_header
+
+            header = format_social_meeting_header(meeting)
+        except Exception:
+            header = (
+                f"{date} {meeting.get('weekday', '')} {venue}{meeting.get('session', '')}賽"
+                f"{(' · ' + meeting['start_time']) if meeting.get('start_time') else ''}".rstrip()
+            )
+        if header:
+            extras.append(header)
+    if "j18.hk" not in lower:
+        extras.append(cta or DEFAULT_CTA)
+    if ("不構成投注建議" not in body) and ("未滿18歲" not in body):
         extras.append(DEFAULT_DISCLAIMER)
-    tags = _publish_hashtags(meeting, extra=list(hashtags or []))
-    if tags and not any(t in body for t in tags[:2]):
-        extras.append(" ".join(tags))
+    # 范文已含完整 hashtag 列時唔再追加精簡 tag
+    if "#J18賽馬" in body or "#香港賽馬" in body or "#HorseRacingTips" in body:
+        pass
+    else:
+        tags = _publish_hashtags(meeting, extra=list(hashtags or []))
+        if tags and not any(t in body for t in tags[:2]):
+            extras.append(" ".join(tags))
     if not extras:
         return body
     return body.rstrip() + "\n\n" + "\n".join(extras)

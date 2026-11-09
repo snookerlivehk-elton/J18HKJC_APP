@@ -82,16 +82,107 @@ TONE_PRESETS: Dict[str, Dict[str, str]] = {
     },
 }
 
-# 所有社交文案結尾固定加入（程式強制附加，唔依賴 LLM）
-# 合規定位：公開數據／模型研究；禁止投注誘導用詞
+# Facebook / IG 發佈范文（頭尾固定；中間 title／subtitle／精選由 LLM 填）
+# 格式：日期行 → 品牌開場 → 標題／副標 → 三場精選 → CTA → 免責 → hashtag
+SOCIAL_BRAND_INTRO = (
+    "J18.hk賽前預測，各馬匹近賽最近資訊，供各位作參考，祝各馬迷馬運亨通！！"
+)
+SOCIAL_CTA_LINE = "即刻打開手機瀏覽器登入 j18.hk 查看即時賽事資訊。"
+SOCIAL_DISCLAIMER_LINE = (
+    "⚠️ 內容只供資料研究及參考，不構成投注建議；未滿18歲切勿參與賭博。"
+)
+# 范文 hashtag（用戶確認版；已去掉零寬／物件替換字元）
+SOCIAL_PUBLISH_HASHTAGS = (
+    "#香港賽馬 #跑马 #賽馬貼士 #賽馬心水 #四重彩 #賽馬會 #賽事分析 "
+    "#賽馬預測 #馬龍 #賽馬賠率 #賽馬直播 #香港賽馬 #HKJC #獨贏 #過關 "
+    "#賽馬心水 #賽馬貼士 #J18賽馬 #賽馬 #HorseRacingTips #tips"
+)
+
+# 文末固定：CTA + 免責（程式強制附加，唔依賴 LLM）
 POST_FOOTER_LINES: List[str] = [
-    "今季模型整合多項公開賽事資料，逐場做統計分析同模型推演。\n免費登入 j18.hk，查看部分場次分析、模型紀錄及系統更新，一齊追蹤模型表現。",
-    "⚠️ 內容只供資料研究及參考，不構成投注建議；不保證任何結果。過往表現不代表未來表現。未滿18歲切勿參與賭博。",
+    SOCIAL_CTA_LINE,
+    SOCIAL_DISCLAIMER_LINE,
 ]
+
+_WEEKDAY_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
 
 def post_footer_text() -> str:
     return "\n\n".join(POST_FOOTER_LINES)
+
+
+def _social_venue_label(course: str) -> str:
+    c = str(course or "").strip().upper()
+    if c in {"ST", "沙田"}:
+        return "沙田"
+    if c in {"HV", "跑馬地", "谷", "谷草"}:
+        return "跑馬地"
+    return str(course or "").strip()
+
+
+def _social_start_hhmm(meeting: Optional[Dict[str, Any]], *, is_night: bool = False) -> str:
+    """開跑時間：優先 meeting.start_time；否則日馬 13:00／夜馬 18:45。"""
+    raw = str((meeting or {}).get("start_time") or (meeting or {}).get("race_time") or "").strip()
+    if raw:
+        # 已是 HH:MM
+        m = re.search(r"(\d{1,2}):(\d{2})", raw)
+        if m:
+            return f"{int(m.group(1)):02d}:{m.group(2)}"
+        # 約下午1時／約晚上7時15分 等 → 盡量唔用，改預設
+    return "18:45" if is_night else "13:00"
+
+
+def format_social_meeting_header(
+    meeting: Optional[Dict[str, Any]] = None,
+    *,
+    copy_data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """范文首行：2026年10月28日, 星期三, 沙田, 18:45"""
+    # copy.json meeting（含 theme）為底，social.meeting 有值再覆蓋
+    m: Dict[str, Any] = dict((copy_data or {}).get("meeting") or {})
+    if isinstance(meeting, dict) and meeting:
+        for k, v in meeting.items():
+            if v is None or v == "":
+                continue
+            m[k] = v
+    race_date = str(m.get("racing_date") or m.get("date") or "")[:10]
+    course = str(m.get("course") or m.get("venue_code") or m.get("venue") or "")
+    venue = str(m.get("venue_zh") or "").strip() or _social_venue_label(course)
+    # 若 venue 仍是代碼
+    if venue.upper() in {"ST", "HV"}:
+        venue = _social_venue_label(venue)
+
+    weekday = str(m.get("weekday") or "").strip()
+    if not weekday and race_date:
+        try:
+            from datetime import datetime
+
+            dt = datetime.strptime(race_date, "%Y-%m-%d")
+            weekday = _WEEKDAY_ZH[dt.weekday()]
+        except Exception:
+            weekday = ""
+
+    session_raw = str(m.get("session") or m.get("theme") or "")
+    course_u = str(course or "").upper()
+    is_night = (
+        "夜" in session_raw
+        or session_raw.lower() == "night"
+        or (course_u == "HV" and "日" not in session_raw and session_raw.lower() != "day")
+    )
+    start = _social_start_hhmm(m, is_night=is_night)
+
+    date_zh = ""
+    if race_date:
+        try:
+            from datetime import datetime
+
+            dt = datetime.strptime(race_date, "%Y-%m-%d")
+            date_zh = f"{dt.year}年{dt.month}月{dt.day}日"
+        except Exception:
+            date_zh = race_date
+
+    parts = [p for p in (date_zh, weekday, venue, start) if p]
+    return ", ".join(parts)
 
 
 HK_WRITING_RULES = """文筆必須像「香港本地」發出嘅公開數據研究貼文，唔好似國語翻譯腔，亦唔好似賭波／貼士廣告：
@@ -585,9 +676,40 @@ def _correct_hashtags_in_text(body: str, copy_data: Optional[Dict[str, Any]]) ->
 
 
 def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[Dict[str, Any]] = None) -> str:
-    """Facebook / IG 可貼文排版（含固定結尾）。唔寫入系統／fallback 提示句。"""
-    daypart = _meeting_daypart_from_copy(copy_data or {"meeting": (social_data or {}).get("meeting") or {}})
+    """Facebook / IG 可貼文排版（范文頭尾固定）。唔寫入系統／fallback 提示句。
+
+    結構：
+      {日期}, {星期}, {場地}, {開跑}
+      <空行>
+      J18.hk賽前預測…馬運亨通！！
+      <空行>
+      {title}
+      {subtitle}
+      <空行>
+      第N場｜馬號 馬名
+      {comment}
+      …
+      即刻打開手機瀏覽器登入 j18.hk …
+      <空行>
+      ⚠️ 內容只供…
+      <空行>
+      {固定 hashtags}
+    """
+    meeting_ctx = copy_data or {"meeting": (social_data or {}).get("meeting") or {}}
+    daypart = _meeting_daypart_from_copy(meeting_ctx)
     lines: List[str] = []
+
+    header = format_social_meeting_header(
+        (social_data or {}).get("meeting") if isinstance((social_data or {}).get("meeting"), dict) else None,
+        copy_data=meeting_ctx if isinstance(meeting_ctx, dict) else None,
+    )
+    if header:
+        lines.append(header)
+        lines.append("")
+
+    lines.append(SOCIAL_BRAND_INTRO)
+    lines.append("")
+
     title = str((social_data or {}).get("title") or "").strip()
     if title:
         if daypart in {"今日", "聽日"}:
@@ -596,13 +718,15 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
                 title = title.replace("今日", "聽日")
         lines.append(title)
     subtitle = str((social_data or {}).get("subtitle") or "").strip()
-    if subtitle and not _is_system_subtitle(subtitle):
+    if _is_system_subtitle(subtitle):
+        subtitle = ""
+    if subtitle:
         if daypart in {"今日", "聽日"}:
             subtitle = subtitle.replace("今晚", daypart).replace("今夜", daypart)
             if daypart == "聽日":
                 subtitle = subtitle.replace("今日", "聽日")
         lines.append(subtitle)
-    if lines:
+    if title or subtitle:
         lines.append("")
 
     for item in list((social_data or {}).get("featured") or []):
@@ -615,19 +739,14 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
             lines.append(str(comment))
         lines.append("")
 
-    hashtags = list((social_data or {}).get("hashtags") or [])
-    if not hashtags:
-        hashtags = _publish_hashtags_for_copy(copy_data)
-    else:
-        hashtags = _publish_hashtags_for_copy(copy_data, extra=hashtags)
-    if hashtags:
-        lines.append(" ".join(str(t) for t in hashtags[:6]))
-        lines.append("")
+    lines.append(SOCIAL_CTA_LINE)
+    lines.append("")
+    lines.append(SOCIAL_DISCLAIMER_LINE)
+    lines.append("")
+    lines.append(SOCIAL_PUBLISH_HASHTAGS)
 
-    footer = str((social_data or {}).get("footer") or "").strip() or post_footer_text()
-    lines.append(footer)
     text = "\n".join(lines).strip() + "\n"
-    return _correct_hashtags_in_text(text, copy_data or {"meeting": (social_data or {}).get("meeting") or {}})
+    return _correct_hashtags_in_text(text, meeting_ctx if isinstance(meeting_ctx, dict) else {"meeting": {}})
 
 
 class AdSocialCopywriter:
@@ -1035,13 +1154,19 @@ class AdSocialCopywriter:
             title = f"{racing_date} {course} {daypart}邊場數據最值得一齊睇？".strip()
 
         footer = post_footer_text()
+        meeting_meta = dict((copy_data or {}).get("meeting") or {})
         result = {
             "title": title,
             "subtitle": subtitle,
             "featured": clean_rows[:3],
-            "hashtags": _publish_hashtags_for_copy(copy_data, extra=clean_tags),
+            "hashtags": list(SOCIAL_PUBLISH_HASHTAGS.split()),
             "footer": footer,
             "footer_lines": list(POST_FOOTER_LINES),
+            "brand_intro": SOCIAL_BRAND_INTRO,
+            "cta": SOCIAL_CTA_LINE,
+            "disclaimer": SOCIAL_DISCLAIMER_LINE,
+            "meeting": meeting_meta,
+            "meeting_header": format_social_meeting_header(meeting_meta, copy_data=copy_data),
             "post_text": "",
             "tone": tone_key,
             "tone_label": tone_label(tone_key),
@@ -1051,9 +1176,8 @@ class AdSocialCopywriter:
             "raw": raw,
         }
         result["post_text"] = format_social_post_text(result, copy_data=copy_data)
-        result["hashtags"] = _publish_hashtags_for_copy(
-            copy_data, extra=list(result.get("hashtags") or [])
-        )
+        # 發佈 hashtag 用范文固定列；LLM 標籤只留 raw 參考
+        result["hashtags"] = list(SOCIAL_PUBLISH_HASHTAGS.split())
         result["post_text"] = _correct_hashtags_in_text(
             str(result.get("post_text") or ""), copy_data
         )

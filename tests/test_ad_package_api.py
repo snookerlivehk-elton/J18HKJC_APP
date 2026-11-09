@@ -930,7 +930,7 @@ class PostRacePackageTest(unittest.TestCase):
             self.assertEqual(pub.get("purpose"), "post_race")
             fb = (pub.get("copy") or {}).get("facebook") or ""
             self.assertIn("第5場", fb)
-            self.assertIn("J18.hk", fb)
+            self.assertIn("j18.hk", fb.lower())
             self.assertEqual(
                 stable_post_race_ad_id("2026-09-16", "HV", is_day_meeting=False),
                 "2026-09-16-hv-night-post",
