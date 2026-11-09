@@ -44,6 +44,8 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
       finish_ok / sectionals_ok / running_comment_ok / incident_ok
     """
     prefix = _prefix(racing_date, course)
+    # 通配符喺 Python 拼接，避免部分 PG driver 對 `:p || '%'` 綁參異常
+    like_prefix = f"{prefix}%"
     cov = coverage_for_prefix(engine, prefix)
 
     with engine.connect() as conn:
@@ -51,10 +53,10 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
             text(
                 """
                 SELECT COUNT(DISTINCT race_id) FROM runners
-                WHERE race_id LIKE :p || '%'
+                WHERE race_id LIKE :p
                 """
             ),
-            {"p": prefix},
+            {"p": like_prefix},
         ).scalar()
         race_n = int(race_n or 0)
 
@@ -91,11 +93,11 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
                   ) AS incident_n,
                   COUNT(DISTINCT ru.race_id || ':' || CAST(ru.horse_no AS TEXT)) AS finish_n
                 FROM runners ru
-                WHERE ru.race_id LIKE :p || '%'
+                WHERE ru.race_id LIKE :p
                   AND ru.finish_order_num IS NOT NULL
                 """
             ),
-            {"p": prefix},
+            {"p": like_prefix},
         ).mappings().first()
 
         missing_sec = conn.execute(
@@ -104,14 +106,14 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
                 SELECT ru.race_id, ru.horse_no, ru.horse_name, ru.finish_order_num, ru.runner_id
                 FROM runners ru
                 LEFT JOIN runner_sections rs ON rs.runner_id = ru.runner_id
-                WHERE ru.race_id LIKE :p || '%'
+                WHERE ru.race_id LIKE :p
                   AND ru.finish_order_num IS NOT NULL
                   AND rs.id IS NULL
                 ORDER BY ru.race_id, ru.horse_no
                 LIMIT 40
                 """
             ),
-            {"p": prefix},
+            {"p": like_prefix},
         ).mappings().all()
 
         # 場額幽靈：HV horse_no>12／ST>14（例如 ST Glenealy 誤寫入 HV race_id）
@@ -126,13 +128,13 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
                         """
                         SELECT race_id, horse_no, horse_name, finish_order_num, runner_id
                         FROM runners
-                        WHERE race_id LIKE :p || '%'
+                        WHERE race_id LIKE :p
                           AND horse_no > :cap
                         ORDER BY race_id, horse_no
                         LIMIT 40
                         """
                     ),
-                    {"p": prefix, "cap": int(cap)},
+                    {"p": like_prefix, "cap": int(cap)},
                 ).mappings().all()
             ]
 

@@ -677,7 +677,21 @@ for stage, label in STAGES:
                     r = pipe.run_action(racing_date, course, "sync_jjjc_sectionals")
                 _rec("sync_jjjc_sectionals", stage, str(r.get("detail") or r.get("ok")))
                 st.session_state["ops_sectionals_sync"] = r
+                # R2 後必須清覆蓋摘要快取，否則 ③b 仍顯示舊「無名次」
+                st.session_state.pop("ops_sectionals_inv", None)
+                st.session_state.pop("ops_sectionals_inv_key", None)
                 st.session_state.pop("ops_ready", None)
+                try:
+                    from data_audit import meeting_inventory as _inv
+
+                    st.session_state["ops_sectionals_inv"] = _inv(
+                        pipe.engine, racing_date, course
+                    )
+                    st.session_state["ops_sectionals_inv_key"] = (
+                        f"{racing_date}_{course}"
+                    )
+                except Exception:
+                    pass
                 if r.get("waiting"):
                     st.info(r.get("detail") or "分段尚未 obtained（suspicious／empty／unpublished）")
                 elif r.get("ok"):
@@ -687,6 +701,7 @@ for stage, label in STAGES:
                     )
                 else:
                     st.error(r.get("error") or r)
+                st.rerun()
             if a2.button(
                 "修復中文名（馬／騎／練）",
                 key=f"act_zh_{stage}",
@@ -981,19 +996,29 @@ try:
     from data_audit import meeting_inventory
 
     inv_key = f"{racing_date}_{course}"
-    if st.button("刷新覆蓋摘要", key="ops_day_inv_btn"):
-        st.session_state.pop("ops_sectionals_inv", None)
-        st.session_state.pop("ops_sectionals_inv_key", None)
+    c_ref1, c_ref2 = st.columns([1, 3])
+    with c_ref1:
+        force_refresh = st.button("刷新覆蓋摘要", key="ops_day_inv_btn")
+    with c_ref2:
+        st.caption("每次進入本區會即時讀庫；若仍見舊缺口，撳左鍵強制重算。")
 
-    # 換賽日必須重算，避免上一場缺口殘留造成閃報
-    if st.session_state.get("ops_sectionals_inv_key") != inv_key:
+    # 同步成功後若仍用舊 session 快取，會假報「無名次」——預設即時讀庫
+    last_res = st.session_state.get("ops_results_result") or {}
+    sync_wrote = int(last_res.get("runner_upserted") or 0) > 0 or int(
+        last_res.get("race_count") or 0
+    ) > 0
+    if force_refresh or st.session_state.get("ops_sectionals_inv_key") != inv_key:
         st.session_state.pop("ops_sectionals_inv", None)
 
-    inv = st.session_state.get("ops_sectionals_inv")
-    if inv is None:
+    # 有成功寫入紀錄時一律重算，唔用舊 gaps
+    if sync_wrote or force_refresh or st.session_state.get("ops_sectionals_inv") is None:
         inv = meeting_inventory(pipe.engine, racing_date, course)
         st.session_state["ops_sectionals_inv"] = inv
         st.session_state["ops_sectionals_inv_key"] = inv_key
+    else:
+        inv = st.session_state.get("ops_sectionals_inv") or meeting_inventory(
+            pipe.engine, racing_date, course
+        )
 
     i1, i2, i3, i4 = st.columns(4)
     i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
@@ -1016,16 +1041,21 @@ try:
         f"庫統計：race_n={inv.get('race_n')} · finish_n={inv.get('finish_n')} · "
         f"finish_ok={inv.get('finish_ok')} · prefix={inv.get('prefix')}"
     )
+    if sync_wrote and not inv.get("finish_ok"):
+        st.error(
+            "RESULTS 顯示已寫入，但覆蓋摘要仍無名次——"
+            "請撳「刷新覆蓋摘要」。若 finish_n 仍為 0，代表寫入庫與作戰室讀庫不一致。"
+        )
     if inv.get("gaps"):
         st.warning("缺口：" + "；".join(inv["gaps"]))
         if any("無名次" in str(g) for g in inv.get("gaps") or []):
             st.info(
-                "無名次處理：確認場地正確後，RESULTS 先撳「同步 jjjc 賽果」"
-                "（較快只寫名次）；成功後再「同步 R2 分段」。"
-                f"本日上游參考：2026-09-06 只有 ST（10 場）。"
-                if str(racing_date)[:10] == "2026-09-06"
-                else "無名次處理：確認場地正確後，RESULTS 先撳「同步 jjjc 賽果」"
-                "（較快只寫名次）；成功後再「同步 R2 分段」。"
+                "無名次處理：③b 先撳「刷新覆蓋摘要」；仍無名次則 RESULTS「同步 jjjc 賽果」。"
+                + (
+                    " 09-06 只有 ST（10 場）。"
+                    if str(racing_date)[:10] == "2026-09-06"
+                    else ""
+                )
             )
     ghosts = inv.get("field_ghost_sample") or []
     if ghosts:
