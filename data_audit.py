@@ -425,8 +425,15 @@ def resync_results_and_sectionals(
     """
     重跑賽果同步（會寫 runner_sections）+ R2 分段秒數 + 可選 raw_json 回填保險。
     pipe: MeetingPipeline 實例。
+
+    名次優先：先 skip_sectionals 寫 finish_order，再拉 R2。
+    避免 sectionals phases/post/run 過慢／Nginx 超時時，連名次都未提交、作戰室仍掛「無名次」。
     """
-    sync_out = pipe.run_action(racing_date, course, "sync_jjjc_results")
+    # 1) 只寫賽果名次（短路徑）
+    sync_out = pipe.run_action(
+        racing_date, course, "sync_jjjc_results", skip_sectionals=True
+    )
+    # 2) R2 分段（可慢；失敗唔回滾名次）
     sec_out = None
     try:
         sec_out = pipe.run_action(racing_date, course, "sync_jjjc_sectionals")
@@ -434,15 +441,29 @@ def resync_results_and_sectionals(
         sec_out = {"ok": False, "error": str(e)[:200]}
     bf_out = None
     if also_backfill and getattr(pipe, "engine", None) is not None:
-        bf_out = backfill_meeting_sectionals(pipe.engine, racing_date, course)
+        try:
+            bf_out = backfill_meeting_sectionals(pipe.engine, racing_date, course)
+        except Exception as e:
+            bf_out = {"ok": False, "error": str(e)[:200]}
     inv = meeting_inventory(pipe.engine, racing_date, course)
+    finish_ok = bool(inv.get("finish_ok")) and not bool(inv.get("thin_results"))
     return {
-        "ok": bool(sync_out.get("ok")),
+        "ok": bool(sync_out.get("ok")) and finish_ok,
         "sync": sync_out,
         "sectionals_export": sec_out,
         "backfill": bf_out,
         "inventory": inv,
+        "finish_ok": finish_ok,
         "sectional_times_ok": bool(inv.get("sectional_times_ok")),
+        "diagnose": {
+            "race_n": inv.get("race_n"),
+            "finish_n": inv.get("finish_n"),
+            "sync_race_count": sync_out.get("race_count"),
+            "sync_runner_upserted": sync_out.get("runner_upserted"),
+            "sync_waiting": sync_out.get("waiting"),
+            "sync_detail": sync_out.get("detail") or sync_out.get("error"),
+            "gaps": inv.get("gaps"),
+        },
     }
 
 

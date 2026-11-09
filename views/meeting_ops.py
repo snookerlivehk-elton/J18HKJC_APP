@@ -593,25 +593,65 @@ for stage, label in STAGES:
             if a2.button(
                 "同步 jjjc 賽果",
                 key=f"act_res_{stage}",
-                help="名次／派彩／分段走位入庫；快照各場齊名次後會自動觸發結算",
+                help="只同步名次／派彩／走位（較快；無名次時先撳呢個）。快照各場齊名次後會自動結算",
             ):
-                with st.spinner("jjjc results export → runners + runner_sections…"):
-                    r = pipe.run_action(racing_date, course, "sync_jjjc_results")
-                _rec("sync_jjjc_results", stage, str(r.get("error") or ""))
+                with st.spinner("jjjc results export → runners…"):
+                    # 無名次優先：唔喺同一請求內拉 R2，避免超時連名次都未寫
+                    r = pipe.run_action(
+                        racing_date, course, "sync_jjjc_results", skip_sectionals=True
+                    )
+                _rec(
+                    "sync_jjjc_results",
+                    stage,
+                    str(r.get("error") or r.get("detail") or ""),
+                )
                 st.session_state["ops_results_result"] = r
+                try:
+                    from data_audit import meeting_inventory as _inv
+
+                    st.session_state["ops_sectionals_inv"] = _inv(
+                        pipe.engine, racing_date, course
+                    )
+                    st.session_state["ops_sectionals_inv_key"] = (
+                        f"{racing_date}_{course}"
+                    )
+                except Exception:
+                    pass
                 st.session_state.pop("ops_ready", None)
                 st.rerun()
             if a2.button(
                 "重跑賽果＋回填分段",
                 key=f"act_res_sec_{stage}",
-                help="再打 jjjc results（寫分段表）+ 從 raw_json 回填保險",
+                help="先寫名次，再拉 R2 分段／raw 回填（較慢；若超時請改撳「同步 jjjc 賽果」）",
             ):
                 with st.spinner("resync results + sectionals…"):
                     r = pipe.run_action(racing_date, course, "resync_results_sectionals")
                 _rec("resync_results_sectionals", stage, str(r.get("ok")))
                 st.session_state["ops_results_result"] = r.get("sync") or r
-                st.session_state["ops_sectionals_inv"] = r.get("inventory")
-                st.session_state["ops_sectionals_inv_key"] = f"{racing_date}_{course}"
+                st.session_state["ops_results_resync_meta"] = {
+                    k: r.get(k)
+                    for k in (
+                        "ok",
+                        "finish_ok",
+                        "diagnose",
+                        "inventory",
+                        "sectionals_export",
+                    )
+                    if k in r
+                }
+                inv = r.get("inventory")
+                if inv is None:
+                    try:
+                        from data_audit import meeting_inventory as _inv
+
+                        inv = _inv(pipe.engine, racing_date, course)
+                    except Exception:
+                        inv = None
+                if inv is not None:
+                    st.session_state["ops_sectionals_inv"] = inv
+                    st.session_state["ops_sectionals_inv_key"] = (
+                        f"{racing_date}_{course}"
+                    )
                 st.session_state.pop("ops_ready", None)
                 st.rerun()
             if a2.button(
@@ -705,6 +745,10 @@ for stage, label in STAGES:
                             f"race_count={uf.get('race_count')} "
                             f"err={uf.get('error') or '—'}"
                         )
+                    st.caption(
+                        f"請確認賽日場地係官方賽日（例 2026-09-06 只有 ST，唔係 HV）；"
+                        f"並檢查主機可達 JJJC_API_BASE。"
+                    )
                 elif last_res.get("ok"):
                     st.success(
                         f"寫入 {last_res.get('runner_upserted')} 匹／"
@@ -725,6 +769,24 @@ for stage, label in STAGES:
                         st.info(f"自動結算：{auto.get('message')}")
                 else:
                     st.error(last_res.get("error") or last_res.get("detail") or last_res)
+            meta = st.session_state.get("ops_results_resync_meta") or {}
+            diag = meta.get("diagnose") or {}
+            if diag:
+                st.caption(
+                    "診斷："
+                    f"庫內 race_n={diag.get('race_n')} finish_n={diag.get('finish_n')}；"
+                    f"sync race_count={diag.get('sync_race_count')} "
+                    f"upserted={diag.get('sync_runner_upserted')} "
+                    f"waiting={diag.get('sync_waiting')}；"
+                    f"detail={diag.get('sync_detail') or '—'}"
+                )
+                if meta.get("finish_ok") is False:
+                    st.error(
+                        "同步後庫內仍無名次。常見原因："
+                        "①選錯場地（09-06 只有 ST）；"
+                        "②主機連唔到 apicc；"
+                        "③請求超時——請再撳「同步 jjjc 賽果」。"
+                    )
         elif stage == "SETTLED":
             if a2.button("結算快照", key=f"act_set_{stage}", help=help_txt):
                 with st.spinner("settle…"):
@@ -950,8 +1012,21 @@ try:
         inv.get("running_comment_n", 0),
         f"{float(inv.get('running_comment_coverage') or 0):.0%}",
     )
+    st.caption(
+        f"庫統計：race_n={inv.get('race_n')} · finish_n={inv.get('finish_n')} · "
+        f"finish_ok={inv.get('finish_ok')} · prefix={inv.get('prefix')}"
+    )
     if inv.get("gaps"):
         st.warning("缺口：" + "；".join(inv["gaps"]))
+        if any("無名次" in str(g) for g in inv.get("gaps") or []):
+            st.info(
+                "無名次處理：確認場地正確後，RESULTS 先撳「同步 jjjc 賽果」"
+                "（較快只寫名次）；成功後再「同步 R2 分段」。"
+                f"本日上游參考：2026-09-06 只有 ST（10 場）。"
+                if str(racing_date)[:10] == "2026-09-06"
+                else "無名次處理：確認場地正確後，RESULTS 先撳「同步 jjjc 賽果」"
+                "（較快只寫名次）；成功後再「同步 R2 分段」。"
+            )
     ghosts = inv.get("field_ghost_sample") or []
     if ghosts:
         st.error(
