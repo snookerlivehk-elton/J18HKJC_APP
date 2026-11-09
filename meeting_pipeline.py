@@ -69,7 +69,7 @@ STAGE_HELP: Dict[str, str] = {
     "SPEEDGUIDE": "JJJC speedguide 主路徑；空殼／waiting 會打 HKJC CMS 備援（JJJC 爬蟲修好前）。",
     "FORMGUIDE": "JJJC formguide 主路徑；waiting／空字預設打 HKJC CMS 備援。",
     "FACTORS": "重算 factor_scores（預設不含 NLP 干擾）；需排位後才自動跑；有評述後再用「含 NLP」。",
-    "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。",
+    "NLP": "可選強化：評述 → NLP → 干擾通道。不阻擋快照／結算。一鍵可跑遺留鏈。text-reports export 空／缺沿途時會自動 POST /api/text-reports/fetch 再拉。",
     "FORM_AI": "硬閘：SG＋FormGuide＋Factors 皆 ok。Web 只入隊；Cron tick 喺容器內 inline 跑（唔再 Web Popen）。卡住會 reconcile＋only_missing 續跑。覆蓋 ≥80% 後自動接快照／海報／文案。",
     "SNAPSHOT": "SG＋FormGuide＋Factors＋Form AI 齊備才建 primary；建完自動產 AI 社交文案並推送 Ad API。",
     "RESULTS": "賽後同步 jjjc results（名次／派彩／分段走位→runner_sections）。export 空會自動 POST /api/results/fetch 再重試；快照各場齊名次後才標 ok，並會自動觸發結算＋賽後命中文案。詳情附分段覆蓋率（步速原料；不擋結算）。",

@@ -147,6 +147,92 @@ class JjjcSectionalsSyncTest(unittest.TestCase):
             self.assertIn("10.9", str(one["分段時間串"]))
             eng.dispose()
 
+    def test_sync_meeting_auto_refresh_when_export_empty(self):
+        """export empty 應觸發 phases/target + post/run，再 re-export 入庫。"""
+        from unittest.mock import patch
+
+        import jjjc_sectionals_sync as sync
+
+        empty = {
+            "schema": "jjjc.sectionals.v1",
+            "race_date": "2026-10-25",
+            "venue_code": "ST",
+            "status": "empty",
+            "race_count": 0,
+            "runners_with_sectional_time": 0,
+            "races": [],
+        }
+        filled = {
+            "schema": "jjjc.sectionals.v1",
+            "race_date": "2026-10-25",
+            "venue_code": "ST",
+            "status": "obtained",
+            "race_count": 1,
+            "runners_with_sectional_time": 1,
+            "races": [
+                {
+                    "race_id": "20261025ST01",
+                    "race_no": 1,
+                    "race_date": "2026-10-25",
+                    "venue_code": "ST",
+                    "runners": [
+                        {
+                            "horse_no": 1,
+                            "horse_code": "H001",
+                            "sections": [
+                                {
+                                    "section_index": 1,
+                                    "position": 1,
+                                    "sectional_time": "12.5",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        export_calls = {"n": 0}
+        refresh_calls = {"n": 0}
+
+        def _fake_export(**kwargs):
+            export_calls["n"] += 1
+            return empty if export_calls["n"] == 1 else filled
+
+        def _fake_refresh(race_date, venue, **kwargs):
+            refresh_calls["n"] += 1
+            return {
+                "ok": True,
+                "race_date": race_date,
+                "venue_code": venue,
+                "post_run": {"ok": True, "sectional_race_count": 1},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "sec_refresh.db")
+            os.environ["USE_SQLITE"] = "true"
+            import etl_pipeline
+            import sectionals_store as ss
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+            ss.USE_SQLITE = True
+            ss.SQLITE_DB_PATH = db_path
+            etl_pipeline.J18ETLPipeline()
+
+            with patch.object(sync, "fetch_export", side_effect=_fake_export), patch.object(
+                sync, "trigger_sectionals_upstream_refresh", side_effect=_fake_refresh
+            ):
+                out = sync.sync_meeting("2026-10-25", "ST")
+
+            self.assertTrue(out.get("ok"), out)
+            self.assertTrue(out.get("auto_refreshed"), out)
+            self.assertEqual(refresh_calls["n"], 1)
+            self.assertGreaterEqual(export_calls["n"], 2)
+            self.assertGreaterEqual(int(out.get("runner_sections_upserted") or 0), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

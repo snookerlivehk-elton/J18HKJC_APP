@@ -534,6 +534,100 @@ class JjjcResultsSyncTest(unittest.TestCase):
         self.assertTrue(out.get("waiting"), out)
         self.assertIn("無賽果", str(out.get("detail") or ""))
 
+    def test_sync_meeting_auto_fetch_when_export_partial(self):
+        """半空 export（例如只有 1 場）亦應觸發 fetch，避免作戰室無名次。"""
+        from unittest.mock import patch
+
+        import jjjc_results_sync as sync
+
+        partial = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-11-04",
+            "venue_code": "HV",
+            "race_count": 1,
+            "runner_count": 12,
+            "races": [
+                {
+                    "race_id": "20261104HV01",
+                    "race_no": 1,
+                    "race_date": "2026-11-04",
+                    "venue_code": "HV",
+                    "runners": [
+                        {
+                            "horse_no": i,
+                            "horse_name": f"馬{i}",
+                            "finish_position": i,
+                            "finish_order_num": i,
+                        }
+                        for i in range(1, 13)
+                    ],
+                }
+            ],
+        }
+        filled = {
+            "schema": "jjjc.results.v1",
+            "race_date": "2026-11-04",
+            "venue_code": "HV",
+            "race_count": 9,
+            "runner_count": 108,
+            "races": [
+                {
+                    "race_id": f"20261104HV{n:02d}",
+                    "race_no": n,
+                    "race_date": "2026-11-04",
+                    "venue_code": "HV",
+                    "runners": [
+                        {
+                            "horse_no": i,
+                            "horse_name": f"馬{n}-{i}",
+                            "finish_position": i,
+                            "finish_order_num": i,
+                        }
+                        for i in range(1, 13)
+                    ],
+                }
+                for n in range(1, 10)
+            ],
+        }
+        export_calls = {"n": 0}
+        fetch_calls = {"n": 0}
+
+        def _fake_export(**kwargs):
+            export_calls["n"] += 1
+            return partial if export_calls["n"] == 1 else filled
+
+        def _fake_fetch(race_date, venue, **kwargs):
+            fetch_calls["n"] += 1
+            return {
+                "ok": True,
+                "race_count": 9,
+                "runner_count": 108,
+                "race_date": race_date,
+                "venue_code": venue,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "partial.db")
+            os.environ["USE_SQLITE"] = "true"
+            import etl_pipeline
+
+            etl_pipeline.USE_SQLITE = True
+            etl_pipeline.SQLITE_DB_PATH = db_path
+            sync.USE_SQLITE = True
+            sync.SQLITE_DB_PATH = db_path
+            sync.DATABASE_URL_SYNC = f"sqlite:///{db_path}"
+
+            with patch.object(sync, "fetch_export", side_effect=_fake_export), patch.object(
+                sync, "trigger_results_fetch", side_effect=_fake_fetch
+            ):
+                out = sync.sync_meeting("2026-11-04", "HV")
+
+            self.assertTrue(out.get("ok"), out)
+            self.assertTrue(out.get("auto_fetched"), out)
+            self.assertEqual(fetch_calls["n"], 1)
+            self.assertEqual(int(out.get("race_count") or 0), 9)
+            self.assertGreaterEqual(int(out.get("runner_upserted") or 0), 100)
+
     def test_results_resync_preserves_sectional_times(self):
         """整場換血刪 runner_sections 後，仍應把先前 R2 秒數按馬號寫返。"""
         root = Path(__file__).resolve().parents[1]

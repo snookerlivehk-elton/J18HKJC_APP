@@ -26,7 +26,8 @@
   4) settle_pending
   5) promo_hits → post_race_copy（SETTLED 後；可開關）
   6) data_backlog 掃遺留（保留窗內沿途評述等；見 data_backlog.py）
-  7) SECTIONALS_TIMES late-backfill（賽後≥5日；R2 jjjc.sectionals.v1 通常此時齊）
+  7) RESULTS_REPAIR（超出 lookback 仍無名次／半空殼 → 重同步 RESULTS）
+  8) SECTIONALS_TIMES late-backfill（賽後≥5日；R2 jjjc.sectionals.v1 通常此時齊）
 
 原則：
   - 短週期 Cron 呼叫本 CLI；勿塞進 Streamlit request
@@ -150,6 +151,25 @@ AUTO_NLP_MEETING_FACTORS = (
     "yes",
 )
 NLP_MEETING_LIMIT = int(os.getenv("MEETING_TICK_NLP_MEETING_LIMIT", "200") or 200)
+
+# 無名次／半空賽果：超出 lookback 仍掃（export 半空曾漏 fetch）
+AUTO_RESULTS_REPAIR = (
+    os.getenv("MEETING_TICK_AUTO_RESULTS_REPAIR", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+DEFAULT_RESULTS_REPAIR_MIN_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_RESULTS_REPAIR_MIN_AGE_DAYS", "0") or 0
+)
+DEFAULT_RESULTS_REPAIR_MAX_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_RESULTS_REPAIR_MAX_AGE_DAYS", "21") or 21
+)
+DEFAULT_RESULTS_REPAIR_LIMIT = int(
+    os.getenv("MEETING_TICK_RESULTS_REPAIR_LIMIT", "8") or 8
+)
+RESULTS_REPAIR_STAGE = "RESULTS_REPAIR"
 
 # 賽後晚到分段秒數：官網／R2 通常約第 5 日齊 → 超出 lookback 仍掃
 AUTO_SECTIONALS_TIMES = (
@@ -2242,6 +2262,16 @@ class MeetingTickRunner:
                 (report.get("backlog") or {}).get("n_processed") or 0
             )
 
+        # 無名次／半空賽果：超出 lookback 仍重同步 RESULTS（auto-fetch 半空 export）
+        if AUTO_RESULTS_REPAIR:
+            report["results_repair"] = self.run_results_repair_pass(
+                as_of=today,
+                dry_run=dry_run,
+            )
+            report["n_actions"] += int(
+                (report.get("results_repair") or {}).get("n_processed") or 0
+            )
+
         # 分段秒數晚到：賽後≥min_age（預設 5 日）掃歷史缺口並拉 R2
         if AUTO_SECTIONALS_TIMES:
             report["sectionals_times"] = self.run_sectionals_times_pass(
@@ -2367,6 +2397,192 @@ class MeetingTickRunner:
             )
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def run_results_repair_pass(
+        self,
+        *,
+        as_of: Optional[date] = None,
+        dry_run: bool = False,
+        min_age_days: int = DEFAULT_RESULTS_REPAIR_MIN_AGE_DAYS,
+        max_age_days: int = DEFAULT_RESULTS_REPAIR_MAX_AGE_DAYS,
+        limit: int = DEFAULT_RESULTS_REPAIR_LIMIT,
+    ) -> Dict[str, Any]:
+        """
+        無名次／半空賽果晚修。
+
+        lookback 預設 3 日；若當日 export 半空（只 1 場）又未 auto-fetch，
+        會跌出 lookback 後長掛「無名次」。本 pass 掃至 max_age（預設 21 日）。
+        """
+        today = as_of or date.today()
+        out: Dict[str, Any] = {
+            "ok": True,
+            "as_of": today.isoformat(),
+            "min_age_days": int(min_age_days),
+            "max_age_days": int(max_age_days),
+            "limit": int(limit),
+            "n_candidates": 0,
+            "n_processed": 0,
+            "n_ok": 0,
+            "n_waiting": 0,
+            "n_failed": 0,
+            "n_skipped": 0,
+            "meetings": [],
+        }
+        try:
+            from data_audit import (
+                list_meetings_needing_results_resync,
+                repair_results_for_meeting,
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        try:
+            candidates = list_meetings_needing_results_resync(
+                self.pipe.engine,
+                as_of=today,
+                min_age_days=min_age_days,
+                max_age_days=max_age_days,
+                limit=max(1, int(limit) * 3),
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        out["n_candidates"] = len(candidates)
+        processed = 0
+        for item in candidates:
+            if processed >= max(1, int(limit)):
+                break
+            d = str(item.get("racing_date") or "")[:10]
+            c = str(item.get("course") or "").upper()
+            if not d or c not in {"ST", "HV"}:
+                continue
+            prev = self.get_tick_state(d, c, RESULTS_REPAIR_STAGE)
+            prev_status = str(prev.get("last_status") or STATUS_WAITING)
+            allowed, reason = self._attempt_allowed(
+                d, c, RESULTS_REPAIR_STAGE, prev_status
+            )
+            if not allowed:
+                out["n_skipped"] += 1
+                out["meetings"].append(
+                    {
+                        "racing_date": d,
+                        "course": c,
+                        "skipped": True,
+                        "reason": reason,
+                        "age_days": item.get("age_days"),
+                        "finish_n": item.get("finish_n"),
+                        "race_n": item.get("race_n"),
+                    }
+                )
+                continue
+
+            rec: Dict[str, Any] = {
+                "racing_date": d,
+                "course": c,
+                "age_days": item.get("age_days"),
+                "finish_n_before": item.get("finish_n"),
+                "race_n_before": item.get("race_n"),
+            }
+            if dry_run:
+                rec["ok"] = True
+                rec["dry_run"] = True
+                out["meetings"].append(rec)
+                processed += 1
+                out["n_processed"] = processed
+                continue
+
+            try:
+                result = repair_results_for_meeting(
+                    self.pipe,
+                    d,
+                    c,
+                    also_text_reports=True,
+                    also_sectionals=True,
+                )
+            except Exception as e:
+                result = {"ok": False, "error": str(e)[:200]}
+
+            finish_ok = bool(result.get("finish_ok"))
+            waiting = bool(result.get("waiting")) and not finish_ok
+            hard_fail = (result.get("ok") is False) and not waiting and not finish_ok
+            if finish_ok:
+                status = STATUS_OK
+                count_ok = True
+                out["n_ok"] += 1
+            elif waiting:
+                status = STATUS_WAITING
+                count_ok = True
+                out["n_waiting"] += 1
+            else:
+                status = STATUS_FAILED
+                count_ok = False
+                out["n_failed"] += 1
+                out["ok"] = False
+
+            detail = str(
+                result.get("error")
+                or ((result.get("inventory") or {}).get("status"))
+                or ((result.get("sync") or {}).get("detail"))
+                or ""
+            )[:500]
+            self.record_tick_attempt(
+                d,
+                c,
+                RESULTS_REPAIR_STAGE,
+                ok=count_ok,
+                status=status,
+                detail=detail
+                or f"finish_n={(result.get('inventory') or {}).get('finish_n')}",
+            )
+            # 亦刷新正式 RESULTS stage，令作戰室 readiness 即時轉綠
+            if finish_ok:
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "RESULTS",
+                    ok=True,
+                    status=STATUS_OK,
+                    detail="results_repair ok",
+                )
+                try:
+                    self.pipe.refresh_readiness(d, c)
+                except Exception:
+                    pass
+
+            rec.update(
+                {
+                    "ok": bool(finish_ok or (result.get("ok") and not hard_fail)),
+                    "waiting": waiting,
+                    "status": status,
+                    "finish_ok": finish_ok,
+                    "inventory": result.get("inventory"),
+                    "sync": {
+                        k: (result.get("sync") or {}).get(k)
+                        for k in (
+                            "ok",
+                            "waiting",
+                            "detail",
+                            "auto_fetched",
+                            "race_count",
+                            "runner_upserted",
+                            "races",
+                        )
+                        if (result.get("sync") or {}).get(k) is not None
+                    }
+                    if result.get("sync")
+                    else None,
+                    "error": result.get("error"),
+                }
+            )
+            out["meetings"].append(rec)
+            processed += 1
+            out["n_processed"] = processed
+
+        return out
 
     def run_sectionals_times_pass(
         self,

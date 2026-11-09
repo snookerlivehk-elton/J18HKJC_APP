@@ -399,13 +399,109 @@ def upsert_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _api_base(explicit: Optional[str] = None) -> str:
+    from jjjc_export_common import api_base
+
+    return api_base(explicit)
+
+
+def _sectionals_payload_empty(payload: Dict[str, Any]) -> bool:
+    races = list(payload.get("races") or [])
+    if not races:
+        return True
+    status = str(payload.get("status") or "").lower()
+    if status in {"empty", "unpublished", "waiting"}:
+        return True
+    with_time = payload.get("runners_with_sectional_time")
+    if with_time is not None and int(with_time or 0) <= 0:
+        return True
+    return False
+
+
+def trigger_sectionals_upstream_refresh(
+    race_date: str,
+    venue: str,
+    *,
+    base_url: Optional[str] = None,
+    timeout: float = 300.0,
+) -> Dict[str, Any]:
+    """
+    上游 export 空時，觸發 api_jjjc POST phase 補采分段。
+
+    實測 2026-10-25／10-28／11-01／11-04：export status=empty，
+    但 POST /api/phases/target + /api/phases/post/run 後即可 obtained。
+    （無獨立 /api/sectionals/fetch。）
+    """
+    base = _api_base(base_url)
+    if not base:
+        return {"ok": False, "error": "未設定 JJJC_API_BASE"}
+    v = str(venue or "").strip().upper()
+    if v not in {"ST", "HV"}:
+        return {"ok": False, "error": f"venue 必須係 ST|HV，收到：{venue!r}"}
+    d = normalize_date(race_date)
+    body = {"date": d, "venue": v}
+    out: Dict[str, Any] = {"ok": True, "race_date": d, "venue_code": v}
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            t = client.post(f"{base}/api/phases/target", json=body)
+            try:
+                parsed_t = t.json()
+                t_body = parsed_t if isinstance(parsed_t, dict) else {"raw": parsed_t}
+            except Exception:
+                t_body = {"raw_text": (t.text or "")[:300]}
+            out["target"] = {
+                "ok": t.status_code < 400 and bool(t_body.get("ok", True)),
+                "status_code": t.status_code,
+                "response": t_body,
+            }
+            if t.status_code >= 400:
+                out["ok"] = False
+                out["error"] = f"phases/target HTTP {t.status_code}"
+                return out
+
+            r = client.post(f"{base}/api/phases/post/run", json=body)
+            try:
+                parsed_r = r.json()
+                r_body = parsed_r if isinstance(parsed_r, dict) else {"raw": parsed_r}
+            except Exception:
+                r_body = {"raw_text": (r.text or "")[:300]}
+            out["post_run"] = {
+                "ok": r.status_code < 400 and bool(r_body.get("ok", True)),
+                "status_code": r.status_code,
+                "race_date": r_body.get("race_date"),
+                "venue_code": r_body.get("venue_code"),
+                "race_count": r_body.get("race_count"),
+                "sectional_race_count": r_body.get("sectional_race_count"),
+                "response": r_body,
+            }
+            if r.status_code >= 400 or not r_body.get("ok", True):
+                out["ok"] = False
+                out["error"] = (
+                    f"phases/post/run HTTP {r.status_code}"
+                    if r.status_code >= 400
+                    else str(r_body.get("error") or r_body.get("detail") or "post/run failed")
+                )
+            return out
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300], "race_date": d, "venue_code": v}
+
+
 def sync_meeting(
     racing_date: str,
     course: str,
     race_no: Optional[int] = None,
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
+    *,
+    auto_refresh: bool = True,
 ) -> Dict[str, Any]:
+    """
+    拉 sectionals export → upsert。
+
+    export 空（預設）會先觸發上游 POST phase（target+post/run）再重試 export，
+    避免作戰室長掛「只有走位、無分段秒數」而上游其實只差一槍補采。
+    """
+    upstream_refresh: Optional[Dict[str, Any]] = None
     if from_file:
         payload = load_payload_file(from_file)
     else:
@@ -415,10 +511,49 @@ def sync_meeting(
             race_no=race_no,
             base_url=base_url,
         )
+        if auto_refresh and _sectionals_payload_empty(payload):
+            upstream_refresh = trigger_sectionals_upstream_refresh(
+                racing_date, course, base_url=base_url
+            )
+            try:
+                payload = fetch_export(
+                    race_date=racing_date,
+                    venue=course,
+                    race_no=race_no,
+                    base_url=base_url,
+                )
+            except Exception as e:
+                return {
+                    "ok": False,
+                    "waiting": False,
+                    "error": f"sectionals refresh 後 re-export 失敗：{e}",
+                    "upstream_refresh": upstream_refresh,
+                    "racing_date": normalize_date(racing_date),
+                    "course": (normalize_venue(course) or course).upper(),
+                }
+
     out = upsert_payload(payload)
     out["racing_date"] = normalize_date(racing_date)
     out["course"] = (normalize_venue(course) or course).upper()
     out["meeting_id"] = make_meeting_id(racing_date, course)
+    if upstream_refresh is not None:
+        out["upstream_refresh"] = upstream_refresh
+        out["auto_refreshed"] = True
+        if _sectionals_payload_empty(payload) and out.get("waiting"):
+            detail = str(out.get("detail") or "無分段內容")
+            if upstream_refresh.get("ok"):
+                detail = (
+                    f"{detail}（已自動 phases/post/run；"
+                    f"sectional_race_count="
+                    f"{(upstream_refresh.get('post_run') or {}).get('sectional_race_count')}"
+                    "；上游可能仍未齊）"
+                )
+            else:
+                detail = (
+                    f"{detail}（自動 upstream refresh 失敗："
+                    f"{upstream_refresh.get('error')}）"
+                )
+            out["detail"] = detail
     return out
 
 
@@ -430,6 +565,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--from-file", dest="from_file")
     p.add_argument("--base-url", dest="base_url")
     p.add_argument("--catalog", action="store_true", help="只印 /api/export/catalog")
+    p.add_argument(
+        "--no-auto-refresh",
+        action="store_true",
+        help="唔自動觸發上游 phases/post/run（即使 export 空）",
+    )
     args = p.parse_args(argv)
     if args.catalog:
         print(json.dumps(fetch_catalog(base_url=args.base_url), ensure_ascii=False, indent=2))
@@ -442,6 +582,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         race_no=args.raceNo,
         from_file=args.from_file,
         base_url=args.base_url,
+        auto_refresh=not bool(args.no_auto_refresh),
     )
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0 if out.get("ok") else 1

@@ -611,6 +611,7 @@ for stage, label in STAGES:
                 _rec("resync_results_sectionals", stage, str(r.get("ok")))
                 st.session_state["ops_results_result"] = r.get("sync") or r
                 st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state["ops_sectionals_inv_key"] = f"{racing_date}_{course}"
                 st.session_state.pop("ops_ready", None)
                 st.rerun()
             if a2.button(
@@ -622,6 +623,7 @@ for stage, label in STAGES:
                     r = pipe.run_action(racing_date, course, "backfill_sectionals")
                 _rec("backfill_sectionals", stage, str(r.get("section_rows_upserted")))
                 st.session_state["ops_sectionals_inv"] = r.get("inventory")
+                st.session_state["ops_sectionals_inv_key"] = f"{racing_date}_{course}"
                 st.session_state.pop("ops_ready", None)
                 st.success(
                     f"回填馬 {r.get('runners_written')}／段列 {r.get('section_rows_upserted')}"
@@ -872,8 +874,8 @@ try:
             elif not has_time:
                 st.warning(
                     "只有走位（多數來自賽果 `running_position`），**未有各段秒數**。"
-                    "上游 R2 `jjjc.sectionals.v1` 若已有時間，請撳 RESULTS「同步 R2 分段（jjjc）」"
-                    "或「重跑賽果＋回填分段」——唔好以為空時間係正常。"
+                    "請 RESULTS「同步 R2 分段（jjjc）」或「重跑賽果＋回填分段」——"
+                    "會自動觸發上游 `phases/post/run` 補采後再入庫；唔好以為空時間係正常。"
                 )
             st.dataframe(grid, use_container_width=True, hide_index=True)
             race_secs = grid.attrs.get("race_sectionals") or []
@@ -909,19 +911,27 @@ except Exception as e:
 
 st.divider()
 st.subheader(f"③b 本賽日覆蓋摘要 — {racing_date} {course}")
-st.caption("邊樣齊／唔齊（名次、分段、評述）。重跑：RESULTS「重跑賽果＋回填分段」。")
+st.caption(
+    "邊樣齊／唔齊（名次、分段、評述）。重跑：RESULTS「重跑賽果＋回填分段」；"
+    "評述缺口會自動 POST /api/text-reports/fetch 再拉 export。"
+)
 try:
     from data_audit import meeting_inventory
 
+    inv_key = f"{racing_date}_{course}"
     if st.button("刷新覆蓋摘要", key="ops_day_inv_btn"):
-        st.session_state["ops_sectionals_inv"] = meeting_inventory(
-            pipe.engine, racing_date, course
-        )
+        st.session_state.pop("ops_sectionals_inv", None)
+        st.session_state.pop("ops_sectionals_inv_key", None)
+
+    # 換賽日必須重算，避免上一場缺口殘留造成閃報
+    if st.session_state.get("ops_sectionals_inv_key") != inv_key:
+        st.session_state.pop("ops_sectionals_inv", None)
 
     inv = st.session_state.get("ops_sectionals_inv")
     if inv is None:
         inv = meeting_inventory(pipe.engine, racing_date, course)
         st.session_state["ops_sectionals_inv"] = inv
+        st.session_state["ops_sectionals_inv_key"] = inv_key
 
     i1, i2, i3, i4 = st.columns(4)
     i1.metric("有名次", inv.get("finish_n", 0), f"{inv.get('race_n', 0)} 場")
