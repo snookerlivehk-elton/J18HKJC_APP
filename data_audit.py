@@ -179,7 +179,8 @@ def meeting_inventory(engine, racing_date: str, course: str) -> Dict[str, Any]:
     elif not times_ok:
         gaps.append(
             f"有走位但缺分段秒數 {with_times}/{finish_n}（{time_cov:.0%}）—"
-            "請 RESULTS「同步 R2 分段」拉 jjjc.sectionals.v1（上游已有時間時唔好只靠賽果回填）"
+            "請 RESULTS「同步 R2 分段」（空 export 會自動 phases/post/run 補采）；"
+            "唔好只靠賽果 running_position 回填"
         )
     if finish_ok and run_cov < 0.8:
         gaps.append(f"沿途評述不足 {running_n}/{finish_n}")

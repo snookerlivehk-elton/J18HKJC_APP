@@ -874,8 +874,8 @@ try:
             elif not has_time:
                 st.warning(
                     "只有走位（多數來自賽果 `running_position`），**未有各段秒數**。"
-                    "上游 R2 `jjjc.sectionals.v1` 若已有時間，請撳 RESULTS「同步 R2 分段（jjjc）」"
-                    "或「重跑賽果＋回填分段」——唔好以為空時間係正常。"
+                    "請 RESULTS「同步 R2 分段（jjjc）」或「重跑賽果＋回填分段」——"
+                    "會自動觸發上游 `phases/post/run` 補采後再入庫；唔好以為空時間係正常。"
                 )
             st.dataframe(grid, use_container_width=True, hide_index=True)
             race_secs = grid.attrs.get("race_sectionals") or []

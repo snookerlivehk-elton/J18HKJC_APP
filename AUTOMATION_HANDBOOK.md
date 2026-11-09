@@ -248,7 +248,7 @@ NLP／沿路走勢：賽後／遺留鏈（§11.4），不擋賽前 Form AI／正
 | R4 宣傳評估 | `evaluate_ad_promo_hits` | 可宣傳列表 | **無正式已結算快照 → 不跑／不廣告** |
 | R5 賽後文案 | 自動 `generate_post_race_copy`＋歸檔 | JSON＋可貼文 | 無命中或不滿足 R4 → 不觸發 |
 | R5b 無名次晚修 | `RESULTS_REPAIR` pass（`MEETING_TICK_AUTO_RESULTS_REPAIR`） | finish_ok 且非半空場次 | 超出 lookback 仍掃（預設 21 日）；CLI：`repair_results_gaps.py` |
-| R6 分段秒數晚補 | `SECTIONALS_TIMES` pass（`MEETING_TICK_AUTO_SECTIONALS_TIMES`） | `runner_sections.sectional_time` 覆蓋≥80% | 賽後未滿 5 日跳過；上游 empty→waiting 冷卻；可調 `SECTIONALS_MIN/MAX_AGE_DAYS`／`LIMIT` |
+| R6 分段秒數晚補 | `SECTIONALS_TIMES` pass（`MEETING_TICK_AUTO_SECTIONALS_TIMES`） | `runner_sections.sectional_time` 覆蓋≥80% | 賽後未滿 5 日跳過；export empty 會自動 `phases/target`+`post/run` 再拉；仍 empty→waiting；可調 `SECTIONALS_MIN/MAX_AGE_DAYS`／`LIMIT` |
 
 ### 4.3 與 JJJC +12h 對齊
 
