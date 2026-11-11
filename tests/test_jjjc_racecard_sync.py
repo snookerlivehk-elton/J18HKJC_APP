@@ -40,7 +40,7 @@ class JjjcRacecardSyncTest(unittest.TestCase):
                 with eng.connect() as conn:
                     race = conn.execute(
                         text(
-                            "SELECT race_id, course, race_num, distance_m, race_name "
+                            "SELECT race_id, course, race_num, distance_m, race_name, post_time "
                             "FROM upcoming_races WHERE race_id='20260909HV01'"
                         )
                     ).mappings().first()
@@ -62,6 +62,7 @@ class JjjcRacecardSyncTest(unittest.TestCase):
             self.assertEqual(int(race["race_num"]), 1)
             self.assertEqual(int(race["distance_m"]), 1200)
             self.assertEqual(race["race_name"], "金鐘讓賽")
+            self.assertEqual(race["post_time"], "2026-09-09T19:05:00+08:00")
             self.assertEqual(n, 2)
             self.assertEqual(first["horse_name"], "閃電星福")
             self.assertEqual(int(first["draw"]), 11)
