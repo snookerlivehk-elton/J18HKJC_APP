@@ -26,6 +26,54 @@ class TextReportsAutoFetchTest(unittest.TestCase):
             sync._needs_upstream_fetch({"status": "empty", "reports": []}, None)
         )
 
+    def test_needs_fetch_when_running_comment_is_placeholder_shell(self):
+        """10-11 ST：export 有沿途卡，但正文全空，必須再 POST fetch。"""
+        payload = {
+            "status": "suspicious",
+            "reports": [
+                {
+                    "report_type": "running_comment",
+                    "race_id": "20261011ST01",
+                    "runners": [
+                        {
+                            "horse_no": 8,
+                            "text": None,
+                            "is_placeholder": True,
+                        },
+                        {
+                            "horse_no": 9,
+                            "text": "",
+                            "is_placeholder": True,
+                        },
+                    ],
+                }
+            ],
+        }
+        self.assertTrue(
+            sync._needs_upstream_fetch(payload, want="running_comment")
+        )
+        self.assertTrue(sync._needs_upstream_fetch(payload, want=None))
+
+    def test_skip_fetch_when_running_comment_has_real_text(self):
+        payload = {
+            "status": "obtained",
+            "reports": [
+                {
+                    "report_type": "running_comment",
+                    "runners": [
+                        {
+                            "horse_no": 1,
+                            "text": "起步後居中",
+                            "is_placeholder": False,
+                        }
+                    ],
+                }
+            ],
+        }
+        self.assertFalse(
+            sync._needs_upstream_fetch(payload, want="running_comment")
+        )
+
     def test_sync_meeting_auto_fetch_then_upsert(self):
         empty = {"schema": "jjjc.text_reports.v1", "status": "empty", "reports": []}
         filled = {

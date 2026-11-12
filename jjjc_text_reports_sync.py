@@ -12,8 +12,9 @@ report_type：running_comment | incident_report
     其次 upcoming_runners，最後 {race_id}_{horse_no}
 
 上游補救（對齊 results）：
-  export 空／只有 incident 無沿途時，先 POST /api/text-reports/fetch
-  再 re-export。否則作戰室會長駐「沿途評述不足」，其實上游只差一槍 fetch。
+  export 空、只有 incident、或沿途全是 placeholder／suspicious 空殼時，
+  先 POST /api/text-reports/fetch 再 re-export。
+  否則作戰室會長駐「沿途評述不足」：馬會頁已有字，上游快照仍是空殼。
 
 CLI：
   python jjjc_text_reports_sync.py --date 2026-09-06 --course ST
@@ -178,14 +179,36 @@ def _payload_report_types(payload: Dict[str, Any]) -> set[str]:
     return out
 
 
+def _comment_runner_stats(
+    payload: Dict[str, Any], kind: str
+) -> Tuple[int, int]:
+    """(runner 列數, 有真正正文的列數)。placeholder／空字不算正文。"""
+    total = 0
+    real = 0
+    for rep in payload.get("reports") or []:
+        if not isinstance(rep, dict):
+            continue
+        if normalize_report_type(rep.get("report_type")) != kind:
+            continue
+        for ru in rep.get("runners") or []:
+            if not isinstance(ru, dict):
+                continue
+            total += 1
+            if effective_text(ru, "text", "report_text"):
+                real += 1
+    return total, real
+
+
 def _needs_upstream_fetch(
     payload: Dict[str, Any], want: Optional[str]
 ) -> bool:
     """
-    export 空、或缺指定 kind、或全日 sync 仍無沿途評述 → 需要 POST fetch。
+    export 空、缺指定 kind、或目標 kind 全是空殼 → 需要 POST fetch。
 
-    實測（2026-10-28 ST）：fetch 前 export 只有 incident_report；
-    POST /api/text-reports/fetch 後 running_comment 才齊。
+    實測：
+    - 2026-10-28 ST：fetch 前只有 incident_report
+    - 2026-10-11 ST：export 已有 running_comment，但 status=suspicious、
+      136 匹 text 全 null。馬會頁已有評述，唔再 fetch 就永遠 0 入庫。
     """
     reports = list(payload.get("reports") or [])
     status = str(payload.get("status") or "").strip().lower()
@@ -198,6 +221,13 @@ def _needs_upstream_fetch(
         return True
     # 全日同步：有賽果評述鏈時缺沿途＝典型「只差一槍 fetch」
     if want is None and "running_comment" not in present:
+        return True
+    # 類型在，但每一列都是 placeholder／空字（可疑空殼）
+    target = want or "running_comment"
+    total, real = _comment_runner_stats(payload, target)
+    if total > 0 and real == 0:
+        return True
+    if status == "suspicious" and real == 0 and (want is None or want == target):
         return True
     return False
 

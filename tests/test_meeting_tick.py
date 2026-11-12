@@ -753,6 +753,86 @@ class SectionalsTimesPassTest(unittest.TestCase):
         )
 
 
+class RunningCommentRepairPassTest(unittest.TestCase):
+    def test_run_running_comment_repair_pass_syncs_and_records(self):
+        from unittest.mock import patch
+
+        import data_audit as da
+        from meeting_tick import (
+            RUNNING_COMMENT_REPAIR_STAGE,
+            MeetingTickRunner,
+            TickGuards,
+        )
+
+        pipe = MagicMock()
+        pipe.engine = MagicMock()
+        runner = MeetingTickRunner.__new__(MeetingTickRunner)
+        runner.pipe = pipe
+        runner.guards = TickGuards(force=True)
+        runner.get_tick_state = MagicMock(
+            return_value={
+                "fail_count": 0,
+                "last_attempt_at": None,
+                "last_ok_at": None,
+                "last_status": None,
+                "last_detail": None,
+            }
+        )
+        runner.record_tick_attempt = MagicMock()
+
+        candidates = [
+            {
+                "racing_date": "2026-10-11",
+                "course": "ST",
+                "age_days": 32,
+                "running_comment_coverage": 0.0,
+            }
+        ]
+        sync_out = {
+            "ok": True,
+            "waiting": False,
+            "running_comment_ok": True,
+            "inventory": {
+                "running_comment_coverage": 1.0,
+                "running_comment_ok": True,
+                "status": "ok",
+            },
+            "sync": {
+                "ok": True,
+                "waiting": False,
+                "auto_fetched": True,
+                "runner_upserted": 136,
+            },
+        }
+        with patch.object(
+            da, "list_meetings_missing_running_comments", return_value=candidates
+        ), patch.object(
+            da, "sync_running_comments_for_meeting", return_value=sync_out
+        ):
+            out = runner.run_running_comment_repair_pass(
+                as_of=date(2026, 11, 12), dry_run=False, limit=4
+            )
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["n_ok"], 1)
+        self.assertEqual(out["n_processed"], 1)
+        runner.record_tick_attempt.assert_any_call(
+            "2026-10-11",
+            "ST",
+            RUNNING_COMMENT_REPAIR_STAGE,
+            ok=True,
+            status="ok",
+            detail=ANY,
+        )
+        runner.record_tick_attempt.assert_any_call(
+            "2026-10-11",
+            "ST",
+            "TEXT_REPORTS",
+            ok=True,
+            status="ok",
+            detail="running_comment_repair ok",
+        )
+
+
 class ResultsRepairPassTest(unittest.TestCase):
     def test_run_results_repair_pass_syncs_and_records(self):
         from unittest.mock import patch

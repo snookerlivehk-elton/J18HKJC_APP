@@ -554,6 +554,120 @@ def list_meetings_missing_sectional_times(
     return out
 
 
+def list_meetings_missing_running_comments(
+    engine,
+    *,
+    as_of: Optional[Any] = None,
+    min_age_days: int = 2,
+    max_age_days: int = 120,
+    limit: int = 24,
+    min_coverage: float = 0.8,
+) -> List[Dict[str, Any]]:
+    """
+    已有名次但沿途評述覆蓋未達標的歷史賽日。
+
+    沿途常在賽後才由馬會頁補上，上游卻把 placeholder 空殼停住。
+    超出 backlog 保留窗（預設 14 日）後仍要掃到 max_age。
+    """
+    from datetime import date, datetime, timedelta
+
+    if as_of is None:
+        today = date.today()
+    elif isinstance(as_of, datetime):
+        today = as_of.date()
+    elif isinstance(as_of, date):
+        today = as_of
+    else:
+        today = date.fromisoformat(str(as_of)[:10])
+
+    min_age = max(0, int(min_age_days))
+    max_age = max(min_age, int(max_age_days))
+    newest = today - timedelta(days=min_age)
+    oldest = today - timedelta(days=max_age)
+
+    q = text(
+        """
+        SELECT substr(race_id, 1, 8) AS d8,
+               UPPER(substr(race_id, 9, 2)) AS course,
+               COUNT(DISTINCT race_id) AS race_n,
+               SUM(CASE WHEN finish_order_num IS NOT NULL THEN 1 ELSE 0 END) AS finish_n
+        FROM runners
+        WHERE finish_order_num IS NOT NULL
+          AND length(race_id) >= 10
+        GROUP BY 1, 2
+        ORDER BY 1 DESC
+        """
+    )
+    df = pd.read_sql(q, engine)
+    out: List[Dict[str, Any]] = []
+    if df is None or df.empty:
+        return out
+
+    for row in df.itertuples(index=False):
+        d8 = str(getattr(row, "d8") or "")
+        course = str(getattr(row, "course") or "").upper()
+        if len(d8) != 8 or course not in {"ST", "HV"}:
+            continue
+        try:
+            rd = date(int(d8[:4]), int(d8[4:6]), int(d8[6:8]))
+        except ValueError:
+            continue
+        if rd < oldest or rd > newest:
+            continue
+        racing_date = rd.isoformat()
+        inv = meeting_inventory(engine, racing_date, course)
+        if not inv.get("finish_ok"):
+            continue
+        if bool(inv.get("running_comment_ok")):
+            continue
+        if float(inv.get("running_comment_coverage") or 0) >= float(min_coverage):
+            continue
+        out.append(
+            {
+                "racing_date": racing_date,
+                "course": course,
+                "age_days": (today - rd).days,
+                "finish_n": int(inv.get("finish_n") or 0),
+                "running_comment_n": int(inv.get("running_comment_n") or 0),
+                "running_comment_coverage": float(
+                    inv.get("running_comment_coverage") or 0
+                ),
+                "gaps": list(inv.get("gaps") or []),
+                "status": inv.get("status"),
+            }
+        )
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
+def sync_running_comments_for_meeting(pipe, racing_date: str, course: str) -> Dict[str, Any]:
+    """
+    沿途評述晚補：sync_meeting 會在可疑空殼時 POST /api/text-reports/fetch 再入庫。
+    """
+    from jjjc_text_reports_sync import sync_meeting
+
+    try:
+        sync_out = sync_meeting(
+            str(racing_date)[:10],
+            str(course).upper(),
+            report_type="running_comment",
+        )
+    except Exception as e:
+        sync_out = {"ok": False, "waiting": False, "error": str(e)[:300]}
+
+    inv = meeting_inventory(pipe.engine, racing_date, course)
+    running_ok = bool(inv.get("running_comment_ok"))
+    waiting = bool(sync_out.get("waiting")) and not running_ok
+    return {
+        "ok": bool(sync_out.get("ok")) or running_ok,
+        "waiting": waiting,
+        "sync": sync_out,
+        "inventory": inv,
+        "running_comment_ok": running_ok,
+    }
+
+
 def list_meetings_needing_results_resync(
     engine,
     *,
