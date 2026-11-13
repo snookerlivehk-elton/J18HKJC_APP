@@ -46,12 +46,87 @@ FORM_AI_SYSTEM_PROMPT = """你是香港賽馬賽前分析師。根據「系統�
 """
 
 
+class BillingBlocked(RuntimeError):
+    """主分析端口欠费或额度用尽，且备用端口不可用。"""
+
+
+def fallback_chat_config() -> Optional[Dict[str, str]]:
+    """备用分析端口，OpenAI 兼容的 chat/completions。
+
+    FORM_AI_FALLBACK_BASE_URL  例如 https://api.openai.com/v1/chat/completions
+    FORM_AI_FALLBACK_API_KEY
+    FORM_AI_FALLBACK_MODEL     可选，默认 gpt-4o-mini
+    """
+    base = (os.getenv("FORM_AI_FALLBACK_BASE_URL") or "").strip()
+    key = (os.getenv("FORM_AI_FALLBACK_API_KEY") or "").strip()
+    model = (os.getenv("FORM_AI_FALLBACK_MODEL") or "").strip() or "gpt-4o-mini"
+    if not base or not key:
+        return None
+    return {"base_url": base, "api_key": key, "model": model}
+
+
+def is_billing_failure(status_code: int, body: str = "") -> bool:
+    if int(status_code) == 402:
+        return True
+    blob = (body or "").lower()
+    if int(status_code) not in (401, 403):
+        return False
+    return any(
+        token in blob
+        for token in ("payment", "credit", "quota", "insufficient", "billing", "欠费")
+    )
+
+
 class FormAIAnalyst:
     def __init__(self):
         self.engine = create_engine(DATABASE_URL_SYNC)
         self.nlp = NLPProcessor()
         self.infer = InferenceEngine()
+        self._fallback_latched = False
         self.ensure_tables()
+
+    def _chat_content(self, *, base_url: str, api_key: str, model: str, user: str) -> str:
+        import httpx
+
+        payload = {
+            "model": model,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": FORM_AI_SYSTEM_PROMPT},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.25,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(base_url, headers=headers, json=payload)
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if is_billing_failure(resp.status_code, resp.text):
+                    raise BillingBlocked(
+                        f"分析端口欠费或额度用尽 HTTP {resp.status_code} {base_url}"
+                    ) from exc
+                raise
+            return resp.json()["choices"][0]["message"]["content"]
+
+    def _result_from_content(self, content: str, *, provider: str) -> dict:
+        parsed = self.nlp._parse_content(content)
+        if "ai_score" not in parsed and "summary" not in parsed:
+            parsed = {
+                "summary": parsed.get("reason") or content[:200],
+                "ai_score": 0,
+                "confidence": 0.2,
+                "tags": [],
+                "risks": ["模型输出格式异常"],
+                "evidence": [],
+            }
+        result = self._normalize_result(parsed)
+        result["provider"] = provider
+        return result
 
     def ensure_tables(self):
         if USE_SQLITE:
@@ -167,39 +242,41 @@ class FormAIAnalyst:
 
     def analyze_one(self, race_meta: dict, row: pd.Series, form_text: str) -> dict:
         user = self.build_user_payload(race_meta, row, form_text)
-        # 借用 NLPProcessor 的 sync chat，但換 system prompt；user 已含完整內容
-        # analyze_report_sync 會再包一層「分析以下賽馬報告」— 改直接打 API
-        if not self.is_ready():
+        if not self.is_ready() and not fallback_chat_config():
             raise ValueError("尚未設定 OPENAI_API_KEY")
-        import httpx
-
-        payload = {
-            "model": self.nlp.model,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": FORM_AI_SYSTEM_PROMPT},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.25,
-        }
-        with httpx.Client(timeout=60.0) as client:
-            resp = client.post(
-                self.nlp.base_url, headers=self.nlp._headers(), json=payload
+        fallback = fallback_chat_config()
+        if self._fallback_latched:
+            if not fallback:
+                raise BillingBlocked("主分析端口欠费，备用端口未配置")
+            content = self._chat_content(
+                base_url=fallback["base_url"],
+                api_key=fallback["api_key"],
+                model=fallback["model"],
+                user=user,
             )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-        parsed = self.nlp._parse_content(content)
-        # 若誤走受阻 schema，兜底
-        if "ai_score" not in parsed and "summary" not in parsed:
-            parsed = {
-                "summary": parsed.get("reason") or content[:200],
-                "ai_score": 0,
-                "confidence": 0.2,
-                "tags": [],
-                "risks": ["模型輸出格式異常"],
-                "evidence": [],
-            }
-        return self._normalize_result(parsed)
+            return self._result_from_content(content, provider="fallback")
+        try:
+            content = self._chat_content(
+                base_url=self.nlp.base_url,
+                api_key=self.nlp.api_key,
+                model=self.nlp.model,
+                user=user,
+            )
+            return self._result_from_content(content, provider="primary")
+        except BillingBlocked:
+            if not fallback:
+                raise BillingBlocked(
+                    "OpenRouter 欠费（HTTP 402）。未配置备用分析端口 "
+                    "FORM_AI_FALLBACK_BASE_URL / FORM_AI_FALLBACK_API_KEY"
+                )
+            self._fallback_latched = True
+            content = self._chat_content(
+                base_url=fallback["base_url"],
+                api_key=fallback["api_key"],
+                model=fallback["model"],
+                user=user,
+            )
+            return self._result_from_content(content, provider="fallback")
 
     def save_result(self, race_id: str, horse_no: int, result: dict):
         runner_id = f"{race_id}_{horse_no}"
@@ -357,10 +434,22 @@ class FormAIAnalyst:
                 done += 1
                 if progress_cb:
                     progress_cb(done, total, hno, res)
+            except BillingBlocked as e:
+                errors.append({"horse_no": hno, "error": str(e)})
+                return {
+                    "ok": False,
+                    "done": done,
+                    "skipped": 0,
+                    "total": total,
+                    "errors": errors,
+                    "race_id": race_id,
+                    "budget_hit": budget_hit,
+                    "billing_blocked": True,
+                    "error": str(e),
+                }
             except Exception as e:
                 errors.append({"horse_no": hno, "error": str(e)})
                 if progress_cb:
-                    # 失敗也推進度，避免卡住視覺
                     progress_cb(done + len(errors), total, hno, {"ai_score": None, "summary": str(e)})
         return {
             "ok": True,
