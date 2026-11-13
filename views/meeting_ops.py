@@ -372,6 +372,8 @@ for stage, label in STAGES:
                 "「後台啟動」而家只**入隊**，由 Railway Cron／meeting_tick **喺容器內 inline 跑**"
                 "（唔再靠 Web Popen，避免無心跳被殺）。"
                 f"每輪約最多 {os.getenv('FORM_AI_INLINE_MAX_HORSES', '40')} 匹，下一 tick only_missing 續跑。"
+                " OpenRouter 返回 402 时，若已设置 FORM_AI_FALLBACK_BASE_URL 与 "
+                "FORM_AI_FALLBACK_API_KEY，本轮剩余马匹改走该备用端口；未设置则立即停止，不再空打。"
             )
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",

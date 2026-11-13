@@ -627,6 +627,8 @@ def run_meeting(
         total_done = 0
         total_errors = 0
         n_races = len(race_ids)
+        billing_blocked = False
+        billing_error = ""
 
         for i, rid in enumerate(race_ids, start=1):
             if max_sec is not None and (time.monotonic() - started_mono) >= float(max_sec):
@@ -673,6 +675,11 @@ def run_meeting(
                 total_errors += len(out.get("errors") or [])
                 if horses_left is not None:
                     horses_left = max(0, horses_left - wrote - len(out.get("errors") or []))
+                if out.get("billing_blocked"):
+                    billing_blocked = True
+                    billing_error = str(out.get("error") or "分析端口欠费")
+                    print(f"  BILLING {billing_error}", flush=True)
+                    break
                 if out.get("budget_hit") or (horses_left is not None and horses_left <= 0):
                     budget_exhausted = True
                 print(
@@ -701,7 +708,7 @@ def run_meeting(
                     detail=detail,
                     progress=dict(hb_progress),
                 )
-            if budget_exhausted:
+            if budget_exhausted or billing_blocked:
                 break
             if sleep > 0:
                 time.sleep(sleep)
@@ -715,17 +722,26 @@ def run_meeting(
             "course": course.upper(),
             "only_missing": only_missing,
             "budget_exhausted": budget_exhausted,
+            "billing_blocked": billing_blocked,
             "max_horses": max_horses,
             "max_sec": max_sec,
             "elapsed_sec": round(time.monotonic() - started_mono, 1),
         }
-        # 預算用盡＝正常暫停（下一 tick only_missing 續跑），唔當 failed
-        st = "paused" if budget_exhausted else ("ok" if total_errors == 0 else "ok_with_errors")
-        phase = "paused" if budget_exhausted else "done"
-        detail_msg = (
-            f"本輪寫入 {total_done} 匹／{n_races} 場"
-            + ("（達上限，下一 tick 續跑）" if budget_exhausted else f"，錯誤 {total_errors}")
-        )
+        # 預算用盡＝正常暫停（下一 tick only_missing 續跑），唔當 failed。
+        # 欠费且没有备用端口：立刻失败，避免把本轮 40 个名额都打成 402。
+        if billing_blocked:
+            st = "failed"
+            phase = "billing_blocked"
+            detail_msg = billing_error
+        else:
+            st = "paused" if budget_exhausted else ("ok" if total_errors == 0 else "ok_with_errors")
+            phase = "paused" if budget_exhausted else "done"
+            detail_msg = (
+                f"本輪寫入 {total_done} 匹／{n_races} 場"
+                + ("（達上限，下一 tick 續跑）" if budget_exhausted else f"，錯誤 {total_errors}")
+            )
+            if getattr(analyst, "_fallback_latched", False):
+                detail_msg += "（主端口欠费，已改走备用分析端口）"
         _set_progress(phase=phase, **final)
         update_job(
             engine,
@@ -733,7 +749,7 @@ def run_meeting(
             status=st,
             detail=detail_msg,
             progress={"phase": phase, **final},
-            finished=not budget_exhausted,
+            finished=billing_blocked or not budget_exhausted,
         )
         print(f"Done. wrote={total_done} races={n_races} errors={total_errors} paused={budget_exhausted}", flush=True)
 
