@@ -52,7 +52,13 @@ st.markdown(
 .idx-chip.is-2 { background:#475569; }
 .idx-chip.is-3 { background:#9a3412; }
 .idx-empty { color:#94a3b8; }
-.idx-rate { font-variant-numeric: tabular-nums; font-weight:700; }
+.idx-rate { font-variant-numeric: tabular-nums; font-weight:700; white-space:nowrap; }
+.idx-sum { display:flex; align-items:baseline; gap:0.75rem; padding:0.15rem 0;
+  border-bottom:1px solid rgba(148,163,184,0.25); }
+.idx-sum-name { flex:1 1 auto; min-width:0; }
+.idx-sum-name b { margin-right:0.45rem; }
+.idx-sum-note { color:#64748b; font-size:0.85rem; }
+.idx-sum-meta { color:#64748b; font-size:0.8rem; font-weight:500; margin-left:0.45rem; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -88,25 +94,23 @@ def _board() -> None:
         st.info("还没有快照。受注开始后，这一页会每 30 秒重排号码。")
         return
 
-    head1, head2, head3, head4 = st.columns([2.2, 1.2, 1.2, 2.4])
-    head1.markdown("**策略**")
-    head2.markdown("**本赛日入围**")
-    head3.markdown("**累积入围**")
-    head4.markdown("**样本**")
+    st.caption("入围写成「本赛日（累积）」。括号里是以往赛日加在一起的入围率。")
+    rows = []
     for strategy_id, label, note in STRATEGY_SPECS:
         day = day_rates.get(strategy_id) or {}
         total = cumulative_rates.get(strategy_id) or {}
-        c1, c2, c3, c4 = st.columns([2.2, 1.2, 1.2, 2.4])
-        c1.markdown(f"**{label}**")
-        c1.caption(note)
-        c2.markdown(f'<span class="idx-rate">{_pct(day.get("rate"))}</span>', unsafe_allow_html=True)
-        c3.markdown(f'<span class="idx-rate">{_pct(total.get("rate"))}</span>', unsafe_allow_html=True)
         day_races = int(day.get("races") or 0)
         total_races = int(total.get("races") or 0)
-        c4.caption(
-            f"本日 {day_races} 场 · {int(day.get('placed') or 0)}/{int(day.get('picks') or 0)}"
-            f"　累计 {total_races} 场 · {int(total.get('placed') or 0)}/{int(total.get('picks') or 0)}"
+        rows.append(
+            "<div class='idx-sum'>"
+            f"<div class='idx-sum-name'><b>{label}</b>"
+            f"<span class='idx-sum-note'>{note}</span></div>"
+            f"<div class='idx-rate'>{_pct(day.get('rate'))}"
+            f"（{_pct(total.get('rate'))}）"
+            f"<span class='idx-sum-meta'>本日 {day_races} 场 · 累计 {total_races} 场</span></div>"
+            "</div>"
         )
+    st.markdown("".join(rows), unsafe_allow_html=True)
 
     st.divider()
     for race in board["races"]:
@@ -119,8 +123,8 @@ def _board() -> None:
                 placed = item.get("placed")
                 tail = f"本场 {placed}/{len(item['picks'])}" if placed is not None else "本场未派彩"
                 st.markdown(
-                    f"**{item['label']}** · 本赛日 {_pct(day.get('rate'))}"
-                    f" · 累积 {_pct(total.get('rate'))} · {tail}",
+                    f"**{item['label']}** · {_pct(day.get('rate'))}"
+                    f"（{_pct(total.get('rate'))}） · {tail}",
                 )
                 st.markdown(_numbers(item["picks"], item["marks"]), unsafe_allow_html=True)
 
