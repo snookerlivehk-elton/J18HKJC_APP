@@ -190,6 +190,25 @@ DEFAULT_SECTIONALS_LIMIT = int(
 )
 SECTIONALS_TIMES_STAGE = "SECTIONALS_TIMES"
 
+# 沿途評述空殼：馬會頁可能數週後先有字，上游 suspicious 快照要主動重抓
+AUTO_RUNNING_COMMENT_REPAIR = (
+    os.getenv("MEETING_TICK_AUTO_RUNNING_COMMENT_REPAIR", "true") or "true"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+DEFAULT_RUNNING_COMMENT_MIN_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_RUNNING_COMMENT_MIN_AGE_DAYS", "2") or 2
+)
+DEFAULT_RUNNING_COMMENT_MAX_AGE_DAYS = int(
+    os.getenv("MEETING_TICK_RUNNING_COMMENT_MAX_AGE_DAYS", "120") or 120
+)
+DEFAULT_RUNNING_COMMENT_LIMIT = int(
+    os.getenv("MEETING_TICK_RUNNING_COMMENT_LIMIT", "4") or 4
+)
+RUNNING_COMMENT_REPAIR_STAGE = "RUNNING_COMMENT_REPAIR"
+
 POST_RACE_MODE = "post_race"
 PRE_RACE_MODE = "pre_race"
 ALL_MODE = "all"
@@ -2282,6 +2301,16 @@ class MeetingTickRunner:
                 (report.get("sectionals_times") or {}).get("n_processed") or 0
             )
 
+        # 沿途評述空殼：超出 backlog 14 日仍重抓（馬會頁已有字、上游仍 suspicious）
+        if AUTO_RUNNING_COMMENT_REPAIR:
+            report["running_comment_repair"] = self.run_running_comment_repair_pass(
+                as_of=today,
+                dry_run=dry_run,
+            )
+            report["n_actions"] += int(
+                (report.get("running_comment_repair") or {}).get("n_processed") or 0
+            )
+
         # needs_human／failed → 營運介入報告（notify_admins 入口；預設可 stub）
         if not dry_run:
             report["incidents"] = self.scan_ops_incidents(report)
@@ -2749,6 +2778,183 @@ class MeetingTickRunner:
                         is not None
                     }
                     if result.get("sectionals_export")
+                    else None,
+                    "error": result.get("error"),
+                }
+            )
+            out["meetings"].append(rec)
+            processed += 1
+            out["n_processed"] = processed
+
+        return out
+
+    def run_running_comment_repair_pass(
+        self,
+        *,
+        as_of: Optional[date] = None,
+        dry_run: bool = False,
+        min_age_days: int = DEFAULT_RUNNING_COMMENT_MIN_AGE_DAYS,
+        max_age_days: int = DEFAULT_RUNNING_COMMENT_MAX_AGE_DAYS,
+        limit: int = DEFAULT_RUNNING_COMMENT_LIMIT,
+    ) -> Dict[str, Any]:
+        """
+        歷史賽日沿途評述晚補。
+
+        backlog 只保留約 14 日。上游若把 placeholder 空殼標成已有 running_comment，
+        舊邏輯不會再 POST fetch，一個月後作戰室仍顯示 0。本 pass 掃到 max_age，
+        sync 見到空殼會先打 /api/text-reports/fetch。
+        """
+        today = as_of or date.today()
+        out: Dict[str, Any] = {
+            "ok": True,
+            "as_of": today.isoformat(),
+            "min_age_days": int(min_age_days),
+            "max_age_days": int(max_age_days),
+            "limit": int(limit),
+            "n_candidates": 0,
+            "n_processed": 0,
+            "n_ok": 0,
+            "n_waiting": 0,
+            "n_failed": 0,
+            "n_skipped": 0,
+            "meetings": [],
+        }
+        try:
+            from data_audit import (
+                list_meetings_missing_running_comments,
+                sync_running_comments_for_meeting,
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        try:
+            candidates = list_meetings_missing_running_comments(
+                self.pipe.engine,
+                as_of=today,
+                min_age_days=min_age_days,
+                max_age_days=max_age_days,
+                limit=max(1, int(limit) * 3),
+            )
+        except Exception as e:
+            out["ok"] = False
+            out["error"] = str(e)[:200]
+            return out
+
+        out["n_candidates"] = len(candidates)
+        processed = 0
+        for item in candidates:
+            if processed >= max(1, int(limit)):
+                break
+            d = str(item.get("racing_date") or "")[:10]
+            c = str(item.get("course") or "").upper()
+            if not d or c not in {"ST", "HV"}:
+                continue
+            prev = self.get_tick_state(d, c, RUNNING_COMMENT_REPAIR_STAGE)
+            prev_status = str(prev.get("last_status") or STATUS_WAITING)
+            allowed, reason = self._attempt_allowed(
+                d, c, RUNNING_COMMENT_REPAIR_STAGE, prev_status
+            )
+            if not allowed:
+                out["n_skipped"] += 1
+                out["meetings"].append(
+                    {
+                        "racing_date": d,
+                        "course": c,
+                        "skipped": True,
+                        "reason": reason,
+                        "age_days": item.get("age_days"),
+                        "running_comment_coverage": item.get(
+                            "running_comment_coverage"
+                        ),
+                    }
+                )
+                continue
+
+            rec: Dict[str, Any] = {
+                "racing_date": d,
+                "course": c,
+                "age_days": item.get("age_days"),
+                "running_comment_coverage_before": item.get(
+                    "running_comment_coverage"
+                ),
+            }
+            if dry_run:
+                rec["ok"] = True
+                rec["dry_run"] = True
+                out["meetings"].append(rec)
+                processed += 1
+                out["n_processed"] = processed
+                continue
+
+            try:
+                result = sync_running_comments_for_meeting(self.pipe, d, c)
+            except Exception as e:
+                result = {"ok": False, "error": str(e)[:200]}
+
+            running_ok = bool(result.get("running_comment_ok"))
+            waiting = bool(result.get("waiting")) and not running_ok
+            hard_fail = (result.get("ok") is False) and not waiting and not running_ok
+            if running_ok:
+                status = STATUS_OK
+                count_ok = True
+                out["n_ok"] += 1
+            elif waiting:
+                status = STATUS_WAITING
+                count_ok = True
+                out["n_waiting"] += 1
+            else:
+                status = STATUS_FAILED
+                count_ok = False
+                out["n_failed"] += 1
+                out["ok"] = False
+
+            detail = str(
+                result.get("error")
+                or ((result.get("sync") or {}).get("detail"))
+                or ((result.get("sync") or {}).get("error"))
+                or ""
+            )[:500]
+            self.record_tick_attempt(
+                d,
+                c,
+                RUNNING_COMMENT_REPAIR_STAGE,
+                ok=count_ok,
+                status=status,
+                detail=detail
+                or f"cov={(result.get('inventory') or {}).get('running_comment_coverage')}",
+            )
+            if running_ok:
+                self.record_tick_attempt(
+                    d,
+                    c,
+                    "TEXT_REPORTS",
+                    ok=True,
+                    status=STATUS_OK,
+                    detail="running_comment_repair ok",
+                )
+            rec.update(
+                {
+                    "ok": bool(running_ok or (result.get("ok") and not hard_fail)),
+                    "waiting": waiting,
+                    "status": status,
+                    "running_comment_ok": running_ok,
+                    "inventory": result.get("inventory"),
+                    "sync": {
+                        k: (result.get("sync") or {}).get(k)
+                        for k in (
+                            "ok",
+                            "waiting",
+                            "phase",
+                            "detail",
+                            "auto_fetched",
+                            "runner_upserted",
+                            "error",
+                        )
+                        if (result.get("sync") or {}).get(k) is not None
+                    }
+                    if result.get("sync")
                     else None,
                     "error": result.get("error"),
                 }
