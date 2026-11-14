@@ -414,6 +414,29 @@ def test_format_social_day_meeting_no_tonight_or_system():
     assert "j18.hk" in text.lower() or "J18.hk" in text
 
 
+def test_format_social_post_keeps_full_comment():
+    comment = (
+        "近績19/10同程1800米在極快步速下早段搶口，最後二百五十米仍能追前甚多得亞軍；"
+        "今仗若步速偏快，但末段恢復力有近績支持，唔怕早段稍急。"
+    )
+    assert len(comment) > COMMENT_MAX_CHARS
+    text = format_social_post_text(
+        {
+            "featured": [
+                {
+                    "race_no": 4,
+                    "horse_no": 1,
+                    "horse_name": "捷威",
+                    "comment": comment,
+                }
+            ],
+            "footer": post_footer_text(),
+        }
+    )
+    assert comment in text
+    assert "有近績支\n" not in text
+
+
 def test_normalize_strips_system_subtitle_for_day():
     writer = DummyWriter()
     data = writer._normalize_result(
