@@ -1,4 +1,4 @@
-"""廣告海報：日馬啡／夜馬藍底圖、中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
+"""廣告海報：日馬橙／夜馬藍底圖、中段拉伸、最多 4 匹、只顯示馬號＋馬名。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +8,7 @@ from PIL import Image
 
 from ad_poster import (
     AI_FILE,
+    BLANK_H,
     BUNDLED_FONT,
     COMPANY_DIR,
     FONT_BASE_PX,
@@ -16,6 +17,8 @@ from ad_poster import (
     ROW_H_SCALE,
     SLICE_MID_END,
     SLICE_TOP_END,
+    TABLE_TEXT_FG,
+    THEME_STYLES,
     PickItem,
     RaceAdPayload,
     _cell_text,
@@ -98,11 +101,21 @@ def test_cell_text_no_share_pct():
     assert "%" not in s
 
 
+def test_day_and_night_share_table_text_color():
+    """橙色日馬版與藍色夜馬版：表內字色必須同為深棕銅。"""
+    assert THEME_STYLES["day"]["text_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["day"]["race_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["night"]["text_fg"] == TABLE_TEXT_FG
+    assert THEME_STYLES["night"]["race_fg"] == TABLE_TEXT_FG
+    assert TABLE_TEXT_FG == (52, 40, 24)
+
+
 def test_mid_stretch_scales_with_race_count(tmp_path: Path):
-    """場數變多／變少時，畫布高度應隨中段拉伸改變，列高近似固定。"""
+    """少於參考場數：白區滿高、列高加大；超過參考場數：畫布加高、列高近似基準。"""
     ref_mid = SLICE_MID_END - SLICE_TOP_END
     row_ref = (ref_mid / float(REF_N_ROWS)) * float(ROW_H_SCALE)
     heights = {}
+    metas = {}
     for n in (8, 11, 12):
         out = tmp_path / f"n{n}.png"
         meta = render_meeting_poster(
@@ -113,7 +126,6 @@ def test_mid_stretch_scales_with_race_count(tmp_path: Path):
         )
         assert out.is_file()
         assert meta["n_races"] == n
-        assert abs(meta["row_h"] - row_ref) < 1.0
         assert meta["race_px"] >= FONT_BASE_PX - 12
         assert meta["pick_px"] >= FONT_BASE_PX - 10
         assert meta["theme"] == "night"
@@ -121,6 +133,13 @@ def test_mid_stretch_scales_with_race_count(tmp_path: Path):
         with Image.open(out) as im:
             heights[n] = im.size[1]
         assert meta["bytes"] <= 2048 * 1024
+        metas[n] = meta
+    # 8 場 ≤ REF：列高 > 基準，畫布高度 = 模版高
+    assert metas[8]["row_h"] > row_ref + 1.0
+    assert abs(heights[8] - (SLICE_TOP_END + ref_mid + (BLANK_H - SLICE_MID_END))) < 2
+    # 11／12 場 > REF：列高 ≈ 基準，場數越多畫布越高
+    assert abs(metas[11]["row_h"] - row_ref) < 1.0
+    assert abs(metas[12]["row_h"] - row_ref) < 1.0
     assert heights[12] > heights[11] > heights[8]
 
 

@@ -60,8 +60,9 @@ COPY_FILE = "copy.json"
 BLANK_W = 1280
 BLANK_H = 1299
 # 上固定（標題＋J18精選列＋白框上緣）／中拉伸（直線白底）／下固定（白框下圓角＋footer）
-SLICE_TOP_END = 400
-SLICE_MID_END = 980
+# 白底實測約 y=366–1012；切片貼齊白區，避免首尾空行（舊值 400/980 會在第1場上、末場下留白）
+SLICE_TOP_END = 380
+SLICE_MID_END = 1013
 REF_N_ROWS = 10  # 模版中段對應參考場數
 ROW_H_SCALE = 1.0
 RACE_COL = (48, 175)
@@ -73,29 +74,36 @@ DATE_PILL_RADIUS = 24
 # 預設字色（會依 theme 覆寫）
 RACE_FG = (55, 55, 55)
 TEXT_FG = (40, 40, 40)
-FONT_BASE_PX = 34
+# 表內正文字級：相對「滿鋪加大」版再縮約約 19%（兩次各約 10%）；強制常規體（非粗體）
+FONT_BASE_PX = 40
+FONT_TABLE_SCALE = 0.81
 # 表身分隔
 GRID_LINE = (210, 210, 210)
 GRID_LINE_STRONG = (170, 170, 170)
 ROW_TINT = (245, 245, 245)
-# 日馬啡色／夜馬藍色（依 fixtures.session 或 is_day_meeting 選擇）
+# 日馬橙色版／夜馬藍色版（依 fixtures.session 或 is_day_meeting 選擇）
+# 注意：外框主題色可不同，但表內排版規則必須一致——
+#   白區滿鋪（少場次不留首尾空行）、字級 FONT_TABLE_SCALE、常規體、
+#   表內字色一律 TABLE_TEXT_FG 深棕銅（日橙版與夜藍版都要用，勿再分主題改回藍／深灰）
 THEMES = ("day", "night")
+# 表內字色：深棕銅（用戶樣圖取樣 ≈ #342818）；day+night 共用
+TABLE_TEXT_FG = (52, 40, 24)
 THEME_STYLES = {
-    "day": {
+    "day": {  # 橙色版（日馬）
         "date_pill_fill": (245, 168, 110),
         "date_pill_text": (255, 255, 255),
-        "race_fg": (90, 55, 35),
-        "text_fg": (55, 40, 30),
+        "race_fg": TABLE_TEXT_FG,
+        "text_fg": TABLE_TEXT_FG,
         "grid": (210, 195, 180),
         "grid_strong": (170, 145, 125),
         "row_tint": (250, 244, 236),
         "canvas_bg": (180, 140, 110),
     },
-    "night": {
+    "night": {  # 藍色版（夜馬）
         "date_pill_fill": (70, 130, 170),
         "date_pill_text": (255, 255, 255),
-        "race_fg": (40, 75, 105),
-        "text_fg": (35, 55, 75),
+        "race_fg": TABLE_TEXT_FG,
+        "text_fg": TABLE_TEXT_FG,
         "grid": (195, 205, 215),
         "grid_strong": (140, 160, 180),
         "row_tint": (236, 244, 250),
@@ -223,7 +231,8 @@ def _find_font() -> Optional[str]:
     return None
 
 
-def _load_font(size: int):
+def _load_font(size: int, *, regular: bool = True):
+    """載入字型。regular=True 時固定用 face index 0（常規體），避免誤選粗體 face。"""
     from PIL import ImageFont
 
     path = _find_font()
@@ -232,15 +241,18 @@ def _load_font(size: int):
             "找不到 CJK 字型：請確認 assets/fonts/wqy-microhei.ttc 已部署，"
             "或設定環境變數 AD_FONT_PATH"
         )
+    size_i = int(size)
     last_err: Optional[Exception] = None
-    for index in (0, 1):
+    # 常規體優先 index=0；僅在失敗時才試其他 face（避免粗體）
+    indices = (0,) if regular else (0, 1)
+    for index in indices:
         try:
-            return ImageFont.truetype(path, size=int(size), index=index)
+            return ImageFont.truetype(path, size=size_i, index=index)
         except Exception as e:
             last_err = e
             continue
     try:
-        return ImageFont.truetype(path, size=int(size))
+        return ImageFont.truetype(path, size=size_i)
     except Exception as e:
         raise RuntimeError(f"無法載入字型 {path}: {e or last_err}") from e
 
@@ -689,7 +701,7 @@ def resolve_poster_theme(
     is_day_meeting: Optional[bool] = None,
 ) -> str:
     """
-    日馬 → day（啡色）；夜馬 → night（藍色）。
+    日馬 → day（橙色）；夜馬 → night（藍色）。
     優先明示 theme，其次 fixtures.session／is_day_meeting，最後以場地慣例（HV=夜、ST=日）。
     """
     t = str(theme or "").strip().lower()
@@ -879,6 +891,9 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
     """
     上固定 + 中段垂直拉伸 + 下固定。
     回傳 (canvas, mid_top_y, row_h)。
+
+    - 場數 ≤ REF_N_ROWS：中段保持模版白區滿高，列高 = 滿高/場數（填滿、字更大）
+    - 場數 > REF_N_ROWS：中段按基準列高向上加長
     """
     from PIL import Image
 
@@ -894,8 +909,11 @@ def _assemble_blank_canvas(blank: "Image.Image", n_races: int) -> Tuple["Image.I
     bot = blank.crop((0, mid_end, w, h))
 
     ref_mid_h = mid_end - top_end
-    row_h = (ref_mid_h / float(REF_N_ROWS)) * float(ROW_H_SCALE)
-    new_mid_h = max(1, int(round(n * row_h)))
+    base_row_h = (ref_mid_h / float(REF_N_ROWS)) * float(ROW_H_SCALE)
+    if n <= REF_N_ROWS:
+        new_mid_h = max(1, int(ref_mid_h))
+    else:
+        new_mid_h = max(1, int(round(n * base_row_h)))
     if mid.height != new_mid_h:
         mid = mid.resize((w, new_mid_h), Image.Resampling.LANCZOS)
 
@@ -918,7 +936,7 @@ def render_meeting_poster(
 ) -> Dict[str, Any]:
     """
     空白公司模版疊加：中段按場數垂直拉伸，再只畫日期／場次號／揀馬。
-    theme=day|night（日馬啡色／夜馬藍色）；可由 session／is_day_meeting／場地推斷。
+    theme=day|night（日馬橙色／夜馬藍色）；可由 session／is_day_meeting／場地推斷。
     """
     from PIL import Image, ImageDraw
 
@@ -958,12 +976,14 @@ def render_meeting_poster(
     )
 
     # 字級隨列高；推介／場次號皆欄內水平置中（anchor=mm）
-    # 「第N場」較單數字寬，場次字略細以塞進左欄
+    # 「第N場」較單數字寬，場次字略細；再 × FONT_TABLE_SCALE（約縮 10%）
+    # 常規體（index=0），避免粗體 face 造成密、重的觀感
     base = int(FONT_BASE_PX)
-    race_px = int(max(base - 10, min(int(row_h * 0.42), base - 2)))
-    pick_px = int(max(base - 6, min(int(row_h * 0.50), base + 4)))
-    font_race = _load_font(race_px)
-    font_pick = _load_font(pick_px)
+    scale = float(FONT_TABLE_SCALE)
+    race_px = int(round(max(base - 10, min(int(row_h * 0.55), base)) * scale))
+    pick_px = int(round(max(base - 6, min(int(row_h * 0.68), base + 6)) * scale))
+    font_race = _load_font(race_px, regular=True)
+    font_pick = _load_font(pick_px, regular=True)
     race_fg = tuple(style["race_fg"])
     text_fg = tuple(style["text_fg"])
 
