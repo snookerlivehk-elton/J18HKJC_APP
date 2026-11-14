@@ -175,6 +175,7 @@ form_nlp = st.Page("views/form_nlp_factor.py", title="近績與 NLP")
 pace = st.Page("views/pace_factor.py", title="步速形勢")
 speed = st.Page("views/speed_factor.py", title="速度指數")
 sg = st.Page("views/speed_guide.py", title="官方速勢能量")
+index_selection = st.Page("views/index_selection.py", title="指數評選")
 
 # 隱藏預設導航（側欄／頂欄都會在手機變成透明抽屜疊字）
 # 改由主畫面「功能選單」st.page_link 切頁
@@ -185,14 +186,15 @@ if role == ROLE_ADMIN:
         "廣告": [ad_output, helper_form],
         "預測": [raceday, inference, calibration, hit_stats, form_ai],
         "因子": [jockey, trainer, synergy, draw, hj, form_nlp, pace, speed, sg],
+        "指數": [index_selection],
     }
     nav = st.navigation(sections, position="hidden")
     render_main_nav(sections)
 else:
     user_sections = {
-        "瀏覽": [raceday, hit_stats],
+        "瀏覽": [raceday, hit_stats, index_selection],
     }
-    nav = st.navigation([raceday, hit_stats], position="hidden")
+    nav = st.navigation([raceday, hit_stats, index_selection], position="hidden")
     render_main_nav(user_sections)
 
 nav.run()
