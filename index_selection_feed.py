@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-import httpx
 from sqlalchemy import create_engine, text
 
 from etl_pipeline import resolve_database_url
@@ -20,20 +21,45 @@ from index_selection import (
 
 HKJC_URL = "https://info.cld.hkjc.com/graphql/base-get/"
 HK_TZ = timezone(timedelta(hours=8))
+# 查询正文必须与马会投注页一致，否则接口回 WHITELIST_ERROR。
 POOL_QUERY = """
-query sp4e_racing_pmPool($date: String, $venueCode: String, $oddsTypes: [OddsType], $raceNo: Int) {
-  raceMeetings(date: $date, venueCode: $venueCode) {
-    pmPools(oddsTypes: $oddsTypes, raceNo: $raceNo) {
-      id
-      status
-      sellStatus
-      oddsType
-      lastUpdateTime
-      leg { number races }
-      oddsNodes { combString oddsValue hotFavourite oddsDropValue }
-    }
-  }
-}
+      query sp4e_racing_pmPool($date: String, $venueCode: String, $oddsTypes: [OddsType], $raceNo: Int) {
+          raceMeetings(date: $date, venueCode: $venueCode)
+          {
+            pmPools(oddsTypes: $oddsTypes, raceNo: $raceNo) {
+              id
+              status
+              sellStatus
+              oddsType
+              lastUpdateTime
+              oddsLastUpdateTime
+              guarantee
+              minTicketCost
+              name_en
+              name_ch
+              leg {
+                number
+                races
+              }
+              cWinSelections {
+                composite
+                name_ch
+                name_en
+                starters
+              }
+              oddsNodes {
+                combString
+                oddsValue
+                hotFavourite
+                oddsDropValue
+                bankerOdds {
+                  combString
+                  oddsValue
+                }
+              }
+            }
+          }
+      }
 """
 ODDS_TYPES = ["WIN", "PLA", "QIN", "QPL", "FCT"]
 STALE_SECONDS = 25
@@ -184,36 +210,57 @@ def parse_pools(pools: List[Mapping[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def fetch_race_pools(race_no: int, *, client: Optional[httpx.Client] = None) -> Dict[str, Any]:
-    own = client is None
-    client = client or httpx.Client(timeout=25.0)
-    try:
-        response = client.get(
-            HKJC_URL,
-            params={
-                "query": POOL_QUERY,
-                "variables": json.dumps(
-                    {"raceNo": int(race_no), "oddsTypes": ODDS_TYPES},
-                    separators=(",", ":"),
-                ),
-            },
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Referer": "https://bet.hkjc.com/",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-        )
-        response.raise_for_status()
-        payload = response.json()
-        meetings = ((payload.get("data") or {}).get("raceMeetings")) or []
-        pools = (meetings[0].get("pmPools") if meetings else None) or []
-        parsed = parse_pools(pools)
-        parsed["race_no"] = parsed.get("race_no") or int(race_no)
-        return parsed
-    finally:
-        if own:
-            client.close()
+def fetch_race_pools(
+    race_no: int,
+    *,
+    meeting_date: Optional[str] = None,
+    venue_code: Optional[str] = None,
+    client: Any = None,
+) -> Dict[str, Any]:
+    del client  # 保留参数，避免刷新循环改签名
+    variables: Dict[str, Any] = {"raceNo": int(race_no), "oddsTypes": ODDS_TYPES}
+    if meeting_date:
+        text_date = str(meeting_date)
+        if len(text_date) == 8 and text_date.isdigit():
+            text_date = f"{text_date[:4]}-{text_date[4:6]}-{text_date[6:]}"
+        variables["date"] = text_date
+    if venue_code:
+        variables["venueCode"] = venue_code
+    params = urllib.parse.urlencode(
+        {"query": POOL_QUERY, "variables": json.dumps(variables, separators=(",", ":"))}
+    )
+    req = urllib.request.Request(
+        HKJC_URL + "?" + params,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://bet.hkjc.com/",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=25) as response:
+        raw = response.read()
+    if raw[:2] == b"\x1f\x8b":
+        import gzip
+
+        raw = gzip.decompress(raw)
+    payload = json.loads(raw.decode())
+    if payload.get("errors"):
+        return {
+            "meeting_date": "",
+            "race_no": int(race_no),
+            "sell_status": "",
+            "pool_status": "",
+            "horses": [],
+            "qin": {},
+            "fct": {},
+            "error": payload["errors"][0].get("message"),
+        }
+    meetings = ((payload.get("data") or {}).get("raceMeetings")) or []
+    pools = (meetings[0].get("pmPools") if meetings else None) or []
+    parsed = parse_pools(pools)
+    parsed["race_no"] = parsed.get("race_no") or int(race_no)
+    return parsed
 
 
 def _venue_for_date(conn, yyyymmdd: str) -> str:
@@ -489,17 +536,36 @@ def refresh_live(*, max_races: int = 12, force: bool = False) -> Dict[str, Any]:
     engine = _engine()
     summary = {"races": 0, "fetched": 0, "meeting_date": "", "venue": ""}
     try:
-        with httpx.Client(timeout=25.0) as client:
-            probe = fetch_race_pools(1, client=client)
-            meeting_date = str(probe.get("meeting_date") or "")
-            if not meeting_date:
-                return summary
-            fetched: List[Dict[str, Any]] = [probe]
-            for race_no in range(2, max_races + 1):
-                parsed = fetch_race_pools(race_no, client=client)
-                if not parsed.get("horses"):
+        probe = fetch_race_pools(1)
+        meeting_date = str(probe.get("meeting_date") or "")
+        venue_hint = ""
+        if not meeting_date:
+            today = datetime.now(HK_TZ).date()
+            for day in (today, today - timedelta(days=1)):
+                for venue in ("ST", "HV"):
+                    probe = fetch_race_pools(
+                        1,
+                        meeting_date=day.strftime("%Y%m%d"),
+                        venue_code=venue,
+                    )
+                    meeting_date = str(probe.get("meeting_date") or "")
+                    if probe.get("horses"):
+                        venue_hint = venue
+                        break
+                if meeting_date:
                     break
-                fetched.append(parsed)
+        if not meeting_date:
+            return summary
+        fetched: List[Dict[str, Any]] = [probe]
+        for race_no in range(2, max_races + 1):
+            parsed = fetch_race_pools(
+                race_no,
+                meeting_date=meeting_date,
+                venue_code=venue_hint or None,
+            )
+            if not parsed.get("horses"):
+                break
+            fetched.append(parsed)
         with engine.begin() as conn:
             venue = _venue_for_date(conn, meeting_date)
             summary["meeting_date"] = meeting_date
