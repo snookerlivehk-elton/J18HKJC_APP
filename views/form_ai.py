@@ -25,12 +25,20 @@ st.caption(
 engine = InferenceEngine()
 analyst = FormAIAnalyst()
 
+races = engine.get_upcoming_races()
+_default_iso, _default_course, _default_slash = ui_utils.latest_upcoming_meeting_defaults(races)
+
 st.subheader("① 抓取官方賽績指引（CMS）")
 c1, c2, c3 = st.columns(3)
 with c1:
-    fg_date = st.text_input("核對日期 YYYY/MM/DD", value="2026/09/06")
+    fg_date = st.text_input("核對日期 YYYY/MM/DD", value=_default_slash)
 with c2:
-    fg_course = st.selectbox("核對場地", ["ST", "HV"])
+    _course_opts = ["ST", "HV"]
+    fg_course = st.selectbox(
+        "核對場地",
+        _course_opts,
+        index=_course_opts.index(_default_course) if _default_course in _course_opts else 0,
+    )
 with c3:
     st.write("")
     st.write("")
@@ -48,18 +56,19 @@ with c3:
             except subprocess.CalledProcessError as e:
                 st.error(e.stderr or e.stdout)
 
-races = engine.get_upcoming_races()
 if races.empty:
     st.warning("無排位賽事")
     st.stop()
 
 opts = ui_utils.get_upcoming_races_list()
 race_opts = [o for o in opts if o[0] != "None"]
+# 列表已按最新賽日排前；預設第一場＝最新賽日第 1 場
 selected = st.selectbox(
     "② 選擇場次做 AI 評價",
     options=[o[0] for o in race_opts],
     format_func=lambda x: next(o[1] for o in race_opts if o[0] == x),
 )
+st.caption(f"預設賽日：**{_default_iso} {_default_course}**（可手動改選較舊場次）")
 
 forms = analyst.load_formguide(selected)
 st.caption(f"本場 Form Guide 已入庫：{len(forms)} 匹" if not forms.empty else "本場尚無 Form Guide，請先抓取。")

@@ -36,6 +36,16 @@ FACTOR_COLS = [
     "近績分", "步速分", "速度分", "SG貢獻", "總預測分", "模型勝率%",
 ]
 
+# 整數欄位唔做小數格式（體重／負磅等量度值要 round 到 1 位）
+_INT_DISPLAY_COLS = {
+    "預測排名",
+    "馬號",
+    "檔位",
+    "命中",
+    "評分",
+    "評分升降",
+}
+
 
 def highlight_top3(s):
     if s["預測排名"] == 1:
@@ -45,6 +55,38 @@ def highlight_top3(s):
     if s["預測排名"] == 3:
         return ["background-color: #cd7f32; color: black"] * len(s)
     return [""] * len(s)
+
+
+def _round_display_df(df: pd.DataFrame) -> pd.DataFrame:
+    """顯示用：浮點列四捨五入到 1 位小數（排名／馬號等整數除外）。"""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    for col in out.columns:
+        if col in _INT_DISPLAY_COLS:
+            continue
+        if pd.api.types.is_numeric_dtype(out[col]):
+            out[col] = pd.to_numeric(out[col], errors="coerce").round(1)
+    return out
+
+
+def _style_pred_table(df: pd.DataFrame):
+    """表格數值統一顯示 1 位小數（排名／馬號等整數除外）。"""
+    if df is None or df.empty:
+        return df
+    rounded = _round_display_df(df)
+    fmt = {
+        col: "{:.1f}"
+        for col in rounded.columns
+        if col not in _INT_DISPLAY_COLS and pd.api.types.is_numeric_dtype(rounded[col])
+    }
+    sty = rounded.style.apply(highlight_top3, axis=1)
+    if fmt:
+        try:
+            sty = sty.format(fmt)
+        except Exception:
+            pass
+    return sty
 
 
 engine = InferenceEngine()
@@ -108,8 +150,22 @@ with st.expander("融合權重（ModelConfig）", expanded=True):
         help=ph.SOFTMAX_T,
     )
 
+# upcoming_races 會累積多個舊賽日；預設跟「賽日速覽」一樣落在最新一日，唔好停在最舊（如 9/6）
+races_df = races_df.copy()
+races_df["_date"] = races_df["racing_date"].astype(str).str[:10]
+dates = sorted(races_df["_date"].unique().tolist())
+date_sel = st.selectbox(
+    "賽日",
+    dates,
+    index=len(dates) - 1,
+    help="資料庫內所有已抓排位賽日；預設最新一日。",
+)
+day = races_df[races_df["_date"] == date_sel].sort_values("race_num")
+course = str(day.iloc[0]["course"]) if not day.empty else ""
+st.caption(f"{date_sel}　{course}　共 {len(day)} 場（庫內共 {len(dates)} 個賽日）")
+
 race_options = []
-for _, row in races_df.iterrows():
+for _, row in day.iterrows():
     label = (
         f"第 {row['race_num']} 場｜{row['racing_date']} {row['course']} "
         f"{row['track']} {row['distance_m']}米（{format_class_display(row['class'])}）"
@@ -194,14 +250,14 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
     if not compact and "模型勝率%" in predictions_df.columns:
         top = predictions_df.iloc[0]
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("首位總分", f"{top['總預測分']:.2f}")
-        m2.metric("首位模型勝率", f"{top['模型勝率%']:.1f}%")
+        m1.metric("首位總分", f"{float(top['總預測分']):.1f}")
+        m2.metric("首位模型勝率", f"{float(top['模型勝率%']):.1f}%")
         m3.metric("場內馬數", f"{len(predictions_df)}")
         m4.metric("預計步速", pace_sc)
 
     show = [c for c in SUMMARY_COLS if c in predictions_df.columns]
     st.dataframe(
-        predictions_df[show].style.apply(highlight_top3, axis=1),
+        _style_pred_table(predictions_df[show]),
         use_container_width=True,
         height=320 if compact else 440,
         hide_index=True,
@@ -212,7 +268,11 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
 
     with st.expander("各因子分數明細（可負；原始 Z）", expanded=False):
         fcols = [c for c in FACTOR_COLS if c in predictions_df.columns]
-        st.dataframe(predictions_df[fcols], use_container_width=True, hide_index=True)
+        st.dataframe(
+            _style_pred_table(predictions_df[fcols]),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     with st.expander("外傳凱利／賠率系統 JSON", expanded=False):
         import json
@@ -233,7 +293,10 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
     st.subheader("因子雷達圖")
     default_top = [int(x) for x in predictions_df.head(3)["馬號"].tolist()]
     all_labels = {
-        int(r["馬號"]): f"{int(r['馬號'])} {r['馬名']}（#{int(r['預測排名'])}｜總分 {r['總預測分']}）"
+        int(r["馬號"]): (
+            f"{int(r['馬號'])} {r['馬名']}"
+            f"（#{int(r['預測排名'])}｜總分 {float(r['總預測分']):.1f}）"
+        )
         for _, r in predictions_df.iterrows()
     }
     pick = st.multiselect(
@@ -259,7 +322,7 @@ def render_race_block(race_id: str, race_label: str, *, compact: bool = False):
     st.caption(f"原始因子分（未正規化）— {int(drow['馬號'])} {drow['馬名']}")
     cols = st.columns(len(RADAR_AXES))
     for i, (col, label) in enumerate(RADAR_AXES):
-        cols[i].metric(label, f"{float(drow[col]):.2f}")
+        cols[i].metric(label, f"{float(drow[col]):.1f}")
 
 
 if view_mode == "整日總覽":
