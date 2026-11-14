@@ -4,6 +4,7 @@
 路由：
   GET /embed/raceday          → 電腦版 HTML（專為 j18.hk/pc 右手邊 iframe）
   GET /embed/raceday-pc       → 開發用：整頁複製 pc.j18.hk 排版的賽日速覽（不取代上者）
+  GET /embed/racecard         → 排位表設計稿（左鎖馬號／馬名／檔位／獨贏位置，右滑其餘欄）
   GET /embed/api/health
   GET /embed/api/meetings
   GET /embed/api/races/{id}
@@ -33,6 +34,7 @@ from raceday_embed_payload import (
 _ROOT = Path(__file__).resolve().parent
 _HTML_PATH = _ROOT / "static" / "raceday_embed.html"
 _PC_HTML_PATH = _ROOT / "static" / "raceday_pc.html"
+_RACECARD_HTML_PATH = _ROOT / "static" / "racecard_board.html"
 
 # 允許被 j18.hk PC 頁 iframe 嵌入
 _FRAME_ANCESTORS = os.getenv(
@@ -77,6 +79,15 @@ def mount_raceday_embed(app: FastAPI) -> None:
     def embed_raceday_pc_page():
         """獨立開發頁：pc.j18.hk 風格整頁排版，不改動 /embed/raceday。"""
         html = _read_pc_html().replace("__APP_VERSION__", get_version())
+        return HTMLResponse(content=html, headers=_embed_headers())
+
+    @app.get("/embed/racecard", response_class=HTMLResponse, include_in_schema=False)
+    def embed_racecard_board():
+        """排位表設計稿：左鎖馬號／馬名／檔／賠，右滑其餘欄，點表頭整行排序。"""
+        if _RACECARD_HTML_PATH.is_file():
+            html = _RACECARD_HTML_PATH.read_text(encoding="utf-8")
+        else:
+            html = "<!DOCTYPE html><html><body><p>racecard_board.html missing</p></body></html>"
         return HTMLResponse(content=html, headers=_embed_headers())
 
     @app.get("/embed/api/health")
