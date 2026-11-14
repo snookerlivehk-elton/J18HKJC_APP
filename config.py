@@ -143,6 +143,9 @@ class ModelConfig:
     # P_fused = α·P_model + (1−α)·P_AI；AI 整場不推時退回純模型
     FUSE_MODEL_ALPHA = 0.60
     FUSE_CONSENSUS_BONUS = 1.15  # 雙軌皆入推介列時份額加成，其後再正規化
+    # AI 覆蓋不足時勿進綜合軌（否則 1 匹 AI＝100% 份額，會把海報壓成 2 個號）
+    FUSE_AI_MIN_COVERAGE = 0.50  # 場內有 ai_combo 的馬比例下限
+    FUSE_AI_MIN_HORSES = 3       # 同時至少幾匹有 AI
 
     # 廣告海報：公司原海報風格（日馬啡色／夜馬藍色）；全賽日表格式；固定檔名覆蓋
     AD_OUTPUT_ON_SNAPSHOT = True
