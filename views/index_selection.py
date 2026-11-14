@@ -10,8 +10,9 @@ from ui_theme import inject_admin_css, page_header
 inject_admin_css()
 page_header("指数评选", "每场 6 个号码，开跑前随赔率跳动；派彩后标冠亚季")
 st.caption(
-    "入围率是已派彩场次里，这 6 个号码跑进名次 1、2、3 的比例。"
-    "样本变多之后再决定留哪一套。内容只供资料对照，不构成投注建议。"
+    "本赛日入围率只算眼前这一天已派彩的场次。"
+    "累积入围率把以往每个赛日的已派彩场次加在一起。"
+    "两者都是这 6 个号码跑进名次 1、2、3 的比例。内容只供资料对照，不构成投注建议。"
 )
 
 SELL_LABEL = {
@@ -81,25 +82,31 @@ def _board() -> None:
             st.caption("马会这刻没有返回受注会议。")
 
     board = load_board()
-    rates = board.get("rates") or {}
+    day_rates = board.get("day_rates") or {}
+    cumulative_rates = board.get("cumulative_rates") or {}
     if not board.get("races"):
         st.info("还没有快照。受注开始后，这一页会每 30 秒重排号码。")
         return
 
-    head1, head2, head3 = st.columns([2, 1, 3])
+    head1, head2, head3, head4 = st.columns([2.2, 1.2, 1.2, 2.4])
     head1.markdown("**策略**")
-    head2.markdown("**入围率**")
-    head3.markdown("**已派彩样本**")
+    head2.markdown("**本赛日入围**")
+    head3.markdown("**累积入围**")
+    head4.markdown("**样本**")
     for strategy_id, label, note in STRATEGY_SPECS:
-        stat = rates.get(strategy_id) or {}
-        c1, c2, c3 = st.columns([2, 1, 3])
+        day = day_rates.get(strategy_id) or {}
+        total = cumulative_rates.get(strategy_id) or {}
+        c1, c2, c3, c4 = st.columns([2.2, 1.2, 1.2, 2.4])
         c1.markdown(f"**{label}**")
         c1.caption(note)
-        c2.markdown(f'<span class="idx-rate">{_pct(stat.get("rate"))}</span>', unsafe_allow_html=True)
-        races_n = int(stat.get("races") or 0)
-        placed = int(stat.get("placed") or 0)
-        picks = int(stat.get("picks") or 0)
-        c3.caption(f"{races_n} 场 · {placed}/{picks} 个号码进入前三" if races_n else "尚无派彩样本")
+        c2.markdown(f'<span class="idx-rate">{_pct(day.get("rate"))}</span>', unsafe_allow_html=True)
+        c3.markdown(f'<span class="idx-rate">{_pct(total.get("rate"))}</span>', unsafe_allow_html=True)
+        day_races = int(day.get("races") or 0)
+        total_races = int(total.get("races") or 0)
+        c4.caption(
+            f"本日 {day_races} 场 · {int(day.get('placed') or 0)}/{int(day.get('picks') or 0)}"
+            f"　累计 {total_races} 场 · {int(total.get('placed') or 0)}/{int(total.get('picks') or 0)}"
+        )
 
     st.divider()
     for race in board["races"]:
@@ -107,11 +114,13 @@ def _board() -> None:
         title = f"第 {race.get('race_no') or '?'} 场 · {status}"
         with st.expander(title, expanded=True):
             for item in race["strategies"]:
-                stat = rates.get(item["id"]) or {}
+                day = day_rates.get(item["id"]) or {}
+                total = cumulative_rates.get(item["id"]) or {}
                 placed = item.get("placed")
                 tail = f"本场 {placed}/{len(item['picks'])}" if placed is not None else "本场未派彩"
                 st.markdown(
-                    f"**{item['label']}** · 入围 {_pct(stat.get('rate'))} · {tail}",
+                    f"**{item['label']}** · 本赛日 {_pct(day.get('rate'))}"
+                    f" · 累积 {_pct(total.get('rate'))} · {tail}",
                 )
                 st.markdown(_numbers(item["picks"], item["marks"]), unsafe_allow_html=True)
 

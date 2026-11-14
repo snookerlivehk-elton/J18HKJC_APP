@@ -71,6 +71,7 @@ def _engine():
 
 
 def ensure_schema(engine=None) -> None:
+    own = engine is None
     engine = engine or _engine()
     serial = "INTEGER PRIMARY KEY AUTOINCREMENT" if engine.dialect.name == "sqlite" else "BIGSERIAL PRIMARY KEY"
     ts = "TEXT" if engine.dialect.name == "sqlite" else "TIMESTAMPTZ DEFAULT NOW()"
@@ -103,7 +104,8 @@ def ensure_schema(engine=None) -> None:
                 """
             )
         )
-    engine.dispose()
+    if own:
+        engine.dispose()
 
 
 def _parse_odds(raw: Any) -> Optional[float]:
@@ -647,19 +649,20 @@ def refresh_live(*, max_races: int = 12, force: bool = False) -> Dict[str, Any]:
         engine.dispose()
 
 
-def _rates(conn) -> Dict[str, Dict[str, Any]]:
-    rows = conn.execute(
-        text(
-            """
+def _rates(conn, race_prefix: str = "") -> Dict[str, Dict[str, Any]]:
+    sql = """
             SELECT strategy_id,
                    SUM(placed_n) AS placed_n,
                    SUM(pick_n) AS pick_n,
                    COUNT(*) AS races
             FROM index_sel_scores
-            GROUP BY strategy_id
             """
-        )
-    ).fetchall()
+    params: Dict[str, Any] = {}
+    if race_prefix:
+        sql += " WHERE race_id LIKE :prefix"
+        params["prefix"] = f"{race_prefix}%"
+    sql += " GROUP BY strategy_id"
+    rows = conn.execute(text(sql), params).fetchall()
     out = {}
     for strategy_id, placed_n, pick_n, races in rows:
         placed = int(placed_n or 0)
@@ -688,10 +691,21 @@ def load_board() -> Dict[str, Any]:
                     """
                 )
             ).fetchall()
+            latest = conn.execute(
+                text(
+                    """
+                    SELECT race_id FROM index_sel_snapshots
+                    ORDER BY id DESC LIMIT 1
+                    """
+                )
+            ).fetchone()
+            meeting_key = str(latest[0])[:10] if latest and latest[0] else ""
             races = []
-            meeting_date = ""
-            venue = ""
+            meeting_date = meeting_key[:8]
+            venue = meeting_key[8:10]
             for race_id, max_id in race_rows:
+                if meeting_key and not str(race_id).startswith(meeting_key):
+                    continue
                 row = conn.execute(
                     text(
                         """
@@ -708,9 +722,6 @@ def load_board() -> Dict[str, Any]:
                 except json.JSONDecodeError:
                     continue
                 rid = str(race_id)
-                if len(rid) >= 10:
-                    meeting_date = rid[:8]
-                    venue = rid[8:10]
                 finishes = _finishes(conn, rid)
                 strategies = []
                 for strategy_id, label, note in STRATEGY_SPECS:
@@ -740,7 +751,8 @@ def load_board() -> Dict[str, Any]:
                 "meeting_date": meeting_date,
                 "venue": venue,
                 "races": races,
-                "rates": _rates(conn),
+                "day_rates": _rates(conn, meeting_key),
+                "cumulative_rates": _rates(conn),
             }
     finally:
         engine.dispose()

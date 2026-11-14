@@ -102,6 +102,33 @@ def test_finish_marks_and_hit_rate():
     assert hit_rate(3, 6) == 0.5
 
 
+def test_day_rate_stays_separate_from_cumulative():
+    from sqlalchemy import create_engine, text
+
+    from index_selection_feed import _rates, ensure_schema
+
+    engine = create_engine("sqlite:///:memory:")
+    ensure_schema(engine)
+    with engine.begin() as conn:
+        for race_id, placed in (("20261114ST01", 2), ("20261118HV01", 6)):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO index_sel_scores
+                    (race_id, strategy_id, picks_json, placed_n, pick_n, source)
+                    VALUES (:race_id, 'win_hot', '[1]', :placed, 6, 'pre_close')
+                    """
+                ),
+                {"race_id": race_id, "placed": placed},
+            )
+        day = _rates(conn, "20261114ST")
+        total = _rates(conn)
+    assert day["win_hot"]["rate"] == 2 / 6
+    assert day["win_hot"]["races"] == 1
+    assert total["win_hot"]["rate"] == 8 / 12
+    assert total["win_hot"]["races"] == 2
+
+
 def test_parse_pools_reads_win_place_qin_fct():
     parsed = parse_pools(
         [
