@@ -914,9 +914,22 @@ class MeetingTickRunner:
                     c,
                     "RACECARD",
                     rec.get("result") or {},
-                    waiting_hints=("無排位", "尚未", "empty", "404"),
+                    waiting_hints=("無排位", "尚未", "empty", "404", "WHITELIST"),
                 )
                 out["readiness_after_racecard"] = self.pipe.refresh_readiness(d, c)
+                # jjjc export／上游 fetch 失敗（常見 WHITELIST_ERROR）時，
+                # 回退本機 HKJC HTML crawler，避免賽前全鏈卡死、廣告出唔到。
+                if self._stage_status(out["readiness_after_racecard"], "RACECARD") != STATUS_OK:
+                    crawl = _act("crawl_racecard")
+                    self._record_pull_attempt(
+                        d,
+                        c,
+                        "RACECARD",
+                        crawl.get("result") or {},
+                        waiting_hints=("無排位", "尚未", "empty", "404", "解析失敗"),
+                    )
+                    out["readiness_after_racecard"] = self.pipe.refresh_readiness(d, c)
+                    out["racecard_crawl_fallback"] = True
 
         # 本輪拉完排位後才有意義；若計劃拉但失敗，下游仍可能 skip
         ready_now = (
