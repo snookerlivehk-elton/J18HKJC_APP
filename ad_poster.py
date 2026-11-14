@@ -1410,9 +1410,12 @@ def zip_batch_bytes(batch_dir: Path) -> bytes:
                 from ad_llm_copy import format_social_post_text
 
                 social = _json.loads(social_p.read_text(encoding="utf-8"))
-                fb_text = str(social.get("post_text") or "").strip()
-                if not fb_text:
+                featured = list(social.get("featured") or [])
+                fb_text = ""
+                if featured:
                     fb_text = format_social_post_text(social).strip()
+                if not fb_text:
+                    fb_text = str(social.get("post_text") or "").strip()
             except Exception:
                 fb_text = ""
         if not fb_text:

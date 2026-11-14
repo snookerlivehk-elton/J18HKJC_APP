@@ -330,9 +330,10 @@ def _render_social_copy(
     if hashtags:
         st.code(" ".join(hashtags), language=None)
 
-    post_text = str(social_data.get("post_text") or "").strip()
+    # 已保存的 post_text 可能按 60 字截斷；預覽按精選評述全文重排。
+    post_text = format_social_post_text(social_data).strip()
     if not post_text:
-        post_text = format_social_post_text(social_data)
+        post_text = str(social_data.get("post_text") or "").strip()
     st.text_area(
         "Facebook / IG 貼文",
         value=post_text,

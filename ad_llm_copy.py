@@ -482,8 +482,13 @@ def _build_pick_reason(
     return reason
 
 
-def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
-    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚，並標明近績時間線。"""
+def _humanize_comment(
+    text: str, *, daypart: str = "今日", max_chars: Optional[int] = COMMENT_MAX_CHARS
+) -> str:
+    """精選評述轉人話：去掉能量／走位技術字串，日馬唔用今晚，並標明近績時間線。
+
+    max_chars 只用於生成時收斂長度。貼文排版傳 None，避免半句截斷。
+    """
     body = str(text or "").strip().replace("\n", " ")
     body = re.sub(r"能量\s*[：:]\s*[\d.]+%?", "", body)
     body = re.sub(r"\b\d+W\d+P\d+S\b", "", body, flags=re.I)
@@ -497,7 +502,9 @@ def _humanize_comment(text: str, *, daypart: str = "今日") -> str:
     if not body or len(body) < 4:
         return f"{daypart}數據走勢值得留意，有得傾"
     body = _frame_as_prerace_form_comment(body)
-    return body[:COMMENT_MAX_CHARS]
+    if max_chars is None:
+        return body
+    return body[: max(0, int(max_chars))]
 
 
 def _meeting_daypart_from_copy(copy_data: Optional[Dict[str, Any]]) -> str:
@@ -609,7 +616,9 @@ def format_social_post_text(social_data: Dict[str, Any], *, copy_data: Optional[
         race_no = item.get("race_no") or "?"
         horse_no = item.get("horse_no") or "?"
         horse_name = item.get("horse_name") or ""
-        comment = _humanize_comment(item.get("comment") or "", daypart=daypart)
+        comment = _humanize_comment(
+            item.get("comment") or "", daypart=daypart, max_chars=None
+        )
         lines.append(f"第{race_no}場｜{horse_no} {horse_name}".rstrip())
         if comment:
             lines.append(str(comment))

@@ -87,12 +87,14 @@ def _social_dict_to_ai_payload(social: Dict[str, Any]) -> Optional[Dict[str, Any
     except Exception:
         format_social_post_text = None  # type: ignore
     featured = list(social.get("featured") or [])
-    post_text = str(social.get("post_text") or "").strip()
-    if not post_text and format_social_post_text:
+    post_text = ""
+    if format_social_post_text and featured:
         try:
             post_text = format_social_post_text(social).strip()
         except Exception:
             post_text = ""
+    if not post_text:
+        post_text = str(social.get("post_text") or "").strip()
     if not featured and not post_text:
         return None
     meeting = dict(social.get("meeting") or {})
