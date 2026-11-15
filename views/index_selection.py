@@ -21,6 +21,15 @@ SELL_LABEL = {
     "PAYOUT": "已派彩",
     "REFUND": "退款",
 }
+VENUE_LABEL = {"ST": "沙田", "HV": "跑马地"}
+
+
+def _meeting_label(meeting_date, venue) -> str:
+    text = str(meeting_date or "")
+    if len(text) == 8 and text.isdigit():
+        text = f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+    place = VENUE_LABEL.get(str(venue or ""), str(venue or ""))
+    return f"{text} {place}".strip()
 
 
 def _pct(rate) -> str:
@@ -78,22 +87,24 @@ def _board() -> None:
         with st.spinner("正在向马会对齐各池…"):
             summary = refresh_live()
         st.session_state["index_sel_summary"] = summary
-    with col2:
-        if summary.get("meeting_date"):
-            st.caption(
-                f"会议 {summary.get('meeting_date')} {summary.get('venue') or ''} · "
-                f"本轮新写入 {summary.get('fetched') or 0} 场"
-            )
-        else:
-            st.caption("马会这刻没有返回受注会议。")
-
     board = load_board()
     day_rates = board.get("day_rates") or {}
     cumulative_rates = board.get("cumulative_rates") or {}
+    meeting = _meeting_label(board.get("meeting_date"), board.get("venue"))
+    with col2:
+        if meeting:
+            fresh = int(summary.get("fetched") or 0)
+            st.caption(f"本轮新写入 {fresh} 场" if summary.get("meeting_date") else "马会这刻没有返回受注会议，下面是最近一个赛日。")
+        elif summary.get("meeting_date"):
+            st.caption(f"本轮新写入 {summary.get('fetched') or 0} 场")
+        else:
+            st.caption("马会这刻没有返回受注会议。")
+
     if not board.get("races"):
         st.info("还没有快照。受注开始后，这一页会每 30 秒重排号码。")
         return
 
+    st.subheader(meeting or "赛日未知")
     st.caption("入围写成「本赛日（累积）」。括号里是以往赛日加在一起的入围率。")
     rows = []
     for strategy_id, label, note in STRATEGY_SPECS:
@@ -115,7 +126,7 @@ def _board() -> None:
     st.divider()
     for race in board["races"]:
         status = SELL_LABEL.get(str(race.get("sell_status") or ""), str(race.get("sell_status") or "—"))
-        title = f"第 {race.get('race_no') or '?'} 场 · {status}"
+        title = f"{meeting} · 第 {race.get('race_no') or '?'} 场 · {status}"
         with st.expander(title, expanded=True):
             for item in race["strategies"]:
                 day = day_rates.get(item["id"]) or {}
