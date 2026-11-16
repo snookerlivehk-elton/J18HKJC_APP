@@ -1,8 +1,9 @@
 # j18pro 排位页开发交接说明
 
 > 面向接手同事的工程文档。产品文案用繁体（zh-HK）；本文用简体方便阅读。  
-> 文档对应线上约 **`0.2.364`**（以 SERVER2 `package.json` / `VERSION` 为准）。  
-> 主工作文件：`static/racecard_board.html`（单文件 HTML + CSS + JS，约 1.2 万行）。
+> **先读总览**：[程序开发介绍与语言架构](./J18PRO_DEV_INTRO.md)。  
+> 文档对应线上约 **`0.2.416`**（以 SERVER2 `package.json` / `VERSION` 为准）。  
+> 主工作文件：`static/racecard_board.html`（单文件 HTML + CSS + JS，约 1.3 万行）。
 
 ---
 
@@ -14,9 +15,11 @@ j18 手机端风格的 **赛马排位页原型 / 业务页**：
 - 场次胶囊、赛况元信息
 - 综合指数 / 赛果派彩胶囊
 - 左锁列 + 右滑数据表（自动量列宽）
-- 水位、马匹详情、心水笔记、心水战绩、**名家贴士** 等弹层
+- 水位、马匹详情、心水笔记、心水战绩、**名家贴士**、使用说明（更新日志）等弹层／独立页
 
 当前阶段：**前端演示数据为主**（内嵌 `MEETING` 快照 + 若干 DEMO）。接真 API 时尽量只换数据入口，少动交互壳。
+
+**语言一句话**：页面 = 原生 HTML/CSS/JS（无框架）；线上宿主 = Node 静态服务；仓库预览／测试 = Python FastAPI + pytest。
 
 ---
 
@@ -43,10 +46,12 @@ http://120.77.253.95:3030/racecard.html
 
 | 路径 | 说明 |
 |------|------|
+| `docs/J18PRO_DEV_INTRO.md` | **程序介绍 + 语言架构总览**（给接手同事先读） |
 | `static/racecard_board.html` | **唯一主实现**（结构 / 样式 / 逻辑都在此） |
+| `static/racecard_help.html` | 使用说明页 + `FEATURE_CHANGELOG` |
 | `raceday_embed_api.py` | 仓库内 `/embed/racecard` 挂载 |
 | `tests/test_raceday_embed.py` | 大量字符串断言锁 UI/行为（`test_racecard_board_prototype_serves`） |
-| `AGENTS.md` | Cursor Cloud 排位页硬规则（部署、验收、列宽、文案语言） |
+| `AGENTS.md` | Cursor Cloud 排位页硬规则（部署、验收、列宽、文案语言、更新日志） |
 | `docs/JJJC_DOWNSTREAM_CONTRACT.md` | 下游 JJJC 数据契约（接 API 时对照，非本页交互说明） |
 
 线上对应：
@@ -94,7 +99,8 @@ header.topbar
 | `synthReviewOverlay` | 综合评述 + 笔记 |
 | `speedMapOverlay` | 走位/速度相关 |
 | `jtCollabOverlay` | 骑练合作战绩 |
-| `waterSheet` / `horseSheet` | 水位、马匹详情 |
+| `waterSheet` / `horseSheet` | 水位、马匹详情（详情正文待重设计：暂只彩衣／马号／马名） |
+| `help.html`（独立页） | 菜单「使用说明」→ 功能更新日志 |
 
 约定：打开弹层前调用 `closeAllBoardOverlays(exceptId)` 统一互斥（含水位 / 马匹详情）。  
 赛期表 `closeRaceDateCalendar` **仅在 overlay 原本已打开时**才 `loadMeetingForDate`；Escape 由顶栏处理链统一接管（含赛期 / 派彩）。  
@@ -151,23 +157,25 @@ header.topbar
 
 ## 7. 近期已完成功能（接手上下文）
 
-按时间从近到远（便于对照 PR / 版本）：
+按时间从近到远（便于对照 PR / 版本；以线上 `VERSION` 与使用说明日志为准）：
 
-1. **名家贴士号圈浅色对比度**（约 `0.2.364`）  
-   - 未中号可读；与心水战绩一致  
-2. **名家入口 + 名家贴士弹层**（约 `0.2.363`）  
-   - 顶栏布局调整；弹层含场次胶囊、综合心水、临场/早餐/马房、胜率、冠亚季殿  
-3. **心水战绩**一整套  
-   - 今日心水、战绩统计（本日/本赛季）、名家奖金榜  
-   - 高度贴底/短内容收缩、深色可滚、灰色字对比度  
-   - 弹层顶对齐公告栏  
+1. **马匹详情清空待重设计**（`0.2.416`）  
+   - 点马名：顶栏只留彩衣／马号／马名；正文与场次副标先空  
+2. **使用说明 + 功能更新日志**（自 `0.2.412`）  
+   - 菜单进独立 `help.html`；`FEATURE_CHANGELOG` 只记终态  
+3. **名家榜／骑练文案／单元格半圆提示** 等（`0.2.400+` 一带，见 help 日志与 PR 栈）  
+4. **名家贴士号圈浅色对比度**（约 `0.2.364`）  
+5. **名家入口 + 名家贴士弹层**（约 `0.2.363`）  
+6. **心水战绩**一整套  
    - 「每场预计奖金」类实验已按产品要求 **revert 掉**，勿擅自加回  
 
 相关 PR 示例（栈会随合并变化，以 GitHub 为准）：
 
+- #115 马匹详情清空  
+- #105 一带：名家排序／文案／半圆提示等叠栈  
 - #97 名家贴士弹层（base: `cursor/j18pro-racecard-board-6fd6`）  
-- #98 名家号圈对比度（base: `cursor/famous-tips-sheet-6fd6`）  
-- #61 等更早的 j18pro 排位基建（赛期表、状态灯、指数胶囊…）
+- #98 名家号圈对比度  
+- #61 等更早的 j18pro 排位基建
 
 ---
 
@@ -203,7 +211,7 @@ python3 -m pytest tests/test_raceday_embed.py -q -k racecard_board
 scp static/racecard_board.html root@120.77.253.95:/root/j18pro/public/racecard.html
 
 # 2)  bump 版本（VERSION + package.json，二者一致）
-#    例：0.2.364 → 0.2.365
+#    例：0.2.416 → 0.2.417
 
 # 3) 重启
 ssh root@120.77.253.95 'cd /root/j18pro && pm2 restart j18pro'
