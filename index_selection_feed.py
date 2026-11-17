@@ -265,30 +265,38 @@ def fetch_race_pools(
     return parsed
 
 
+def _try_fetchall(conn, statement, params: Mapping[str, Any]) -> List[Any]:
+    """可选查询放在保存点里。失败只回滚这一句，不能让 PostgreSQL 废掉整段写入。"""
+    try:
+        with conn.begin_nested():
+            return list(conn.execute(statement, params).fetchall())
+    except Exception:
+        return []
+
+
 def _venue_for_date(conn, yyyymmdd: str) -> str:
-    rows = conn.execute(
+    rows = _try_fetchall(
+        conn,
         text("SELECT race_id FROM runners WHERE race_id LIKE :p LIMIT 30"),
         {"p": f"{yyyymmdd}%"},
-    ).fetchall()
+    )
     codes = []
     for row in rows:
         rid = str(row[0] or "")
         if len(rid) >= 10:
             codes.append(rid[8:10])
     if not codes:
-        try:
-            upcoming = conn.execute(
-                text(
-                    """
-                    SELECT race_id FROM upcoming_races
-                    WHERE REPLACE(CAST(racing_date AS TEXT), '-', '') = :d
-                    LIMIT 5
-                    """
-                ),
-                {"d": yyyymmdd},
-            ).fetchall()
-        except Exception:
-            upcoming = []
+        upcoming = _try_fetchall(
+            conn,
+            text(
+                """
+                SELECT race_id FROM upcoming_races
+                WHERE REPLACE(CAST(racing_date AS TEXT), '-', '') = :d
+                LIMIT 5
+                """
+            ),
+            {"d": yyyymmdd},
+        )
         for row in upcoming:
             rid = str(row[0] or "")
             if len(rid) >= 10:
@@ -297,8 +305,8 @@ def _venue_for_date(conn, yyyymmdd: str) -> str:
 
 
 def _attach_model(conn, race_id: str, horses: List[Dict[str, Any]]) -> None:
-    try:
-        rows = conn.execute(
+    rows = _try_fetchall(
+        conn,
         text(
             """
             SELECT s.horse_no, s.model_win_prob, s.fused_share
@@ -313,10 +321,8 @@ def _attach_model(conn, race_id: str, horses: List[Dict[str, Any]]) -> None:
               )
             """
         ),
-            {"race_id": race_id},
-        ).fetchall()
-    except Exception:
-        return
+        {"race_id": race_id},
+    )
     by_no = {int(r[0]): r for r in rows}
     for horse in horses:
         row = by_no.get(int(horse["no"]))
@@ -344,43 +350,12 @@ def _finishes(conn, race_id: str) -> Dict[int, int]:
     return out
 
 
-def _post_time(conn, race_id: str) -> Optional[datetime]:
-    try:
-        row = conn.execute(
-            text("SELECT post_time, race_time FROM upcoming_races WHERE race_id = :r"),
-            {"r": race_id},
-        ).fetchone()
-    except Exception:
-        return None
-    if not row:
-        return None
-    raw = row[0] or row[1]
-    if raw is None:
-        return None
-    if isinstance(raw, datetime):
-        return raw if raw.tzinfo else raw.replace(tzinfo=HK_TZ)
-    text_v = str(raw).strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%H:%M"):
-        try:
-            parsed = datetime.strptime(text_v, fmt)
-            break
-        except ValueError:
-            parsed = None
-    if parsed is None:
-        return None
-    if parsed.year < 2000 and len(race_id) >= 8:
-        day = datetime.strptime(race_id[:8], "%Y%m%d")
-        parsed = parsed.replace(year=day.year, month=day.month, day=day.day)
-    return parsed.replace(tzinfo=HK_TZ)
-
-
 def _minutes_to_post(conn, race_id: str, sell_status: str) -> Optional[float]:
+    """受注中没有可靠的开跑时间，时间轴策略按开跑前 30 分钟以上处理。"""
+    del conn, race_id
     if str(sell_status).upper() in {"STOP_SELL", "PAYOUT", "REFUND"}:
         return 0.0
-    post = _post_time(conn, race_id)
-    if post is None:
-        return None
-    return (post - datetime.now(HK_TZ)).total_seconds() / 60.0
+    return None
 
 
 def _qin_map(raw: Mapping[str, Any]) -> Dict[Tuple[int, int], float]:

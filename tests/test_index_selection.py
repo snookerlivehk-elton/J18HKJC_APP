@@ -162,3 +162,19 @@ def test_parse_pools_reads_win_place_qin_fct():
     assert parsed["horses"][1]["scratched"] is True
     assert parsed["qin"]["1,3"] == 12.0
     assert parsed["fct"]["3,1"] == 20.0
+
+
+def test_optional_query_failure_does_not_abort_the_write():
+    from sqlalchemy import create_engine, text
+
+    from index_selection_feed import _minutes_to_post, _try_fetchall
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)"))
+        missed = _try_fetchall(conn, text("SELECT missing_col FROM t"), {})
+        assert missed == []
+        conn.execute(text("INSERT INTO t (v) VALUES ('ok')"))
+        assert conn.execute(text("SELECT v FROM t")).scalar() == "ok"
+        assert _minutes_to_post(conn, "20261118HV01", "START_SELL") is None
+        assert _minutes_to_post(conn, "20261118HV01", "PAYOUT") == 0.0
