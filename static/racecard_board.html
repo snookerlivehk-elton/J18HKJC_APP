@@ -1534,6 +1534,7 @@
       --wh-line-h: calc(var(--wh-num-fs) * var(--wh-num-lh));
       --wh-col-w: 54px;
       --wh-odds-w: 37px;
+      --wh-peak-w: 36px;
       --wh-pin-w: 73px;
       min-width: max-content;
       background: #fff;
@@ -1548,6 +1549,7 @@
     .water-row.alt .water-lock,
     .water-row.alt .water-pin,
     .water-row.alt .wp-odds,
+    .water-row.alt .wp-peak,
     .water-row.alt .whour { background: #f4f6f8; }
     .water-row.scratched { opacity: .45; }
     .water-row.head {
@@ -1560,6 +1562,7 @@
     .water-row.head .water-lock,
     .water-row.head .water-pin,
     .water-row.head .wp-odds,
+    .water-row.head .wp-peak,
     .water-row.head .whour {
       background: #e8f0ec;
       color: #355a4c;
@@ -1732,7 +1735,8 @@
       font-variant-numeric: tabular-nums lining-nums;
     }
     .water-pin .pin-lab,
-    .wp-odds .pin-lab {
+    .wp-odds .pin-lab,
+    .wp-peak .pin-lab {
       font-size: 11px;
       font-weight: 700;
       color: #355a4c;
@@ -1740,6 +1744,53 @@
       text-align: center;
       width: 100%;
     }
+    /* 鎖定列最右：曾達最高折扣（獨贏／位置／WP+），只記水位、不記貨量 */
+    .wp-peak {
+      flex: 0 0 var(--wh-peak-w);
+      width: var(--wh-peak-w);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: var(--wh-line-gap);
+      padding: var(--wh-pad-y) 2px;
+      background: #fff;
+      border-right: 1px solid #d5e2db;
+      overflow: hidden;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+    .water-row.head .wp-peak {
+      justify-content: center;
+      align-items: center;
+    }
+    .wp-peak .win,
+    .wp-peak .pla,
+    .wp-peak .wp {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 100%;
+      height: var(--wh-line-h);
+      min-height: var(--wh-line-h);
+      font-size: var(--wh-num-fs);
+      font-weight: 400;
+      line-height: var(--wh-num-lh);
+      white-space: nowrap;
+      text-align: center;
+    }
+    .wp-peak .win { color: var(--text); }
+    .wp-peak .pla { color: #7b8494; }
+    .wp-peak .wp { color: #8a93a3; }
+    .wp-peak .od-n {
+      font: inherit;
+      font-size: var(--wh-num-fs);
+      line-height: var(--wh-num-lh);
+      color: inherit;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+    .wp-peak .muted { color: var(--muted); }
     /* 時段列：等寬收緊、內容居中對齊 */
     .whour {
       flex: 0 0 var(--wh-col-w);
@@ -1848,12 +1899,14 @@
     .water-row.is-wh-cross-row > .water-lock,
     .water-row.is-wh-cross-row .water-pin,
     .water-row.is-wh-cross-row .wp-odds,
+    .water-row.is-wh-cross-row .wp-peak,
     .water-row.is-wh-cross-row > .whour {
       background: #dce9e2;
     }
     .water-row.alt.is-wh-cross-row > .water-lock,
     .water-row.alt.is-wh-cross-row .water-pin,
     .water-row.alt.is-wh-cross-row .wp-odds,
+    .water-row.alt.is-wh-cross-row .wp-peak,
     .water-row.alt.is-wh-cross-row > .whour {
       background: #d0e0d7;
     }
@@ -1976,6 +2029,7 @@
       opacity: .88;
       line-height: 1.25;
     }
+    .horse-sheet-title .sub:empty { display: none; }
     .horse-sheet-close {
       position: absolute;
       top: 8px;
@@ -5891,6 +5945,7 @@
     }
     html[data-theme="dark"] .odds .pla,
     html[data-theme="dark"] .wp-odds .pla,
+    html[data-theme="dark"] .wp-peak .pla,
     html[data-theme="dark"] .wh-line .fv,
     html[data-theme="dark"] .wp-tname,
     html[data-theme="dark"] .scroll-col .v.gear-chg .gear-prev {
@@ -5898,12 +5953,14 @@
     }
     html[data-theme="dark"] .wh-line.pla .wv,
     html[data-theme="dark"] .wh-line.pla .fv,
-    html[data-theme="dark"] .wp-odds .pla {
+    html[data-theme="dark"] .wp-odds .pla,
+    html[data-theme="dark"] .wp-peak .pla {
       color: #8b93a0;
     }
     html[data-theme="dark"] .wh-line.wp .wv,
     html[data-theme="dark"] .wh-line.wp .fv,
-    html[data-theme="dark"] .wp-odds .wp {
+    html[data-theme="dark"] .wp-odds .wp,
+    html[data-theme="dark"] .wp-peak .wp {
       color: #7b8494;
     }
     html[data-theme="dark"] .comment {
@@ -5964,25 +6021,29 @@
     html[data-theme="dark"] .water-lock,
     html[data-theme="dark"] .water-pin,
     html[data-theme="dark"] .wp-odds,
+    html[data-theme="dark"] .wp-peak,
     html[data-theme="dark"] .whour {
       background: #1e242d;
     }
     html[data-theme="dark"] .water-row.alt .water-lock,
     html[data-theme="dark"] .water-row.alt .water-pin,
     html[data-theme="dark"] .water-row.alt .wp-odds,
+    html[data-theme="dark"] .water-row.alt .wp-peak,
     html[data-theme="dark"] .water-row.alt .whour {
       background: #252b34;
     }
     html[data-theme="dark"] .water-row.head .water-lock,
     html[data-theme="dark"] .water-row.head .water-pin,
     html[data-theme="dark"] .water-row.head .wp-odds,
+    html[data-theme="dark"] .water-row.head .wp-peak,
     html[data-theme="dark"] .water-row.head .whour {
       background: #2a3831;
       color: #b8d4c4;
       border-bottom-color: #3d5448;
     }
     html[data-theme="dark"] .water-pin .pin-lab,
-    html[data-theme="dark"] .wp-odds .pin-lab {
+    html[data-theme="dark"] .wp-odds .pin-lab,
+    html[data-theme="dark"] .wp-peak .pin-lab {
       color: #b8d4c4;
     }
     html[data-theme="dark"] .water-pin .nm {
@@ -5991,12 +6052,14 @@
     html[data-theme="dark"] .whour {
       border-right-color: #323a46;
     }
-    html[data-theme="dark"] .wp-odds {
+    html[data-theme="dark"] .wp-odds,
+    html[data-theme="dark"] .wp-peak {
       border-right-color: #3d5448;
     }
     html[data-theme="dark"] .water-row.is-wh-cross-row > .water-lock,
     html[data-theme="dark"] .water-row.is-wh-cross-row .water-pin,
     html[data-theme="dark"] .water-row.is-wh-cross-row .wp-odds,
+    html[data-theme="dark"] .water-row.is-wh-cross-row .wp-peak,
     html[data-theme="dark"] .water-row.is-wh-cross-row > .whour,
     html[data-theme="dark"] .water-board .whour.is-wh-cross-col {
       background: #2f4a3c;
@@ -6004,6 +6067,7 @@
     html[data-theme="dark"] .water-row.alt.is-wh-cross-row > .water-lock,
     html[data-theme="dark"] .water-row.alt.is-wh-cross-row .water-pin,
     html[data-theme="dark"] .water-row.alt.is-wh-cross-row .wp-odds,
+    html[data-theme="dark"] .water-row.alt.is-wh-cross-row .wp-peak,
     html[data-theme="dark"] .water-row.alt.is-wh-cross-row > .whour,
     html[data-theme="dark"] .water-row.alt .whour.is-wh-cross-col {
       background: #355445;
@@ -10962,11 +11026,6 @@
       });
     }
 
-    function sheetItem(label, value, wide) {
-      const empty = value == null || value === "" || value === "—";
-      return '<div class="item' + (wide ? " wide" : "") + '"><span class="k">' + esc(label) +
-        '</span><span class="v' + (empty ? " muted" : "") + '">' + esc(empty ? "—" : value) + "</span></div>";
-    }
     function closeHorseSheet() {
       if (!el.sheet || el.sheet.hasAttribute("hidden")) return;
       el.sheet.setAttribute("hidden", "");
@@ -11206,6 +11265,44 @@
         activateFrom(cell);
       });
     }
+    /* 曾達最高折扣：只取水位（winW／plaW／wpW），不記貨量；只升不降 */
+    function waterPeakMax(prev, samples, key) {
+      let peak = numOrNull(prev);
+      (samples || []).forEach(function (s) {
+        const n = s ? numOrNull(s[key]) : null;
+        if (n == null) return;
+        peak = peak == null ? n : Math.max(peak, n);
+      });
+      return peak;
+    }
+    function rememberWaterPeaks(r, samples) {
+      if (!r || r.scratched) return { win: null, pla: null, wp: null };
+      const win = waterPeakMax(r.winWaterPeak, samples, "winW");
+      const pla = waterPeakMax(r.placeWaterPeak, samples, "plaW");
+      const wp = waterPeakMax(r.wpWaterPeak, samples, "wpW");
+      if (win != null) r.winWaterPeak = win;
+      if (pla != null) r.placeWaterPeak = pla;
+      if (wp != null) r.wpWaterPeak = wp;
+      return { win: win, pla: pla, wp: wp };
+    }
+    function waterPeakLineHtml(cls, val) {
+      const empty = val == null;
+      return (
+        '<span class="' + cls + (empty ? " muted" : "") + '"><span class="od-n">' +
+          esc(empty ? "—" : fmtWater(val)) +
+        "</span></span>"
+      );
+    }
+    function waterPeakCellHtml(peak) {
+      const p = peak || {};
+      return (
+        '<div class="wp-peak">' +
+          waterPeakLineHtml("win", p.win) +
+          waterPeakLineHtml("pla", p.pla) +
+          waterPeakLineHtml("wp", p.wp) +
+        "</div>"
+      );
+    }
     function fillWaterSheet() {
       if (!el.waterSheetBody) return;
       const hours = waterHourLabels(WATER_HOUR_COLS);
@@ -11217,6 +11314,7 @@
           '<div class="water-lock">' +
             '<div class="water-pin"><span class="pin-lab">馬號／馬名</span></div>' +
             '<div class="wp-odds"><span class="pin-lab">賠率</span></div>' +
+            '<div class="wp-peak"><span class="pin-lab">最高</span></div>' +
           "</div>" +
           hours.map(function (lab, hi) {
             return '<div class="whour" data-wh-col="' + hi + '">' + esc(lab) + "</div>";
@@ -11232,6 +11330,11 @@
         const tFull = (r.trainer != null && String(r.trainer).trim() !== "") ? String(r.trainer).trim() : "—";
         const jShow = shortWaterJtName(jFull);
         const tShow = shortWaterJtName(tFull);
+        /* 左＝最近（hourAgo 0），右＝更早；與右鄰更早時段比升降 */
+        const samples = hours.map(function (_lab, hi) {
+          return waterHourSample(r, hi);
+        });
+        const peak = rememberWaterPeaks(r, samples);
         const lock =
           '<div class="water-lock">' +
             '<div class="water-pin">' +
@@ -11252,11 +11355,8 @@
               /* 第三行無獨立 WP 賠率，固定標「WP+」對齊時段列下 WP 行 */
               '<span class="wp"><span class="od-n">WP+</span></span>' +
             "</div>" +
+            waterPeakCellHtml(peak) +
           "</div>";
-        /* 左＝最近（hourAgo 0），右＝更早；與右鄰更早時段比升降 */
-        const samples = hours.map(function (_lab, hi) {
-          return waterHourSample(r, hi);
-        });
         const hourCells = samples.map(function (sample, hi) {
           const earlier = hi + 1 < samples.length ? samples[hi + 1] : null;
           return waterHourCellHtml(sample, earlier, hi);
@@ -11293,11 +11393,10 @@
       closeAllBoardOverlays("horseSheet");
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
-      const meet = currentMeet();
-      const j = splitNameAllow(r.jockey);
       el.sheetNo.textContent = String(r.no);
       el.sheetName.textContent = r.name || "";
-      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
+      /* 詳情正文待重設計：暫只保留彩衣／馬號／馬名 */
+      if (el.sheetRace) el.sheetRace.textContent = "";
       if (r.silk) {
         el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
         el.sheetSilk.className = "horse-sheet-silk";
@@ -11305,36 +11404,7 @@
         el.sheetSilk.style.backgroundImage = "";
         el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
       }
-      el.sheetBody.innerHTML =
-        '<div class="horse-sheet-odds">' +
-          '<div class="box"><span class="k">檔位</span><span class="v">' + esc(fmt(r.draw)) + "</span></div>" +
-          '<div class="box"><span class="k">獨贏</span><span class="v">' + esc(r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win")) + "</span></div>" +
-          '<div class="box"><span class="k">位置</span><span class="v">' + esc(r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place")) + "</span></div>" +
-        "</div>" +
-        '<div class="horse-sheet-grid">' +
-          sheetItem("近績", r.form6) +
-          sheetItem("往績", r.recent) +
-          sheetItem("騎師", j.delta ? (j.name + "（" + j.delta + "）") : (j.name || r.jockey)) +
-          sheetItem("練馬師", r.trainer) +
-          sheetItem("年齡", r.age) +
-          sheetItem("評分", (function () {
-            const d = fmtDelta(r.rtgDelta);
-            return d ? (fmt(r.rating) + "（" + d + "）") : r.rating;
-          })()) +
-          sheetItem("負磅", (function () {
-            const d = hwDeltaOf(r);
-            return d ? (fmt(r.hw) + "（" + d + "）") : r.hw;
-          })()) +
-          sheetItem("排位體重", r.bodyWt) +
-          sheetItem("配備", r.gear) +
-          sheetItem("出道至今", fmtCareer(r.career)) +
-          sheetItem("跑道", r.rail) +
-          sheetItem("父系", r.sire) +
-          sheetItem("母系", r.dam) +
-          sheetItem("外祖父", r.damsire, true) +
-          sheetItem("馬主", r.owner, true) +
-          sheetItem("獎金", r.prize) +
-        "</div>";
+      if (el.sheetBody) el.sheetBody.innerHTML = "";
       el.sheet.removeAttribute("hidden");
       el.sheet.setAttribute("aria-hidden", "false");
       if (el.sheetClose) el.sheetClose.focus();
