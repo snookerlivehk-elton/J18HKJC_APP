@@ -295,6 +295,31 @@
       color: var(--orange);
     }
     .msg.is-ok { color: #1e8e3e; }
+    .tip-mask {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(20, 28, 38, .45);
+    }
+    .tip-box {
+      width: min(320px, 100%);
+      padding: 18px 16px 16px;
+      border-radius: 14px;
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 12px 32px rgba(20, 28, 38, .28);
+    }
+    .tip-box p {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .tip-box .go { margin-top: 14px; }
   </style>
 </head>
 <body>
@@ -345,6 +370,12 @@
       <button type="submit" class="go" id="goBtn">同意並登入</button>
       <p class="msg" id="msg" role="status"></p>
     </form>
+    <div class="tip-mask" id="forgotTip" hidden>
+      <div class="tip-box" role="alertdialog" aria-modal="true" aria-labelledby="forgotTipText">
+        <p id="forgotTipText">請使用手機號碼或電郵，接收驗證碼登入</p>
+        <button type="button" class="go" id="forgotTipOk">知道了</button>
+      </div>
+    </div>
   </main>
   <script>
     var mode = "login";
@@ -405,7 +436,7 @@
       var seg = $("methodSeg");
       seg.style.setProperty("--n", String(list.length));
       seg.style.setProperty("--i", String(idx));
-      seg.setAttribute("aria-label", mode === "login" ? "登入方式" : (mode === "forgot" ? "重設方式" : "註冊方式"));
+      seg.setAttribute("aria-label", mode === "login" ? "登入方式" : "註冊方式");
       seg.innerHTML = '<div class="seg-slider" aria-hidden="true"></div>' + list.map(function (m, i) {
         return '<button type="button" class="seg-btn' + (i === idx ? " is-on" : "") +
           '" data-method="' + m.id + '" role="tab" aria-selected="' + (i === idx ? "true" : "false") + '">' +
@@ -415,8 +446,8 @@
 
     function paintMode() {
       var left = $("modeLeft");
-      left.textContent = mode === "forgot" ? "忘記密碼" : "登入";
-      left.setAttribute("data-mode", mode === "register" ? "login" : mode);
+      left.textContent = "登入";
+      left.setAttribute("data-mode", "login");
       var onLeft = mode !== "register";
       left.classList.toggle("is-on", onLeft);
       left.setAttribute("aria-selected", onLeft ? "true" : "false");
@@ -427,7 +458,7 @@
       $("passField").hidden = code || mode !== "login";
       $("codeRow").hidden = !code;
       $("forgotBtn").hidden = mode !== "login" || method !== "password";
-      $("goBtn").textContent = mode === "register" ? "同意並註冊" : (mode === "forgot" ? "同意並繼續" : "同意並登入");
+      $("goBtn").textContent = mode === "register" ? "同意並註冊" : "同意並登入";
       paintMethods();
       syncIdField();
       setMsg("");
@@ -476,8 +507,7 @@
       var btn = ev.target.closest(".seg-btn");
       if (!btn) return;
       var next = btn.getAttribute("data-mode");
-      if (next === "login" && mode === "forgot") mode = "login";
-      else mode = next === "register" ? "register" : "login";
+      mode = next === "register" ? "register" : "login";
       if (mode !== "login") method = method === "password" ? "sms" : method;
       paintMode();
     });
@@ -519,9 +549,13 @@
     });
 
     $("forgotBtn").addEventListener("click", function () {
-      mode = "forgot";
+      mode = "login";
       method = "sms";
       paintMode();
+      $("forgotTip").hidden = false;
+    });
+    $("forgotTipOk").addEventListener("click", function () {
+      $("forgotTip").hidden = true;
     });
 
     $("sendBtn").addEventListener("click", function () {
@@ -581,7 +615,7 @@
       phoneFailStreak = 0;
       phoneMul = 1;
       issued = "";
-      setMsg(mode === "forgot" ? "已驗證，可繼續重設" : "已驗證", true);
+      setMsg("已驗證", true);
     });
 
     $("authBack").addEventListener("click", function (ev) {
