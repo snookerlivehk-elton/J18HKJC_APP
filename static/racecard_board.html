@@ -3228,7 +3228,7 @@
     }
     .tr-lb-sum {
       display: grid;
-      grid-template-columns: 26px minmax(0, 1fr) 40px auto;
+      grid-template-columns: 34px minmax(0, 1fr) 40px auto;
       gap: 5px;
       align-items: center;
       width: 100%;
@@ -3247,6 +3247,7 @@
       font-size: 12px;
       font-weight: 800;
       color: var(--nav);
+      font-variant-numeric: tabular-nums;
     }
     .tr-lb-name-wrap {
       display: flex;
@@ -7337,8 +7338,15 @@
         isSelf: true
       };
     }
+    function tipSelfQualifiesForBoard(u) {
+      /* 正收益且該範圍有參與才上榜；本日未玩、本賽季有玩則只在本賽季出現 */
+      if (!u) return false;
+      const prize = Number(u.prize) || 0;
+      const plays = Number(u.plays) || 0;
+      return prize > 0 && plays > 0;
+    }
     function tipLeaderboardForScope(scope) {
-      /* 名家貼士名單＋個人戰績同榜按獎金 Top 10；本日縮放名家演示量，個人用真實彙總 */
+      /* 名家貼士名單＋個人戰績同榜按獎金；前十內按名次插入，前十外且本人有正收益則末行顯示真實名次 */
       const sc = scope === "season" ? "season" : "day";
       let list = tipFamousLeaderboardBase();
       if (sc === "day") {
@@ -7364,13 +7372,18 @@
           };
         });
       }
-      list = list.concat([tipSelfLeaderboardEntry(sc)]);
+      const self = tipSelfLeaderboardEntry(sc);
+      const showSelf = tipSelfQualifiesForBoard(self);
+      if (showSelf) list = list.concat([self]);
       list.sort(function (a, b) {
         if (b.prize !== a.prize) return b.prize - a.prize;
         if (!!a.isSelf !== !!b.isSelf) return a.isSelf ? -1 : 1;
         return String(a.id).localeCompare(String(b.id));
       });
-      return list.slice(0, 10);
+      list.forEach(function (u, i) { u.rank = i + 1; });
+      const top = list.slice(0, 10);
+      if (showSelf && self.rank > 10) top.push(self);
+      return top;
     }
     function renderTipRecordLbScopeSwitch(scope) {
       const sc = scope === "season" ? "season" : "day";
@@ -7405,7 +7418,7 @@
         return '<div class="tr-lb-row' + (open ? " is-open" : "") + (u.isSelf ? " is-me" : "") +
           '" data-tr-user="' + esc(u.id) + '">' +
           '<button type="button" class="tr-lb-sum" data-tr-user="' + esc(u.id) + '" aria-expanded="' + (open ? "true" : "false") + '">' +
-            '<span class="tr-lb-rank">' + (idx + 1) + "</span>" +
+            '<span class="tr-lb-rank">' + (u.rank != null ? u.rank : (idx + 1)) + "</span>" +
             '<span class="tr-lb-name-wrap">' +
               '<span class="tr-lb-name">' + esc(u.name) + "</span>" +
               meTag +
