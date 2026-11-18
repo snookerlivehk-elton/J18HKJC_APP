@@ -2387,6 +2387,11 @@
       gap: 1px; width: auto; font-size: var(--head-fs); white-space: nowrap;
       line-height: 1.02;
     }
+    .hrow.head .cell.tip-note .tip-record-open {
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
     .odds-sort .lab { display: block; line-height: 1.02; font-size: inherit; }
     .sort-hit {
       display: inline-flex; align-items: center; justify-content: center;
@@ -11409,6 +11414,15 @@
       el.sheet.setAttribute("aria-hidden", "false");
       if (el.sheetClose) el.sheetClose.focus();
     }
+    function bindTipRecordHeadOpen() {
+      document.querySelectorAll('#board [data-open="tipRecord"]').forEach(function (btn) {
+        btn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openTipRecordSheet();
+        });
+      });
+    }
     function bindHorseSheetOpens() {
       document.querySelectorAll("#board .hrow:not(.head) .cell.pin-id[data-no]").forEach(function (cell) {
         cell.addEventListener("click", function () {
@@ -12088,6 +12102,14 @@
           peekCls = " has-cell-peek";
           peekHtml = '<span class="cell-peek" aria-hidden="true"></span>';
         }
+        if (c.key === "tipNote") {
+          /* 表頭不排序；點擊打開心水戰績 */
+          const tipLab = esc(c.label).replace(/\n/g, "<br>");
+          return '<div class="cell ' + c.cls + ' has-cell-peek">' +
+            '<button type="button" class="odds-sort tip-record-open" data-open="tipRecord" aria-label="打開心水戰績">' +
+              '<span class="lab">' + tipLab + "</span></button>" +
+            '<span class="cell-peek" aria-hidden="true"></span></div>';
+        }
         return '<div class="cell ' + c.cls + headOn(c.key) + peekCls + '">' +
           headBtn(c.key, c.label) + peekHtml + "</div>";
       }).join("");
@@ -12185,7 +12207,7 @@
       document.querySelectorAll("#board [data-sort]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.getAttribute("data-sort");
-          if (!key || key === "name" || key === "place" || key === "win" || key === "drawWinPct") return;
+          if (!key || key === "name" || key === "place" || key === "win" || key === "drawWinPct" || key === "tipNote") return;
           if (sortKey === key) sortDir = -sortDir;
           else { sortKey = key; sortDir = 1; }
           renderBoard();
@@ -12196,6 +12218,7 @@
       bindSpeedMapOpens();
       bindJtCollabOpens();
       bindHorseSheetOpens();
+      bindTipRecordHeadOpen();
       bindHorseHeadScroll();
       bindRowFlags();
       bindTipNotes();
