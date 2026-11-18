@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("j18-racecard-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>登入 · J18</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --nav: #3d5a80;
+      --nav-2: #334b6b;
+      --page: #eef1f5;
+      --card: #fff;
+      --text: #2c3340;
+      --muted: #6b7585;
+      --line: #e4e7ec;
+      --orange: #e67e22;
+      --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    html[data-theme="dark"] {
+      --nav: #6a86a8;
+      --nav-2: #2a3d58;
+      --page: #151a21;
+      --card: #1e242c;
+      --text: #e8eef6;
+      --muted: #a8b3c2;
+      --line: rgba(210, 222, 236, .18);
+      --orange: #ffb14a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      align-items: center;
+      gap: 8px;
+      min-height: 56px;
+      padding: 8px 12px;
+      padding-top: max(8px, env(safe-area-inset-top, 0px));
+      background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(30, 42, 58, .18);
+    }
+    html[data-theme="dark"] .top {
+      background: linear-gradient(180deg, #3d5574 0%, #24344a 100%);
+    }
+    .back {
+      justify-self: end;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .14);
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .back:active { background: rgba(255, 255, 255, .26); }
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 14px max(28px, env(safe-area-inset-bottom, 0px));
+    }
+    .seg {
+      --n: 2;
+      --i: 0;
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+      align-items: stretch;
+      gap: 0;
+      padding: 3px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .92);
+      border: 1px solid rgba(255, 255, 255, .35);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .seg.on-page {
+      background: #fff;
+      border-color: var(--line);
+    }
+    html[data-theme="dark"] .seg.on-page {
+      background: #2a313b;
+      border-color: var(--line);
+    }
+    .seg-slider {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 3px;
+      width: calc((100% - 6px) / var(--n));
+      border-radius: 999px;
+      background: var(--nav);
+      box-shadow: 0 1px 3px rgba(45, 62, 80, .22);
+      transform: translateX(calc(var(--i) * 100%));
+      transition: transform .32s cubic-bezier(.22, 1.35, .36, 1);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .seg-btn {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      padding: 7px 6px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--nav-2);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+      text-align: center;
+      cursor: pointer;
+    }
+    .top .seg-btn { color: var(--nav-2); }
+    .seg-btn.is-on { color: #fff; }
+    @media (prefers-reduced-motion: reduce) {
+      .seg-slider { transition: none; }
+    }
+    .card {
+      margin-top: 14px;
+      padding: 14px 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+    }
+    .field {
+      display: flex;
+      align-items: stretch;
+      min-height: 48px;
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f7f8fa;
+      overflow: hidden;
+    }
+    html[data-theme="dark"] .field { background: #171c22; }
+    .field:focus-within { border-color: var(--nav); }
+    .cc {
+      flex: 0 0 auto;
+      width: 92px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 0 8px;
+    }
+    .field.is-mail .cc { display: none; }
+    .field input {
+      flex: 1 1 auto;
+      min-width: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 16px;
+      padding: 0 12px;
+      outline: none;
+    }
+    .code-row { display: flex; gap: 8px; align-items: stretch; }
+    .code-row .field { flex: 1 1 auto; margin-top: 10px; }
+    .send {
+      flex: 0 0 auto;
+      margin-top: 10px;
+      min-width: 108px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--nav);
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .send:disabled { opacity: .55; cursor: default; }
+    .terms {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 14px 0 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .terms input { margin-top: 2px; accent-color: var(--nav); }
+    .go {
+      display: block;
+      width: 100%;
+      margin-top: 14px;
+      min-height: 46px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--nav);
+      color: #fff;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .go:disabled { opacity: .45; cursor: default; }
+    .forgot {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--nav);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .msg {
+      min-height: 1.3em;
+      margin: 10px 0 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--orange);
+    }
+    .msg.is-ok { color: #1e8e3e; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <span></span>
+    <div class="seg" id="modeSeg" style="--n:2;--i:0" role="tablist" aria-label="登入或註冊">
+      <div class="seg-slider" aria-hidden="true"></div>
+      <button type="button" class="seg-btn is-on" id="modeLeft" data-mode="login" role="tab" aria-selected="true">登入</button>
+      <button type="button" class="seg-btn" id="modeRight" data-mode="register" role="tab" aria-selected="false">註冊</button>
+    </div>
+    <button type="button" class="back" id="authBack" aria-label="返回排位">‹</button>
+  </header>
+  <main class="wrap">
+    <div class="seg on-page" id="methodSeg" style="--n:3;--i:0" role="tablist" aria-label="登入方式"></div>
+    <form class="card" id="authForm" novalidate>
+      <div class="field" id="idField">
+        <select class="cc" id="cc" aria-label="區號">
+          <option value="852">+852</option>
+          <option value="86">+86</option>
+          <option value="853">+853</option>
+          <option value="886">+886</option>
+          <option value="65">+65</option>
+          <option value="1">+1</option>
+          <option value="44">+44</option>
+        </select>
+        <input id="account" type="text" autocomplete="username" placeholder="手機號碼或電郵" />
+      </div>
+      <div class="field" id="passField">
+        <input id="password" type="password" autocomplete="current-password" placeholder="密碼" />
+      </div>
+      <div class="code-row" id="codeRow" hidden>
+        <div class="field">
+          <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="驗證碼" />
+        </div>
+        <button type="button" class="send" id="sendBtn">發送驗證碼</button>
+      </div>
+      <label class="terms">
+        <input type="checkbox" id="agree" checked />
+        <span>我已閱讀並同意服務條款及私隱政策</span>
+      </label>
+      <button type="button" class="forgot" id="forgotBtn">忘記密碼</button>
+      <button type="submit" class="go" id="goBtn">同意並登入</button>
+      <p class="msg" id="msg" role="status"></p>
+    </form>
+  </main>
+  <script>
+    var mode = "login";
+    var method = "password";
+    var sendLeft = 0;
+    var sendTimer = 0;
+    var phoneFailStreak = 0;
+    var phoneMul = 1;
+    var issued = "";
+
+    var LOGIN_METHODS = [
+      { id: "password", label: "帳號密碼登入" },
+      { id: "sms", label: "手機驗證碼登入" },
+      { id: "email", label: "電郵驗證碼登入" }
+    ];
+    var CODE_METHODS = [
+      { id: "sms", label: "手機驗證碼註冊登入" },
+      { id: "email", label: "電郵驗證碼註冊登入" }
+    ];
+
+    function $(id) { return document.getElementById(id); }
+
+    function looksEmail(v) {
+      return /[A-Za-z@]/.test(String(v || ""));
+    }
+
+    function syncIdField() {
+      var mail = method === "email" || (method !== "sms" && looksEmail($("account").value));
+      $("idField").classList.toggle("is-mail", mail);
+      $("account").placeholder = mail ? "電郵" : (method === "email" ? "電郵" : "手機號碼或電郵");
+      if (method === "sms") {
+        $("idField").classList.remove("is-mail");
+        $("account").placeholder = "手機號碼";
+      }
+      if (method === "email") {
+        $("idField").classList.add("is-mail");
+        $("account").placeholder = "電郵";
+      }
+    }
+
+    function methodsForMode() {
+      return mode === "login" ? LOGIN_METHODS : CODE_METHODS;
+    }
+
+    function paintMethods() {
+      var list = methodsForMode();
+      if (!list.some(function (m) { return m.id === method; })) method = list[0].id;
+      var idx = 0;
+      list.forEach(function (m, i) { if (m.id === method) idx = i; });
+      var seg = $("methodSeg");
+      seg.style.setProperty("--n", String(list.length));
+      seg.style.setProperty("--i", String(idx));
+      seg.setAttribute("aria-label", mode === "login" ? "登入方式" : (mode === "forgot" ? "重設方式" : "註冊方式"));
+      seg.innerHTML = '<div class="seg-slider" aria-hidden="true"></div>' + list.map(function (m, i) {
+        return '<button type="button" class="seg-btn' + (i === idx ? " is-on" : "") +
+          '" data-method="' + m.id + '" role="tab" aria-selected="' + (i === idx ? "true" : "false") + '">' +
+          m.label + "</button>";
+      }).join("");
+    }
+
+    function paintMode() {
+      var left = $("modeLeft");
+      left.textContent = mode === "forgot" ? "忘記密碼" : "登入";
+      left.setAttribute("data-mode", mode === "register" ? "login" : mode);
+      var onLeft = mode !== "register";
+      left.classList.toggle("is-on", onLeft);
+      left.setAttribute("aria-selected", onLeft ? "true" : "false");
+      $("modeRight").classList.toggle("is-on", mode === "register");
+      $("modeRight").setAttribute("aria-selected", mode === "register" ? "true" : "false");
+      $("modeSeg").style.setProperty("--i", mode === "register" ? "1" : "0");
+      var code = method !== "password";
+      $("passField").hidden = code || mode !== "login";
+      $("codeRow").hidden = !code;
+      $("forgotBtn").hidden = mode !== "login" || method !== "password";
+      $("goBtn").textContent = mode === "register" ? "同意並註冊" : (mode === "forgot" ? "同意並繼續" : "同意並登入");
+      paintMethods();
+      syncIdField();
+      setMsg("");
+    }
+
+    function setMsg(text, ok) {
+      var el = $("msg");
+      el.textContent = text || "";
+      el.classList.toggle("is-ok", !!ok);
+    }
+
+    function baseCooldown() {
+      if (method === "sms") return 60 * phoneMul;
+      return 60;
+    }
+
+    function tickSend() {
+      sendLeft -= 1;
+      if (sendLeft <= 0) {
+        sendLeft = 0;
+        clearInterval(sendTimer);
+        sendTimer = 0;
+        $("sendBtn").disabled = false;
+        $("sendBtn").textContent = "發送驗證碼";
+        return;
+      }
+      $("sendBtn").disabled = true;
+      $("sendBtn").textContent = sendLeft + "秒後重發";
+    }
+
+    function startCooldown(sec) {
+      sendLeft = sec;
+      $("sendBtn").disabled = true;
+      $("sendBtn").textContent = sendLeft + "秒後重發";
+      if (sendTimer) clearInterval(sendTimer);
+      sendTimer = setInterval(tickSend, 1000);
+    }
+
+    function accountOk() {
+      var v = String($("account").value || "").trim();
+      if (method === "email" || looksEmail(v)) return /.+@.+\..+/.test(v);
+      return /^\d{6,15}$/.test(v.replace(/[\s-]/g, ""));
+    }
+
+    $("modeSeg").addEventListener("click", function (ev) {
+      var btn = ev.target.closest(".seg-btn");
+      if (!btn) return;
+      var next = btn.getAttribute("data-mode");
+      if (next === "login" && mode === "forgot") mode = "login";
+      else mode = next === "register" ? "register" : "login";
+      if (mode !== "login") method = method === "password" ? "sms" : method;
+      paintMode();
+    });
+
+    $("methodSeg").addEventListener("click", function (ev) {
+      var btn = ev.target.closest("[data-method]");
+      if (!btn) return;
+      method = btn.getAttribute("data-method");
+      paintMode();
+    });
+
+    $("account").addEventListener("input", syncIdField);
+
+    $("forgotBtn").addEventListener("click", function () {
+      mode = "forgot";
+      method = "sms";
+      paintMode();
+    });
+
+    $("sendBtn").addEventListener("click", function () {
+      if (sendLeft > 0) return;
+      if (!accountOk()) {
+        setMsg(method === "email" ? "請輸入有效電郵" : "請輸入有效手機號碼");
+        return;
+      }
+      issued = String(Math.floor(100000 + Math.random() * 900000));
+      setMsg("驗證碼已發送", true);
+      startCooldown(baseCooldown());
+    });
+
+    function notePhoneFail() {
+      phoneFailStreak += 1;
+      if (phoneFailStreak % 3 === 0) {
+        phoneMul *= 3;
+        startCooldown(60 * phoneMul);
+        setMsg("連續驗證錯誤，請 " + (60 * phoneMul) + " 秒後再試");
+        return;
+      }
+      setMsg("驗證碼不正確");
+    }
+
+    $("authForm").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      if (!$("agree").checked) {
+        setMsg("請先同意服務條款及私隱政策");
+        return;
+      }
+      if (!accountOk()) {
+        setMsg(method === "email" || looksEmail($("account").value) ? "請輸入有效電郵" : "請輸入有效手機號碼或電郵");
+        return;
+      }
+      if (method === "password") {
+        if (!String($("password").value || "")) {
+          setMsg("請輸入密碼");
+          return;
+        }
+        setMsg("登入服務尚未接通", false);
+        return;
+      }
+      var code = String($("code").value || "").trim();
+      if (!/^\d{6}$/.test(code)) {
+        setMsg("請輸入 6 位驗證碼");
+        return;
+      }
+      if (!issued) {
+        setMsg("請先發送驗證碼");
+        return;
+      }
+      if (code !== issued) {
+        if (method === "sms") notePhoneFail();
+        else setMsg("驗證碼不正確");
+        return;
+      }
+      phoneFailStreak = 0;
+      phoneMul = 1;
+      issued = "";
+      setMsg(mode === "forgot" ? "已驗證，可繼續重設" : "已驗證", true);
+    });
+
+    $("authBack").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      try {
+        if (window.history.length > 1 && document.referrer) {
+          window.history.back();
+          return;
+        }
+      } catch (e) {}
+      window.location.href = "racecard.html";
+    });
+
+    paintMode();
+  </script>
+</body>
+</html>

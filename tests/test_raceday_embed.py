@@ -104,6 +104,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('data-nav="raceDate"', r.text)
         self.assertIn('data-nav="colSort"', r.text)
         self.assertIn('data-nav="help"', r.text)
+        self.assertIn('data-nav="login"', r.text)
+        self.assertIn('href = "auth.html"', r.text)
         self.assertIn("使用說明", r.text)
         self.assertIn('window.location.href = "help.html"', r.text)
         self.assertIn("馬匹數據排序", r.text)
@@ -1259,6 +1261,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("0.2.418", text)
         self.assertIn("0.2.419", text)
         self.assertIn("0.2.420", text)
+        self.assertIn("0.2.421", text)
         self.assertIn("只記功能修改的終態結果", text)
         self.assertIn("不另開序號", text)
         self.assertIn("racecard.html", text)
@@ -1268,6 +1271,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('no: 4,', text)
         self.assertIn('no: 5,', text)
         self.assertIn('no: 6,', text)
+        self.assertIn('no: 7,', text)
+        self.assertIn("菜單最下方新增「登入」", text)
         self.assertIn("名家心水權重", text)
         self.assertIn("末行顯示真實名次", text)
         self.assertIn("點擊打開心水戰績彈窗", text)
@@ -1278,6 +1283,22 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn("自此頁建立起", text)
         self.assertNotIn("0.2.400–0.2.411", text)
         self.assertNotIn("居中靠下靜態橙色半圓提示", text)
+
+    def test_racecard_auth_page(self):
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[1] / "static" / "racecard_auth.html"
+        self.assertTrue(path.is_file())
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("帳號密碼登入", text)
+        self.assertIn("手機驗證碼登入", text)
+        self.assertIn("電郵驗證碼登入", text)
+        self.assertIn("手機驗證碼註冊登入", text)
+        self.assertIn("電郵驗證碼註冊登入", text)
+        self.assertIn("忘記密碼", text)
+        self.assertIn("phoneMul *= 3", text)
+        self.assertIn('id="agree" checked', text)
+        self.assertIn("racecard.html", text)
 
 
 if __name__ == "__main__":

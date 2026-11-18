@@ -6320,6 +6320,8 @@
           <button type="button" class="zoom-btn" data-zoom-step="1" aria-label="放大">+</button>
           <button type="button" class="zoom-reset" data-zoom-step="0" aria-label="復原為預設大小">復原</button>
         </div>
+        <div class="sep" role="separator"></div>
+        <button type="button" role="menuitem" data-nav="login">登入</button>
       </div>
     </div>
   </header>
@@ -13141,6 +13143,8 @@
         } else if (act === "help") {
           /* 獨立使用說明頁（含功能更新日誌文檔） */
           window.location.href = "help.html";
+        } else if (act === "login") {
+          window.location.href = "auth.html";
         } else if (act === "service") {
           const anno = document.querySelector(".anno");
           if (anno && typeof anno.scrollIntoView === "function") {
