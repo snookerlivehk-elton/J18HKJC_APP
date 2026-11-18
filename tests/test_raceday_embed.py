@@ -1261,7 +1261,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("0.2.418", text)
         self.assertIn("0.2.419", text)
         self.assertIn("0.2.420", text)
-        self.assertIn("0.2.421", text)
+        self.assertIn("0.2.422", text)
+        self.assertIn("帳號密碼登入不顯示驗證碼", text)
         self.assertIn("只記功能修改的終態結果", text)
         self.assertIn("不另開序號", text)
         self.assertIn("racecard.html", text)
@@ -1297,6 +1298,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("電郵驗證碼註冊登入", text)
         self.assertIn("忘記密碼", text)
         self.assertIn("phoneMul *= 3", text)
+        self.assertIn("[hidden] { display: none !important; }", text)
+        self.assertIn('id="codeRow" hidden', text)
         self.assertIn('id="agree" checked', text)
         self.assertIn("racecard.html", text)
 
