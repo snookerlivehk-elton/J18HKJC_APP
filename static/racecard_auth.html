@@ -52,12 +52,11 @@
       position: sticky;
       top: 0;
       z-index: 20;
-      display: grid;
-      grid-template-columns: 44px 1fr 44px;
+      display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
       min-height: 56px;
-      padding: 8px 12px;
+      padding: 8px 10px;
       padding-top: max(8px, env(safe-area-inset-top, 0px));
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
       color: #fff;
@@ -67,18 +66,34 @@
       background: linear-gradient(180deg, #3d5574 0%, #24344a 100%);
     }
     .back {
-      justify-self: end;
-      width: 36px;
+      position: absolute;
+      left: 8px;
+      top: max(8px, env(safe-area-inset-top, 0px));
+      display: inline-flex;
+      align-items: center;
+      gap: 1px;
       height: 36px;
+      margin: 0;
+      padding: 0 8px 0 2px;
       border: 0;
       border-radius: 8px;
-      background: rgba(255, 255, 255, .14);
+      background: transparent;
       color: #fff;
-      font-size: 22px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
       line-height: 1;
       cursor: pointer;
     }
-    .back:active { background: rgba(255, 255, 255, .26); }
+    .back-mark { font-size: 22px; line-height: 1; }
+    .back:active { opacity: .7; }
+    .top .seg {
+      width: 200px;
+    }
+    .top .seg-btn {
+      padding: 4px 8px;
+      font-size: 14px;
+    }
     .wrap {
       max-width: 480px;
       margin: 0 auto;
@@ -324,13 +339,12 @@
 </head>
 <body>
   <header class="top">
-    <span></span>
+    <button type="button" class="back" id="authBack" aria-label="返回排位"><span class="back-mark" aria-hidden="true">‹</span><span>返回</span></button>
     <div class="seg" id="modeSeg" style="--n:2;--i:0" role="tablist" aria-label="登入或註冊">
       <div class="seg-slider" aria-hidden="true"></div>
       <button type="button" class="seg-btn is-on" id="modeLeft" data-mode="login" role="tab" aria-selected="true">登入</button>
       <button type="button" class="seg-btn" id="modeRight" data-mode="register" role="tab" aria-selected="false">註冊</button>
     </div>
-    <button type="button" class="back" id="authBack" aria-label="返回排位">‹</button>
   </header>
   <main class="wrap">
     <div class="seg on-page" id="methodSeg" style="--n:3;--i:0" role="tablist" aria-label="登入方式"></div>
