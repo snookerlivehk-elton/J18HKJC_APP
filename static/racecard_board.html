@@ -7609,7 +7609,7 @@
       { key: "stable", name: "馬房貼士", hint: "", earlyBonus: 10 }
     ];
     const FAMOUS_TIPSTERS_DEMO = [
-      /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家綜合心水；勝率演示數字與其他名家同格式 */
+      /* 臨場區：對接綜合指數膠囊三行（綜合指數／水位排名／流量排名），不計入上方名家心水權重；勝率演示數字與其他名家同格式 */
       { id: "ix_composite", name: "綜合指數", group: "live", indexStrategy: "composite", count: 6, inAggregate: false, wins: 22, plays: 58 },
       { id: "ix_water", name: "水位排名", group: "live", indexStrategy: "water", count: 6, inAggregate: false, wins: 17, plays: 58 },
       { id: "ix_flow", name: "流量排名", group: "live", indexStrategy: "flow", count: 6, inAggregate: false, wins: 14, plays: 58 },
@@ -7778,7 +7778,7 @@
       const agg = famousAggregateTips(race);
       return '<section class="ft-sec ft-agg">' +
         '<div class="ft-sec-head">' +
-          '<div class="ft-sec-title">名家綜合心水</div>' +
+          '<div class="ft-sec-title">名家心水權重</div>' +
           '<div class="ft-sec-hint">權重按順序左強右弱。</div>' +
           '<button type="button" class="ft-help-btn" data-ft-act="help" aria-expanded="' +
             (famousAggHelpOpen ? "true" : "false") + '" aria-controls="famousAggHelp">規則</button>' +
