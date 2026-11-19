@@ -2017,49 +2017,11 @@
     }
     .horse-sheet-title .nm {
       display: block;
-      min-width: 0;
       font-size: 18px;
       font-weight: 400;
       letter-spacing: .02em;
       line-height: 1.15;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
-    .horse-sheet-name-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-    }
-    .hs-marks {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      flex: 0 0 auto;
-    }
-    .hs-mark {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      height: 22px;
-      margin: 0;
-      padding: 0 7px;
-      border: 1px solid rgba(255, 255, 255, .5);
-      border-radius: 999px;
-      background: transparent;
-      color: rgba(255, 255, 255, .88);
-      font: inherit;
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1;
-      cursor: pointer;
-    }
-    .hs-mark svg { width: 10px; height: 12px; display: block; }
-    .hs-mark.is-flag-1 { background: #f0a202; color: #3a2800; border-color: transparent; }
-    .hs-mark.is-flag-2 { background: #2f9e57; color: #fff; border-color: transparent; }
-    .hs-mark.is-tip { background: #fff; color: var(--nav-2); border-color: transparent; }
-    .hs-mark:disabled { opacity: .45; cursor: default; }
     .horse-sheet-title .sub {
       display: block;
       margin-top: 3px;
@@ -2151,63 +2113,6 @@
       word-break: break-word;
     }
     .horse-sheet-grid .v.muted { color: var(--muted); }
-    .hs-glance {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .hs-glance .box,
-    .hs-cell,
-    .hs-block {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-    }
-    .hs-glance .box { padding: 7px 4px 6px; text-align: center; }
-    .hs-glance .k,
-    .hs-cell .k,
-    .hs-block > .k {
-      display: block;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--muted);
-      line-height: 1.2;
-    }
-    .hs-glance .v {
-      display: block;
-      margin-top: 2px;
-      font-size: 18px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      line-height: 1.1;
-    }
-    .hs-glance .v .delta { font-size: 11px; margin-left: 2px; }
-    .hs-grid {
-      display: grid;
-      grid-template-columns: 1.35fr 1fr .72fr .72fr;
-      gap: 6px;
-      margin-top: 6px;
-    }
-    .hs-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .hs-cell { padding: 6px 8px; min-width: 0; }
-    .hs-cell .v {
-      display: block;
-      margin-top: 1px;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1.25;
-      word-break: break-word;
-    }
-    .hs-block { margin-top: 6px; padding: 8px 10px; }
-    .hs-form { margin-top: 4px; font-size: 15px; font-weight: 800; }
-    .hs-prose {
-      margin: 4px 0 0;
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.45;
-    }
-    .hs-prose + .hs-prose { margin-top: 6px; }
-    .hs-prose .lab { font-weight: 800; color: var(--muted); margin-right: 4px; }
 
     .hrow {
       display: flex;
@@ -6190,10 +6095,7 @@
       background: #181d24;
     }
     html[data-theme="dark"] .horse-sheet-odds .box,
-    html[data-theme="dark"] .horse-sheet-grid .item,
-    html[data-theme="dark"] .hs-glance .box,
-    html[data-theme="dark"] .hs-cell,
-    html[data-theme="dark"] .hs-block {
+    html[data-theme="dark"] .horse-sheet-grid .item {
       background: #252b34;
       border-color: var(--line);
     }
@@ -6663,10 +6565,7 @@
         <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
         <span class="horse-sheet-id" id="horseSheetNo"></span>
         <div class="horse-sheet-title">
-          <div class="horse-sheet-name-row">
-            <span class="nm" id="horseSheetName"></span>
-            <span class="hs-marks" id="horseSheetMarks"></span>
-          </div>
+          <span class="nm" id="horseSheetName"></span>
           <span class="sub" id="horseSheetRace"></span>
         </div>
         <button type="button" class="horse-sheet-close" id="horseSheetClose" aria-label="關閉">×</button>
@@ -6883,7 +6782,6 @@
       sheetName: document.getElementById("horseSheetName"),
       sheetRace: document.getElementById("horseSheetRace"),
       sheetBody: document.getElementById("horseSheetBody"),
-      sheetMarks: document.getElementById("horseSheetMarks"),
       sheetClose: document.getElementById("horseSheetClose"),
       waterSheet: document.getElementById("waterSheet"),
       waterSheetBody: document.getElementById("waterSheetBody"),
@@ -11511,114 +11409,14 @@
       });
       if (el.waterSheetClose) el.waterSheetClose.focus();
     }
-    function hsKv(k, v) {
-      return '<div class="hs-cell"><span class="k">' + k + '</span><span class="v">' + v + "</span></div>";
-    }
-    function hsPlain(v) {
-      if (v == null || v === "") return "—";
-      return esc(v);
-    }
-    function hsDeltaHtml(d) {
-      const s = fmtDelta(d);
-      if (!s) return "";
-      return '<span class="' + deltaClass(s).trim() + '">' + esc(s) + "</span>";
-    }
-    function hsWp(win, pla, fmtFn) {
-      return esc(fmtFn(win)) + " / " + esc(fmtFn(pla));
-    }
-    function paintHorseMarks(r) {
-      if (!el.sheetMarks) return;
-      if (!r) {
-        el.sheetMarks.innerHTML = "";
-        return;
-      }
-      const mark = getRowMark(r.no);
-      const flagCls = mark === 1 ? " is-flag-1" : mark === 2 ? " is-flag-2" : "";
-      const flagLab = mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾";
-      const ord = getTipNoteOrder(r.no);
-      const tipOn = ord != null;
-      const frozen = isTipNoteFrozen();
-      const full = !tipOn && tipNoteList().length >= TIP_NOTE_MAX;
-      el.sheetMarks.innerHTML =
-        '<button type="button" class="hs-mark' + flagCls + '" data-hs-flag="1" aria-pressed="' +
-          (mark ? "true" : "false") + '" aria-label="' + flagLab + '">' +
-          ROW_FLAG_SVG + "<span>" + flagLab + "</span></button>" +
-        '<button type="button" class="hs-mark' + (tipOn ? " is-tip" : "") + '" data-hs-tip="1" aria-pressed="' +
-          (tipOn ? "true" : "false") + '"' + ((frozen || full) ? " disabled" : "") +
-          ' aria-label="' + (tipOn ? ("心水第" + ord) : "心水") + '"><span>' +
-          (tipOn ? ("心水" + ord) : "心水") + "</span></button>";
-    }
-    function fillHorseSheet(r) {
-      if (!el.sheetBody) return;
-      if (!r) {
-        el.sheetBody.innerHTML = "";
-        return;
-      }
-      const j = splitNameAllow(r.jockey);
-      const rating = hsPlain(fmt(r.rating)) + hsDeltaHtml(r.rtgDelta);
-      const jockey = hsPlain(j.name || r.jockey) + hsDeltaHtml(j.delta);
-      const hw = hsPlain(fmt(r.hw)) + hsDeltaHtml(hwDeltaOf(r));
-      const review = synthReviewOf(r);
-      const note = horseNoteOf(r);
-      const gearPrev = gearPrevOf(r);
-      const gearNow = gearNowOf(r);
-      const gear = !gearPrev && !gearNow
-        ? "—"
-        : (gearPrev ? ("前 " + esc(gearPrev) + " → ") : "") + esc(gearNow || "—");
-      const season = r.prizeSeason;
-      const total = r.prizeTotal != null ? r.prizeTotal : r.prize;
-      el.sheetBody.innerHTML =
-        '<div class="hs">' +
-          '<div class="hs-glance">' +
-            '<div class="box"><span class="k">獨贏</span><span class="v">' + hsPlain(r.scratched ? "—" : fmtOdds(r.win, "win")) + "</span></div>" +
-            '<div class="box"><span class="k">位置</span><span class="v">' + hsPlain(r.scratched ? "—" : fmtOdds(r.place, "place")) + "</span></div>" +
-            '<div class="box"><span class="k">檔位</span><span class="v">' + hsPlain(fmt(r.draw)) + "</span></div>" +
-            '<div class="box"><span class="k">評分</span><span class="v">' + rating + "</span></div>" +
-          "</div>" +
-          '<div class="hs-grid">' +
-            hsKv("騎師", jockey) +
-            hsKv("練馬師", hsPlain(fmt(r.trainer))) +
-            hsKv("負磅", hw) +
-            hsKv("跑法", hsPlain(fmt(r.runStyle))) +
-          "</div>" +
-          '<div class="hs-block"><span class="k">近六賽績 · 班次升降</span><div class="hs-form">' + cellForm6(r) + "</div></div>" +
-          '<div class="hs-grid cols-3">' +
-            hsKv("最佳時間", hsPlain(fmt(r.bestTime))) +
-            hsKv("入圍", hsPlain(fmtPlaceInLeft(r) + "｜" + fmtPctCell(r.placeInPct != null ? r.placeInPct : r.gatePct))) +
-            hsKv("歷季出賽", hsPlain(fmtCareer(r.career))) +
-            hsKv("同班賽", hsPlain(fmtRecordTriple(r.sameClass))) +
-            hsKv("同場同程", hsPlain(fmtRecordTriple(r.sameCourseDist))) +
-            hsKv("同程", hsPlain(fmtRecordTriple(r.sameDist))) +
-            hsKv("久休復出", hsPlain(fmtLayoff(r.layoff))) +
-            hsKv("上仗水位", hsWp(r.lastWinOdds != null ? r.lastWinOdds : r.lastOdds, r.lastPlaceOdds, fmtLastOdds)) +
-            hsKv("裝備", gear === "—" ? "—" : gear) +
-            hsKv("水位", hsWp(r.winWater, r.placeWater, fmtWater)) +
-            hsKv("流量", hsWp(r.winFlow, r.placeFlow, fmtFlow)) +
-            hsKv("獎金", hsPlain(fmt(season)) + " / " + hsPlain(fmt(total))) +
-          "</div>" +
-          '<div class="hs-grid cols-3">' +
-            hsKv("年齡", hsPlain(fmt(r.age))) +
-            hsKv("父系", hsPlain(fmt(r.sire))) +
-            hsKv("母系", hsPlain(fmt(r.dam))) +
-          "</div>" +
-          '<div class="hs-grid">' +
-            hsKv("外祖父", hsPlain(fmt(r.damsire))) +
-            '<div class="hs-cell" style="grid-column: span 3"><span class="k">馬主</span><span class="v">' + hsPlain(fmt(r.owner)) + "</span></div>" +
-          "</div>" +
-          '<div class="hs-block"><span class="k">綜合評述</span>' +
-            '<p class="hs-prose"><span class="lab">評述</span> ' + hsPlain(review || "—") + "</p>" +
-            '<p class="hs-prose"><span class="lab">筆記</span> ' + hsPlain(note || "—") + "</p>" +
-          "</div>" +
-        "</div>";
-    }
     function openHorseSheet(no) {
       closeAllBoardOverlays("horseSheet");
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       el.sheetNo.textContent = String(r.no);
       el.sheetName.textContent = r.name || "";
+      /* 詳情正文待重設計：暫只保留彩衣／馬號／馬名 */
       if (el.sheetRace) el.sheetRace.textContent = "";
-      paintHorseMarks(r);
       if (r.silk) {
         el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
         el.sheetSilk.className = "horse-sheet-silk";
@@ -11626,7 +11424,7 @@
         el.sheetSilk.style.backgroundImage = "";
         el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
       }
-      if (el.sheetBody) fillHorseSheet(r);
+      if (el.sheetBody) el.sheetBody.innerHTML = "";
       el.sheet.removeAttribute("hidden");
       el.sheet.setAttribute("aria-hidden", "false");
       if (el.sheetClose) el.sheetClose.focus();
@@ -12505,38 +12303,6 @@
     } catch (e) {}
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
-    }
-    if (el.sheetMarks) {
-      el.sheetMarks.addEventListener("click", function (ev) {
-        const no = el.sheetNo ? el.sheetNo.textContent : "";
-        if (!no) return;
-        const rNow = function () {
-          return currentRunners().find(function (x) { return String(x.no) === String(no); });
-        };
-        if (ev.target.closest("[data-hs-flag]")) {
-          ev.preventDefault();
-          const mark = cycleRowMark(no);
-          const row = document.querySelector('#boardX .hrow[data-no="' + no + '"]');
-          applyRowMarkClass(row, mark);
-          const btn = row && row.querySelector("button.row-flag");
-          if (btn) {
-            btn.setAttribute("data-mark", String(mark));
-            btn.setAttribute("aria-pressed", mark ? "true" : "false");
-            btn.setAttribute(
-              "aria-label",
-              mark === 1 ? "黃標，再點改綠標" : mark === 2 ? "綠標，再點取消" : "標記此馬"
-            );
-          }
-          paintHorseMarks(rNow());
-          return;
-        }
-        if (ev.target.closest("[data-hs-tip]")) {
-          ev.preventDefault();
-          if (!toggleTipNote(no)) return;
-          renderBoard();
-          paintHorseMarks(rNow());
-        }
-      });
     }
     if (el.waterSheetClose) {
       el.waterSheetClose.addEventListener("click", closeWaterSheet);
