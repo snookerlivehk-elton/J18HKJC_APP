@@ -482,6 +482,21 @@ def _build_pick_reason(
     return reason
 
 
+def _prefer_form_ai_comment(race_id: str, horse_no, comment: str) -> str:
+    """賽績評價已經是同一套練馬師短評時，賽前文案直接用它，不再另寫一遍。"""
+    try:
+        hno = int(horse_no)
+    except (TypeError, ValueError):
+        return comment
+    try:
+        from form_ai_analyst import load_public_summaries
+
+        stored = (load_public_summaries(race_id).get(hno) or "").strip()
+    except Exception:
+        return comment
+    return stored or comment
+
+
 def _humanize_comment(
     text: str, *, daypart: str = "今日", max_chars: Optional[int] = COMMENT_MAX_CHARS
 ) -> str:
@@ -878,6 +893,7 @@ class AdSocialCopywriter:
             else:
                 tag = str(best.get("tag") or "推介").strip() or "推介"
                 comment = f"{tag}走勢值得留意，有得傾"[:COMMENT_MAX_CHARS]
+            comment = _prefer_form_ai_comment(race_id, best.get("horse_no"), comment)
 
             dual = "model" in sources_map.get(int(best["horse_no"]), set()) and "ai" in sources_map.get(
                 int(best["horse_no"]), set()
@@ -979,6 +995,7 @@ class AdSocialCopywriter:
 
             if horse_no is None:
                 continue
+            comment = _prefer_form_ai_comment(race_id, horse_no, comment)
             seen_races.add(race_id)
             angle_hint = str(item.get("angle") or "").strip()
             row = {
