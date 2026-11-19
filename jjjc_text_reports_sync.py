@@ -168,12 +168,16 @@ def trigger_text_reports_fetch(
 
 
 def _payload_report_types(payload: Dict[str, Any]) -> set[str]:
+    """只算有正文的報告。整場 placeholder 不算已經有沿途評述。"""
     out: set[str] = set()
     for rep in payload.get("reports") or []:
         if not isinstance(rep, dict):
             continue
         rtype = normalize_report_type(rep.get("report_type"))
-        if rtype:
+        if not rtype:
+            continue
+        runners = rep.get("runners") or []
+        if any(effective_text(ru, "text", "report_text") for ru in runners if isinstance(ru, dict)):
             out.add(rtype)
     return out
 

@@ -2866,6 +2866,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"meetings={report.get('n_meetings')} actions={report.get('n_actions')}"
         )
         print(text_out)
+    if not args.dry_run:
+        try:
+            from index_selection_feed import refresh_live
+
+            refresh_live()
+        except Exception as exc:
+            print(f"[meeting_tick] 指數評選刷新跳過: {exc}", file=sys.stderr)
     return 1 if _report_has_hard_error(report) else 0
 
 
