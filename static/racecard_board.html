@@ -2072,43 +2072,91 @@
       border-color: #7ddea0;
     }
     .hs-tip {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 5px;
       height: 34px;
-      padding: 0 10px;
+      padding: 0 7px 0 8px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,.48);
       background: rgba(255,255,255,.16);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.32);
       color: #fff;
       font: inherit;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .02em;
       line-height: 1;
       -webkit-tap-highlight-color: transparent;
     }
     .hs-tip:active { background: rgba(255,255,255,.28); }
+    .hs-tip-words {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      line-height: 1.05;
+    }
+    .hs-tip-frac {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 14px;
+    }
+    .hs-tip-frac .n {
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .hs-tip-frac .bar {
+      width: 12px;
+      height: 1.5px;
+      margin: 1px 0;
+      border-radius: 1px;
+      background: currentColor;
+      opacity: .75;
+      transform: rotate(-18deg);
+    }
+    .hs-tip-frac .d {
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      opacity: .8;
+    }
+    .hs-tip-tick {
+      display: none;
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #e74c3c;
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1;
+      box-shadow: 0 1px 2px rgba(140, 24, 24, .4);
+    }
     .hs-tip.is-on {
       background: #fff;
       color: var(--nav-2);
       border-color: #fff;
     }
-    .hs-tip-ord {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 3px;
-      border-radius: 999px;
-      background: var(--nav-2);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0;
+    .hs-tip.is-on .hs-tip-tick {
+      display: flex;
+      animation: hsTipPop .28s ease-out;
+    }
+    @keyframes hsTipPop {
+      from { transform: scale(.35) rotate(-18deg); }
+      to { transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hs-tip.is-on .hs-tip-tick { animation: none; }
     }
     .hs-tip:disabled { opacity: .45; cursor: default; }
     .horse-sheet-title .sub {
@@ -11728,7 +11776,9 @@
           (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + ROW_FLAG_SVG + "</button>" +
         '<button type="button" class="hs-tip' + (tipOn ? " is-on" : "") + '" data-hs-tip="1"' +
           (full ? " disabled" : "") + ' aria-label="' + (tipOn ? "取消心水標記" : (full ? "心水標記已滿" : "心水標記")) + '" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
-          "心水標記" + (tipOn ? '<span class="hs-tip-ord">' + ord + "</span>" : "") + "</button>";
+          '<span class="hs-tip-words"><span>心水</span><span>標記</span></span>' +
+          '<span class="hs-tip-frac" aria-hidden="true"><span class="n">' + (tipOn ? ord : "–") + '</span><span class="bar"></span><span class="d">' + TIP_NOTE_MAX + "</span></span>" +
+          '<span class="hs-tip-tick" aria-hidden="true">✓</span></button>';
     }
     function fillHorseSheet(r) {
       if (!el.sheetBody) return;
