@@ -2046,12 +2046,12 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 30px;
-      height: 34px;
+      width: 28px;
+      height: 42px;
     }
     .hs-flag svg {
       width: 20px;
-      height: 24px;
+      height: 36px;
       display: block;
       filter: drop-shadow(0 1px 0 rgba(12, 24, 40, .35));
     }
@@ -2064,7 +2064,7 @@
       align-items: center;
       gap: 6px;
       height: 34px;
-      margin-left: 8px;
+      margin-left: 18px;
       padding-left: 10px;
       border-left: 1px solid rgba(255,255,255,.28);
       font: inherit;
@@ -9126,6 +9126,10 @@
         /* 書籤／燕尾旗：頂平、底中凹三角缺口 */
         '<path fill="currentColor" d="M2 1h8v9.2L6 7.4 2 10.2V1z"/>' +
       "</svg>";
+    const HS_FLAG_SVG =
+      '<svg viewBox="0 0 12 22" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M2 .6h8v17.2L6 13.4 2 17.8V.6z"/>' +
+      "</svg>";
     function renderRowFlag(no, mark) {
       const m = mark === 1 || mark === 2 ? mark : 0;
       const lab = m === 1 ? "黃標，再點改綠標" : m === 2 ? "綠標，再點取消" : "標記此馬";
@@ -11740,7 +11744,7 @@
       const full = !tipOn && tipNoteList().length >= TIP_NOTE_MAX;
       el.sheetMarks.innerHTML =
         '<button type="button" class="hs-flag' + flagCls + '" data-hs-flag="1" aria-label="' +
-          (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + ROW_FLAG_SVG + "</button>" +
+          (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + HS_FLAG_SVG + "</button>" +
         '<button type="button" class="hs-tip' + (tipOn ? " is-on" : "") + '" data-hs-tip="1"' +
           (full ? " disabled" : "") + ' aria-label="' + (tipOn ? "取消心水標記" : (full ? "心水標記已滿" : "心水標記")) + '" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
           '<span class="hs-tip-words"><span>心水</span><span>標記</span></span>' +
