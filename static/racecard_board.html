@@ -10043,27 +10043,29 @@
       if (n == null) return "—";
       return String(Math.max(0, Math.round(n))).padStart(2, "0");
     }
-    function cellWinPlacePair(r, winKey, plaKey, fmtFn, winTickKey, plaTickKey) {
+    function cellWinPlacePair(r, winKey, plaKey, fmtFn, winTickKey, plaTickKey, winFreshKey, plaFreshKey) {
       if (r && r.scratched) return '<span class="v">—</span>';
       const w = r ? r[winKey] : null;
       const p = r ? r[plaKey] : null;
       if ((w == null || w === "") && (p == null || p === "")) return '<span class="v">—</span>';
       const wTick = winTickKey && r ? r[winTickKey] : "";
       const pTick = plaTickKey && r ? r[plaTickKey] : "";
+      const wFresh = !!(winFreshKey && r && r[winFreshKey]);
+      const pFresh = !!(plaFreshKey && r && r[plaFreshKey]);
       return (
         '<span class="wp">' +
-          wpLineHtml("w", fmtFn(w), wTick) +
-          wpLineHtml("p", fmtFn(p), pTick) +
+          wpLineHtml("w", fmtFn(w), wTick, wFresh) +
+          wpLineHtml("p", fmtFn(p), pTick, pFresh) +
         "</span>"
       );
     }
-    function wpLineHtml(cls, text, tick) {
+    function wpLineHtml(cls, text, tick, fresh) {
       const dir = tick === "up" || tick === "down" ? tick : "";
       const label = dir === "up" ? "近5分鐘升" : dir === "down" ? "近5分鐘降" : "";
       return (
         '<span class="' + cls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
           '<span class="od-n">' + esc(text) + "</span>" +
-          oddsTickHtml(dir) +
+          oddsTickHtml(dir, !!fresh) +
         "</span>"
       );
     }
@@ -10077,7 +10079,7 @@
     }
     function cellValue(c, r) {
       if (c.key === "water") {
-        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater, "winWaterTick", "placeWaterTick");
+        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater, "winWaterTick", "placeWaterTick", "_winWaterTickFresh", "_placeWaterTickFresh");
       }
       if (c.key === "flow") {
         return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow, "winFlowTick", "placeFlowTick");
@@ -10189,6 +10191,12 @@
       const rounded = Math.round(Math.max(1.01, next) * 10) / 10;
       return kind === "place" ? rounded : (Number.isInteger(rounded) ? rounded : rounded);
     }
+    function nudgeWater(v, tick) {
+      const n = numOrNull(v);
+      if (n == null) return v;
+      const next = tick === "up" ? n + 1 : n - 1;
+      return Math.max(35, Math.min(99, Math.round(next)));
+    }
     let oddsTickFreshTimer = 0;
     function clearOddsTickFreshFlags(race) {
       if (!race || !Array.isArray(race.runners)) return;
@@ -10196,6 +10204,8 @@
         if (!r) return;
         delete r._winTickFresh;
         delete r._placeTickFresh;
+        delete r._winWaterTickFresh;
+        delete r._placeWaterTickFresh;
       });
       document.querySelectorAll(".od-tick.fresh").forEach(function (node) {
         node.classList.remove("fresh");
@@ -10219,6 +10229,16 @@
           r.placeTick = flipOddsTick(r.placeTick);
           r.place = nudgeOdds(r.place, r.placeTick, "place");
           r._placeTickFresh = true;
+        }
+        if (numOrNull(r.winWater) != null) {
+          r.winWaterTick = flipOddsTick(r.winWaterTick);
+          r.winWater = nudgeWater(r.winWater, r.winWaterTick);
+          r._winWaterTickFresh = true;
+        }
+        if (numOrNull(r.placeWater) != null) {
+          r.placeWaterTick = flipOddsTick(r.placeWaterTick);
+          r.placeWater = nudgeWater(r.placeWater, r.placeWaterTick);
+          r._placeWaterTickFresh = true;
         }
       });
       renderBoard();
@@ -11633,7 +11653,7 @@
     function hsMetric(range, water, kind, tick, fresh) {
       const nowAt = hsSpot(range.now, range.lo, range.hi).toFixed(1);
       const nightAt = hsSpot(range.night, range.lo, range.hi).toFixed(1);
-      const tickHtml = water ? "" : oddsTickHtml(tick, !!fresh);
+      const tickHtml = oddsTickHtml(tick, !!fresh);
       return '<div class="hs-metric">' +
         '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span></div>" +
         '<div class="hs-scale">' +
@@ -11647,9 +11667,10 @@
         '<div class="hs-ovn"><span>隔夜</span>' + hsNum(range.night, water) + "</div>" +
         "</div>";
     }
-    function hsPoolRow(label, odds, water, tick, fresh) {
+    function hsPoolRow(label, odds, water, tick, fresh, waterTick, waterFresh) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
-        hsMetric(odds, false, "賠率", tick, fresh) + hsMetric(water, true, "水位") + "</div>";
+        hsMetric(odds, false, "賠率", tick, fresh) +
+        hsMetric(water, true, "水位", waterTick, waterFresh) + "</div>";
     }
     function paintHorseMarks(r) {
       if (!el.sheetMarks) return;
@@ -11676,8 +11697,8 @@
       const plaW = horseWaterRange(r, "placeWater", "plaW");
       el.sheetBody.innerHTML =
         '<section class="hs-ow">' +
-          hsPoolRow("獨贏", winOdds, winW, r.winTick, r._winTickFresh) +
-          hsPoolRow("位置", plaOdds, plaW, r.placeTick, r._placeTickFresh) +
+          hsPoolRow("獨贏", winOdds, winW, r.winTick, r._winTickFresh, r.winWaterTick, r._winWaterTickFresh) +
+          hsPoolRow("位置", plaOdds, plaW, r.placeTick, r._placeTickFresh, r.placeWaterTick, r._placeWaterTickFresh) +
         "</section>";
     }
     function refreshOpenHorseSheet() {
