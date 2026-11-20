@@ -2092,13 +2092,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      min-width: 14px;
+      width: 14px;
+      flex: 0 0 14px;
     }
     .hs-tip-frac .n {
+      width: 14px;
       font-size: 14px;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
       line-height: 1;
+      text-align: center;
     }
     .hs-tip-frac .bar {
       width: 11px;
@@ -2115,11 +2118,16 @@
       opacity: .7;
     }
     .hs-tip-tick {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      margin-left: 4px;
       display: none;
       color: #ff5a4f;
       font-size: 14px;
       font-weight: 700;
       line-height: 1;
+      transform: translateY(-50%);
     }
     .hs-tip.is-on .hs-tip-frac .n { color: #fff; }
     .hs-tip.is-on .hs-tip-tick {
@@ -2127,8 +2135,8 @@
       animation: hsTipPop .28s ease-out;
     }
     @keyframes hsTipPop {
-      from { transform: scale(.4); opacity: 0; }
-      to { transform: none; opacity: 1; }
+      from { transform: translateY(-50%) scale(.4); opacity: 0; }
+      to { transform: translateY(-50%) scale(1); opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
       .hs-tip.is-on .hs-tip-tick { animation: none; }
