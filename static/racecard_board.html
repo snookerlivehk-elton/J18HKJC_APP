@@ -2105,18 +2105,18 @@
     }
     .hs-row {
       display: grid;
-      grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr);
-      column-gap: 10px;
+      grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+      column-gap: 12px;
       align-items: center;
-      padding: 3px 0 4px;
+      padding: 8px 0 10px;
     }
     .hs-row + .hs-row { border-top: 1px solid var(--line); }
     .hs-pool {
-      font-size: 13px;
+      font-size: 16px;
       font-weight: 800;
-      letter-spacing: .06em;
+      letter-spacing: .04em;
       color: var(--nav);
-      line-height: 1.15;
+      line-height: 1.2;
     }
     .hs-metric {
       display: flex;
@@ -2134,69 +2134,44 @@
     }
     .hs-k {
       flex: 0 0 auto;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: .06em;
+      letter-spacing: .04em;
       color: var(--muted);
     }
     .hs-now {
       position: relative;
       text-align: left;
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 800;
       line-height: 1;
       letter-spacing: -.02em;
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
-    .hs-now .od-tick { font-size: 12px; margin-top: -0.55em; }
-    .hs-scale {
-      display: grid;
-      grid-template-columns: auto minmax(28px, 1fr) auto;
-      align-items: center;
-      gap: 4px;
-    }
-    .hs-end {
-      font-size: 13px;
+    .hs-now .od-tick { font-size: 14px; margin-top: -0.5em; }
+    .hs-refs {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 4px;
+      font-size: 15px;
       font-weight: 800;
-      line-height: 1;
+      line-height: 1.25;
       font-variant-numeric: tabular-nums;
-      white-space: nowrap;
     }
-    .hs-end span {
-      display: inline;
-      margin-right: 2px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-    .hs-end.lo { color: var(--red); text-align: left; }
-    .hs-end.hi { color: var(--green); text-align: right; }
-    .hs-bar {
-      position: relative;
-      height: 3px;
-      border-radius: 999px;
-      background: #d5dbe3;
-    }
-    .hs-bar .tick {
-      position: absolute;
-      top: 50%;
-      width: 2px;
-      height: 9px;
-      border-radius: 1px;
-      background: var(--hs-night, #163a66);
-      transform: translate(-50%, -50%);
-    }
+    .hs-refs .lo { color: var(--red); }
+    .hs-refs .hi { color: var(--green); text-align: right; }
     .hs-ovn {
-      text-align: center;
-      font-size: 12px;
+      margin-top: 2px;
+      font-size: 15px;
       font-weight: 800;
-      line-height: 1;
+      line-height: 1.25;
       letter-spacing: .02em;
       font-variant-numeric: tabular-nums;
       color: #163a66;
     }
-    .hs-ovn span { font-weight: 700; margin-right: 3px; }
     .horse-sheet-odds {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -6242,9 +6217,7 @@
       border-color: #3a4452;
       box-shadow: none;
     }
-    html[data-theme="dark"] .hs-bar { background: #3a4452; }
-    html[data-theme="dark"] .hs-ovn { color: #9eb6de; }
-    html[data-theme="dark"] .hs-bar .tick { background: #9eb6de; }
+    html[data-theme="dark"] .hs-ovn { color: #b9cef2; }
     html[data-theme="dark"] .hs-pool { color: #d5e4f6; }
     html[data-theme="dark"] .hs-now { color: #eef3f8; }
     html[data-theme="dark"] .hs-row + .hs-row { border-top-color: #343e4c; }
@@ -11639,26 +11612,15 @@
       });
       return { now: now, night: night, hi: hi, lo: lo };
     }
-    function hsSpot(v, lo, hi) {
-      const n = numOrNull(v);
-      const a = numOrNull(lo);
-      const b = numOrNull(hi);
-      if (n == null || a == null || b == null || a === b) return 50;
-      return Math.max(6, Math.min(94, ((n - a) / (b - a)) * 100));
-    }
     function hsMetric(range, water, kind, tick, fresh) {
-      const nightAt = hsSpot(range.night, range.lo, range.hi).toFixed(1);
       const tickHtml = oddsTickHtml(tick, !!fresh);
       return '<div class="hs-metric">' +
         '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span></div>" +
-        '<div class="hs-scale">' +
-          '<span class="hs-end lo"><span>最低</span>' + hsNum(range.lo, water) + "</span>" +
-          '<span class="hs-bar" aria-hidden="true">' +
-            '<i class="tick" style="left:' + nightAt + '%"></i>' +
-          "</span>" +
-          '<span class="hs-end hi"><span>最高</span>' + hsNum(range.hi, water) + "</span>" +
+        '<div class="hs-refs">' +
+          '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
+          '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
         "</div>" +
-        '<div class="hs-ovn"><span>隔夜</span>' + hsNum(range.night, water) + "</div>" +
+        '<div class="hs-ovn"><span>隔夜</span> ' + hsNum(range.night, water) + "</div>" +
         "</div>";
     }
     function hsPoolRow(label, odds, water, tick, fresh, waterTick, waterFresh) {
