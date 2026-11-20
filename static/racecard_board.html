@@ -2043,11 +2043,16 @@
       -webkit-tap-highlight-color: transparent;
     }
     .hs-flag {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      z-index: 2;
+      transform: translateX(-50%);
       display: inline-flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       width: 28px;
-      height: 42px;
+      height: 40px;
     }
     .hs-flag svg {
       width: 20px;
@@ -2059,14 +2064,17 @@
     .hs-flag.is-1 { color: #ffd15c; }
     .hs-flag.is-2 { color: #8ef0b4; }
     .hs-tip {
-      position: relative;
+      position: absolute;
+      top: 50%;
+      right: calc(8px + 32px + 20px * 2);
+      transform: translateY(-50%);
       display: inline-flex;
       align-items: center;
       gap: 6px;
       height: 34px;
-      margin-left: 18px;
-      padding-left: 10px;
-      border-left: 1px solid rgba(255,255,255,.28);
+      margin: 0;
+      padding: 0;
+      border: 0;
       font: inherit;
       line-height: 1;
     }
