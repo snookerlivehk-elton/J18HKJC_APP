@@ -2105,8 +2105,8 @@
     }
     .hs-row {
       display: grid;
-      grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
-      column-gap: 12px;
+      grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr);
+      column-gap: 8px;
       align-items: center;
       padding: 8px 0 10px;
     }
@@ -2119,19 +2119,31 @@
       line-height: 1.2;
     }
     .hs-metric {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 1px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      column-gap: 4px;
+      row-gap: 2px;
+      align-items: start;
       min-width: 0;
     }
-    .hs-nowline {
-      display: flex;
-      align-items: baseline;
-      justify-content: flex-start;
-      gap: 6px;
-      min-width: 0;
+    .hs-k { grid-column: 1; grid-row: 1 / 3; align-self: center; }
+    .hs-now { grid-column: 2; grid-row: 1; justify-self: start; }
+    .hs-metric .hi { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
+    .hs-ovn { grid-column: 2; grid-row: 2; justify-self: start; }
+    .hs-metric .lo { grid-column: 2; grid-row: 2; justify-self: end; align-self: end; }
+    .hs-metric .hi,
+    .hs-metric .lo,
+    .hs-ovn {
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
+    .hs-metric .hi { color: var(--green); }
+    .hs-metric .lo { color: var(--red); }
+    .hs-ovn { color: #163a66; }
     .hs-k {
       flex: 0 0 auto;
       font-size: 14px;
@@ -2141,8 +2153,9 @@
     }
     .hs-now {
       position: relative;
+      padding-right: 12px;
       text-align: left;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
       line-height: 1;
       letter-spacing: -.02em;
@@ -2150,28 +2163,6 @@
       color: var(--text);
     }
     .hs-now .od-tick { font-size: 14px; margin-top: -0.5em; }
-    .hs-refs {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
-      margin-top: 4px;
-      font-size: 15px;
-      font-weight: 800;
-      line-height: 1.25;
-      font-variant-numeric: tabular-nums;
-    }
-    .hs-refs .lo { color: var(--red); }
-    .hs-refs .hi { color: var(--green); text-align: right; }
-    .hs-ovn {
-      margin-top: 2px;
-      font-size: 15px;
-      font-weight: 800;
-      line-height: 1.25;
-      letter-spacing: .02em;
-      font-variant-numeric: tabular-nums;
-      color: #163a66;
-    }
     .horse-sheet-odds {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -11615,12 +11606,11 @@
     function hsMetric(range, water, kind, tick, fresh) {
       const tickHtml = oddsTickHtml(tick, !!fresh);
       return '<div class="hs-metric">' +
-        '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span></div>" +
-        '<div class="hs-refs">' +
-          '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
-          '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
-        "</div>" +
-        '<div class="hs-ovn"><span>隔夜</span> ' + hsNum(range.night, water) + "</div>" +
+        '<span class="hs-k">' + kind + '</span>' +
+        '<span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span>" +
+        '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
+        '<span class="hs-ovn"><span>隔夜</span> ' + hsNum(range.night, water) + "</span>" +
+        '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
         "</div>";
     }
     function hsPoolRow(label, odds, water, tick, fresh, waterTick, waterFresh) {
