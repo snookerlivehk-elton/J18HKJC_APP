@@ -2117,9 +2117,9 @@
     }
     .hs-leg span { display: inline-flex; align-items: center; gap: 3px; }
     .hs-leg i { width: 7px; height: 7px; border-radius: 50%; display: block; }
-    .hs-leg i.night { background: #e2b423; }
-    .hs-leg i.hi { background: #3dae62; }
-    .hs-leg i.lo { background: #e15b52; }
+    .hs-leg i.night { background: var(--yellow); }
+    .hs-leg i.hi { background: var(--green); }
+    .hs-leg i.lo { background: var(--red); }
     .hs-cols, .hs-row {
       display: grid;
       grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr);
@@ -2145,51 +2145,42 @@
       line-height: 1.15;
     }
     .hs-metric {
+      display: grid;
+      grid-template-columns: auto auto;
+      grid-template-rows: 28px 28px;
+      gap: 3px 6px;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .hs-now {
+      grid-column: 1;
+      grid-row: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      min-width: 0;
-    }
-    .hs-main {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      flex: 0 0 auto;
-    }
-    .hs-now {
-      text-align: center;
-      font-size: 22px;
+      font-size: 26px;
       font-weight: 800;
       line-height: 1;
       letter-spacing: -.02em;
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
-    .hs-range {
+    .hs-metric .night { grid-column: 1; grid-row: 2; background: var(--yellow); color: #2a2416; }
+    .hs-metric .hi { grid-column: 2; grid-row: 1; background: var(--green); color: #fff; }
+    .hs-metric .lo { grid-column: 2; grid-row: 2; background: var(--red); color: #fff; }
+    .hs-metric .night,
+    .hs-metric .hi,
+    .hs-metric .lo {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
-      flex: 0 0 auto;
-    }
-    .hs-main .night,
-    .hs-range span {
-      display: block;
-      min-width: 34px;
-      padding: 0 4px;
-      text-align: center;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      padding: 0 5px;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
-      line-height: 16px;
       font-variant-numeric: tabular-nums;
-      color: #243044;
     }
-    .hs-main .night,
-    .hs-range .night { background: #f6e4a4; }
-    .hs-range .hi { background: #d7f0d4; }
-    .hs-range .lo { background: #f8d2ce; }
     .horse-sheet-odds {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -11605,12 +11596,11 @@
     }
     function hsMetric(range, water) {
       return '<div class="hs-metric">' +
-        '<div class="hs-main"><div class="hs-now">' + hsNum(range.now, water) + "</div>" +
-          '<span class="night">' + hsNum(range.night, water) + "</span></div>" +
-        '<div class="hs-range">' +
-          '<span class="hi">' + hsNum(range.hi, water) + "</span>" +
-          '<span class="lo">' + hsNum(range.lo, water) + "</span>" +
-        "</div></div>";
+        '<div class="hs-now">' + hsNum(range.now, water) + "</div>" +
+        '<span class="hi">' + hsNum(range.hi, water) + "</span>" +
+        '<span class="night">' + hsNum(range.night, water) + "</span>" +
+        '<span class="lo">' + hsNum(range.lo, water) + "</span>" +
+        "</div>";
     }
     function hsPoolRow(label, odds, water) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
