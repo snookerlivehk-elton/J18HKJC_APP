@@ -11,8 +11,5 @@
 - 只动 j18pro。不要改、重启或部署 `finance-18`、`100852`、`cabinet-quoter`。
 - 产品界面用繁体（zh-HK）；和用户对话用简体中文。
 - 风格延续现有 j18（钢蓝顶栏、绿/蓝场次块、浅底斑马纹），做渐进改动，不要大改视觉。
-- **功能更新日志（`static/racecard_help.html` → `FEATURE_CHANGELOG`）**：
-  - 只记功能修改的**终态结果**（用户最终看到的行为／文案／样式），不记中途尝试与反复改版过程。
-  - 按用户要求合并／精简序号区间时，改数组并重排 `no`；**合并日志本身不算功能改动，不另开序号**。
-  - 有实质功能结果时，部署顺手追加一条（序号、版本、香港时间、精简说明）。
+- **功能更新日志已暂停**。`static/racecard_help.html` 的 `FEATURE_CHANGELOG` 保持空数组。用户明确说「记录」之前，不要追加条目。恢复后仍用原格式：`{ no, version, at: "YYYY-MM-DD HH:mm"（香港时间）, body }`，只记终态；序号升序存储，画面由新到旧。合并日志本身不算功能改动，不另开序号。
 - **右滑列宽规则（快照与日后 API 都必须遵守）**：每列宽度按当场该字段最长内容（含表头）自动量，数据到分隔线固定 2px（`COL_FIT.dataToRulePx` / `--scroll-col-gap`）。禁止再写死 sm/md/wide/xl 或按字段手填列宽。换场、排序、灌入新数据都必须走 `applyMeeting` → `renderBoard` → `fitScrollColWidths`。
