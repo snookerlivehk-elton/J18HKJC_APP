@@ -2151,9 +2151,15 @@
       gap: 6px;
       min-width: 0;
     }
-    .hs-now {
+    .hs-main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
       flex: 0 0 auto;
-      text-align: right;
+    }
+    .hs-now {
+      text-align: center;
       font-size: 22px;
       font-weight: 800;
       line-height: 1;
@@ -2167,6 +2173,7 @@
       gap: 2px;
       flex: 0 0 auto;
     }
+    .hs-main .night,
     .hs-range span {
       display: block;
       min-width: 34px;
@@ -2179,6 +2186,7 @@
       font-variant-numeric: tabular-nums;
       color: #243044;
     }
+    .hs-main .night,
     .hs-range .night { background: #f6e4a4; }
     .hs-range .hi { background: #d7f0d4; }
     .hs-range .lo { background: #f8d2ce; }
@@ -11595,16 +11603,14 @@
       });
       return { now: now, night: night, hi: hi, lo: lo };
     }
-    function hsRange(range, water) {
-      return '<div class="hs-range">' +
-        '<span class="night">' + hsNum(range.night, water) + "</span>" +
-        '<span class="hi">' + hsNum(range.hi, water) + "</span>" +
-        '<span class="lo">' + hsNum(range.lo, water) + "</span>" +
-        "</div>";
-    }
     function hsMetric(range, water) {
-      return '<div class="hs-metric"><div class="hs-now">' + hsNum(range.now, water) + "</div>" +
-        hsRange(range, water) + "</div>";
+      return '<div class="hs-metric">' +
+        '<div class="hs-main"><div class="hs-now">' + hsNum(range.now, water) + "</div>" +
+          '<span class="night">' + hsNum(range.night, water) + "</span></div>" +
+        '<div class="hs-range">' +
+          '<span class="hi">' + hsNum(range.hi, water) + "</span>" +
+          '<span class="lo">' + hsNum(range.lo, water) + "</span>" +
+        "</div></div>";
     }
     function hsPoolRow(label, odds, water) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
