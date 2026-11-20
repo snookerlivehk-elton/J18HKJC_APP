@@ -2105,10 +2105,18 @@
     }
     .hs-row {
       display: grid;
-      grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr);
-      column-gap: 8px;
+      grid-template-columns: 32px minmax(0, 1fr) 14px minmax(0, 1fr);
+      column-gap: 0;
       align-items: center;
       padding: 8px 0 10px;
+    }
+    .hs-split {
+      width: 1px;
+      height: 28px;
+      justify-self: center;
+      align-self: center;
+      background: #c5ced8;
+      border-radius: 1px;
     }
     .hs-row + .hs-row { border-top: 1px solid var(--line); }
     .hs-pool {
@@ -2129,7 +2137,6 @@
     }
     .hs-k { grid-column: 1; grid-row: 1; align-self: center; }
     .hs-now { grid-column: 2; grid-row: 1; justify-self: start; }
-    .hs-metric .hi { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
     /* 隔夜從「賠率／水位」左緣起筆，字寬不把現價往右推 */
     .hs-ovn {
       grid-column: 1;
@@ -2140,7 +2147,18 @@
       min-width: 0;
       overflow: visible;
     }
-    .hs-metric .lo { grid-column: 2; grid-row: 2; justify-self: end; align-self: end; }
+    /* 最高、最低成組靠右，組內文字左對齊，小數長短不把「最高」「最低」擠歪 */
+    .hs-range {
+      grid-column: 2;
+      grid-row: 1 / 3;
+      justify-self: end;
+      align-self: center;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      min-width: 0;
+    }
     .hs-metric .hi,
     .hs-metric .lo,
     .hs-ovn {
@@ -2162,7 +2180,6 @@
     }
     .hs-now {
       position: relative;
-      padding-right: 12px;
       text-align: left;
       font-size: 26px;
       font-weight: 800;
@@ -2171,7 +2188,7 @@
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
-    .hs-now .od-tick { font-size: 14px; margin-top: -0.5em; }
+    .hs-now .od-tick { font-size: 14px; margin-top: -0.5em; margin-left: 2px; }
     .horse-sheet-odds {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -2689,6 +2706,7 @@
       pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
+    .hs-now .od-tick { margin-left: 2px; }
     /* 彈窗賠率行高含水位箭頭位，升降箭改對齊數字中線 */
     .wp-odds .od-tick {
       top: calc(var(--wh-num-fs) * var(--wh-num-lh) / 2);
@@ -6221,6 +6239,7 @@
     html[data-theme="dark"] .hs-pool { color: #d5e4f6; }
     html[data-theme="dark"] .hs-now { color: #eef3f8; }
     html[data-theme="dark"] .hs-row + .hs-row { border-top-color: #343e4c; }
+    html[data-theme="dark"] .hs-split { background: #4a5568; }
     html[data-theme="dark"] .horse-sheet-odds .box,
     html[data-theme="dark"] .horse-sheet-grid .item {
       background: #252b34;
@@ -11617,14 +11636,17 @@
       return '<div class="hs-metric">' +
         '<span class="hs-k">' + kind + '</span>' +
         '<span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span>" +
-        '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
         '<span class="hs-ovn"><span>隔夜</span> ' + hsNum(range.night, water) + "</span>" +
-        '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
+        '<span class="hs-range">' +
+          '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
+          '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
+        "</span>" +
         "</div>";
     }
     function hsPoolRow(label, odds, water, tick, fresh, waterTick, waterFresh) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
         hsMetric(odds, false, "賠率", tick, fresh) +
+        '<span class="hs-split" aria-hidden="true"></span>' +
         hsMetric(water, true, "水位", waterTick, waterFresh) + "</div>";
     }
     function paintHorseMarks(r) {
