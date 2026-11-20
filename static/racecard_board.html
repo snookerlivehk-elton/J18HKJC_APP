@@ -2072,19 +2072,45 @@
       border-color: #7ddea0;
     }
     .hs-tip {
-      height: 24px;
-      padding: 0 9px;
-      border: 1px solid rgba(255,255,255,.55);
-      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.48);
+      background: rgba(255,255,255,.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.32);
       color: #fff;
       font: inherit;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: .04em;
+      letter-spacing: .02em;
       line-height: 1;
+      -webkit-tap-highlight-color: transparent;
     }
-    .hs-tip.is-on { background: #fff; color: var(--nav-2); border-color: #fff; }
-    .hs-tip:disabled { opacity: .45; }
+    .hs-tip:active { background: rgba(255,255,255,.28); }
+    .hs-tip.is-on {
+      background: #fff;
+      color: var(--nav-2);
+      border-color: #fff;
+    }
+    .hs-tip-ord {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 3px;
+      border-radius: 999px;
+      background: var(--nav-2);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .hs-tip:disabled { opacity: .45; cursor: default; }
     .horse-sheet-title .sub {
       display: block;
       margin-top: 3px;
@@ -7126,8 +7152,8 @@
         "</span></button>" +
         "</span>";
     }
-    function toggleTipNote(no) {
-      if (isTipNoteFrozen()) return false;
+    function toggleTipNote(no, opts) {
+      if (isTipNoteFrozen() && !(opts && opts.fromSheet)) return false;
       const s = String(no);
       if (!s) return false;
       const runners = currentRunners();
@@ -11696,14 +11722,13 @@
       const flagCls = mark === 1 ? " is-1" : mark === 2 ? " is-2" : "";
       const ord = getTipNoteOrder(r.no);
       const tipOn = ord != null;
-      const frozen = isTipNoteFrozen();
       const full = !tipOn && tipNoteList().length >= TIP_NOTE_MAX;
       el.sheetMarks.innerHTML =
         '<button type="button" class="hs-flag' + flagCls + '" data-hs-flag="1" aria-label="' +
           (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + ROW_FLAG_SVG + "</button>" +
         '<button type="button" class="hs-tip' + (tipOn ? " is-on" : "") + '" data-hs-tip="1"' +
-          ((frozen || full) ? " disabled" : "") + ' aria-label="心水標記" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
-          (tipOn ? ("心水 " + ord) : "心水") + "</button>";
+          (full ? " disabled" : "") + ' aria-label="' + (tipOn ? "取消心水標記" : (full ? "心水標記已滿" : "心水標記")) + '" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
+          "心水標記" + (tipOn ? '<span class="hs-tip-ord">' + ord + "</span>" : "") + "</button>";
     }
     function fillHorseSheet(r) {
       if (!el.sheetBody) return;
@@ -12641,7 +12666,7 @@
         }
         if (ev.target.closest("[data-hs-tip]")) {
           ev.preventDefault();
-          if (!toggleTipNote(no)) return;
+          if (!toggleTipNote(no, { fromSheet: true })) return;
           renderBoard();
           paintHorseMarks(rNow());
         }
