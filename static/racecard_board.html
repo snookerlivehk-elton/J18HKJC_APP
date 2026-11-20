@@ -2178,25 +2178,14 @@
       border-radius: 999px;
       background: #d5dbe3;
     }
-    .hs-bar .tick,
-    .hs-bar .dot {
+    .hs-bar .tick {
       position: absolute;
       top: 50%;
-      transform: translate(-50%, -50%);
-    }
-    .hs-bar .tick {
       width: 2px;
       height: 9px;
       border-radius: 1px;
-      background: var(--yellow);
-    }
-    .hs-bar .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--nav);
-      box-shadow: 0 0 0 2px #fff;
-      z-index: 1;
+      background: var(--hs-night, #163a66);
+      transform: translate(-50%, -50%);
     }
     .hs-ovn {
       text-align: center;
@@ -2205,7 +2194,7 @@
       line-height: 1;
       letter-spacing: .02em;
       font-variant-numeric: tabular-nums;
-      color: var(--yellow);
+      color: #163a66;
     }
     .hs-ovn span { font-weight: 700; margin-right: 3px; }
     .horse-sheet-odds {
@@ -6254,7 +6243,8 @@
       box-shadow: none;
     }
     html[data-theme="dark"] .hs-bar { background: #3a4452; }
-    html[data-theme="dark"] .hs-bar .dot { box-shadow: 0 0 0 2px #242b35; }
+    html[data-theme="dark"] .hs-ovn { color: #9eb6de; }
+    html[data-theme="dark"] .hs-bar .tick { background: #9eb6de; }
     html[data-theme="dark"] .hs-pool { color: #d5e4f6; }
     html[data-theme="dark"] .hs-now { color: #eef3f8; }
     html[data-theme="dark"] .hs-row + .hs-row { border-top-color: #343e4c; }
@@ -11657,7 +11647,6 @@
       return Math.max(6, Math.min(94, ((n - a) / (b - a)) * 100));
     }
     function hsMetric(range, water, kind, tick, fresh) {
-      const nowAt = hsSpot(range.now, range.lo, range.hi).toFixed(1);
       const nightAt = hsSpot(range.night, range.lo, range.hi).toFixed(1);
       const tickHtml = oddsTickHtml(tick, !!fresh);
       return '<div class="hs-metric">' +
@@ -11666,7 +11655,6 @@
           '<span class="hs-end lo"><span>最低</span>' + hsNum(range.lo, water) + "</span>" +
           '<span class="hs-bar" aria-hidden="true">' +
             '<i class="tick" style="left:' + nightAt + '%"></i>' +
-            '<i class="dot" style="left:' + nowAt + '%"></i>' +
           "</span>" +
           '<span class="hs-end hi"><span>最高</span>' + hsNum(range.hi, water) + "</span>" +
         "</div>" +
