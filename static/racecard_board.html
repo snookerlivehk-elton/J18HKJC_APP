@@ -2135,7 +2135,7 @@
       text-align: center;
     }
     .hs-cols span:last-child { text-align: left; padding-left: 2px; }
-    .hs-row { padding: 4px 0 7px; align-items: start; }
+    .hs-row { padding: 5px 0 6px; align-items: center; }
     .hs-row + .hs-row { border-top: 1px solid var(--line); }
     .hs-pool {
       font-size: 13px;
@@ -2143,30 +2143,39 @@
       letter-spacing: .06em;
       color: var(--nav);
       line-height: 1.15;
-      padding-top: 2px;
+    }
+    .hs-metric {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 0;
     }
     .hs-now {
-      text-align: center;
+      flex: 0 0 auto;
+      text-align: right;
       font-size: 22px;
       font-weight: 800;
-      line-height: 1.05;
+      line-height: 1;
       letter-spacing: -.02em;
       font-variant-numeric: tabular-nums;
       color: var(--text);
-      margin-bottom: 3px;
     }
     .hs-range {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 3px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 0 0 auto;
     }
     .hs-range span {
       display: block;
+      min-width: 34px;
+      padding: 0 4px;
       text-align: center;
-      border-radius: 5px;
+      border-radius: 4px;
       font-size: 11px;
       font-weight: 800;
-      line-height: 18px;
+      line-height: 16px;
       font-variant-numeric: tabular-nums;
       color: #243044;
     }
