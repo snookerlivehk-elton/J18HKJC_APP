@@ -2101,23 +2101,15 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       box-shadow: 0 8px 22px rgba(45, 62, 80, .06);
-      padding: 8px 10px 4px;
+      padding: 6px 10px 2px;
     }
-    .hs-cols, .hs-row {
+    .hs-row {
       display: grid;
       grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr);
       column-gap: 10px;
       align-items: center;
+      padding: 4px 0 6px;
     }
-    .hs-cols {
-      padding: 0 0 2px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      color: var(--muted);
-      text-align: center;
-    }
-    .hs-row { padding: 6px 0 8px; align-items: center; }
     .hs-row + .hs-row { border-top: 1px solid var(--line); }
     .hs-pool {
       font-size: 13px;
@@ -2130,11 +2122,25 @@
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 3px;
+      gap: 2px;
       min-width: 0;
     }
+    .hs-nowline {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-start;
+      gap: 6px;
+      min-width: 0;
+    }
+    .hs-k {
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      color: var(--muted);
+    }
     .hs-now {
-      text-align: center;
+      text-align: left;
       font-size: 24px;
       font-weight: 800;
       line-height: 1;
@@ -11616,11 +11622,11 @@
       if (n == null || a == null || b == null || a === b) return 50;
       return Math.max(6, Math.min(94, ((n - a) / (b - a)) * 100));
     }
-    function hsMetric(range, water) {
+    function hsMetric(range, water, kind) {
       const nowAt = hsSpot(range.now, range.lo, range.hi).toFixed(1);
       const nightAt = hsSpot(range.night, range.lo, range.hi).toFixed(1);
       return '<div class="hs-metric">' +
-        '<div class="hs-now">' + hsNum(range.now, water) + "</div>" +
+        '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + "</span></div>" +
         '<div class="hs-scale">' +
           '<span class="hs-end lo"><span>最低</span>' + hsNum(range.lo, water) + "</span>" +
           '<span class="hs-bar" aria-hidden="true">' +
@@ -11634,7 +11640,7 @@
     }
     function hsPoolRow(label, odds, water) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
-        hsMetric(odds, false) + hsMetric(water, true) + "</div>";
+        hsMetric(odds, false, "賠率") + hsMetric(water, true, "水位") + "</div>";
     }
     function paintHorseMarks(r) {
       if (!el.sheetMarks) return;
@@ -11661,7 +11667,6 @@
       const plaW = horseWaterRange(r, "placeWater", "plaW");
       el.sheetBody.innerHTML =
         '<section class="hs-ow">' +
-          '<div class="hs-cols"><span></span><span>賠率</span><span>水位</span></div>' +
           hsPoolRow("獨贏", winOdds, winW) +
           hsPoolRow("位置", plaOdds, plaW) +
         "</section>";
