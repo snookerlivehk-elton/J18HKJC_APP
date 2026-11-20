@@ -2140,6 +2140,7 @@
       color: var(--muted);
     }
     .hs-now {
+      position: relative;
       text-align: left;
       font-size: 24px;
       font-weight: 800;
@@ -2148,6 +2149,7 @@
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
+    .hs-now .od-tick { font-size: 12px; margin-top: -0.55em; }
     .hs-scale {
       display: grid;
       grid-template-columns: auto minmax(28px, 1fr) auto;
@@ -2704,7 +2706,8 @@
     /* 字符箭頭絕對貼數字右側，不佔版面寬度（外層賠率／水位流量／彈窗賠率共用） */
     .odds .od-tick,
     .scroll-col .wp .od-tick,
-    .wp-odds .od-tick {
+    .wp-odds .od-tick,
+    .hs-now .od-tick {
       position: absolute;
       left: 100%;
       top: 50%;
@@ -2724,14 +2727,17 @@
     }
     .odds .od-tick.up,
     .scroll-col .wp .od-tick.up,
-    .wp-odds .od-tick.up { color: #1e8e3e; }
+    .wp-odds .od-tick.up,
+    .hs-now .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down,
     .scroll-col .wp .od-tick.down,
-    .wp-odds .od-tick.down { color: #c0392b; }
+    .wp-odds .od-tick.down,
+    .hs-now .od-tick.down { color: #c0392b; }
     /* 賠率刷新後：箭頭呼吸 3 次提示升降更新 */
     .odds .od-tick.fresh,
     .scroll-col .wp .od-tick.fresh,
-    .wp-odds .od-tick.fresh {
+    .wp-odds .od-tick.fresh,
+    .hs-now .od-tick.fresh {
       animation: odTickBreath .65s ease-in-out 3;
       transform-origin: center center;
     }
@@ -2751,7 +2757,8 @@
     @media (prefers-reduced-motion: reduce) {
       .odds .od-tick.fresh,
       .scroll-col .wp .od-tick.fresh,
-      .wp-odds .od-tick.fresh { animation: none; opacity: 1; }
+      .wp-odds .od-tick.fresh,
+      .hs-now .od-tick.fresh { animation: none; opacity: 1; }
     }
     .odds .na { color: var(--muted); font-size: 14px; }
 
@@ -10215,6 +10222,7 @@
         }
       });
       renderBoard();
+      refreshOpenHorseSheet();
       /* 呼吸約 3×0.65s；結束後清 fresh，避免整表重繪再閃一次 */
       oddsTickFreshTimer = setTimeout(function () {
         oddsTickFreshTimer = 0;
@@ -11622,11 +11630,12 @@
       if (n == null || a == null || b == null || a === b) return 50;
       return Math.max(6, Math.min(94, ((n - a) / (b - a)) * 100));
     }
-    function hsMetric(range, water, kind) {
+    function hsMetric(range, water, kind, tick, fresh) {
       const nowAt = hsSpot(range.now, range.lo, range.hi).toFixed(1);
       const nightAt = hsSpot(range.night, range.lo, range.hi).toFixed(1);
+      const tickHtml = water ? "" : oddsTickHtml(tick, !!fresh);
       return '<div class="hs-metric">' +
-        '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + "</span></div>" +
+        '<div class="hs-nowline"><span class="hs-k">' + kind + '</span><span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span></div>" +
         '<div class="hs-scale">' +
           '<span class="hs-end lo"><span>最低</span>' + hsNum(range.lo, water) + "</span>" +
           '<span class="hs-bar" aria-hidden="true">' +
@@ -11638,9 +11647,9 @@
         '<div class="hs-ovn"><span>隔夜</span>' + hsNum(range.night, water) + "</div>" +
         "</div>";
     }
-    function hsPoolRow(label, odds, water) {
+    function hsPoolRow(label, odds, water, tick, fresh) {
       return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
-        hsMetric(odds, false, "賠率") + hsMetric(water, true, "水位") + "</div>";
+        hsMetric(odds, false, "賠率", tick, fresh) + hsMetric(water, true, "水位") + "</div>";
     }
     function paintHorseMarks(r) {
       if (!el.sheetMarks) return;
@@ -11667,9 +11676,15 @@
       const plaW = horseWaterRange(r, "placeWater", "plaW");
       el.sheetBody.innerHTML =
         '<section class="hs-ow">' +
-          hsPoolRow("獨贏", winOdds, winW) +
-          hsPoolRow("位置", plaOdds, plaW) +
+          hsPoolRow("獨贏", winOdds, winW, r.winTick, r._winTickFresh) +
+          hsPoolRow("位置", plaOdds, plaW, r.placeTick, r._placeTickFresh) +
         "</section>";
+    }
+    function refreshOpenHorseSheet() {
+      if (!el.sheet || el.sheet.hasAttribute("hidden") || !el.sheetNo) return;
+      const no = el.sheetNo.textContent;
+      const r = currentRunners().find(function (x) { return String(x.no) === String(no); });
+      if (r) fillHorseSheet(r);
     }
     function openHorseSheet(no) {
       closeAllBoardOverlays("horseSheet");
