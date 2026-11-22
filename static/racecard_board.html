@@ -2017,11 +2017,131 @@
     }
     .horse-sheet-title .nm {
       display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 18px;
       font-weight: 400;
       letter-spacing: .02em;
       line-height: 1.15;
     }
+    .horse-sheet-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .hs-marks { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; }
+    .hs-flag, .hs-tip {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: rgba(255,255,255,.92);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hs-flag {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      z-index: 2;
+      transform: translateX(calc(-50% + 10px));
+      display: inline-flex;
+      align-items: flex-start;
+      justify-content: center;
+      width: 57px;
+      height: 40px;
+    }
+    .hs-flag svg {
+      width: 40.56px;
+      height: 36px;
+      display: block;
+      filter: drop-shadow(0 1px 0 rgba(12, 24, 40, .35));
+    }
+    .hs-flag:active { opacity: .72; }
+    .hs-flag.is-1 { color: #ffd15c; }
+    .hs-flag.is-2 { color: #8ef0b4; }
+    .hs-tip {
+      position: absolute;
+      top: 50%;
+      right: calc(8px + 32px + 24px * 2 - 10px);
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 41px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      font: inherit;
+      line-height: 1;
+    }
+    .hs-tip:active { opacity: .72; }
+    .hs-tip-words {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 14.4px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      line-height: 1.05;
+    }
+    .hs-tip-frac {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 17px;
+      flex: 0 0 17px;
+    }
+    .hs-tip-frac .n {
+      width: 17px;
+      font-size: 16.8px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      text-align: center;
+    }
+    .hs-tip-frac .bar {
+      width: 13px;
+      height: 1px;
+      margin: 2px 0 1px;
+      background: currentColor;
+      opacity: .55;
+      transform: rotate(-16deg);
+    }
+    .hs-tip-frac .d {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      opacity: .7;
+    }
+    .hs-tip-tick {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      margin-left: 5px;
+      display: none;
+      color: #ff5a4f;
+      font-size: 16.8px;
+      font-weight: 700;
+      line-height: 1;
+      transform: translateY(-50%);
+    }
+    .hs-tip.is-on .hs-tip-frac .n { color: #fff; }
+    .hs-tip.is-on .hs-tip-tick {
+      display: block;
+      animation: hsTipPop .28s ease-out;
+    }
+    @keyframes hsTipPop {
+      from { transform: translateY(-50%) scale(.4); opacity: 0; }
+      to { transform: translateY(-50%) scale(1); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hs-tip.is-on .hs-tip-tick { animation: none; }
+    }
+    .hs-tip:disabled { opacity: .4; cursor: default; }
     .horse-sheet-title .sub {
       display: block;
       margin-top: 3px;
@@ -2056,9 +2176,119 @@
       overflow: auto;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
-      padding: 10px 10px 16px;
-      background: #f4f6f8;
+      padding: 8px 10px 12px;
+      background: #eef1f5;
     }
+    .hs-ow {
+      display: grid;
+      grid-template-columns:
+        max-content
+        max-content
+        minmax(0, 1.28fr)
+        max-content
+        14px
+        max-content
+        minmax(0, 1fr)
+        max-content;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 8px 22px rgba(45, 62, 80, .06);
+      padding: 6px 10px 2px;
+    }
+    .hs-row {
+      display: grid;
+      grid-template-columns: subgrid;
+      grid-column: 1 / -1;
+      align-items: center;
+      padding: 8px 0 10px;
+    }
+    .hs-split {
+      grid-column: 5;
+      width: 1px;
+      height: 28px;
+      justify-self: center;
+      align-self: center;
+      background: #c5ced8;
+      border-radius: 1px;
+      /* 最高左移後，線要落在左側數字和「水位」之間的正中 */
+      transform: translateX(-5px);
+    }
+    .hs-row + .hs-row { border-top: 1px solid var(--line); }
+    .hs-pool {
+      grid-column: 1;
+      white-space: nowrap;
+      padding-right: 6px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--nav);
+      line-height: 1.2;
+    }
+    .hs-metric {
+      display: grid;
+      grid-template-columns: subgrid;
+      grid-template-rows: auto auto;
+      align-items: start;
+      min-width: 0;
+    }
+    .hs-metric.is-odds { grid-column: 2 / 5; }
+    .hs-metric.is-water { grid-column: 6 / 9; }
+    .hs-k { grid-column: 1; grid-row: 1; align-self: center; padding-right: 4px; }
+    .hs-now { grid-column: 2; grid-row: 1; justify-self: start; }
+    /* 隔夜從「賠率／水位」左緣起筆，字寬不把現價往右推 */
+    .hs-ovn {
+      grid-column: 1;
+      grid-row: 2;
+      justify-self: start;
+      align-self: end;
+      width: 0;
+      min-width: 0;
+      overflow: visible;
+    }
+    /* 上下兩行共用同一欄，最高、最低左緣對齊 */
+    .hs-range {
+      grid-column: 3;
+      grid-row: 1 / 3;
+      justify-self: stretch;
+      align-self: center;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      min-width: 0;
+    }
+    .hs-metric.is-odds .hs-range { transform: translateX(-10px); }
+    .hs-metric .hi,
+    .hs-metric .lo,
+    .hs-ovn {
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .hs-metric .hi { color: var(--green); }
+    .hs-metric .lo { color: var(--red); }
+    .hs-ovn { color: #163a66; }
+    .hs-k {
+      flex: 0 0 auto;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+    .hs-now {
+      position: relative;
+      text-align: left;
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .hs-now .od-tick { font-size: 14px; margin-top: -0.5em; margin-left: 2px; }
     .horse-sheet-odds {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -2563,7 +2793,8 @@
     /* 字符箭頭絕對貼數字右側，不佔版面寬度（外層賠率／水位流量／彈窗賠率共用） */
     .odds .od-tick,
     .scroll-col .wp .od-tick,
-    .wp-odds .od-tick {
+    .wp-odds .od-tick,
+    .hs-now .od-tick {
       position: absolute;
       left: 100%;
       top: 50%;
@@ -2575,6 +2806,7 @@
       pointer-events: none;
       font-family: "Noto Sans TC", "PingFang TC", "Segoe UI Symbol", sans-serif;
     }
+    .hs-now .od-tick { margin-left: 2px; }
     /* 彈窗賠率行高含水位箭頭位，升降箭改對齊數字中線 */
     .wp-odds .od-tick {
       top: calc(var(--wh-num-fs) * var(--wh-num-lh) / 2);
@@ -2583,14 +2815,17 @@
     }
     .odds .od-tick.up,
     .scroll-col .wp .od-tick.up,
-    .wp-odds .od-tick.up { color: #1e8e3e; }
+    .wp-odds .od-tick.up,
+    .hs-now .od-tick.up { color: #1e8e3e; }
     .odds .od-tick.down,
     .scroll-col .wp .od-tick.down,
-    .wp-odds .od-tick.down { color: #c0392b; }
+    .wp-odds .od-tick.down,
+    .hs-now .od-tick.down { color: #c0392b; }
     /* 賠率刷新後：箭頭呼吸 3 次提示升降更新 */
     .odds .od-tick.fresh,
     .scroll-col .wp .od-tick.fresh,
-    .wp-odds .od-tick.fresh {
+    .wp-odds .od-tick.fresh,
+    .hs-now .od-tick.fresh {
       animation: odTickBreath .65s ease-in-out 3;
       transform-origin: center center;
     }
@@ -2610,7 +2845,8 @@
     @media (prefers-reduced-motion: reduce) {
       .odds .od-tick.fresh,
       .scroll-col .wp .od-tick.fresh,
-      .wp-odds .od-tick.fresh { animation: none; opacity: 1; }
+      .wp-odds .od-tick.fresh,
+      .hs-now .od-tick.fresh { animation: none; opacity: 1; }
     }
     .odds .na { color: var(--muted); font-size: 14px; }
 
@@ -6094,6 +6330,16 @@
     html[data-theme="dark"] .horse-sheet-body {
       background: #181d24;
     }
+    html[data-theme="dark"] .hs-ow {
+      background: #242b35;
+      border-color: #3a4452;
+      box-shadow: none;
+    }
+    html[data-theme="dark"] .hs-ovn { color: #b9cef2; }
+    html[data-theme="dark"] .hs-pool { color: #d5e4f6; }
+    html[data-theme="dark"] .hs-now { color: #eef3f8; }
+    html[data-theme="dark"] .hs-row + .hs-row { border-top-color: #343e4c; }
+    html[data-theme="dark"] .hs-split { background: #4a5568; }
     html[data-theme="dark"] .horse-sheet-odds .box,
     html[data-theme="dark"] .horse-sheet-grid .item {
       background: #252b34;
@@ -6565,7 +6811,10 @@
         <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
         <span class="horse-sheet-id" id="horseSheetNo"></span>
         <div class="horse-sheet-title">
-          <span class="nm" id="horseSheetName"></span>
+          <div class="horse-sheet-name-row">
+            <span class="nm" id="horseSheetName"></span>
+            <span class="hs-marks" id="horseSheetMarks"></span>
+          </div>
           <span class="sub" id="horseSheetRace"></span>
         </div>
         <button type="button" class="horse-sheet-close" id="horseSheetClose" aria-label="關閉">×</button>
@@ -6782,6 +7031,7 @@
       sheetName: document.getElementById("horseSheetName"),
       sheetRace: document.getElementById("horseSheetRace"),
       sheetBody: document.getElementById("horseSheetBody"),
+      sheetMarks: document.getElementById("horseSheetMarks"),
       sheetClose: document.getElementById("horseSheetClose"),
       waterSheet: document.getElementById("waterSheet"),
       waterSheetBody: document.getElementById("waterSheetBody"),
@@ -6936,8 +7186,8 @@
         "</span></button>" +
         "</span>";
     }
-    function toggleTipNote(no) {
-      if (isTipNoteFrozen()) return false;
+    function toggleTipNote(no, opts) {
+      if (isTipNoteFrozen() && !(opts && opts.fromSheet)) return false;
       const s = String(no);
       if (!s) return false;
       const runners = currentRunners();
@@ -8895,6 +9145,10 @@
         /* 書籤／燕尾旗：頂平、底中凹三角缺口 */
         '<path fill="currentColor" d="M2 1h8v9.2L6 7.4 2 10.2V1z"/>' +
       "</svg>";
+    const HS_FLAG_SVG =
+      '<svg viewBox="0 0 12 22" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M2 .6h8v17.2L6 13.4 2 17.8V.6z"/>' +
+      "</svg>";
     function renderRowFlag(no, mark) {
       const m = mark === 1 || mark === 2 ? mark : 0;
       const lab = m === 1 ? "黃標，再點改綠標" : m === 2 ? "綠標，再點取消" : "標記此馬";
@@ -9881,27 +10135,29 @@
       if (n == null) return "—";
       return String(Math.max(0, Math.round(n))).padStart(2, "0");
     }
-    function cellWinPlacePair(r, winKey, plaKey, fmtFn, winTickKey, plaTickKey) {
+    function cellWinPlacePair(r, winKey, plaKey, fmtFn, winTickKey, plaTickKey, winFreshKey, plaFreshKey) {
       if (r && r.scratched) return '<span class="v">—</span>';
       const w = r ? r[winKey] : null;
       const p = r ? r[plaKey] : null;
       if ((w == null || w === "") && (p == null || p === "")) return '<span class="v">—</span>';
       const wTick = winTickKey && r ? r[winTickKey] : "";
       const pTick = plaTickKey && r ? r[plaTickKey] : "";
+      const wFresh = !!(winFreshKey && r && r[winFreshKey]);
+      const pFresh = !!(plaFreshKey && r && r[plaFreshKey]);
       return (
         '<span class="wp">' +
-          wpLineHtml("w", fmtFn(w), wTick) +
-          wpLineHtml("p", fmtFn(p), pTick) +
+          wpLineHtml("w", fmtFn(w), wTick, wFresh) +
+          wpLineHtml("p", fmtFn(p), pTick, pFresh) +
         "</span>"
       );
     }
-    function wpLineHtml(cls, text, tick) {
+    function wpLineHtml(cls, text, tick, fresh) {
       const dir = tick === "up" || tick === "down" ? tick : "";
       const label = dir === "up" ? "近5分鐘升" : dir === "down" ? "近5分鐘降" : "";
       return (
         '<span class="' + cls + '"' + (label ? ' title="' + label + '"' : "") + ">" +
           '<span class="od-n">' + esc(text) + "</span>" +
-          oddsTickHtml(dir) +
+          oddsTickHtml(dir, !!fresh) +
         "</span>"
       );
     }
@@ -9915,7 +10171,7 @@
     }
     function cellValue(c, r) {
       if (c.key === "water") {
-        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater, "winWaterTick", "placeWaterTick");
+        return cellWinPlacePair(r, "winWater", "placeWater", fmtWater, "winWaterTick", "placeWaterTick", "_winWaterTickFresh", "_placeWaterTickFresh");
       }
       if (c.key === "flow") {
         return cellWinPlacePair(r, "winFlow", "placeFlow", fmtFlow, "winFlowTick", "placeFlowTick");
@@ -10027,6 +10283,12 @@
       const rounded = Math.round(Math.max(1.01, next) * 10) / 10;
       return kind === "place" ? rounded : (Number.isInteger(rounded) ? rounded : rounded);
     }
+    function nudgeWater(v, tick) {
+      const n = numOrNull(v);
+      if (n == null) return v;
+      const next = tick === "up" ? n + 1 : n - 1;
+      return Math.max(35, Math.min(99, Math.round(next)));
+    }
     let oddsTickFreshTimer = 0;
     function clearOddsTickFreshFlags(race) {
       if (!race || !Array.isArray(race.runners)) return;
@@ -10034,6 +10296,8 @@
         if (!r) return;
         delete r._winTickFresh;
         delete r._placeTickFresh;
+        delete r._winWaterTickFresh;
+        delete r._placeWaterTickFresh;
       });
       document.querySelectorAll(".od-tick.fresh").forEach(function (node) {
         node.classList.remove("fresh");
@@ -10058,8 +10322,19 @@
           r.place = nudgeOdds(r.place, r.placeTick, "place");
           r._placeTickFresh = true;
         }
+        if (numOrNull(r.winWater) != null) {
+          r.winWaterTick = flipOddsTick(r.winWaterTick);
+          r.winWater = nudgeWater(r.winWater, r.winWaterTick);
+          r._winWaterTickFresh = true;
+        }
+        if (numOrNull(r.placeWater) != null) {
+          r.placeWaterTick = flipOddsTick(r.placeWaterTick);
+          r.placeWater = nudgeWater(r.placeWater, r.placeWaterTick);
+          r._placeWaterTickFresh = true;
+        }
       });
       renderBoard();
+      refreshOpenHorseSheet();
       /* 呼吸約 3×0.65s；結束後清 fresh，避免整表重繪再閃一次 */
       oddsTickFreshTimer = setTimeout(function () {
         oddsTickFreshTimer = 0;
@@ -11409,14 +11684,119 @@
       });
       if (el.waterSheetClose) el.waterSheetClose.focus();
     }
+    function hsNum(v, water) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      if (water) return esc(fmtWater(n));
+      const r = Math.round(n * 10) / 10;
+      return esc(Number.isInteger(r) ? String(r) : r.toFixed(1));
+    }
+    function horseOddsRange(current, no, kind) {
+      const base = numOrNull(current);
+      if (base == null) return { now: null, night: null, hi: null, lo: null };
+      const raceNum = Number(currentRace) || 1;
+      const vals = [base];
+      const step = kind === "place" ? 0.45 : 1.1;
+      for (let i = 1; i < 8; i++) {
+        const jitter = ((Number(no) * 5 + raceNum * 3 + i * 7) % 5) - 1;
+        vals.push(Math.max(1.1, Math.round((base + i * step + jitter * 0.3) * 10) / 10));
+      }
+      const night = vals[vals.length - 1];
+      vals[3] = Math.round((night + (kind === "place" ? 1.8 : 3.2)) * 10) / 10;
+      let hi = vals[0];
+      let lo = vals[0];
+      vals.forEach(function (n) {
+        if (n > hi) hi = n;
+        if (n < lo) lo = n;
+      });
+      return { now: base, night: night, hi: hi, lo: lo };
+    }
+    function horseWaterRange(r, field, sampleKey) {
+      const now = r ? numOrNull(r[field]) : null;
+      const vals = [];
+      let night = null;
+      if (!r || r.scratched) return { now: null, night: null, hi: null, lo: null };
+      const nightIdx = Math.min(6, WATER_HOUR_COLS - 1);
+      for (let i = 0; i < WATER_HOUR_COLS; i++) {
+        const s = waterHourSample(r, i);
+        const n = s ? numOrNull(s[sampleKey]) : null;
+        if (n == null) continue;
+        vals.push(n);
+        if (i === nightIdx) night = n;
+      }
+      if (night == null && vals.length) night = vals[vals.length - 1];
+      if (now != null) vals.push(now);
+      if (!vals.length) return { now: null, night: null, hi: null, lo: null };
+      let hi = vals[0];
+      let lo = vals[0];
+      vals.forEach(function (n) {
+        if (n > hi) hi = n;
+        if (n < lo) lo = n;
+      });
+      return { now: now, night: night, hi: hi, lo: lo };
+    }
+    function hsMetric(range, water, kind, tick, fresh, slot) {
+      const tickHtml = oddsTickHtml(tick, !!fresh);
+      return '<div class="hs-metric ' + slot + '">' +
+        '<span class="hs-k">' + kind + '</span>' +
+        '<span class="hs-now">' + hsNum(range.now, water) + tickHtml + "</span>" +
+        '<span class="hs-ovn"><span>隔夜</span> ' + hsNum(range.night, water) + "</span>" +
+        '<span class="hs-range">' +
+          '<span class="hi"><span>最高</span> ' + hsNum(range.hi, water) + "</span>" +
+          '<span class="lo"><span>最低</span> ' + hsNum(range.lo, water) + "</span>" +
+        "</span>" +
+        "</div>";
+    }
+    function hsPoolRow(label, odds, water, tick, fresh, waterTick, waterFresh) {
+      return '<div class="hs-row"><div class="hs-pool">' + label + "</div>" +
+        hsMetric(odds, false, "賠率", tick, fresh, "is-odds") +
+        '<span class="hs-split" aria-hidden="true"></span>' +
+        hsMetric(water, true, "水位", waterTick, waterFresh, "is-water") + "</div>";
+    }
+    function paintHorseMarks(r) {
+      if (!el.sheetMarks) return;
+      if (!r) { el.sheetMarks.innerHTML = ""; return; }
+      const mark = getRowMark(r.no);
+      const flagCls = mark === 1 ? " is-1" : mark === 2 ? " is-2" : "";
+      const ord = getTipNoteOrder(r.no);
+      const tipOn = ord != null;
+      const full = !tipOn && tipNoteList().length >= TIP_NOTE_MAX;
+      el.sheetMarks.innerHTML =
+        '<button type="button" class="hs-flag' + flagCls + '" data-hs-flag="1" aria-label="' +
+          (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + HS_FLAG_SVG + "</button>" +
+        '<button type="button" class="hs-tip' + (tipOn ? " is-on" : "") + '" data-hs-tip="1"' +
+          (full ? " disabled" : "") + ' aria-label="' + (tipOn ? "取消心水標記" : (full ? "心水標記已滿" : "心水標記")) + '" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
+          '<span class="hs-tip-words"><span>心水</span><span>標記</span></span>' +
+          '<span class="hs-tip-frac" aria-hidden="true"><span class="n">' + (tipOn ? ord : "–") + '</span><span class="bar"></span><span class="d">' + TIP_NOTE_MAX + "</span></span>" +
+          '<span class="hs-tip-tick" aria-hidden="true">✓</span></button>';
+    }
+    function fillHorseSheet(r) {
+      if (!el.sheetBody) return;
+      if (!r) { el.sheetBody.innerHTML = ""; return; }
+      const winOdds = horseOddsRange(r.win, r.no, "win");
+      const plaOdds = horseOddsRange(r.place, r.no, "place");
+      const winW = horseWaterRange(r, "winWater", "winW");
+      const plaW = horseWaterRange(r, "placeWater", "plaW");
+      el.sheetBody.innerHTML =
+        '<section class="hs-ow">' +
+          hsPoolRow("獨贏", winOdds, winW, r.winTick, r._winTickFresh, r.winWaterTick, r._winWaterTickFresh) +
+          hsPoolRow("位置", plaOdds, plaW, r.placeTick, r._placeTickFresh, r.placeWaterTick, r._placeWaterTickFresh) +
+        "</section>";
+    }
+    function refreshOpenHorseSheet() {
+      if (!el.sheet || el.sheet.hasAttribute("hidden") || !el.sheetNo) return;
+      const no = el.sheetNo.textContent;
+      const r = currentRunners().find(function (x) { return String(x.no) === String(no); });
+      if (r) fillHorseSheet(r);
+    }
     function openHorseSheet(no) {
       closeAllBoardOverlays("horseSheet");
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
       el.sheetNo.textContent = String(r.no);
       el.sheetName.textContent = r.name || "";
-      /* 詳情正文待重設計：暫只保留彩衣／馬號／馬名 */
       if (el.sheetRace) el.sheetRace.textContent = "";
+      paintHorseMarks(r);
       if (r.silk) {
         el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
         el.sheetSilk.className = "horse-sheet-silk";
@@ -11424,7 +11804,7 @@
         el.sheetSilk.style.backgroundImage = "";
         el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
       }
-      if (el.sheetBody) el.sheetBody.innerHTML = "";
+      if (el.sheetBody) fillHorseSheet(r);
       el.sheet.removeAttribute("hidden");
       el.sheet.setAttribute("aria-hidden", "false");
       if (el.sheetClose) el.sheetClose.focus();
@@ -12303,6 +12683,34 @@
     } catch (e) {}
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
+    }
+    if (el.sheetMarks) {
+      el.sheetMarks.addEventListener("click", function (ev) {
+        const no = el.sheetNo ? el.sheetNo.textContent : "";
+        if (!no) return;
+        const rNow = function () {
+          return currentRunners().find(function (x) { return String(x.no) === String(no); });
+        };
+        if (ev.target.closest("[data-hs-flag]")) {
+          ev.preventDefault();
+          const mark = cycleRowMark(no);
+          const row = document.querySelector('#boardX .hrow[data-no="' + no + '"]');
+          applyRowMarkClass(row, mark);
+          const btn = row && row.querySelector("button.row-flag");
+          if (btn) {
+            btn.setAttribute("data-mark", String(mark));
+            btn.setAttribute("aria-pressed", mark ? "true" : "false");
+          }
+          paintHorseMarks(rNow());
+          return;
+        }
+        if (ev.target.closest("[data-hs-tip]")) {
+          ev.preventDefault();
+          if (!toggleTipNote(no, { fromSheet: true })) return;
+          renderBoard();
+          paintHorseMarks(rNow());
+        }
+      });
     }
     if (el.waterSheetClose) {
       el.waterSheetClose.addEventListener("click", closeWaterSheet);
