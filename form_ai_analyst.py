@@ -242,7 +242,7 @@ class FormAIAnalyst:
             "raw": data,
         }
 
-    def _chat_json(self, user: str) -> dict:
+    def _chat_json(self, user: str, clients: Optional[List[Any]] = None) -> dict:
         if not self.is_ready():
             raise ValueError("尚未設定 OPENAI_API_KEY")
         import httpx
@@ -256,12 +256,22 @@ class FormAIAnalyst:
             ],
             "temperature": 0.55,
         }
-        with httpx.Client(timeout=60.0) as client:
+        # 讀取逾時只在「完全沒有位元組」時生效。閘道若持續送 HTTP/2 心跳，
+        # 這個逾時不會響。呼叫端要保留 client，超時時主動 close 才能打斷。
+        client = httpx.Client(
+            timeout=httpx.Timeout(connect=15.0, read=60.0, write=20.0, pool=15.0)
+        )
+        if clients is not None:
+            clients.append(client)
+        try:
             resp = client.post(
                 self.nlp.base_url, headers=self.nlp._headers(), json=payload
             )
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
+        finally:
+            if clients is None:
+                client.close()
         parsed = self.nlp._parse_content(content)
         if "ai_score" not in parsed and "summary" not in parsed:
             parsed = {
@@ -274,13 +284,20 @@ class FormAIAnalyst:
             }
         return parsed
 
-    def analyze_one(self, race_meta: dict, row: pd.Series, form_text: str) -> dict:
+    def analyze_one(
+        self,
+        race_meta: dict,
+        row: pd.Series,
+        form_text: str,
+        clients: Optional[List[Any]] = None,
+    ) -> dict:
         user = self.build_user_payload(race_meta, row, form_text)
-        parsed = self._chat_json(user)
+        parsed = self._chat_json(user, clients)
         result = self._normalize_result(parsed)
         if summary_leaks_internal(result["summary"]):
             parsed = self._chat_json(
-                user + "\n上一則 summary 寫了內部分數或系統用語。請重寫 summary，只留跑法和一個形勢判斷。"
+                user + "\n上一則 summary 寫了內部分數或系統用語。請重寫 summary，只留跑法和一個形勢判斷。",
+                clients,
             )
             result = self._normalize_result(parsed)
         result["summary"] = fit_public_summary(result["summary"])
@@ -434,16 +451,25 @@ class FormAIAnalyst:
                 from concurrent.futures import ThreadPoolExecutor
                 from concurrent.futures import TimeoutError as FuturesTimeout
 
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(
-                        self.analyze_one, race_meta, row, form_map.get(hno, "")
+                clients: List[Any] = []
+                pool = ThreadPoolExecutor(max_workers=1)
+                fut = pool.submit(
+                    self.analyze_one, race_meta, row, form_map.get(hno, ""), clients
+                )
+                try:
+                    res = fut.result(timeout=horse_timeout)
+                except FuturesTimeout:
+                    raise TimeoutError(
+                        f"單馬超時 {int(horse_timeout)}s（FORM_AI_HORSE_TIMEOUT_SEC）"
                     )
-                    try:
-                        res = fut.result(timeout=horse_timeout)
-                    except FuturesTimeout:
-                        raise TimeoutError(
-                            f"單馬超時 {int(horse_timeout)}s（FORM_AI_HORSE_TIMEOUT_SEC）"
-                        )
+                finally:
+                    # 不要 with Executor：超時後 shutdown(wait=True) 會等那條卡住的請求，整場停住。
+                    for client in list(clients):
+                        try:
+                            client.close()
+                        except Exception:
+                            pass
+                    pool.shutdown(wait=False, cancel_futures=True)
                 self.save_result(race_id, hno, res)
                 done += 1
                 if progress_cb:
