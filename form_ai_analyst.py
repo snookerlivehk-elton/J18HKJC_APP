@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -29,21 +30,104 @@ if USE_SQLITE:
 else:
     DATABASE_URL_SYNC = resolve_database_url()
 
-FORM_AI_SYSTEM_PROMPT = """你是香港賽馬賽前分析師。根據「系統量化統計」與「官方賽績指引近績文字」為該馬寫評價。
+# 與賽前文案同一口徑：給馬迷看的只有 summary。分數欄留在內部，不進正文。
+PUBLIC_SUMMARY_LIMIT = 90
+_PUBLIC_ANGLES = ("步速", "走位", "路程", "恢復", "出閘")
+_PUBLIC_LEADS = (
+    "起句直接寫跑法，不要用「近績」二字開頭。",
+    "起句先寫今日路程或步速判斷，近績事實放在後面。",
+    "起句用上仗一個具體位置（領放、沿欄、望空、包入），收尾不要用「值得留意」。",
+)
+_FORBIDDEN_PUBLIC = (
+    "模型",
+    "演算法",
+    "雙軌",
+    "份額",
+    "勝率",
+    "預測分",
+    "預測排名",
+    "機器學習",
+    "系統統計",
+    "綜合第",
+)
+
+FORM_AI_SYSTEM_PROMPT = """你是香港資深練馬師，替馬迷寫賽前形勢短評。口吻專業、短、有判斷，像筆記而不是報告，也不是貼士。
 嚴格輸出 JSON：
 {
-  "summary": "繁中 3~5 句評價（優劣、距離/跑道適性、風險）",
+  "summary": "繁體兩句以內，70到90字。一句是近績或上仗真實跑法，一句是今日形勢判斷。",
   "ai_score": -2.0至2.0的數字（正=看高、負=看淡、0=中性）,
   "confidence": 0.0至1.0,
-  "tags": ["短標籤1","短標籤2"],
-  "risks": ["風險要點"],
-  "evidence": ["必須引用輸入中出現過的數字或近績事實，禁止捏造"]
+  "tags": ["步速或走位或路程或恢復或出閘，只一個"],
+  "risks": ["一個具體風險，用賽事語言"],
+  "evidence": ["只引用近績裡出現過的跑法，不要引用分數"]
 }
 規則：
-- 不可發明未出現在輸入的名次、賠率、時間。
-- 官方文字若空泛，降低 confidence，並在 risks 註明「近績資訊不足」。
-- ai_score 是獨立觀點，不要只複述模型勝率高低。
+- summary 是馬迷會看到的唯一文字，必須和賽前文案同一種寫法。
+- summary 禁止出現：模型、AI、演算法、雙軌、份額、勝率、預測分、排名、系統。分數只填在 ai_score 和 confidence。
+- 不可虛構近績沒有的名次、路程、跑法、時間。近績空泛就直說資訊不足，並降低 confidence。
+- 每匹馬只抓住最貼的一點來判斷：步速、走位、路程、恢復、出閘，五選一，不要面面俱到。
+- 換起句、換收尾。禁止每條都用「近績顯示」「值得留意」「賽前可對照會否延續」。
+- 有判斷，但不寫心水、必中、跟注。
 """
+
+
+def summary_leaks_internal(text: str) -> bool:
+    s = str(text or "")
+    if any(word in s for word in _FORBIDDEN_PUBLIC):
+        return True
+    return bool(re.search(r"\bAI\b", s, re.IGNORECASE))
+
+
+def fit_public_summary(text: str, limit: int = PUBLIC_SUMMARY_LIMIT) -> str:
+    s = re.sub(r"\s+", "", str(text or "")).strip()
+    if len(s) <= limit:
+        return s
+    cut = s[:limit]
+    for mark in ("。", "；", "，"):
+        idx = cut.rfind(mark)
+        if idx >= 24:
+            return cut[: idx + 1]
+    return cut
+
+
+def http_deadline_sec() -> float:
+    """整次请求的墙钟上限。读超时会被闸道心跳清掉，这个上限不会。"""
+    raw = os.getenv("FORM_AI_HTTP_DEADLINE_SEC", "70") or 70
+    try:
+        sec = float(raw)
+    except (TypeError, ValueError):
+        sec = 70.0
+    return max(20.0, min(sec, 180.0))
+
+
+def load_public_summaries(race_id: str) -> Dict[int, str]:
+    """賽前文案直接用這裡的 summary，避免再生成一遍不同的評述。"""
+    engine = create_engine(DATABASE_URL_SYNC)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT horse_no, summary
+                    FROM upcoming_form_ai
+                    WHERE race_id = :race_id
+                    """
+                ),
+                {"race_id": race_id},
+            ).fetchall()
+    except Exception:
+        return {}
+    finally:
+        engine.dispose()
+    out: Dict[int, str] = {}
+    for horse_no, summary in rows:
+        text_v = fit_public_summary(summary or "")
+        if text_v and not summary_leaks_internal(text_v):
+            try:
+                out[int(horse_no)] = text_v
+            except (TypeError, ValueError):
+                continue
+    return out
 
 
 class FormAIAnalyst:
@@ -133,13 +217,17 @@ class FormAIAnalyst:
             "距離": race_meta.get("distance_m"),
             "班次": race_meta.get("class"),
         }
+        horse_no = int(stats["馬號"] or 0)
+        angle = _PUBLIC_ANGLES[horse_no % len(_PUBLIC_ANGLES)]
+        lead = _PUBLIC_LEADS[horse_no % len(_PUBLIC_LEADS)]
         return (
             "【場次】\n"
             + json.dumps(meta, ensure_ascii=False)
-            + "\n【系統統計】\n"
-            + json.dumps(stats, ensure_ascii=False)
-            + "\n【官方賽績指引近績】\n"
+            + "\n【官方近績。summary 只能改寫這裡出現過的跑法】\n"
             + (form_text or "（無）")
+            + "\n【內部評分。只用於 ai_score 和 confidence，禁止寫進 summary】\n"
+            + json.dumps(stats, ensure_ascii=False)
+            + f"\n【這匹馬的寫法】優先從「{angle}」落筆。{lead}"
         )
 
     def _normalize_result(self, data: dict) -> dict:
@@ -165,10 +253,7 @@ class FormAIAnalyst:
             "raw": data,
         }
 
-    def analyze_one(self, race_meta: dict, row: pd.Series, form_text: str) -> dict:
-        user = self.build_user_payload(race_meta, row, form_text)
-        # 借用 NLPProcessor 的 sync chat，但換 system prompt；user 已含完整內容
-        # analyze_report_sync 會再包一層「分析以下賽馬報告」— 改直接打 API
+    def _chat_json(self, user: str, clients: Optional[List[Any]] = None) -> dict:
         if not self.is_ready():
             raise ValueError("尚未設定 OPENAI_API_KEY")
         import httpx
@@ -180,26 +265,71 @@ class FormAIAnalyst:
                 {"role": "system", "content": FORM_AI_SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.25,
+            "temperature": 0.55,
         }
-        with httpx.Client(timeout=60.0) as client:
+        # 不用 HTTP/2：心跳帧会让「多久没收到数据」的读超时一直被清掉。
+        # 另外用墙钟到点就 close，正文一直不来时线程自己退出。
+        client = httpx.Client(
+            http2=False,
+            timeout=httpx.Timeout(connect=15.0, read=45.0, write=20.0, pool=15.0),
+        )
+        if clients is not None:
+            clients.append(client)
+        timer = threading.Timer(http_deadline_sec(), client.close)
+        timer.daemon = True
+        timer.start()
+        try:
             resp = client.post(
                 self.nlp.base_url, headers=self.nlp._headers(), json=payload
             )
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
+        finally:
+            timer.cancel()
+            if clients is None:
+                client.close()
         parsed = self.nlp._parse_content(content)
-        # 若誤走受阻 schema，兜底
         if "ai_score" not in parsed and "summary" not in parsed:
             parsed = {
                 "summary": parsed.get("reason") or content[:200],
                 "ai_score": 0,
                 "confidence": 0.2,
                 "tags": [],
-                "risks": ["模型輸出格式異常"],
+                "risks": ["輸出格式異常"],
                 "evidence": [],
             }
-        return self._normalize_result(parsed)
+        return parsed
+
+    def analyze_one(
+        self,
+        race_meta: dict,
+        row: pd.Series,
+        form_text: str,
+        clients: Optional[List[Any]] = None,
+    ) -> dict:
+        import httpx
+
+        user = self.build_user_payload(race_meta, row, form_text)
+        try:
+            parsed = self._chat_json(user, clients)
+        except (httpx.TimeoutException, httpx.TransportError):
+            # 同一条连接被心跳拖住时，换一条新连接再要一次。
+            parsed = self._chat_json(user, clients)
+        result = self._normalize_result(parsed)
+        if summary_leaks_internal(result["summary"]):
+            parsed = self._chat_json(
+                user + "\n上一則 summary 寫了內部分數或系統用語。請重寫 summary，只留跑法和一個形勢判斷。",
+                clients,
+            )
+            result = self._normalize_result(parsed)
+        result["summary"] = fit_public_summary(result["summary"])
+        if summary_leaks_internal(result["summary"]):
+            kept = []
+            for piece in re.split(r"(?<=[。；])", result["summary"]):
+                if piece and not summary_leaks_internal(piece):
+                    kept.append(piece)
+            result["summary"] = fit_public_summary("".join(kept))
+        return result
 
     def save_result(self, race_id: str, horse_no: int, result: dict):
         runner_id = f"{race_id}_{horse_no}"
@@ -336,6 +466,8 @@ class FormAIAnalyst:
 
         horse_timeout = float(os.getenv("FORM_AI_HORSE_TIMEOUT_SEC", "90") or 90)
         horse_timeout = max(15.0, horse_timeout)
+        # 一次请求有墙钟上限，失败后再换连接试一次，所以外层要盖住两轮。
+        horse_timeout = max(horse_timeout, http_deadline_sec() * 2 + 20.0)
 
         for row in work:
             hno = int(row["馬號"])
@@ -343,16 +475,25 @@ class FormAIAnalyst:
                 from concurrent.futures import ThreadPoolExecutor
                 from concurrent.futures import TimeoutError as FuturesTimeout
 
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(
-                        self.analyze_one, race_meta, row, form_map.get(hno, "")
+                clients: List[Any] = []
+                pool = ThreadPoolExecutor(max_workers=1)
+                fut = pool.submit(
+                    self.analyze_one, race_meta, row, form_map.get(hno, ""), clients
+                )
+                try:
+                    res = fut.result(timeout=horse_timeout)
+                except FuturesTimeout:
+                    raise TimeoutError(
+                        f"單馬超時 {int(horse_timeout)}s（FORM_AI_HORSE_TIMEOUT_SEC）"
                     )
-                    try:
-                        res = fut.result(timeout=horse_timeout)
-                    except FuturesTimeout:
-                        raise TimeoutError(
-                            f"單馬超時 {int(horse_timeout)}s（FORM_AI_HORSE_TIMEOUT_SEC）"
-                        )
+                finally:
+                    # 不要 with Executor：超時後 shutdown(wait=True) 會等那條卡住的請求，整場停住。
+                    for client in list(clients):
+                        try:
+                            client.close()
+                        except Exception:
+                            pass
+                    pool.shutdown(wait=False, cancel_futures=True)
                 self.save_result(race_id, hno, res)
                 done += 1
                 if progress_cb:

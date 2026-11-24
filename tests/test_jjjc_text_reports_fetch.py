@@ -17,9 +17,32 @@ class TextReportsAutoFetchTest(unittest.TestCase):
         self.assertTrue(
             sync._needs_upstream_fetch(payload, want="running_comment")
         )
+        self.assertTrue(
+            sync._needs_upstream_fetch(payload, want="incident_report")
+        )
+        payload["reports"][0]["runners"] = [
+            {"horse_no": 1, "text": "競賽報告", "is_placeholder": False}
+        ]
         self.assertFalse(
             sync._needs_upstream_fetch(payload, want="incident_report")
         )
+
+    def test_needs_fetch_when_running_comments_are_placeholders(self):
+        payload = {
+            "status": "obtained",
+            "reports": [
+                {
+                    "report_type": "incident_report",
+                    "runners": [{"horse_no": 1, "text": "競賽報告", "is_placeholder": False}],
+                },
+                {
+                    "report_type": "running_comment",
+                    "runners": [{"horse_no": 1, "text": "", "is_placeholder": True}],
+                },
+            ],
+        }
+        self.assertTrue(sync._needs_upstream_fetch(payload, want=None))
+        self.assertNotIn("running_comment", sync._payload_report_types(payload))
 
     def test_needs_fetch_when_empty(self):
         self.assertTrue(
