@@ -680,6 +680,8 @@ def run_meeting(
                     f"errors={len(out.get('errors') or [])}",
                     flush=True,
                 )
+                for err in out.get("errors") or []:
+                    print(f"  horse_error {err}", flush=True)
             except Exception as e:
                 total_errors += 1
                 print(f"  FAIL {rid}: {e}", file=sys.stderr, flush=True)

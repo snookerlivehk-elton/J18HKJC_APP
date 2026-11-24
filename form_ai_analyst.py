@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -87,6 +88,16 @@ def fit_public_summary(text: str, limit: int = PUBLIC_SUMMARY_LIMIT) -> str:
         if idx >= 24:
             return cut[: idx + 1]
     return cut
+
+
+def http_deadline_sec() -> float:
+    """整次请求的墙钟上限。读超时会被闸道心跳清掉，这个上限不会。"""
+    raw = os.getenv("FORM_AI_HTTP_DEADLINE_SEC", "70") or 70
+    try:
+        sec = float(raw)
+    except (TypeError, ValueError):
+        sec = 70.0
+    return max(20.0, min(sec, 180.0))
 
 
 def load_public_summaries(race_id: str) -> Dict[int, str]:
@@ -256,13 +267,17 @@ class FormAIAnalyst:
             ],
             "temperature": 0.55,
         }
-        # 讀取逾時只在「完全沒有位元組」時生效。閘道若持續送 HTTP/2 心跳，
-        # 這個逾時不會響。呼叫端要保留 client，超時時主動 close 才能打斷。
+        # 不用 HTTP/2：心跳帧会让「多久没收到数据」的读超时一直被清掉。
+        # 另外用墙钟到点就 close，正文一直不来时线程自己退出。
         client = httpx.Client(
-            timeout=httpx.Timeout(connect=15.0, read=60.0, write=20.0, pool=15.0)
+            http2=False,
+            timeout=httpx.Timeout(connect=15.0, read=45.0, write=20.0, pool=15.0),
         )
         if clients is not None:
             clients.append(client)
+        timer = threading.Timer(http_deadline_sec(), client.close)
+        timer.daemon = True
+        timer.start()
         try:
             resp = client.post(
                 self.nlp.base_url, headers=self.nlp._headers(), json=payload
@@ -270,6 +285,7 @@ class FormAIAnalyst:
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
         finally:
+            timer.cancel()
             if clients is None:
                 client.close()
         parsed = self.nlp._parse_content(content)
@@ -291,8 +307,14 @@ class FormAIAnalyst:
         form_text: str,
         clients: Optional[List[Any]] = None,
     ) -> dict:
+        import httpx
+
         user = self.build_user_payload(race_meta, row, form_text)
-        parsed = self._chat_json(user, clients)
+        try:
+            parsed = self._chat_json(user, clients)
+        except (httpx.TimeoutException, httpx.TransportError):
+            # 同一条连接被心跳拖住时，换一条新连接再要一次。
+            parsed = self._chat_json(user, clients)
         result = self._normalize_result(parsed)
         if summary_leaks_internal(result["summary"]):
             parsed = self._chat_json(
@@ -444,6 +466,8 @@ class FormAIAnalyst:
 
         horse_timeout = float(os.getenv("FORM_AI_HORSE_TIMEOUT_SEC", "90") or 90)
         horse_timeout = max(15.0, horse_timeout)
+        # 一次请求有墙钟上限，失败后再换连接试一次，所以外层要盖住两轮。
+        horse_timeout = max(horse_timeout, http_deadline_sec() * 2 + 20.0)
 
         for row in work:
             hno = int(row["馬號"])
