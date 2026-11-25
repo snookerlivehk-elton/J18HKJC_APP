@@ -2059,6 +2059,127 @@
       word-break: break-word;
     }
     .horse-sheet-grid .v.muted { color: var(--muted); }
+    .hs-block {
+      margin: 0 0 10px;
+      padding: 10px 10px 8px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .hs-block h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--nav);
+    }
+    .hs-market { display: flex; flex-direction: column; gap: 8px; }
+    .hs-mrow {
+      display: grid;
+      grid-template-columns: 36px 1fr 1fr 1fr;
+      gap: 6px;
+      align-items: center;
+    }
+    .hs-mlab { font-size: 14px; font-weight: 800; color: var(--nav); }
+    .hs-mcell { min-width: 0; }
+    .hs-mcell i {
+      display: block;
+      font-style: normal;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .hs-mcell b {
+      display: block;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .hs-mcell .od-tick { font-size: 12px; margin-left: 2px; }
+    .hs-styles { display: flex; gap: 6px; margin-bottom: 8px; }
+    .hs-style {
+      flex: 1 1 0;
+      text-align: center;
+      padding: 6px 0;
+      border-radius: 8px;
+      background: #eef1f5;
+      color: #8b95a3;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .hs-style.is-on.lead { background: #3d5a80; color: #fff; }
+    .hs-style.is-on.press { background: #2f8f78; color: #fff; }
+    .hs-style.is-on.mid { background: #6a7382; color: #fff; }
+    .hs-style.is-on.late { background: #c47a3a; color: #fff; }
+    .hs-people { display: flex; gap: 10px; }
+    .hs-person { flex: 1 1 0; min-width: 0; }
+    .hs-person .k { display: block; font-size: 11px; color: var(--muted); }
+    .hs-person .v { display: block; margin-top: 2px; font-size: 16px; font-weight: 800; }
+    .hs-collab {
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .hs-collab b { font-variant-numeric: tabular-nums; }
+    .hs-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .hs-mini .k { display: block; font-size: 11px; color: var(--muted); }
+    .hs-mini .v { display: block; margin-top: 2px; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .hs-form { display: flex; gap: 4px; }
+    .hs-form-seg {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+    }
+    .hs-form-seg b { font-size: 16px; font-variant-numeric: tabular-nums; line-height: 1; }
+    .hs-cmp {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+    }
+    .hs-cmp .k { display: block; font-size: 11px; color: var(--muted); }
+    .hs-cmp .v { display: block; margin-top: 2px; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .hs-lay { margin-top: 8px; font-size: 13px; font-weight: 700; }
+    .hs-review {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+    .hs-note-pick, .hs-note-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+    }
+    .hs-note-pick { margin-bottom: 8px; padding: 8px; font-size: 13px; }
+    .hs-note-input { min-height: 88px; padding: 8px; font-size: 14px; resize: vertical; }
+    .hs-note-input[readonly] { background: #f4f6f8; }
+    .hs-note-btn {
+      margin-top: 8px;
+      width: 100%;
+      height: 36px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--nav);
+      color: #fff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .hs-note-hint { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 700; }
 
     .hrow {
       display: flex;
@@ -6033,6 +6154,15 @@
       background: var(--line);
       border-color: var(--line);
     }
+    html[data-theme="dark"] .hs-block,
+    html[data-theme="dark"] .hs-note-pick,
+    html[data-theme="dark"] .hs-note-input {
+      background: #252b34;
+      border-color: var(--line);
+      color: var(--text);
+    }
+    html[data-theme="dark"] .hs-style { background: #1b2129; color: #8b95a3; }
+    html[data-theme="dark"] .hs-note-input[readonly] { background: #1b2129; }
     html[data-theme="dark"] .scroll-col::after {
       background: #3a4250;
     }
@@ -7400,14 +7530,15 @@
       if (ex !== "jtCollabOverlay") closeJtCollabSheet();
       if (ex !== "tipRecordOverlay") closeTipRecordSheet();
       if (ex !== "famousTipsOverlay") closeFamousTipsSheet();
-      if (ex !== "horseSheet") closeHorseSheet();
+      if (ex !== "horseSheet" && closeHorseSheet() === false) return false;
       if (ex !== "waterSheet") closeWaterSheet();
       if (typeof closeCapsuleDrop === "function") closeCapsuleDrop();
+      return true;
     }
     function openTipRecordSheet() {
       const overlay = document.getElementById("tipRecordOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("tipRecordOverlay");
+      if (closeAllBoardOverlays("tipRecordOverlay") === false) return;
       ensureTipNoteDemoForMeeting();
       tipRecordHelpOpen = false;
       tipRecordLbOpenIds = {};
@@ -7839,7 +7970,7 @@
     function openFamousTipsSheet() {
       const overlay = document.getElementById("famousTipsOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("famousTipsOverlay");
+      if (closeAllBoardOverlays("famousTipsOverlay") === false) return;
       famousAggHelpOpen = false;
       famousTipsRace = Number(currentRace) || famousTipsRaceNum();
       fillFamousTipsSheet();
@@ -8333,7 +8464,7 @@
     function openSynthReviewSheet(no) {
       const overlay = document.getElementById("synthReviewOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("synthReviewOverlay");
+      if (closeAllBoardOverlays("synthReviewOverlay") === false) return;
       synthNoteSide = "write";
       synthNoteExpandedId = null;
       const runners = currentRunners();
@@ -8572,7 +8703,7 @@
     function openJtCollabSheet(no) {
       const overlay = document.getElementById("jtCollabOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("jtCollabOverlay");
+      if (closeAllBoardOverlays("jtCollabOverlay") === false) return;
       fillJtCollabSheet(no);
       syncJtCollabOverlayTop();
       overlay.removeAttribute("hidden");
@@ -8748,7 +8879,7 @@
     function openSpeedMapSheet() {
       const sheet = document.getElementById("speedMapSheet");
       if (!sheet) return;
-      closeAllBoardOverlays("speedMapSheet");
+      if (closeAllBoardOverlays("speedMapSheet") === false) return;
       const raceNo = Number(currentRace) || 1;
       const token = ++speedMapReqToken;
       renderSpeedMapLoading(raceNo);
@@ -10827,11 +10958,11 @@
         /* 同場仍刷新膠囊／詳情所需狀態 */
         return true;
       }
+      if (closeHorseSheet() === false) return false;
       currentRace = n;
       applyDefaultSortForCurrentRace();
       scrubPointIdx = -1;
       waterCrossFocus = null;
-      closeHorseSheet();
       closeSynthReviewSheet();
       closeJtCollabSheet();
       renderPills();
@@ -10962,15 +11093,376 @@
       });
     }
 
+    const HORSE_SHEET_NOTE_STORE = "j18-horse-race-notes-v1";
+    let hsNoteUi = null;
+
+    function hkTodayYmd() {
+      try {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Hong_Kong",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).format(new Date());
+      } catch (e) {
+        const d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+    }
+    function meetingYmd() {
+      return MEETING && MEETING.date ? String(MEETING.date).trim() : "";
+    }
+    function meetingIsToday() {
+      const ymd = meetingYmd();
+      return !!ymd && ymd === hkTodayYmd();
+    }
+    function hsNoteLoadBook() {
+      try {
+        const raw = localStorage.getItem(HORSE_SHEET_NOTE_STORE);
+        const data = raw ? JSON.parse(raw) : {};
+        return data && typeof data === "object" ? data : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    function hsNoteSaveBook(book) {
+      try { localStorage.setItem(HORSE_SHEET_NOTE_STORE, JSON.stringify(book)); } catch (e) {}
+    }
+    function hsNoteKey(date, raceNum) {
+      return String(date || "") + "#" + String(Number(raceNum) || 0).padStart(2, "0");
+    }
+    function hsRacePlace() {
+      const meet = currentMeet() || {};
+      const meta = String(meet.meta || "");
+      const distM = meta.match(/(\d{3,4})\s*米/);
+      const course = (MEETING && MEETING.courseLabel) || "";
+      let track = "";
+      if (/全天候/.test(meta)) track = "全天候";
+      else if (/草地|谷草/.test(meta)) track = "草地";
+      return {
+        course: course,
+        track: track,
+        dist: distM ? (distM[1] + "米") : ""
+      };
+    }
+    function hsFinishLabel(finish) {
+      const s = String(finish == null ? "" : finish).trim();
+      if (!s) return "—";
+      if (s === "退出" || s === "WX" || s === "W") return "退出";
+      return "第" + s;
+    }
+    function hsNoteLabel(rec) {
+      if (!rec) return "";
+      const place = [rec.course, rec.track].filter(Boolean).join("");
+      return [rec.date, place, rec.dist, rec.jockey, hsFinishLabel(rec.finish)].filter(Boolean).join(" ");
+    }
+    function hsSortedNoteKeys(map) {
+      return Object.keys(map || {}).sort(function (a, b) { return a < b ? 1 : a > b ? -1 : 0; });
+    }
+    function hsCurrentFinish(r) {
+      if (!r) return "";
+      if (r.scratched) return "退出";
+      const n = finishOfRunner(r);
+      return n == null ? "" : String(n);
+    }
+    function hsEnsureDemoNotes(r) {
+      const name = r && r.name ? String(r.name).trim() : "";
+      if (!name) return;
+      const book = hsNoteLoadBook();
+      if (book[name]) return;
+      const jockey = splitPersonName(r.jockey) || "";
+      const place = hsRacePlace();
+      const ymd = meetingYmd();
+      const notes = {};
+      notes[hsNoteKey("2025-11-26", 3)] = {
+        date: "2025-11-26",
+        raceNum: 3,
+        course: "沙田",
+        track: "草地",
+        dist: "1400米",
+        jockey: jockey || "潘頓",
+        finish: "4",
+        text: "上年同日這場，直路先有反應，步速偏快時不宜搶前。"
+      };
+      notes[hsNoteKey("2024-09-23", 1)] = {
+        date: "2024-09-23",
+        raceNum: 1,
+        course: "跑馬地",
+        track: "草地",
+        dist: "1650米",
+        jockey: jockey || "何澤堯",
+        finish: "退出",
+        text: "閘前退出，沒有走勢可記。"
+      };
+      if (ymd && !meetingIsToday()) {
+        notes[hsNoteKey(ymd, currentRace)] = {
+          date: ymd,
+          raceNum: Number(currentRace) || 1,
+          course: place.course,
+          track: place.track,
+          dist: place.dist,
+          jockey: jockey,
+          finish: hsCurrentFinish(r),
+          text: "這一場的示範筆記。過了賽日日期之後只能查看，不能再改。"
+        };
+      }
+      book[name] = notes;
+      hsNoteSaveBook(book);
+    }
+    function hsNoteDirty() {
+      return !!(hsNoteUi && hsNoteUi.editable && hsNoteUi.view === "today" &&
+        String(hsNoteUi.draft || "") !== String(hsNoteUi.baseline || ""));
+    }
+    function confirmLeaveHorseNote() {
+      if (!hsNoteDirty()) return true;
+      return window.confirm("筆記還未保存，離開會丟掉剛才改的字。");
+    }
+    function paintHorseNoteBox() {
+      if (!hsNoteUi) return;
+      const pick = document.getElementById("hsNotePick");
+      const input = document.getElementById("hsNoteInput");
+      const btn = document.getElementById("hsNoteSave");
+      const book = hsNoteLoadBook();
+      const map = (book[hsNoteUi.name] || {});
+      const todayKey = hsNoteUi.todayKey;
+      let keys = hsSortedNoteKeys(map);
+      if (hsNoteUi.editable) keys = keys.filter(function (k) { return k !== todayKey; });
+      if (pick) {
+        let html = "";
+        if (hsNoteUi.editable) html += '<option value="">選擇歷史筆記</option>';
+        keys.forEach(function (k) {
+          html += '<option value="' + esc(k) + '">' + esc(hsNoteLabel(map[k])) + "</option>";
+        });
+        if (!keys.length && !hsNoteUi.editable) html = '<option value="">暫無歷史筆記</option>';
+        pick.innerHTML = html;
+        pick.value = hsNoteUi.view === "today" ? "" : hsNoteUi.view;
+        pick.disabled = !keys.length && !hsNoteUi.editable;
+        pick.hidden = hsNoteUi.editable && !keys.length;
+      }
+      let text = "";
+      let readonly = true;
+      if (hsNoteUi.view === "today") {
+        text = hsNoteUi.draft || "";
+        readonly = !hsNoteUi.editable;
+      } else if (map[hsNoteUi.view]) {
+        text = map[hsNoteUi.view].text || "";
+        readonly = true;
+      }
+      if (input) {
+        input.value = text;
+        input.readOnly = readonly;
+      }
+      if (btn) {
+        const showBack = hsNoteUi.editable && hsNoteUi.view !== "today";
+        const showSave = hsNoteUi.editable && hsNoteUi.view === "today";
+        btn.hidden = !(showBack || showSave);
+        btn.textContent = showBack ? "回到今賽" : "保存";
+        btn.setAttribute("data-hs-note", showBack ? "back" : "save");
+      }
+    }
+    function onHorseNotePick(key) {
+      if (!hsNoteUi) return;
+      if (!key) {
+        hsNoteUi.view = "today";
+      } else {
+        hsNoteUi.view = key;
+      }
+      paintHorseNoteBox();
+    }
+    function saveHorseSheetNote() {
+      if (!hsNoteUi || !hsNoteUi.editable || hsNoteUi.view !== "today") return;
+      if (!meetingIsToday()) return;
+      const input = document.getElementById("hsNoteInput");
+      const text = input ? String(input.value || "") : String(hsNoteUi.draft || "");
+      const book = hsNoteLoadBook();
+      if (!book[hsNoteUi.name]) book[hsNoteUi.name] = {};
+      book[hsNoteUi.name][hsNoteUi.todayKey] = Object.assign({}, hsNoteUi.todayMeta, { text: text });
+      hsNoteSaveBook(book);
+      hsNoteUi.draft = text;
+      hsNoteUi.baseline = text;
+      const btn = document.getElementById("hsNoteSave");
+      if (btn) {
+        const prev = btn.textContent;
+        btn.textContent = "已保存";
+        window.setTimeout(function () {
+          if (btn && hsNoteUi && hsNoteUi.view === "today") btn.textContent = prev === "已保存" ? "保存" : "保存";
+        }, 800);
+      }
+    }
+    function backHorseSheetNote() {
+      if (!hsNoteUi) return;
+      hsNoteUi.view = "today";
+      paintHorseNoteBox();
+    }
+    function bindHorseSheetNoteEvents() {
+      if (!el.sheet || el.sheet.dataset.noteBound) return;
+      el.sheet.dataset.noteBound = "1";
+      el.sheet.addEventListener("input", function (ev) {
+        if (!hsNoteUi || !ev.target || ev.target.id !== "hsNoteInput") return;
+        if (hsNoteUi.view === "today" && hsNoteUi.editable) hsNoteUi.draft = ev.target.value;
+      });
+      el.sheet.addEventListener("change", function (ev) {
+        if (!ev.target || ev.target.id !== "hsNotePick") return;
+        onHorseNotePick(ev.target.value);
+      });
+      el.sheet.addEventListener("click", function (ev) {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("[data-hs-note]") : null;
+        if (!btn) return;
+        ev.preventDefault();
+        const act = btn.getAttribute("data-hs-note");
+        if (act === "save") saveHorseSheetNote();
+        if (act === "back") backHorseSheetNote();
+      });
+    }
+    function hsMarketCell(kind, value, water, flow, tick) {
+      const odds = value == null ? "—" : fmtOdds(value, kind);
+      const w = fmtWater(water);
+      const f = flow == null || flow === "" ? "—" : String(flow);
+      return '<div class="hs-mrow">' +
+        '<span class="hs-mlab">' + (kind === "win" ? "獨贏" : "位置") + "</span>" +
+        '<span class="hs-mcell"><i>賠率</i><b>' + esc(odds) + oddsTickHtml(tick, false) + "</b></span>" +
+        '<span class="hs-mcell"><i>水位</i><b>' + esc(w) + "</b></span>" +
+        '<span class="hs-mcell"><i>流量</i><b>' + esc(f) + "</b></span>" +
+        "</div>";
+    }
+    function hsStyleRow(style) {
+      const order = [
+        { lab: "前領", cls: "lead" },
+        { lab: "跟前", cls: "press" },
+        { lab: "中置", cls: "mid" },
+        { lab: "後上", cls: "late" }
+      ];
+      return '<div class="hs-styles">' + order.map(function (it) {
+        const on = String(style || "").trim() === it.lab;
+        return '<span class="hs-style' + (on ? " is-on " + it.cls : "") + '">' + it.lab + "</span>";
+      }).join("") + "</div>";
+    }
+    function hsFormRow(r) {
+      const parts = parseSlashParts(r.form6 != null ? r.form6 : r.recent);
+      const moves = Array.isArray(r.class6Moves) ? r.class6Moves : classMovesFrom(r.class6);
+      if (!parts.length) return '<div class="hs-form"><span class="v">—</span></div>';
+      return '<div class="hs-form">' + parts.map(function (p, i) {
+        const kind = moves[i] === "up" || moves[i] === "down" ? moves[i] : "flat";
+        return '<span class="hs-form-seg"><b>' + esc(p) + "</b>" + fcMarkSvg(kind) + "</span>";
+      }).join("") + "</div>";
+    }
+    function hsCmpCell(label, value) {
+      return '<div><span class="k">' + esc(label) + '</span><span class="v">' + esc(value) + "</span></div>";
+    }
+
     function sheetItem(label, value, wide) {
       const empty = value == null || value === "" || value === "—";
       return '<div class="item' + (wide ? " wide" : "") + '"><span class="k">' + esc(label) +
         '</span><span class="v' + (empty ? " muted" : "") + '">' + esc(empty ? "—" : value) + "</span></div>";
     }
     function closeHorseSheet() {
-      if (!el.sheet || el.sheet.hasAttribute("hidden")) return;
+      if (!el.sheet || el.sheet.hasAttribute("hidden")) return true;
+      if (!confirmLeaveHorseNote()) return false;
       el.sheet.setAttribute("hidden", "");
       el.sheet.setAttribute("aria-hidden", "true");
+      hsNoteUi = null;
+      return true;
+    }
+    function openHorseSheet(no) {
+      if (el.sheet && !el.sheet.hasAttribute("hidden")) {
+        if (hsNoteUi && String(hsNoteUi.no) === String(no)) return;
+        if (!confirmLeaveHorseNote()) return;
+      }
+      if (closeAllBoardOverlays("horseSheet") === false) return;
+      const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
+      if (!r || !el.sheet) return;
+      const meet = currentMeet();
+      const j = splitNameAllow(r.jockey);
+      const jName = splitPersonName(r.jockey) || "—";
+      const tName = splitPersonName(r.trainer) || (r.trainer ? String(r.trainer) : "—");
+      el.sheetNo.textContent = String(r.no);
+      el.sheetName.textContent = r.name || "";
+      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
+      if (r.silk) {
+        el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
+        el.sheetSilk.className = "horse-sheet-silk";
+      } else {
+        el.sheetSilk.style.backgroundImage = "";
+        el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
+      }
+      const st = jtCollabCoreStats(r);
+      const places = st.wins + st.seconds + st.thirds;
+      const rateDelta = fmtDelta(r.rtgDelta);
+      const place = hsRacePlace();
+      const ymd = meetingYmd();
+      const editable = meetingIsToday() && !r.scratched;
+      hsEnsureDemoNotes(r);
+      const book = hsNoteLoadBook();
+      const name = String(r.name || "").trim();
+      const map = book[name] || {};
+      const todayKey = hsNoteKey(ymd, currentRace);
+      const todayRec = map[todayKey] || {};
+      hsNoteUi = {
+        no: r.no,
+        name: name,
+        editable: editable,
+        todayKey: todayKey,
+        todayMeta: {
+          date: ymd,
+          raceNum: Number(currentRace) || 1,
+          course: place.course,
+          track: place.track,
+          dist: place.dist,
+          jockey: jName === "—" ? "" : jName,
+          finish: hsCurrentFinish(r)
+        },
+        draft: todayRec.text || "",
+        baseline: todayRec.text || "",
+        view: editable ? "today" : (map[todayKey] ? todayKey : (hsSortedNoteKeys(map)[0] || "today"))
+      };
+      const oddsBlock = r.scratched
+        ? '<section class="hs-block"><h3>賠率與水位</h3><p class="hs-note-hint">已退出</p></section>'
+        : '<section class="hs-block hs-market" aria-label="賠率與水位">' +
+            hsMarketCell("win", r.win, r.winWater, r.winFlow, r.winTick) +
+            hsMarketCell("place", r.place, r.placeWater, r.placeFlow, r.placeTick) +
+          "</section>";
+      const review = synthReviewOf(r);
+      el.sheetBody.innerHTML =
+        oddsBlock +
+        '<section class="hs-block">' +
+          "<h3>本場</h3>" +
+          hsStyleRow(r.runStyle) +
+          '<div class="hs-people">' +
+            '<div class="hs-person"><span class="k">騎師</span><span class="v">' + esc(j.delta ? (jName + "（" + j.delta + "）") : jName) + "</span></div>" +
+            '<div class="hs-person"><span class="k">練馬師</span><span class="v">' + esc(tName) + "</span></div>" +
+          "</div>" +
+          '<div class="hs-collab">同乘 <b>' + st.runs + "</b>　勝出 <b>" + st.wins + "</b>　入位 <b>" + places + "</b></div>" +
+          '<div class="hs-mini">' +
+            '<div><span class="k">年齡</span><span class="v">' + esc(fmt(r.age)) + "</span></div>" +
+            '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
+          "</div>" +
+        "</section>" +
+        '<section class="hs-block"><h3>近六次</h3>' + hsFormRow(r) + "</section>" +
+        '<section class="hs-block"><h3>對比</h3><div class="hs-cmp">' +
+          hsCmpCell("歷季出賽", fmtCareer(r.career)) +
+          hsCmpCell("同班賽", fmtRecordTriple(r.sameClass)) +
+          hsCmpCell("同場同程", fmtRecordTriple(r.sameCourseDist)) +
+          hsCmpCell("同程", fmtRecordTriple(r.sameDist)) +
+          hsCmpCell("入圍", (function () {
+            const left = fmtPlaceInLeft(r);
+            let pct = r.placeInPct != null ? r.placeInPct : r.gatePct;
+            return left + "｜" + fmtPctCell(pct);
+          })()) +
+          hsCmpCell("評分", fmt(r.rating) + (rateDelta ? "（" + rateDelta + "）" : "")) +
+        "</div>" +
+        '<div class="hs-lay">久休復出　' + esc(fmtLayoff(r.layoff)) + "</div></section>" +
+        '<section class="hs-block"><h3>綜合評述</h3><p class="hs-review">' + esc(review || "—") + "</p></section>" +
+        '<section class="hs-block" id="hsNoteBlock"><h3>筆記</h3>' +
+          (editable ? "" : '<p class="hs-note-hint">此賽日已過，筆記只可查看</p>') +
+          '<select class="hs-note-pick" id="hsNotePick" aria-label="歷史筆記"></select>' +
+          '<textarea class="hs-note-input" id="hsNoteInput" aria-label="馬匹筆記"></textarea>' +
+          '<button type="button" class="hs-note-btn" id="hsNoteSave" data-hs-note="save">保存</button>' +
+        "</section>";
+      bindHorseSheetNoteEvents();
+      paintHorseNoteBox();
+      el.sheet.removeAttribute("hidden");
+      el.sheet.setAttribute("aria-hidden", "false");
+      if (el.sheetClose) el.sheetClose.focus();
     }
     function isWaterSheetOpen() {
       return !!(el.waterSheet && !el.waterSheet.hasAttribute("hidden"));
@@ -11275,7 +11767,7 @@
     }
     function openWaterSheet() {
       if (!el.waterSheet) return;
-      closeAllBoardOverlays("waterSheet");
+      if (closeAllBoardOverlays("waterSheet") === false) return;
       if (el.board) el.board.scrollTop = 0;
       if (el.boardShell) el.boardShell.classList.add("is-water-open");
       fillWaterSheet();
@@ -11288,56 +11780,6 @@
         requestAnimationFrame(syncWaterSheetTop);
       });
       if (el.waterSheetClose) el.waterSheetClose.focus();
-    }
-    function openHorseSheet(no) {
-      closeAllBoardOverlays("horseSheet");
-      const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
-      if (!r || !el.sheet) return;
-      const meet = currentMeet();
-      const j = splitNameAllow(r.jockey);
-      el.sheetNo.textContent = String(r.no);
-      el.sheetName.textContent = r.name || "";
-      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
-      if (r.silk) {
-        el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
-        el.sheetSilk.className = "horse-sheet-silk";
-      } else {
-        el.sheetSilk.style.backgroundImage = "";
-        el.sheetSilk.className = "horse-sheet-silk " + silkClass(r.no);
-      }
-      el.sheetBody.innerHTML =
-        '<div class="horse-sheet-odds">' +
-          '<div class="box"><span class="k">檔位</span><span class="v">' + esc(fmt(r.draw)) + "</span></div>" +
-          '<div class="box"><span class="k">獨贏</span><span class="v">' + esc(r.scratched || r.win == null ? "—" : fmtOdds(r.win, "win")) + "</span></div>" +
-          '<div class="box"><span class="k">位置</span><span class="v">' + esc(r.scratched || r.place == null ? "—" : fmtOdds(r.place, "place")) + "</span></div>" +
-        "</div>" +
-        '<div class="horse-sheet-grid">' +
-          sheetItem("近績", r.form6) +
-          sheetItem("往績", r.recent) +
-          sheetItem("騎師", j.delta ? (j.name + "（" + j.delta + "）") : (j.name || r.jockey)) +
-          sheetItem("練馬師", r.trainer) +
-          sheetItem("年齡", r.age) +
-          sheetItem("評分", (function () {
-            const d = fmtDelta(r.rtgDelta);
-            return d ? (fmt(r.rating) + "（" + d + "）") : r.rating;
-          })()) +
-          sheetItem("負磅", (function () {
-            const d = hwDeltaOf(r);
-            return d ? (fmt(r.hw) + "（" + d + "）") : r.hw;
-          })()) +
-          sheetItem("排位體重", r.bodyWt) +
-          sheetItem("配備", r.gear) +
-          sheetItem("出道至今", fmtCareer(r.career)) +
-          sheetItem("跑道", r.rail) +
-          sheetItem("父系", r.sire) +
-          sheetItem("母系", r.dam) +
-          sheetItem("外祖父", r.damsire, true) +
-          sheetItem("馬主", r.owner, true) +
-          sheetItem("獎金", r.prize) +
-        "</div>";
-      el.sheet.removeAttribute("hidden");
-      el.sheet.setAttribute("aria-hidden", "false");
-      if (el.sheetClose) el.sheetClose.focus();
     }
     function bindHorseSheetOpens() {
       document.querySelectorAll("#board .hrow:not(.head) .cell.pin-id[data-no]").forEach(function (cell) {
@@ -12196,6 +12638,11 @@
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
     }
+    window.addEventListener("beforeunload", function (ev) {
+      if (!hsNoteDirty()) return;
+      ev.preventDefault();
+      ev.returnValue = "";
+    });
     if (el.waterSheetClose) {
       el.waterSheetClose.addEventListener("click", closeWaterSheet);
     }
@@ -12609,7 +13056,7 @@
     function openPayoutDetail() {
       const overlay = document.getElementById("payoutDetailOverlay");
       if (!overlay || payoutStatusKind !== "paid") return;
-      closeAllBoardOverlays("payoutDetailOverlay");
+      if (closeAllBoardOverlays("payoutDetailOverlay") === false) return;
       renderPayoutDetailBody();
       syncPayoutDetailOverlayTop();
       overlay.removeAttribute("hidden");
@@ -12728,7 +13175,7 @@
     function openColSortSheet() {
       const overlay = document.getElementById("colSortOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("colSortOverlay");
+      if (closeAllBoardOverlays("colSortOverlay") === false) return;
       renderColSortSheet();
       syncColSortOverlayTop();
       overlay.removeAttribute("hidden");
@@ -12803,7 +13250,7 @@
     function openRaceDateCalendar() {
       const overlay = document.getElementById("raceCalOverlay");
       if (!overlay) return;
-      closeAllBoardOverlays("raceCalOverlay");
+      if (closeAllBoardOverlays("raceCalOverlay") === false) return;
       ensureMeetingSnapshot();
       if (!raceCalSelected) syncMenuRaceDate();
       else {
