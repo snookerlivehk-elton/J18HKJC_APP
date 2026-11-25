@@ -2262,18 +2262,18 @@
       border-radius: 1px;
     }
     .hs-pace {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      column-gap: 14px;
       margin-bottom: 8px;
     }
     .hs-pace .v.run-style {
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       gap: 3px;
-      flex: 0 0 auto;
       font-size: 15px;
       font-weight: 800;
       line-height: 1.05;
@@ -2292,23 +2292,23 @@
     .hs-pace .rs-tri.on polygon { fill: #2a5f8f; }
     .hs-pace .rs-tri:not(.on) polygon { fill: #fff; }
     .hs-pace .v.form-class {
-      display: inline-flex;
+      display: flex;
       align-items: flex-start;
-      justify-content: flex-end;
-      flex: 1 1 auto;
+      justify-content: space-between;
+      width: 100%;
       min-width: 0;
       font-size: 15px;
       font-weight: 800;
       line-height: 1.05;
       color: var(--text);
-      white-space: nowrap;
     }
     .hs-pace .fc-seg {
-      display: inline-flex;
+      display: flex;
       flex-direction: column;
       align-items: center;
       gap: 2px;
-      min-width: 1.05em;
+      flex: 1 1 0;
+      min-width: 0;
     }
     .hs-pace .fc-num {
       font-variant-numeric: tabular-nums;
@@ -2316,7 +2316,10 @@
       text-align: center;
     }
     .hs-pace .fc-sep {
-      padding: 0 1px;
+      flex: 0 0 auto;
+      align-self: flex-start;
+      padding: 0;
+      color: #b7c0cb;
       line-height: 1.05;
       user-select: none;
     }
@@ -2329,6 +2332,9 @@
     .hs-person .k { display: block; font-size: 11px; color: var(--muted); }
     .hs-person .v { display: block; margin-top: 2px; font-size: 16px; font-weight: 800; }
     .hs-collab {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
       margin-top: 8px;
       font-size: 13px;
       font-weight: 700;
@@ -11708,7 +11714,13 @@
             '<div class="hs-person"><span class="k">騎師</span><span class="v">' + esc(j.delta ? (jName + "（" + j.delta + "）") : jName) + "</span></div>" +
             '<div class="hs-person"><span class="k">練馬師</span><span class="v">' + esc(tName) + "</span></div>" +
           "</div>" +
-          '<div class="hs-collab">同乘 <b>' + st.runs + "</b>　勝出 <b>" + st.wins + "</b>　入位 <b>" + places + "</b></div>" +
+          '<div class="hs-collab">' +
+            "<span>同乘 <b>" + st.runs + "</b></span>" +
+            "<span>勝出 <b>" + st.wins + "</b></span>" +
+            "<span>入位 <b>" + places + "</b></span>" +
+            "<span>勝出率 <b>" + st.winPct + "%</b></span>" +
+            "<span>位置率 <b>" + st.placePct + "%</b></span>" +
+          "</div>" +
           '<div class="hs-mini">' +
             '<div><span class="k">年齡</span><span class="v">' + esc(fmt(r.age)) + "</span></div>" +
             '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
