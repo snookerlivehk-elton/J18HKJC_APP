@@ -1935,15 +1935,7 @@
       background: linear-gradient(180deg, #4a6a90 0%, var(--nav-2) 100%);
       color: #fff;
     }
-    .horse-sheet-silk {
-      flex: 0 0 auto;
-      width: 42px;
-      height: 42px;
-      background-color: transparent;
-      background-size: contain;
-      background-position: left top;
-      background-repeat: no-repeat;
-    }
+    .horse-sheet-silk { display: none; }
     .horse-sheet-id {
       display: inline-flex;
       align-items: center;
@@ -1964,18 +1956,129 @@
     }
     .horse-sheet-title .nm {
       display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 18px;
       font-weight: 400;
       letter-spacing: .02em;
       line-height: 1.15;
     }
-    .horse-sheet-title .sub {
-      display: block;
-      margin-top: 3px;
-      font-size: 12px;
-      opacity: .88;
-      line-height: 1.25;
+    .horse-sheet-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
+    .hs-marks { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; }
+    .hs-flag, .hs-tip {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: rgba(255,255,255,.92);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hs-flag {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      z-index: 2;
+      transform: translateX(calc(-50% + 10px));
+      display: inline-flex;
+      align-items: flex-start;
+      justify-content: center;
+      width: 57px;
+      height: 40px;
+    }
+    .hs-flag svg {
+      width: 40.56px;
+      height: 36px;
+      display: block;
+      filter: drop-shadow(0 1px 0 rgba(12, 24, 40, .35));
+    }
+    .hs-flag:active { opacity: .72; }
+    .hs-flag.is-1 { color: #ffd15c; }
+    .hs-flag.is-2 { color: #8ef0b4; }
+    .hs-tip {
+      position: absolute;
+      top: 50%;
+      right: calc(8px + 32px + 24px * 2 - 10px);
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 41px;
+      font: inherit;
+      line-height: 1;
+    }
+    .hs-tip:active { opacity: .72; }
+    .hs-tip-words {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 14.4px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      line-height: 1.05;
+    }
+    .hs-tip-frac {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 17px;
+      flex: 0 0 17px;
+    }
+    .hs-tip-frac .n {
+      width: 17px;
+      font-size: 16.8px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      text-align: center;
+    }
+    .hs-tip-frac .bar {
+      width: 13px;
+      height: 1px;
+      margin: 2px 0 1px;
+      background: currentColor;
+      opacity: .55;
+      transform: rotate(-16deg);
+    }
+    .hs-tip-frac .d {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+      opacity: .7;
+    }
+    .hs-tip-tick {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      margin-left: 5px;
+      display: none;
+      color: #ff5a4f;
+      font-size: 16.8px;
+      font-weight: 700;
+      line-height: 1;
+      transform: translateY(-50%);
+    }
+    .hs-tip.is-on .hs-tip-frac .n { color: #fff; }
+    .hs-tip.is-on .hs-tip-tick {
+      display: block;
+      animation: hsTipPop .28s ease-out;
+    }
+    @keyframes hsTipPop {
+      from { transform: translateY(-50%) scale(.4); opacity: 0; }
+      to { transform: translateY(-50%) scale(1); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hs-tip.is-on .hs-tip-tick { animation: none; }
+    }
+    .hs-tip:disabled { opacity: .4; cursor: default; }
+    .horse-sheet-title .sub { display: none; }
     .horse-sheet-close {
       position: absolute;
       top: 8px;
@@ -6685,8 +6788,10 @@
         <div class="horse-sheet-silk" id="horseSheetSilk" aria-hidden="true"></div>
         <span class="horse-sheet-id" id="horseSheetNo"></span>
         <div class="horse-sheet-title">
-          <span class="nm" id="horseSheetName"></span>
-          <span class="sub" id="horseSheetRace"></span>
+          <div class="horse-sheet-name-row">
+            <span class="nm" id="horseSheetName"></span>
+            <span class="hs-marks" id="horseSheetMarks"></span>
+          </div>
         </div>
         <button type="button" class="horse-sheet-close" id="horseSheetClose" aria-label="關閉">×</button>
       </div>
@@ -6900,7 +7005,7 @@
       sheetSilk: document.getElementById("horseSheetSilk"),
       sheetNo: document.getElementById("horseSheetNo"),
       sheetName: document.getElementById("horseSheetName"),
-      sheetRace: document.getElementById("horseSheetRace"),
+      sheetMarks: document.getElementById("horseSheetMarks"),
       sheetBody: document.getElementById("horseSheetBody"),
       sheetClose: document.getElementById("horseSheetClose"),
       waterSheet: document.getElementById("waterSheet"),
@@ -8999,6 +9104,10 @@
       else rowMarks[k] = next;
       return next;
     }
+    const HS_FLAG_SVG =
+      '<svg viewBox="0 0 12 22" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M2 .6h8v17.2L6 13.4 2 17.8V.6z"/>' +
+      "</svg>";
     const ROW_FLAG_SVG =
       '<svg viewBox="0 0 12 14" aria-hidden="true" focusable="false">' +
         /* 書籤／燕尾旗：頂平、底中凹三角缺口 */
@@ -11493,6 +11602,23 @@
       hsNoteUi = null;
       return true;
     }
+    function paintHorseMarks(r) {
+      if (!el.sheetMarks) return;
+      if (!r) { el.sheetMarks.innerHTML = ""; return; }
+      const mark = getRowMark(r.no);
+      const flagCls = mark === 1 ? " is-1" : mark === 2 ? " is-2" : "";
+      const ord = getTipNoteOrder(r.no);
+      const tipOn = ord != null;
+      const full = !tipOn && tipNoteList().length >= TIP_NOTE_MAX;
+      el.sheetMarks.innerHTML =
+        '<button type="button" class="hs-flag' + flagCls + '" data-hs-flag="1" aria-label="' +
+          (mark === 1 ? "燕尾黃" : mark === 2 ? "燕尾綠" : "燕尾") + '">' + HS_FLAG_SVG + "</button>" +
+        '<button type="button" class="hs-tip' + (tipOn ? " is-on" : "") + '" data-hs-tip="1"' +
+          (full ? " disabled" : "") + ' aria-label="' + (tipOn ? "取消心水標記" : (full ? "心水標記已滿" : "心水標記")) + '" aria-pressed="' + (tipOn ? "true" : "false") + '">' +
+          '<span class="hs-tip-words"><span>心水</span><span>標記</span></span>' +
+          '<span class="hs-tip-frac" aria-hidden="true"><span class="n">' + (tipOn ? ord : "–") + '</span><span class="bar"></span><span class="d">' + TIP_NOTE_MAX + "</span></span>" +
+          '<span class="hs-tip-tick" aria-hidden="true">✓</span></button>';
+    }
     function openHorseSheet(no) {
       if (el.sheet && !el.sheet.hasAttribute("hidden")) {
         if (hsNoteUi && String(hsNoteUi.no) === String(no)) return;
@@ -11501,13 +11627,12 @@
       if (closeAllBoardOverlays("horseSheet") === false) return;
       const r = currentRunners().find(function (x) { return Number(x.no) === Number(no); });
       if (!r || !el.sheet) return;
-      const meet = currentMeet();
       const j = splitNameAllow(r.jockey);
       const jName = splitPersonName(r.jockey) || "—";
       const tName = splitPersonName(r.trainer) || (r.trainer ? String(r.trainer) : "—");
       el.sheetNo.textContent = String(r.no);
       el.sheetName.textContent = r.name || "";
-      el.sheetRace.textContent = (meet.meta || ("第" + currentRace + "場")) + (r.scratched ? " · 已退出" : "");
+      paintHorseMarks(r);
       if (r.silk) {
         el.sheetSilk.style.backgroundImage = "url('" + silkProxyUrl(r.silk).replace(/'/g, "%27") + "')";
         el.sheetSilk.className = "horse-sheet-silk";
@@ -12767,6 +12892,34 @@
     } catch (e) {}
     if (el.sheetClose) {
       el.sheetClose.addEventListener("click", closeHorseSheet);
+    }
+    if (el.sheetMarks) {
+      el.sheetMarks.addEventListener("click", function (ev) {
+        const no = el.sheetNo ? el.sheetNo.textContent : "";
+        if (!no) return;
+        const rNow = function () {
+          return currentRunners().find(function (x) { return String(x.no) === String(no); });
+        };
+        if (ev.target.closest("[data-hs-flag]")) {
+          ev.preventDefault();
+          const mark = cycleRowMark(no);
+          const row = document.querySelector('#boardX .hrow[data-no="' + no + '"]');
+          applyRowMarkClass(row, mark);
+          const btn = row && row.querySelector("button.row-flag");
+          if (btn) {
+            btn.setAttribute("data-mark", String(mark));
+            btn.setAttribute("aria-pressed", mark ? "true" : "false");
+          }
+          paintHorseMarks(rNow());
+          return;
+        }
+        if (ev.target.closest("[data-hs-tip]")) {
+          ev.preventDefault();
+          if (!toggleTipNote(no)) return;
+          renderBoard();
+          paintHorseMarks(rNow());
+        }
+      });
     }
     window.addEventListener("beforeunload", function (ev) {
       if (!hsNoteDirty()) return;
