@@ -2261,17 +2261,31 @@
       background: #c5ced8;
       border-radius: 1px;
     }
+    .hs-pace-head {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 0 0 4px;
+    }
+    .hs-pace-head .k {
+      display: block;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.2;
+      color: var(--muted);
+      white-space: nowrap;
+    }
     .hs-pace {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: 1fr 1fr;
       align-items: center;
-      column-gap: 14px;
+      column-gap: 10px;
       margin-bottom: 8px;
     }
     .hs-pace .v.run-style {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       gap: 3px;
       font-size: 15px;
@@ -2344,7 +2358,7 @@
     .hs-mini {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 10px;
       margin-top: 8px;
     }
     .hs-mini .k { display: block; font-size: 11px; color: var(--muted); }
@@ -11707,8 +11721,11 @@
       const review = synthReviewOf(r);
       el.sheetBody.innerHTML =
         oddsBlock +
-        '<section class="hs-block">' +
-          "<h3>本場</h3>" +
+        '<section class="hs-block" aria-label="預計跑法與近績">' +
+          '<div class="hs-pace-head">' +
+            '<span class="k">預計跑法</span>' +
+            '<span class="k">近六賽績與班次升降</span>' +
+          "</div>" +
           hsPaceRow(r) +
           '<div class="hs-people">' +
             '<div class="hs-person"><span class="k">騎師</span><span class="v">' + esc(j.delta ? (jName + "（" + j.delta + "）") : jName) + "</span></div>" +
