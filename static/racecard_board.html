@@ -2261,21 +2261,69 @@
       background: #c5ced8;
       border-radius: 1px;
     }
-    .hs-styles { display: flex; gap: 6px; margin-bottom: 8px; }
-    .hs-style {
-      flex: 1 1 0;
-      text-align: center;
-      padding: 6px 0;
-      border-radius: 8px;
-      background: #eef1f5;
-      color: #8b95a3;
-      font-size: 13px;
-      font-weight: 800;
+    .hs-pace {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
     }
-    .hs-style.is-on.lead { background: #3d5a80; color: #fff; }
-    .hs-style.is-on.press { background: #2f8f78; color: #fff; }
-    .hs-style.is-on.mid { background: #6a7382; color: #fff; }
-    .hs-style.is-on.late { background: #c47a3a; color: #fff; }
+    .hs-pace .v.run-style {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      flex: 0 0 auto;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.05;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .hs-pace .rs-marks {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 10px;
+      line-height: 0;
+    }
+    .hs-pace .rs-tri { display: block; width: 8px; height: 9px; flex: 0 0 auto; overflow: visible; }
+    .hs-pace .rs-tri polygon { stroke: #2a5f8f; stroke-width: 1.1; stroke-linejoin: round; }
+    .hs-pace .rs-tri.on polygon { fill: #2a5f8f; }
+    .hs-pace .rs-tri:not(.on) polygon { fill: #fff; }
+    .hs-pace .v.form-class {
+      display: inline-flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.05;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .hs-pace .fc-seg {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 1.05em;
+    }
+    .hs-pace .fc-num {
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+      text-align: center;
+    }
+    .hs-pace .fc-sep {
+      padding: 0 1px;
+      line-height: 1.05;
+      user-select: none;
+    }
+    .hs-pace .fc-m { display: block; width: 8px; height: 9px; flex: 0 0 auto; }
+    .hs-pace .fc-m.up polygon { fill: #1e8e3e; stroke: #1e8e3e; stroke-width: 0.6; stroke-linejoin: round; }
+    .hs-pace .fc-m.down polygon { fill: #c0392b; stroke: #c0392b; stroke-width: 0.6; stroke-linejoin: round; }
+    .hs-pace .fc-m.flat rect { fill: #8a93a0; }
     .hs-people { display: flex; gap: 10px; }
     .hs-person { flex: 1 1 0; min-width: 0; }
     .hs-person .k { display: block; font-size: 11px; color: var(--muted); }
@@ -2295,16 +2343,6 @@
     }
     .hs-mini .k { display: block; font-size: 11px; color: var(--muted); }
     .hs-mini .v { display: block; margin-top: 2px; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .hs-form { display: flex; gap: 4px; }
-    .hs-form-seg {
-      flex: 1 1 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      min-width: 0;
-    }
-    .hs-form-seg b { font-size: 16px; font-variant-numeric: tabular-nums; line-height: 1; }
     .hs-cmp {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -6325,7 +6363,7 @@
       border-color: var(--line);
       color: var(--text);
     }
-    html[data-theme="dark"] .hs-style { background: #1b2129; color: #8b95a3; }
+    html[data-theme="dark"] .hs-pace .rs-tri:not(.on) polygon { fill: #181d24; }
     html[data-theme="dark"] .hs-movn,
     html[data-theme="dark"] .hs-mflow { color: #9ec0e8; }
     html[data-theme="dark"] .hs-msplit { background: #3a4250; }
@@ -11566,26 +11604,8 @@
         hsRangeHtml(water, true) +
         "</div>";
     }
-    function hsStyleRow(style) {
-      const order = [
-        { lab: "前領", cls: "lead" },
-        { lab: "跟前", cls: "press" },
-        { lab: "中置", cls: "mid" },
-        { lab: "後上", cls: "late" }
-      ];
-      return '<div class="hs-styles">' + order.map(function (it) {
-        const on = String(style || "").trim() === it.lab;
-        return '<span class="hs-style' + (on ? " is-on " + it.cls : "") + '">' + it.lab + "</span>";
-      }).join("") + "</div>";
-    }
-    function hsFormRow(r) {
-      const parts = parseSlashParts(r.form6 != null ? r.form6 : r.recent);
-      const moves = Array.isArray(r.class6Moves) ? r.class6Moves : classMovesFrom(r.class6);
-      if (!parts.length) return '<div class="hs-form"><span class="v">—</span></div>';
-      return '<div class="hs-form">' + parts.map(function (p, i) {
-        const kind = moves[i] === "up" || moves[i] === "down" ? moves[i] : "flat";
-        return '<span class="hs-form-seg"><b>' + esc(p) + "</b>" + fcMarkSvg(kind) + "</span>";
-      }).join("") + "</div>";
+    function hsPaceRow(r) {
+      return '<div class="hs-pace">' + cellRunStyle(r.runStyle) + cellForm6(r) + "</div>";
     }
     function hsCmpCell(label, value) {
       return '<div><span class="k">' + esc(label) + '</span><span class="v">' + esc(value) + "</span></div>";
@@ -11683,7 +11703,7 @@
         oddsBlock +
         '<section class="hs-block">' +
           "<h3>本場</h3>" +
-          hsStyleRow(r.runStyle) +
+          hsPaceRow(r) +
           '<div class="hs-people">' +
             '<div class="hs-person"><span class="k">騎師</span><span class="v">' + esc(j.delta ? (jName + "（" + j.delta + "）") : jName) + "</span></div>" +
             '<div class="hs-person"><span class="k">練馬師</span><span class="v">' + esc(tName) + "</span></div>" +
@@ -11694,7 +11714,6 @@
             '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
           "</div>" +
         "</section>" +
-        '<section class="hs-block"><h3>近六次</h3>' + hsFormRow(r) + "</section>" +
         '<section class="hs-block"><h3>對比</h3><div class="hs-cmp">' +
           hsCmpCell("歷季出賽", fmtCareer(r.career)) +
           hsCmpCell("同班賽", fmtRecordTriple(r.sameClass)) +
