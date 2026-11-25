@@ -2073,30 +2073,90 @@
       letter-spacing: .04em;
       color: var(--nav);
     }
-    .hs-market { display: flex; flex-direction: column; gap: 8px; }
+    .hs-market { display: flex; flex-direction: column; gap: 0; padding: 2px 8px 4px; }
     .hs-mrow {
       display: grid;
-      grid-template-columns: 36px 1fr 1fr 1fr;
-      gap: 6px;
+      grid-template-columns: max-content minmax(0, 1.2fr) max-content 1px minmax(0, 1.05fr) max-content;
+      column-gap: 8px;
       align-items: center;
+      padding: 8px 0;
     }
-    .hs-mlab { font-size: 14px; font-weight: 800; color: var(--nav); }
-    .hs-mcell { min-width: 0; }
-    .hs-mcell i {
-      display: block;
+    .hs-mrow + .hs-mrow { border-top: 1px solid var(--line); }
+    .hs-mlab {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--nav);
+      white-space: nowrap;
+    }
+    .hs-mmetric { min-width: 0; }
+    .hs-mnow {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      min-width: 0;
+    }
+    .hs-mnow i {
+      flex: 0 0 auto;
       font-style: normal;
-      font-size: 11px;
+      font-size: 13px;
+      font-weight: 700;
       color: var(--muted);
-      margin-bottom: 2px;
     }
-    .hs-mcell b {
-      display: block;
-      font-size: 20px;
+    .hs-mnow b {
+      position: relative;
+      font-size: 22px;
       font-weight: 800;
       line-height: 1;
+      letter-spacing: -.02em;
       font-variant-numeric: tabular-nums;
     }
-    .hs-mcell .od-tick { font-size: 12px; margin-left: 2px; }
+    .hs-mnow .od-tick {
+      position: static;
+      margin-left: 1px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .hs-mnow .od-tick.up { color: #1e8e3e; }
+    .hs-mnow .od-tick.down { color: #c0392b; }
+    .hs-movn {
+      margin-top: 3px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #163a66;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .hs-mflow {
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .hs-mrange {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.25;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .hs-mrange .hi { color: var(--green); }
+    .hs-mrange .lo { color: var(--red); }
+    .hs-msplit {
+      width: 1px;
+      height: 32px;
+      justify-self: center;
+      background: #c5ced8;
+      border-radius: 1px;
+    }
     .hs-styles { display: flex; gap: 6px; margin-bottom: 8px; }
     .hs-style {
       flex: 1 1 0;
@@ -6162,6 +6222,8 @@
       color: var(--text);
     }
     html[data-theme="dark"] .hs-style { background: #1b2129; color: #8b95a3; }
+    html[data-theme="dark"] .hs-movn { color: #9ec0e8; }
+    html[data-theme="dark"] .hs-msplit { background: #3a4250; }
     html[data-theme="dark"] .hs-note-input[readonly] { background: #1b2129; }
     html[data-theme="dark"] .scroll-col::after {
       background: #3a4250;
@@ -11314,15 +11376,83 @@
         if (act === "back") backHorseSheetNote();
       });
     }
-    function hsMarketCell(kind, value, water, flow, tick) {
-      const odds = value == null ? "—" : fmtOdds(value, kind);
-      const w = fmtWater(water);
-      const f = flow == null || flow === "" ? "—" : String(flow);
+    function hsNum(v, water) {
+      const n = numOrNull(v);
+      if (n == null) return "—";
+      if (water) return esc(fmtWater(n));
+      const rounded = Math.round(n * 10) / 10;
+      return esc(Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
+    }
+    function horseOddsRange(current, no, kind) {
+      const base = numOrNull(current);
+      if (base == null) return { now: null, night: null, hi: null, lo: null };
+      const raceNum = Number(currentRace) || 1;
+      const vals = [base];
+      const step = kind === "place" ? 0.45 : 1.1;
+      for (let i = 1; i < 8; i++) {
+        const jitter = ((Number(no) * 5 + raceNum * 3 + i * 7) % 5) - 1;
+        vals.push(Math.max(1.1, Math.round((base + i * step + jitter * 0.3) * 10) / 10));
+      }
+      const night = vals[vals.length - 1];
+      vals[3] = Math.round((night + (kind === "place" ? 1.8 : 3.2)) * 10) / 10;
+      let hi = vals[0];
+      let lo = vals[0];
+      vals.forEach(function (n) {
+        if (n > hi) hi = n;
+        if (n < lo) lo = n;
+      });
+      return { now: base, night: night, hi: hi, lo: lo };
+    }
+    function horseWaterRange(r, field, sampleKey) {
+      const now = r ? numOrNull(r[field]) : null;
+      const vals = [];
+      let night = null;
+      if (!r || r.scratched) return { now: null, night: null, hi: null, lo: null };
+      const nightIdx = Math.min(6, WATER_HOUR_COLS - 1);
+      for (let i = 0; i < WATER_HOUR_COLS; i++) {
+        const s = waterHourSample(r, i);
+        const n = s ? numOrNull(s[sampleKey]) : null;
+        if (n == null) continue;
+        vals.push(n);
+        if (i === nightIdx) night = n;
+      }
+      if (night == null && vals.length) night = vals[vals.length - 1];
+      if (now != null) vals.push(now);
+      if (!vals.length) return { now: null, night: null, hi: null, lo: null };
+      let hi = vals[0];
+      let lo = vals[0];
+      vals.forEach(function (n) {
+        if (n > hi) hi = n;
+        if (n < lo) lo = n;
+      });
+      return { now: now, night: night, hi: hi, lo: lo };
+    }
+    function hsRangeHtml(range, water) {
+      return '<span class="hs-mrange">' +
+        '<span class="hi">最高 ' + hsNum(range.hi, water) + "</span>" +
+        '<span class="lo">最低 ' + hsNum(range.lo, water) + "</span>" +
+        "</span>";
+    }
+    function hsMetricHtml(label, range, water, tick, fresh, flow) {
+      const flowHtml = flow == null ? "" :
+        '<div class="hs-mflow">流量 ' + esc(fmtFlow(flow)) + "</div>";
+      return '<div class="hs-mmetric">' +
+        '<div class="hs-mnow"><i>' + label + "</i><b>" + hsNum(range.now, water) + oddsTickHtml(tick, !!fresh) + "</b></div>" +
+        '<div class="hs-movn">隔夜 ' + hsNum(range.night, water) + "</div>" +
+        flowHtml +
+        "</div>";
+    }
+    function hsMarketRow(r, kind) {
+      const win = kind === "win";
+      const odds = horseOddsRange(win ? r.win : r.place, r.no, kind);
+      const water = horseWaterRange(r, win ? "winWater" : "placeWater", win ? "winW" : "plaW");
       return '<div class="hs-mrow">' +
-        '<span class="hs-mlab">' + (kind === "win" ? "獨贏" : "位置") + "</span>" +
-        '<span class="hs-mcell"><i>賠率</i><b>' + esc(odds) + oddsTickHtml(tick, false) + "</b></span>" +
-        '<span class="hs-mcell"><i>水位</i><b>' + esc(w) + "</b></span>" +
-        '<span class="hs-mcell"><i>流量</i><b>' + esc(f) + "</b></span>" +
+        '<span class="hs-mlab">' + (win ? "獨贏" : "位置") + "</span>" +
+        hsMetricHtml("賠率", odds, false, win ? r.winTick : r.placeTick, win ? r._winTickFresh : r._placeTickFresh, null) +
+        hsRangeHtml(odds, false) +
+        '<span class="hs-msplit" aria-hidden="true"></span>' +
+        hsMetricHtml("水位", water, true, win ? r.winWaterTick : r.placeWaterTick, win ? r._winWaterTickFresh : r._placeWaterTickFresh, win ? r.winFlow : r.placeFlow) +
+        hsRangeHtml(water, true) +
         "</div>";
     }
     function hsStyleRow(style) {
@@ -11418,8 +11548,8 @@
       const oddsBlock = r.scratched
         ? '<section class="hs-block"><h3>賠率與水位</h3><p class="hs-note-hint">已退出</p></section>'
         : '<section class="hs-block hs-market" aria-label="賠率與水位">' +
-            hsMarketCell("win", r.win, r.winWater, r.winFlow, r.winTick) +
-            hsMarketCell("place", r.place, r.placeWater, r.placeFlow, r.placeTick) +
+            hsMarketRow(r, "win") +
+            hsMarketRow(r, "place") +
           "</section>";
       const review = synthReviewOf(r);
       el.sheetBody.innerHTML =
