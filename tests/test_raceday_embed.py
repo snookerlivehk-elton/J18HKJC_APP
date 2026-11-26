@@ -906,7 +906,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("openHorseSheet", r.text)
         self.assertIn("預計跑法", r.text)
         cmp = r.text
-        cmp_order = ["歷季出賽", "入圍", "評分", "同程", "同班賽", "同場同程"]
+        cmp_order = ["歷季出賽", "生涯入圍", "評分", "同程", "同班賽", "同場同程"]
         cmp_at = [cmp.find('hsCmpCell("' + name + '"') for name in cmp_order]
         self.assertTrue(all(i >= 0 for i in cmp_at), cmp_at)
         self.assertEqual(cmp_at, sorted(cmp_at))
