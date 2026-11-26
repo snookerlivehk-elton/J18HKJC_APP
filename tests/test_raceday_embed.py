@@ -1291,6 +1291,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("返回</span>", text)
         self.assertIn("phoneMul *= 3", text)
         self.assertIn('id="codeRow" hidden', text)
+        self.assertIn(".code-row .field {\n      flex: 1 1 0;\n      min-width: 0;", text)
+        self.assertIn("max-width: 46%;", text)
         self.assertIn("racecard.html", text)
 
 

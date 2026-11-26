@@ -248,12 +248,22 @@
       padding: 0 12px;
       outline: none;
     }
-    .code-row { display: flex; gap: 8px; align-items: stretch; }
-    .code-row .field { flex: 1 1 auto; margin-top: 10px; }
-    .send {
-      flex: 0 0 auto;
+    .code-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .code-row .field {
+      flex: 1 1 0;
+      min-width: 0;
       margin-top: 10px;
-      min-width: 108px;
+    }
+    .send {
+      flex: 0 1 auto;
+      align-self: stretch;
+      max-width: 46%;
+      margin-top: 10px;
       padding: 0 10px;
       border: 0;
       border-radius: 12px;
@@ -262,6 +272,10 @@
       font: inherit;
       font-size: 13px;
       font-weight: 700;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       cursor: pointer;
     }
     .send:disabled { opacity: .55; cursor: default; }
