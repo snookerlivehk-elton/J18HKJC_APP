@@ -2365,7 +2365,7 @@
     .hs-collab b { font-variant-numeric: tabular-nums; }
     .hs-mini {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 10px;
       margin-top: 8px;
     }
@@ -11754,6 +11754,7 @@
           "</div>" +
           '<div class="hs-mini">' +
             '<div><span class="k">年齡</span><span class="v">' + esc(fmt(r.age)) + "</span></div>" +
+            '<div><span class="k">久休復出</span><span class="v">' + esc(fmtLayoff(r.layoff)) + "</span></div>" +
             '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
           "</div>" +
         "</section>" +
@@ -11768,7 +11769,6 @@
             return left + "｜" + fmtPctCell(pct);
           })()) +
           hsCmpCell("評分", fmt(r.rating) + (rateDelta ? "（" + rateDelta + "）" : "")) +
-          hsCmpCell("久休復出", fmtLayoff(r.layoff)) +
         "</div></section>" +
         '<section class="hs-block"><h3>綜合評述</h3><p class="hs-review">' + esc(review || "—") + "</p></section>" +
         '<section class="hs-block" id="hsNoteBlock"><h3>筆記</h3>' +
