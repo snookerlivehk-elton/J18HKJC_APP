@@ -104,6 +104,8 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn('data-nav="raceDate"', r.text)
         self.assertIn('data-nav="colSort"', r.text)
         self.assertIn('data-nav="help"', r.text)
+        self.assertIn('data-nav="login"', r.text)
+        self.assertIn('href = "auth.html"', r.text)
         self.assertIn("使用說明", r.text)
         self.assertIn('window.location.href = "help.html"', r.text)
         self.assertIn("馬匹數據排序", r.text)
@@ -1022,6 +1024,9 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("qin-c.scratch", r.text)
         self.assertIn("QIN_FIT_N", r.text)
         self.assertIn("const QIN_FIT_N = 14", r.text)
+        self.assertIn("const QIN_BASE_N = 12", r.text)
+        self.assertIn("qin-vacant", r.text)
+        self.assertIn("function qinAxis", r.text)
         self.assertIn("QIN_MAX_N", r.text)
         self.assertNotIn("QIN_MIN_CELL", r.text)
         self.assertIn("fitQinTableWidths", r.text)
@@ -1268,6 +1273,25 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn("0.2.400–0.2.411", text)
         self.assertNotIn("居中靠下靜態橙色半圓提示", text)
         self.assertNotIn('no: 2,', text)
+
+    def test_racecard_auth_page(self):
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[1] / "static" / "racecard_auth.html"
+        self.assertTrue(path.is_file())
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("帳號密碼登入", text)
+        self.assertIn("手機驗證碼登入", text)
+        self.assertIn("電郵驗證碼登入", text)
+        self.assertIn("手機驗證碼註冊登入", text)
+        self.assertIn("電郵驗證碼註冊登入", text)
+        self.assertIn("忘記密碼", text)
+        self.assertIn("請使用手機號碼或電郵，接收驗證碼登入", text)
+        self.assertIn('id="forgotTip"', text)
+        self.assertIn("返回</span>", text)
+        self.assertIn("phoneMul *= 3", text)
+        self.assertIn('id="codeRow" hidden', text)
+        self.assertIn("racecard.html", text)
 
 
 if __name__ == "__main__":

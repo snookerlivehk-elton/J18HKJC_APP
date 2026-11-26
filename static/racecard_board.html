@@ -6619,6 +6619,8 @@
           <button type="button" class="zoom-btn" data-zoom-step="1" aria-label="放大">+</button>
           <button type="button" class="zoom-reset" data-zoom-step="0" aria-label="復原為預設大小">復原</button>
         </div>
+        <div class="sep" role="separator"></div>
+        <button type="button" role="menuitem" data-nav="login">登入</button>
       </div>
     </div>
   </header>
@@ -7164,6 +7166,7 @@
     let scrubPoints = []; /* { minsBefore, label, clock, picks }[] */
     let scrubDragging = false;
     const QIN_FIT_N = 14;
+    const QIN_BASE_N = 12; /* 少於 12 匹仍畫滿 1–12 號，空號不顯示賠率 */
     const QIN_MAX_N = 20;
     /* 小旗整行標記：0 無／1 藍／2 橙；鍵＝場次:馬號 */
     let rowMarks = {};
@@ -12215,7 +12218,21 @@
           }
         }
       }
-      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, mode: qinMode, scratch: scratch };
+      const present = {};
+      nos.forEach(function (no) { present[no] = true; });
+      return { nos: nos, oddsMap: oddsMap, hotKey: hotKey, mode: qinMode, scratch: scratch, present: present };
+    }
+    /* 少於 12 匹：軸固定 1–12，讓碼號顯示齊。12–14 匹用實際馬號並鋪滿。 */
+    function qinAxis(nos) {
+      if (!nos || nos.length < QIN_BASE_N) {
+        const axis = [];
+        for (let no = 1; no <= QIN_BASE_N; no++) axis.push(no);
+        return axis;
+      }
+      return nos.slice();
+    }
+    function qinHasHorse(qin, no) {
+      return !!(qin && qin.present && qin.present[no]);
     }
     function qinHorseScratched(qin, no) {
       return !!(qin && qin.scratch && qin.scratch[no]);
@@ -12245,20 +12262,25 @@
         "</th>"
       );
     }
-    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標開關切正Q／位置Q；首列「1」位為靜態指數 */
+    function qinVacantCell() {
+      return '<td class="qin-vacant"></td>';
+    }
+    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標開關切正Q／位置Q；首列「1」位為靜態指數
+       少於 12 匹時仍畫 1–12 號，沒有馬的交叉格留空、不寫賠率 */
     function renderQinTable(qin) {
-      const nos = qin.nos;
+      const nos = qinAxis(qin.nos);
       const n = nos.length;
+      const horseCount = qin.nos.length;
       const useQpl = qin.mode === "qpl";
       const oddsLab = useQpl ? "連贏位置" : "連贏";
       const idxLab = useQpl ? "位置指數" : "連贏指數";
-      if (n < 2) {
+      if (horseCount < 2) {
         return '<div class="qin-block"><div class="qin-legend" style="padding:12px 10px">暫無連贏組合</div></div>';
       }
       let html =
         '<div class="qin-block">' +
           '<div class="qin-x" id="qinX">' +
-            '<table class="qin-tbl" data-n="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
+            '<table class="qin-tbl" data-n="' + n + '" data-qin-horses="' + horseCount + '" data-qin-mode="' + esc(qin.mode || "qin") +
             '" aria-label="' + oddsLab + '賠率（上三角）與' + idxLab + '（下三角）">' +
             '<colgroup><col class="qin-col-rh" />';
       for (let c = 0; c < n; c++) html += '<col class="qin-col-c" />';
@@ -12288,8 +12310,12 @@
         for (let j = 0; j < n; j++) {
           const colHorse = nos[j];
           if (i === j) {
-            const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
+            const sc = qinHasHorse(qin, rowHorse) && qinHorseScratched(qin, rowHorse) ? " scratch" : "";
             html += '<th class="qin-h' + sc + '">' + esc(rowHorse) + "</th>";
+            continue;
+          }
+          if (!qinHasHorse(qin, rowHorse) || !qinHasHorse(qin, colHorse)) {
+            html += qinVacantCell();
             continue;
           }
           const key = qinPairKey(rowHorse, colHorse);
@@ -12506,7 +12532,7 @@
     }
     /* 連贏格寬規矩：
        - 任何時候（含字體縮放後）首列與各數據列等寬均分
-       - ≤14 匹：等分鋪滿可用寬
+       - 畫出的列數 ≤14（含不足 12 匹時補成的 12 號）：等分鋪滿可用寬
        - >14 匹：鎖定首行／首列，橫滑看其餘；列寬仍等寬（按 14 匹＋首列密度） */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
@@ -13829,6 +13855,8 @@
         } else if (act === "help") {
           /* 獨立使用說明頁（含功能更新日誌文檔） */
           window.location.href = "help.html";
+        } else if (act === "login") {
+          window.location.href = "auth.html";
         } else if (act === "service") {
           const anno = document.querySelector(".anno");
           if (anno && typeof anno.scrollIntoView === "function") {
