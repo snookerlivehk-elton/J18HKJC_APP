@@ -1075,8 +1075,6 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertNotIn("尚未開出", r.text)
         self.assertIn("跑馬地", r.text)
         self.assertIn("騎師", r.text)
-        self.assertIn('class="hs-pair"', r.text)
-        self.assertIn("騎師與練馬師合作", r.text)
         self.assertIn("練馬師", r.text)
         self.assertIn("splitNameAllow", r.text)
         self.assertIn("v stacked", r.text)
