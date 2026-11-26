@@ -4892,11 +4892,6 @@
       font-weight: 700;
       font-size: 12px;
     }
-    /* 不足 14 匹時補上的空位：只佔格，不畫馬號 */
-    .qin-tbl .qin-pad {
-      background: #fff;
-      cursor: default;
-    }
     /* 首行馬號：豎滑鎖定 */
     .qin-tbl .qin-ch {
       position: sticky;
@@ -12250,15 +12245,10 @@
         "</th>"
       );
     }
-    function qinPadCell(tag) {
-      return "<" + tag + ' class="qin-pad" aria-hidden="true"></' + tag + ">";
-    }
-    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標開關切正Q／位置Q；首列「1」位為靜態指數
-       少於 14 匹時補空格到 14，格子大小不隨出馬數變 */
+    /* 單一矩陣：上三角＝賠率，下三角＝指數；角標開關切正Q／位置Q；首列「1」位為靜態指數 */
     function renderQinTable(qin) {
       const nos = qin.nos;
       const n = nos.length;
-      const slots = n > QIN_FIT_N ? n : QIN_FIT_N;
       const useQpl = qin.mode === "qpl";
       const oddsLab = useQpl ? "連贏位置" : "連贏";
       const idxLab = useQpl ? "位置指數" : "連贏指數";
@@ -12268,30 +12258,20 @@
       let html =
         '<div class="qin-block">' +
           '<div class="qin-x" id="qinX">' +
-            '<table class="qin-tbl" data-n="' + slots + '" data-qin-horses="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
+            '<table class="qin-tbl" data-n="' + n + '" data-qin-mode="' + esc(qin.mode || "qin") +
             '" aria-label="' + oddsLab + '賠率（上三角）與' + idxLab + '（下三角）">' +
             '<colgroup><col class="qin-col-rh" />';
-      for (let c = 0; c < slots; c++) html += '<col class="qin-col-c" />';
+      for (let c = 0; c < n; c++) html += '<col class="qin-col-c" />';
       html +=
             "</colgroup>" +
             '<thead><tr role="group" aria-label="連贏盤種切換">' +
             renderQinModeSwitch();
-      for (let j = 1; j < slots; j++) {
-        if (j >= n) {
-          html += qinPadCell("th");
-          continue;
-        }
+      for (let j = 1; j < n; j++) {
         const sc = qinHorseScratched(qin, nos[j]) ? " scratch" : "";
         html += '<th class="qin-ch' + sc + '">' + esc(nos[j]) + "</th>";
       }
       html += "</tr></thead><tbody>";
-      for (let i = 0; i < slots; i++) {
-        if (i >= n) {
-          html += "<tr>" + qinPadCell("th");
-          for (let j = 0; j < slots; j++) html += qinPadCell("td");
-          html += "</tr>";
-          continue;
-        }
+      for (let i = 0; i < n; i++) {
         const rowHorse = nos[i];
         html += "<tr>";
         if (i === 0) {
@@ -12305,11 +12285,7 @@
           const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
           html += '<th class="qin-rh' + sc + '" scope="row">' + esc(rowHorse) + "</th>";
         }
-        for (let j = 0; j < slots; j++) {
-          if (j >= n) {
-            html += qinPadCell("td");
-            continue;
-          }
+        for (let j = 0; j < n; j++) {
           const colHorse = nos[j];
           if (i === j) {
             const sc = qinHorseScratched(qin, rowHorse) ? " scratch" : "";
@@ -12529,9 +12505,9 @@
       panel.addEventListener("click", toggleQinMode);
     }
     /* 連贏格寬規矩：
-       - 任何時候（含字體縮放後）首列與各數據列等寬
-       - ≤14 匹：格子按 14 匹密度，多出的格留空，不把現有馬拉寬
-       - >14 匹：同密度，鎖定首行／首列，橫豎滑動看其餘 */
+       - 任何時候（含字體縮放後）首列與各數據列等寬均分
+       - ≤14 匹：等分鋪滿可用寬
+       - >14 匹：鎖定首行／首列，橫滑看其餘；列寬仍等寬（按 14 匹＋首列密度） */
     function fitQinTableWidths() {
       const panel = document.getElementById("qinPanel");
       const tbl = panel && panel.querySelector(".qin-tbl");
@@ -12539,13 +12515,13 @@
       if (!panel || !tbl) return;
       const n = Number(tbl.getAttribute("data-n") || 0);
       if (n < 2) return;
-      const colCount = n + 1; /* 首列馬號 + 矩陣列（不足 14 已補空列） */
+      const colCount = n + 1; /* 首列馬號 + n 匹 */
       const avail = Math.max(panel.clientWidth, 200);
       let cell;
       let total;
       if (n <= QIN_FIT_N) {
-        cell = avail / (QIN_FIT_N + 1);
-        total = cell * colCount;
+        cell = avail / colCount;
+        total = avail;
       } else {
         cell = Math.max(1, Math.floor(avail / (QIN_FIT_N + 1)));
         total = cell * colCount;
