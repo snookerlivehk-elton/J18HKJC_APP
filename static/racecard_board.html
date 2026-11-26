@@ -2298,13 +2298,20 @@
       justify-self: center;
       text-align: center;
     }
+    .hs-pace .hs-age {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.05;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
     .hs-pace .hs-layoff {
       font-size: 18px;
       font-weight: 800;
       line-height: 1.05;
       color: var(--text);
     }
-    .hs-pace .v.run-style {
+    .hs-block .v.run-style {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
@@ -2316,17 +2323,17 @@
       color: var(--text);
       white-space: nowrap;
     }
-    .hs-pace .rs-marks {
+    .hs-block .rs-marks {
       display: flex;
       align-items: center;
       gap: 2px;
       height: 10px;
       line-height: 0;
     }
-    .hs-pace .rs-tri { display: block; width: 8px; height: 9px; flex: 0 0 auto; overflow: visible; }
-    .hs-pace .rs-tri polygon { stroke: #2a5f8f; stroke-width: 1.1; stroke-linejoin: round; }
-    .hs-pace .rs-tri.on polygon { fill: #2a5f8f; }
-    .hs-pace .rs-tri:not(.on) polygon { fill: #fff; }
+    .hs-block .rs-tri { display: block; width: 8px; height: 9px; flex: 0 0 auto; overflow: visible; }
+    .hs-block .rs-tri polygon { stroke: #2a5f8f; stroke-width: 1.1; stroke-linejoin: round; }
+    .hs-block .rs-tri.on polygon { fill: #2a5f8f; }
+    .hs-block .rs-tri:not(.on) polygon { fill: #fff; }
     .hs-pace .v.form-class {
       display: flex;
       align-items: flex-start;
@@ -6411,7 +6418,7 @@
       border-color: var(--line);
       color: var(--text);
     }
-    html[data-theme="dark"] .hs-pace .rs-tri:not(.on) polygon { fill: #181d24; }
+    html[data-theme="dark"] .hs-block .rs-tri:not(.on) polygon { fill: #181d24; }
     html[data-theme="dark"] .hs-movn,
     html[data-theme="dark"] .hs-mflow { color: #9ec0e8; }
     html[data-theme="dark"] .hs-msplit { background: #3a4250; }
@@ -11658,7 +11665,7 @@
     function hsPaceRow(r) {
       return '<div class="hs-pace">' +
         '<div class="hs-pace-side">' +
-          cellRunStyle(r.runStyle) +
+          '<span class="v hs-age">' + esc(fmt(r.age)) + "</span>" +
           '<span class="v hs-layoff">' + esc(fmtLayoff(r.layoff)) + "</span>" +
         "</div>" +
         cellForm6(r) +
@@ -11760,12 +11767,12 @@
         oddsBlock +
         '<section class="hs-block" aria-label="預計跑法與近績">' +
           '<div class="hs-mini">' +
-            '<div><span class="k">年齡</span><span class="v">' + esc(fmt(r.age)) + "</span></div>" +
+            '<div><span class="k">預計跑法</span>' + cellRunStyle(r.runStyle) + "</div>" +
             '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
           "</div>" +
           '<div class="hs-pace-head">' +
             '<div class="hs-pace-side">' +
-              '<span class="k">預計跑法</span>' +
+              '<span class="k">年齡</span>' +
               '<span class="k mid">久休復出</span>' +
             "</div>" +
             '<span class="k">近六賽績與班次升降</span>' +
@@ -11785,15 +11792,15 @@
         "</section>" +
         '<section class="hs-block" aria-label="對比"><div class="hs-cmp">' +
           hsCmpCell("歷季出賽", fmtCareer(r.career)) +
-          hsCmpCell("同班賽", fmtRecordTriple(r.sameClass)) +
-          hsCmpCell("同場同程", fmtRecordTriple(r.sameCourseDist)) +
-          hsCmpCell("同程", fmtRecordTriple(r.sameDist)) +
           hsCmpCell("入圍", (function () {
             const left = fmtPlaceInLeft(r);
             let pct = r.placeInPct != null ? r.placeInPct : r.gatePct;
             return left + "｜" + fmtPctCell(pct);
           })()) +
           hsCmpCell("評分", fmt(r.rating) + (rateDelta ? "（" + rateDelta + "）" : "")) +
+          hsCmpCell("同程", fmtRecordTriple(r.sameDist)) +
+          hsCmpCell("同班賽", fmtRecordTriple(r.sameClass)) +
+          hsCmpCell("同場同程", fmtRecordTriple(r.sameCourseDist)) +
         "</div></section>" +
         '<section class="hs-block"><h3>綜合評述</h3><p class="hs-review">' + esc(review || "—") + "</p></section>" +
         '<section class="hs-block" id="hsNoteBlock"><h3>筆記</h3>' +
