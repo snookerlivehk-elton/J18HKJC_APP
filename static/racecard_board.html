@@ -2373,12 +2373,18 @@
     .hs-mini .v { display: block; margin-top: 2px; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .hs-cmp {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px 10px;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px 8px;
     }
     .hs-cmp .k { display: block; font-size: 11px; color: var(--muted); }
-    .hs-cmp .v { display: block; margin-top: 2px; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .hs-lay { margin-top: 8px; font-size: 13px; font-weight: 700; }
+    .hs-cmp .v {
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     .hs-review {
       margin: 0;
       font-size: 14px;
@@ -11762,8 +11768,8 @@
             return left + "｜" + fmtPctCell(pct);
           })()) +
           hsCmpCell("評分", fmt(r.rating) + (rateDelta ? "（" + rateDelta + "）" : "")) +
-        "</div>" +
-        '<div class="hs-lay">久休復出　' + esc(fmtLayoff(r.layoff)) + "</div></section>" +
+          hsCmpCell("久休復出", fmtLayoff(r.layoff)) +
+        "</div></section>" +
         '<section class="hs-block"><h3>綜合評述</h3><p class="hs-review">' + esc(review || "—") + "</p></section>" +
         '<section class="hs-block" id="hsNoteBlock"><h3>筆記</h3>' +
           (editable ? "" : '<p class="hs-note-hint">此賽日已過，筆記只可查看</p>') +
