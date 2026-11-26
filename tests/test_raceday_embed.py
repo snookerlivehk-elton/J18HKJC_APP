@@ -906,6 +906,7 @@ class RacedayEmbedApiTest(unittest.TestCase):
         self.assertIn("openHorseSheet", r.text)
         self.assertIn("預計跑法", r.text)
         self.assertIn('class="k mid">久休復出', r.text)
+        self.assertIn("hs-pace-side", r.text)
         self.assertIn("horseSheetMarks", r.text)
         self.assertIn("data-hs-flag", r.text)
         self.assertIn("paintHorseMarks", r.text)

@@ -2269,12 +2269,15 @@
       background: #c5ced8;
       border-radius: 1px;
     }
-    .hs-pace-head {
+    .hs-pace-head,
+    .hs-pace {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin: 0 0 4px;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 10px;
+      align-items: center;
     }
+    .hs-pace-head { margin: 0 0 4px; }
+    .hs-pace { margin-bottom: 8px; }
     .hs-pace-head .k {
       display: block;
       font-size: 11px;
@@ -2283,19 +2286,23 @@
       color: var(--muted);
       white-space: nowrap;
     }
-    .hs-pace-head .k.mid { text-align: center; }
-    .hs-pace {
+    .hs-pace-side {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 4.8em 1fr;
       align-items: center;
-      column-gap: 10px;
-      margin-bottom: 8px;
+      min-width: 0;
+      font-size: 11px;
+    }
+    .hs-pace-side .mid,
+    .hs-pace-side .hs-layoff {
+      justify-self: center;
+      text-align: center;
     }
     .hs-pace .hs-layoff {
-      text-align: center;
       font-size: 18px;
       font-weight: 800;
       line-height: 1.05;
+      color: var(--text);
     }
     .hs-pace .v.run-style {
       display: flex;
@@ -11650,8 +11657,10 @@
     }
     function hsPaceRow(r) {
       return '<div class="hs-pace">' +
-        cellRunStyle(r.runStyle) +
-        '<span class="v hs-layoff">' + esc(fmtLayoff(r.layoff)) + "</span>" +
+        '<div class="hs-pace-side">' +
+          cellRunStyle(r.runStyle) +
+          '<span class="v hs-layoff">' + esc(fmtLayoff(r.layoff)) + "</span>" +
+        "</div>" +
         cellForm6(r) +
       "</div>";
     }
@@ -11755,8 +11764,10 @@
             '<div><span class="k">最佳時間</span><span class="v">' + esc(fmt(r.bestTime)) + "</span></div>" +
           "</div>" +
           '<div class="hs-pace-head">' +
-            '<span class="k">預計跑法</span>' +
-            '<span class="k mid">久休復出</span>' +
+            '<div class="hs-pace-side">' +
+              '<span class="k">預計跑法</span>' +
+              '<span class="k mid">久休復出</span>' +
+            "</div>" +
             '<span class="k">近六賽績與班次升降</span>' +
           "</div>" +
           hsPaceRow(r) +
