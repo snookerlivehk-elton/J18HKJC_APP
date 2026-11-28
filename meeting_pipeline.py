@@ -1041,6 +1041,8 @@ class MeetingPipeline:
           2) 覆蓋已 ≥80% → skip
           3) 仍有 running → waiting
           4) 否則 **inline** only_missing 續跑（唔 Popen）
+          5) 本輪達 40 匹上限（paused）時，同一 tick 內連跑多輪，
+             避免只寫 40/141 就永遠等下一輪 timer
         """
         d, c = str(racing_date)[:10], str(course or "").upper()
         ai_st, ai_detail = self.check_form_ai(d, c)
@@ -1055,38 +1057,83 @@ class MeetingPipeline:
         import form_ai_batch_job as faj
 
         faj.ensure_jobs_table(self.engine)
-        latest = faj.latest_job(self.engine, job_type="form_ai", racing_date=d, course=c)
-        reconciled = False
-        if latest and str(latest.get("status") or "") == "running":
-            before = str(latest.get("status") or "")
-            latest = faj.reconcile_running_job(self.engine, latest) or latest
-            after = str(latest.get("status") or "")
-            reconciled = before == "running" and after != "running"
+        try:
+            chain_rounds = int(os.getenv("FORM_AI_INLINE_CHAIN_ROUNDS", "5") or 5)
+        except (TypeError, ValueError):
+            chain_rounds = 5
+        chain_rounds = max(1, min(chain_rounds, 12))
 
-        if latest and str(latest.get("status") or "") == "running":
-            return {
-                "ok": True,
-                "waiting": True,
-                "skipped": True,
-                "reason": "Form AI 任務進行中",
-                "job_id": latest.get("job_id"),
-                "job": latest,
-                "reconciled": reconciled,
-            }
+        last_out: Dict[str, Any] = {}
+        reconciled_any = False
+        for round_i in range(1, chain_rounds + 1):
+            ai_st, ai_detail = self.check_form_ai(d, c)
+            if ai_st == STATUS_OK:
+                return {
+                    "ok": True,
+                    "skipped": round_i == 1,
+                    "reason": "FORM_AI already ok",
+                    "detail": ai_detail,
+                    "chain_rounds_ran": round_i - 1,
+                    "self_heal": True,
+                    **({} if not last_out else {"last": last_out}),
+                }
 
-        out = self.start_form_ai_background(
-            d,
-            c,
-            only_missing=only_missing,
-            auto_restart=True,
-            run_inline=True,
-            enqueue_only=False,
-            detail="auto_restart self_heal inline/cron",
-        )
-        out["reconciled"] = reconciled
-        out["self_heal"] = True
-        out["form_ai_detail"] = ai_detail
-        return out
+            latest = faj.latest_job(
+                self.engine, job_type="form_ai", racing_date=d, course=c
+            )
+            reconciled = False
+            if latest and str(latest.get("status") or "") == "running":
+                before = str(latest.get("status") or "")
+                latest = faj.reconcile_running_job(self.engine, latest) or latest
+                after = str(latest.get("status") or "")
+                reconciled = before == "running" and after != "running"
+                reconciled_any = reconciled_any or reconciled
+
+            if latest and str(latest.get("status") or "") == "running":
+                return {
+                    "ok": True,
+                    "waiting": True,
+                    "skipped": True,
+                    "reason": "Form AI 任務進行中",
+                    "job_id": latest.get("job_id"),
+                    "job": latest,
+                    "reconciled": reconciled_any,
+                    "self_heal": True,
+                    "form_ai_detail": ai_detail,
+                    "chain_rounds_ran": round_i - 1,
+                }
+
+            out = self.start_form_ai_background(
+                d,
+                c,
+                only_missing=only_missing,
+                auto_restart=True,
+                run_inline=True,
+                enqueue_only=False,
+                detail=f"auto_restart self_heal inline/cron round {round_i}/{chain_rounds}",
+            )
+            out["reconciled"] = reconciled_any
+            out["self_heal"] = True
+            out["form_ai_detail"] = ai_detail
+            out["chain_round"] = round_i
+            out["chain_rounds"] = chain_rounds
+            last_out = out
+
+            if not out.get("ok") and not out.get("waiting"):
+                return out
+
+            # 本輪達馬匹／時間上限 → 同 tick 再開下一輪 only_missing
+            paused = bool(out.get("paused") or out.get("waiting"))
+            result = out.get("result") if isinstance(out.get("result"), dict) else {}
+            if result.get("budget_exhausted") or paused:
+                continue
+            # 非預算暫停（例如寫完或硬失敗）→ 結束連鎖，交外層再判覆蓋
+            break
+
+        last_out["chain_rounds_ran"] = last_out.get("chain_round") or 0
+        last_out["reconciled"] = reconciled_any
+        last_out["self_heal"] = True
+        return last_out
 
     def get_form_ai_job(
         self, racing_date: str, course: str, job_id: Optional[str] = None

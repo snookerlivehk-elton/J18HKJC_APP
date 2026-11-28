@@ -41,12 +41,24 @@ jobs:
       - name: Run Form AI batch
         env:
           USE_SQLITE: "false"
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_URL_SYNC: ${{ secrets.DATABASE_URL_SYNC }}
+          # Prefer Aliyun secret (same as Meeting Tick); fall back to legacy names
+          DATABASE_URL: ${{ secrets.ALIYUN_DATABASE_URL }}
+          DATABASE_URL_FALLBACK: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_SYNC: ${{ secrets.ALIYUN_DATABASE_URL_SYNC }}
+          DATABASE_URL_SYNC_FALLBACK: ${{ secrets.DATABASE_URL_SYNC }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          # 手動 workflow 一次補齊全日，唔好卡喺預設 40 匹／輪
+          FORM_AI_INLINE_MAX_HORSES: "250"
+          FORM_AI_INLINE_MAX_SEC: "9000"
         run: |
+          export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
+          export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Set ALIYUN_DATABASE_URL (or DATABASE_URL) secret — Form AI cannot write"
+            exit 1
+          fi
           DATE="${{ inputs.racing_date }}"
           COURSE="${{ inputs.course }}"
           ARGS=(--date "$DATE" --course "$COURSE" --create-job --sleep 0.2)

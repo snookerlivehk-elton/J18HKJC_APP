@@ -75,7 +75,8 @@ jobs:
           export DATABASE_URL="${DATABASE_URL:-$DATABASE_URL_FALLBACK}"
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-${DATABASE_URL_SYNC_FALLBACK:-$DATABASE_URL}}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "::warning::RAILWAY_DATABASE_URL not set — skip Railway tick (Aliyun local timer is primary)"
+            echo "::warning::RAILWAY_DATABASE_URL not set — Railway tick SKIPPED (Aliyun local timer is primary)"
+            echo "::notice::生產主路徑應係阿里雲 j18-meeting-tick.timer；GHA 只係雙軌備援"
             exit 0
           fi
           # Guard: refuse obvious internal-only hosts on GHA
@@ -129,7 +130,8 @@ jobs:
         run: |
           export DATABASE_URL_SYNC="${DATABASE_URL_SYNC:-$DATABASE_URL}"
           if [ -z "${DATABASE_URL:-}" ] && [ -z "${DATABASE_URL_SYNC:-}" ]; then
-            echo "::warning::ALIYUN_DATABASE_URL not set — skip GHA→Aliyun tick (use server j18-meeting-tick.timer instead)"
+            echo "::warning::ALIYUN_DATABASE_URL not set — GHA→Aliyun tick SKIPPED (速勢/Form AI 不會由本 job 推進)"
+            echo "::notice::請在 GitHub Secrets 設定 ALIYUN_DATABASE_URL，或確認阿里雲 j18-meeting-tick.timer 正在跑（bash scripts/aliyun_tick_doctor.sh）"
             exit 0
           fi
           EXTRA=""

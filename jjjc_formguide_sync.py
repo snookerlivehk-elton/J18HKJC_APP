@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 from typing import Any, Dict, List, Optional
 
+import httpx
 from sqlalchemy import create_engine, text
 
 from etl_pipeline import SQLITE_DB_PATH, USE_SQLITE, resolve_database_url
 from jjjc_export_common import (
+    api_base,
     classify_payload_status,
     content_meta,
     effective_text,
@@ -57,6 +60,85 @@ def fetch_export(
         base_url=base_url,
         timeout=timeout,
     )
+
+
+def _formguide_fetch_timeout() -> float:
+    try:
+        return float(os.getenv("JJJC_FORMGUIDE_FETCH_TIMEOUT", "120") or 120)
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def _form_text_coverage(payload: Dict[str, Any]) -> tuple[int, int]:
+    with_t = 0
+    total = 0
+    for race in payload.get("races") or []:
+        for ru in race.get("runners") or []:
+            total += 1
+            if text_nonempty(effective_text(ru, "form_text")):
+                with_t += 1
+    return with_t, total
+
+
+def export_needs_formguide_refresh(payload: Dict[str, Any]) -> bool:
+    races = list(payload.get("races") or [])
+    if not races:
+        return True
+    st = str(payload.get("status") or "").strip().lower()
+    if st in {"partial", "empty", "suspicious", "unpublished", "waiting", "date_mismatch"}:
+        return True
+    with_t, total = _form_text_coverage(payload)
+    if total <= 0:
+        return True
+    return (with_t / float(total)) < 0.80
+
+
+def trigger_formguide_fetch(
+    race_date: str,
+    venue: str,
+    *,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    """上游主動抓賽績指引：POST {base}/api/formguide/fetch?date=&venue=."""
+    base = api_base(base_url)
+    if not base:
+        return {"ok": False, "error": "未設定 JJJC_API_BASE"}
+    v = str(venue or "").strip().upper()
+    if v not in {"ST", "HV"}:
+        return {"ok": False, "error": f"venue 必須係 ST|HV，收到：{venue!r}"}
+    params = {"date": normalize_date(race_date), "venue": v}
+    url = f"{base}/api/formguide/fetch"
+    to = float(timeout if timeout is not None else _formguide_fetch_timeout())
+    try:
+        with httpx.Client(timeout=to, follow_redirects=True) as client:
+            r = client.post(url, params=params)
+        try:
+            parsed = r.json()
+            body = parsed if isinstance(parsed, dict) else {"raw": parsed}
+        except Exception:
+            body = {"raw_text": (r.text or "")[:300]}
+        if r.status_code >= 400:
+            return {
+                "ok": False,
+                "status_code": r.status_code,
+                "error": f"HTTP {r.status_code}",
+                "url": url,
+                "response": body,
+            }
+        return {
+            "ok": bool(body.get("ok", True)),
+            "status_code": r.status_code,
+            "url": url,
+            "race_date": body.get("race_date") or params["date"],
+            "venue_code": body.get("venue_code") or v,
+            "race_count": safe_int(body.get("race_count")),
+            "runner_count": safe_int(body.get("runner_count")),
+            "status": body.get("status"),
+            "response": body,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300], "url": url}
 
 
 def _ensure_table() -> None:
@@ -229,7 +311,11 @@ def sync_meeting(
     race_no: Optional[int] = None,
     from_file: Optional[str] = None,
     base_url: Optional[str] = None,
+    *,
+    auto_fetch: bool = True,
 ) -> Dict[str, Any]:
+    """拉取後 upsert；export 空／partial／覆蓋不足時預設先 POST formguide/fetch。"""
+    upstream_fetch: Optional[Dict[str, Any]] = None
     try:
         if from_file:
             payload = load_payload_file(from_file)
@@ -240,12 +326,35 @@ def sync_meeting(
                 race_no=race_no,
                 base_url=base_url,
             )
+            if auto_fetch and export_needs_formguide_refresh(payload):
+                upstream_fetch = trigger_formguide_fetch(
+                    racing_date, course, base_url=base_url
+                )
+                try:
+                    payload = fetch_export(
+                        race_date=racing_date,
+                        venue=course,
+                        race_no=race_no,
+                        base_url=base_url,
+                    )
+                except Exception as e:
+                    return {
+                        "ok": False,
+                        "waiting": False,
+                        "phase": "failed",
+                        "error": f"formguide fetch 後 re-export 失敗：{e}",
+                        "upstream_fetch": upstream_fetch,
+                        "auto_fetched": True,
+                        "racing_date": normalize_date(racing_date),
+                        "course": course.upper(),
+                    }
     except Exception as e:
         return {
             "ok": False,
             "waiting": False,
             "phase": "failed",
             "error": str(e),
+            "upstream_fetch": upstream_fetch,
             "racing_date": normalize_date(racing_date),
             "course": course.upper(),
         }
@@ -257,6 +366,8 @@ def sync_meeting(
             "phase": "failed",
             "error": "status=unavailable",
             "status": payload.get("status"),
+            "upstream_fetch": upstream_fetch,
+            "auto_fetched": upstream_fetch is not None,
             "racing_date": normalize_date(racing_date),
             "course": course.upper(),
         }
@@ -264,6 +375,17 @@ def sync_meeting(
     out = upsert_payload(payload)
     out["racing_date"] = normalize_date(racing_date)
     out["course"] = course.upper()
+    if upstream_fetch is not None:
+        out["auto_fetched"] = True
+        out["upstream_fetch"] = upstream_fetch
+        with_t, total = _form_text_coverage(payload)
+        if total > 0 and (with_t / float(total)) < 0.80:
+            out["waiting"] = True
+            out["phase"] = "waiting"
+            out["detail"] = (
+                out.get("detail")
+                or f"自動 formguide fetch 後短評仍不足 {with_t}/{total}"
+            )
     return out
 
 

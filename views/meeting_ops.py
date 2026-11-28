@@ -369,9 +369,12 @@ for stage, label in STAGES:
         elif stage == "FORM_AI":
             st.caption(
                 "上方 readiness＝`upcoming_form_ai` 結果；下方＝`background_jobs`。"
-                "「後台啟動」而家只**入隊**，由 Railway Cron／meeting_tick **喺容器內 inline 跑**"
+                "「後台啟動」而家只**入隊**，由 meeting_tick **喺容器內 inline 跑**"
                 "（唔再靠 Web Popen，避免無心跳被殺）。"
-                f"每輪約最多 {os.getenv('FORM_AI_INLINE_MAX_HORSES', '40')} 匹，下一 tick only_missing 續跑。"
+                f"每輪約最多 {os.getenv('FORM_AI_INLINE_MAX_HORSES', '40')} 匹；"
+                "若顯示 paused／覆蓋停喺 ~40 匹，再撳一次「後台啟動」或等 tick"
+                "（tick 會同輪連跑多輪 only_missing 直至 ≥80%）。"
+                "卡住 running 唔升數 →「強制結束殭屍任務」後再後台啟動。"
             )
             only_miss = st.checkbox(
                 "只補尚未有結果的馬（取消＝整日重跑）",
